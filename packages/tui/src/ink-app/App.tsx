@@ -2349,14 +2349,6 @@ export const TrayambakApp = ({
       case "stats":
         addSystemMessage(`Token count: ${tokenCount}\nMessage count: ${messages.length}`)
         break
-      case "compact":
-        slashCommandService
-          .dispatch(`/compact ${args}`.trim())
-          .then((output) => addSystemMessage(output))
-          .catch((error) =>
-            addSystemMessage(`/compact failed: ${error instanceof Error ? error.message : String(error)}`),
-          )
-        break
       case "skills":
         {
           const profiles = listAgentProfiles()
