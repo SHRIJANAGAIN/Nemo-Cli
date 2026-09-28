@@ -46,9 +46,9 @@ describe("agent HTTP server", () => {
   it("serves openapi + models + 404 JSON", async () => {
     const { port, close } = await boot({})
     try {
-      const spec = await (await fetch(`${base(port)}/openapi.json`)).json() as { openapi: string }
+      const spec = (await (await fetch(`${base(port)}/openapi.json`)).json()) as { openapi: string }
       expect(spec.openapi).toBe("3.0.0")
-      const models = await (await fetch(`${base(port)}/v1/models`)).json() as { data: unknown[] }
+      const models = (await (await fetch(`${base(port)}/v1/models`)).json()) as { data: unknown[] }
       expect(Array.isArray(models.data)).toBe(true)
       const missing = await fetch(`${base(port)}/nope`)
       expect(missing.status).toBe(404)

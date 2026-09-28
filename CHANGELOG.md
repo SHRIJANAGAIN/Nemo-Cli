@@ -6,6 +6,7 @@ All notable changes to trayambak are documented here. The format is based on kee
 ## [0.6.0]
 
 ### Changed — Apache-2.0 relicense (owner-authorized) + WIP stabilization
+
 - `LICENSE`: Proprietary v1.0 → Apache License 2.0 (© 2026 SKT AI LABS PRIVATE LIMITED); `package.json` license `Apache-2.0`; 400 source headers + `AGENTS.md`/`docs/README.md`/vscode-extension manifest updated.
 - Fixed concurrent-author WIP so the tree is green again: sandbox `spawn.ts` (seatbelt names, pid guards, signal casts), `core/process.ts` (no require, typed signals/streams), `core/env_filter.ts` (ProcessEnv input), `core/state_db.ts` (JSON-file backend — no native `better-sqlite3` dep; same API), `core/hook_runtime.ts` (`additionalContext`), `core/agent_registry.ts` (`uuid()`), `command-exec/bash.ts` (no `ctx.emit`, unknown-cast permissions), `prompt/auto-title.test.ts` (unknown-shape helper), `tools/text/*.test.ts` (protocol import), `tui/ui/footer*.ts` (Theme import, indicator fn), sandbox `index.ts` (dedup re-exports).
 

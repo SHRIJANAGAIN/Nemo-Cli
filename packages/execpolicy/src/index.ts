@@ -9,9 +9,4 @@
 
 export { PolicyManager, PolicyParser, getPolicyManager, evaluatePolicy } from "./policy.js"
 export { ExecDecision, NetworkRuleProtocol } from "./policy.js"
-export type {
-    ExecPolicyRule,
-    NetworkRule,
-    ExecPolicyAmendment,
-    ExecPolicy,
-} from "./policy.js"
+export type { ExecPolicyRule, NetworkRule, ExecPolicyAmendment, ExecPolicy } from "./policy.js"

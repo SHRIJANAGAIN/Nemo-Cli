@@ -1,0 +1,244 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+
+/**
+ * State store behaviour.
+ *
+ * Every case runs against a throwaway `codexHome` under the OS temp dir.
+ * `getDatabase()` with no argument resolves to `~/.trayambak/state/state_1.json`,
+ * so a test that reads or writes the default store leaks fixtures into the
+ * developer's real state — which is exactly how a thread named `test-1`
+ * reached production. The last case guards that isolation.
+ */
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { dirname, join } from "path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { DatabaseDatabase, getDatabase, initDatabases, resetDatabase } from "./state_db.js"
+
+let home: string
+let storeFile: string
+
+/** Construct a store rooted at `home`, bypassing the singleton. */
+function open(): DatabaseDatabase {
+  return initDatabases(home)
+}
+
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), "trayambak-state-"))
+  storeFile = join(home, "state", "state_1.json")
+  resetDatabase()
+})
+
+afterEach(() => {
+  resetDatabase()
+  rmSync(home, { recursive: true, force: true })
+})
+
+describe("thread records", () => {
+  it("round-trips metadata values rather than just their presence", () => {
+    const db = open()
+    db.saveThread("t1", { model: "gpt-5", turns: 7, nested: { a: 1 } })
+    const thread = db.getThread("t1")
+    expect(thread).not.toBeNull()
+    expect(thread?.metadata).toEqual({ model: "gpt-5", turns: 7, nested: { a: 1 } })
+    expect(thread?.id).toBe("t1")
+  })
+
+  it("returns null for a thread that was never saved", () => {
+    expect(open().getThread("missing")).toBeNull()
+  })
+
+  it("preserves created_at on update while advancing updated_at", async () => {
+    const db = open()
+    db.saveThread("t1", { v: 1 })
+    const created = (db.getThread("t1") as { created_at: number }).created_at
+    await new Promise((r) => setTimeout(r, 15))
+    db.saveThread("t1", { v: 2 })
+    const after = db.getThread("t1") as {
+      created_at: number
+      updated_at: number
+      metadata: unknown
+    }
+    expect(after.created_at).toBe(created)
+    expect(after.updated_at).toBeGreaterThanOrEqual(created)
+    expect(after.metadata).toEqual({ v: 2 })
+  })
+
+  it("orders threads by most recently updated", async () => {
+    const db = open()
+    db.saveThread("older", { n: 1 })
+    await new Promise((r) => setTimeout(r, 15))
+    db.saveThread("newer", { n: 2 })
+    expect(db.getAllThreads().map((t) => t.id)).toEqual(["newer", "older"])
+  })
+})
+
+describe("event log", () => {
+  it("scopes events to their session", () => {
+    const db = open()
+    db.appendEvent("s1", "tool", { name: "bash" })
+    db.appendEvent("s2", "tool", { name: "read" })
+    const s1 = db.getEvents("s1")
+    expect(s1).toHaveLength(1)
+    // Unlike getThread, which parses `metadata`, getEvents hands back `payload`
+    // exactly as appendEvent wrote it. Documented so a caller knows to parse.
+    expect(s1[0]?.payload).toBe('{"name":"bash"}')
+    expect(db.getEvents("s2")).toHaveLength(1)
+    expect(db.getEvents("s3")).toHaveLength(0)
+  })
+
+  it("filters by the since timestamp", async () => {
+    const db = open()
+    db.appendEvent("s1", "old", {})
+    // Records share a millisecond if written back to back, so the cutoff is
+    // bracketed by sleeps rather than guessed at with Date.now() + 1.
+    await new Promise((r) => setTimeout(r, 10))
+    const cut = Date.now()
+    await new Promise((r) => setTimeout(r, 10))
+    db.appendEvent("s1", "new", {})
+    expect(db.getEvents("s1", cut).map((e) => e.type)).toEqual(["new"])
+    expect(db.getEvents("s1")).toHaveLength(2)
+  })
+
+  it("returns events in chronological order", async () => {
+    const db = open()
+    db.appendEvent("s1", "first", {})
+    await new Promise((r) => setTimeout(r, 5))
+    db.appendEvent("s1", "second", {})
+    expect(db.getEvents("s1").map((e) => e.type)).toEqual(["first", "second"])
+  })
+})
+
+describe("violations and audit trail", () => {
+  it("records violation fields verbatim", () => {
+    const db = open()
+    db.recordViolation("filesystem", "/etc/passwd", "read", 4242)
+    const [v] = db.getViolations() as Array<Record<string, unknown>>
+    expect(v).toMatchObject({
+      type: "filesystem",
+      path: "/etc/passwd",
+      operation: "read",
+      pid: 4242,
+    })
+    expect(v?.id).toBeTypeOf("number")
+    expect(v?.timestamp).toBeTypeOf("number")
+  })
+
+  it("supports a null path for violations without one", () => {
+    open().recordViolation("network", null, "connect", 1)
+    const [v] = new DatabaseDatabase(storeFile).getViolations() as Array<{ path: string | null }>
+    expect(v?.path).toBeNull()
+  })
+
+  it("sorts violations newest first and honours since", async () => {
+    const db = open()
+    db.recordViolation("a", null, "x", 1)
+    await new Promise((r) => setTimeout(r, 10))
+    db.recordViolation("b", null, "y", 2)
+    // Descending by timestamp, so the two are spaced rather than left to a
+    // stable sort over equal millisecond values.
+    expect(db.getViolations().map((v) => v.type)).toEqual(["b", "a"])
+    await new Promise((r) => setTimeout(r, 10))
+    const cut = Date.now()
+    await new Promise((r) => setTimeout(r, 10))
+    db.recordViolation("c", null, "z", 3)
+    expect(db.getViolations(cut).map((v) => v.type)).toEqual(["c"])
+  })
+
+  it("persists the audit trail to the store file", () => {
+    const db = open()
+    db.recordAudit("tool.execute", "agent", "bash", "success")
+    db.close()
+    const raw = JSON.parse(readFileSync(storeFile, "utf8")) as {
+      audit_log: Array<Record<string, unknown>>
+    }
+    expect(raw.audit_log).toHaveLength(1)
+    expect(raw.audit_log[0]).toMatchObject({
+      action: "tool.execute",
+      actor: "agent",
+      target: "bash",
+      result: "success",
+    })
+  })
+})
+
+describe("search", () => {
+  it("matches thread content case-insensitively", () => {
+    const db = open()
+    db.saveThread("a", { note: "Always REBASE before merging" })
+    db.saveThread("b", { note: "unrelated" })
+    const hits = db.searchThreads("rebase")
+    expect(hits.map((t) => t.id)).toEqual(["a"])
+  })
+
+  it("returns nothing when nothing matches", () => {
+    const db = open()
+    db.saveThread("a", { note: "x" })
+    expect(db.searchThreads("zzz-not-present")).toEqual([])
+  })
+
+  it("caps results at 20", () => {
+    const db = open()
+    for (let i = 0; i < 30; i++) db.saveThread(`t${i}`, { blob: "needle" })
+    expect(db.searchThreads("needle")).toHaveLength(20)
+  })
+})
+
+describe("persistence and recovery", () => {
+  it("survives reopening the store from disk", () => {
+    open().saveThread("persist-1", { model: "m" })
+    const reopened = new DatabaseDatabase(storeFile)
+    expect(reopened.getThread("persist-1")?.metadata).toEqual({ model: "m" })
+  })
+
+  it("recovers from a corrupt store instead of throwing", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    writeFileSync(storeFile, "{ this is not json", "utf8")
+    const recovered = open()
+    expect(recovered.getAllThreads()).toEqual([])
+    recovered.saveThread("after-corrupt", { ok: true })
+    expect(open().getThread("after-corrupt")).not.toBeNull()
+  })
+
+  it("starts empty when no store file exists", () => {
+    expect(existsSync(storeFile)).toBe(false)
+    expect(open().getAllThreads()).toEqual([])
+  })
+
+  const nonWindows = process.platform === "win32" ? it.skip : it
+  nonWindows("restricts the store file to its owner", () => {
+    open().saveThread("perms", {})
+    expect(statSync(storeFile).mode & 0o777).toBe(0o600)
+  })
+})
+
+describe("singleton lifecycle", () => {
+  it("hands out one instance until reset", () => {
+    const a = getDatabase(home)
+    expect(getDatabase(home)).toBe(a)
+    resetDatabase()
+    expect(getDatabase(home)).not.toBe(a)
+  })
+
+  it("ignores a later codexHome once cached", () => {
+    const first = getDatabase(home)
+    const other = mkdtempSync(join(tmpdir(), "trayambak-other-"))
+    try {
+      expect(getDatabase(other)).toBe(first)
+    } finally {
+      resetDatabase()
+      rmSync(other, { recursive: true, force: true })
+    }
+  })
+
+  it("writes only under the supplied home, never the developer's", () => {
+    const db = getDatabase(home)
+    db.saveThread("isolation-check", { v: 1 })
+    db.close()
+    // The real store would be ~/.trayambak/state/state_1.json; nothing about
+    // this run may reach it, so the fixture must land inside `home`.
+    expect(storeFile.startsWith(home)).toBe(true)
+    const raw = JSON.parse(readFileSync(storeFile, "utf8")) as { threads: Record<string, unknown> }
+    expect(raw.threads["isolation-check"]).toBeDefined()
+  })
+})

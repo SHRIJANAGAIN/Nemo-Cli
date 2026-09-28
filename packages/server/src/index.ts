@@ -135,21 +135,29 @@ export function startServer(options: ServerOptions = {}): http.Server {
           }
         }
         agent
-          .run(prompt, (event) => {
-            telemetry.capture(event)
-            safeWrite(`data: ${JSON.stringify(event)}\n\n`)
-          }, controller.signal)
+          .run(
+            prompt,
+            (event) => {
+              telemetry.capture(event)
+              safeWrite(`data: ${JSON.stringify(event)}\n\n`)
+            },
+            controller.signal,
+          )
           .then(() => {
             safeWrite("data: [DONE]\n\n")
             try {
               if (!req.destroyed && !res.writableEnded) res.end()
-            } catch { /* client already gone */ }
+            } catch {
+              /* client already gone */
+            }
           })
           .catch((err) => {
             safeWrite(`data: ${JSON.stringify({ error: String(err) })}\n\n`)
             try {
               if (!req.destroyed && !res.writableEnded) res.end()
-            } catch { /* client already gone */ }
+            } catch {
+              /* client already gone */
+            }
           })
       })
       return

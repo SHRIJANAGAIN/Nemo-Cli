@@ -48,12 +48,7 @@ const DEFAULT_TIMEOUT_MS = 15_000
  *  login token refresh bug`). Empty/debris input yields "" and the caller
  *  falls back to the prompt's own first words. */
 export function toFiveWords(text: string): string {
-  const words = clean(text)
-    .replace(/\s+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 5)
+  const words = clean(text).replace(/\s+/g, " ").trim().split(" ").filter(Boolean).slice(0, 5)
   if (words.length === 0) return ""
   // clean() only unwraps a perfectly-matching quote pair — `"Fix the bug".`
   // survives with its debris. Scrub both ends instead.

@@ -93,23 +93,19 @@ describe("ContentControl.verify", () => {
     fs.rmSync(tmp, { recursive: true, force: true })
   })
 
-  it(
-    "runs the fixed typecheck/unit_test/build pipeline against the cwd",
-    async () => {
-      fs.writeFileSync(
-        path.join(tmp, "package.json"),
-        JSON.stringify({
-          name: "verify-fixture",
-          version: "1.0.0",
-          scripts: { typecheck: OK, test: OK, build: OK },
-        }),
-        "utf8",
-      )
-      const report = await makeControl(tmp).verify()
-      expect(report.steps.map((s) => s.step)).toEqual(["typecheck", "unit_test", "build"])
-      expect(report.steps.every((s) => s.status === "pass")).toBe(true)
-      expect(report.overall).toBe("pass")
-    },
-    60_000,
-  )
+  it("runs the fixed typecheck/unit_test/build pipeline against the cwd", async () => {
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      JSON.stringify({
+        name: "verify-fixture",
+        version: "1.0.0",
+        scripts: { typecheck: OK, test: OK, build: OK },
+      }),
+      "utf8",
+    )
+    const report = await makeControl(tmp).verify()
+    expect(report.steps.map((s) => s.step)).toEqual(["typecheck", "unit_test", "build"])
+    expect(report.steps.every((s) => s.status === "pass")).toBe(true)
+    expect(report.overall).toBe("pass")
+  }, 60_000)
 })

@@ -63,13 +63,9 @@ describe("resolveConstrainedPath credential protection", () => {
   })
 
   it("blocks the agent's own token but keeps agent state reachable", () => {
-    expect(() =>
-      resolveConstrainedPath(path.join(home, ".trayambak", "credentials.json"), cwd),
-    ).toThrow(/protected/)
+    expect(() => resolveConstrainedPath(path.join(home, ".trayambak", "credentials.json"), cwd)).toThrow(/protected/)
     // Global skills load from ~/.trayambak/skills and must keep working.
-    expect(() =>
-      resolveConstrainedPath(path.join(home, ".trayambak", "skills", "demo"), cwd),
-    ).not.toThrow()
+    expect(() => resolveConstrainedPath(path.join(home, ".trayambak", "skills", "demo"), cwd)).not.toThrow()
   })
 
   it("leaves ordinary home files readable", () => {

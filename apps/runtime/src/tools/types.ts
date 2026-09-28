@@ -168,12 +168,7 @@ function within(base: string, target: string): boolean {
 const PROTECTED_HOME_DIRS = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure"]
 
 /** Single files under home that hold credentials. */
-const PROTECTED_HOME_FILES = [
-  ".netrc",
-  ".npmrc",
-  ".git-credentials",
-  path.join(".trayambak", "credentials.json"),
-]
+const PROTECTED_HOME_FILES = [".netrc", ".npmrc", ".git-credentials", path.join(".trayambak", "credentials.json")]
 
 /**
  * True for paths the file tools may never open. Deny wins over the `~`

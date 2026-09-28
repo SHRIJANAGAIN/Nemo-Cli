@@ -160,7 +160,7 @@ export const PermissionOverlay = ({
                 is parked on the user) — a rotating half-circle in the
                 mode's own colour keeps it visibly alive instead of a frozen
                 dialog header. Label text unchanged (oracles key on it). */}
-            <Spinner frames={["◐","◓","◑","◒"]} color={modeColor}>
+            <Spinner frames={["◐", "◓", "◑", "◒"]} color={modeColor}>
               Permission Required
             </Spinner>
             <Text dimColor> (mode: {modeLabel})</Text>

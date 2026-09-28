@@ -170,7 +170,7 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
           <>
             <Spinner
               color={item ? subagentStatusColor(theme, item.status) : theme.warning}
-              frames={["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"]}
+              frames={["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]}
               cycleColors
             />
             <Text color={theme.textMuted}>{rest}</Text>

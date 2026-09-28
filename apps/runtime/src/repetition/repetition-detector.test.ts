@@ -45,7 +45,12 @@ describe("runtime RepetitionDetector", () => {
   it("clears every counter on reset", () => {
     const d = new RepetitionDetector()
     for (let i = 0; i < 10; i++) d.record(`spam number${i}`, "bash", "reflect")
-    expect(d.detect().map((r) => r.level).sort()).toEqual(["strategy", "token", "tool"].sort())
+    expect(
+      d
+        .detect()
+        .map((r) => r.level)
+        .sort(),
+    ).toEqual(["strategy", "token", "tool"].sort())
     d.reset()
     expect(d.detect()).toEqual([])
   })

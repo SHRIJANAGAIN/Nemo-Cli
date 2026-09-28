@@ -82,15 +82,9 @@ describe("applyUnifiedPatch", () => {
   })
 
   it("applies multiple hunks in reverse order with correct positions", () => {
-    const patch = [
-      "diff --git a/f.txt b/f.txt",
-      "@@ -1,1 +1,1 @@",
-      "-l1",
-      "+L1",
-      "@@ -5,1 +5,1 @@",
-      "-l5",
-      "+L5",
-    ].join("\n")
+    const patch = ["diff --git a/f.txt b/f.txt", "@@ -1,1 +1,1 @@", "-l1", "+L1", "@@ -5,1 +5,1 @@", "-l5", "+L5"].join(
+      "\n",
+    )
     expect(applyUnifiedPatch("l1\nl2\nl3\nl4\nl5", patch)).toBe("L1\nl2\nl3\nl4\nL5")
   })
 

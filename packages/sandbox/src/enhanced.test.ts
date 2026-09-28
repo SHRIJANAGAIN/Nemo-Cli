@@ -1,8 +1,10 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 /**
- * Enhanced sandbox tests — covers OS-level enforcement types,
- * violation detection, env filtering, process management, and
- * spawn behavior.
+ * Enhanced sandbox tests — policy decisions, exec rule matching, environment
+ * filtering, and filesystem/network violation detection.
+ *
+ * ProcessManager and the state store have their own suites in
+ * `packages/core/src`; they are not exercised here.
  */
 import { describe, expect, it } from "vitest"
 import {
@@ -23,15 +25,9 @@ import {
   isLikelySandboxDenied,
   isFilesystemViolation,
   isNetworkViolation,
-  OUTPUT_MAX_BYTES,
-  IO_DRAIN_TIMEOUT_MS,
-  DEFAULT_EXEC_COMMAND_TIMEOUT_MS,
-  MAX_EXEC_OUTPUT_DELTAS_PER_CALL,
 } from "./index.js"
 import { PolicyManager, PolicyParser, ExecDecision } from "../../execpolicy/src/policy.js"
-import { ProcessManager } from "../../core/src/process.js"
 import { validateEnv, getSafeEnv, createMinimalEnv } from "../../core/src/env_filter.js"
-import { getDatabase, resetDatabase } from "../../core/src/state_db.js"
 
 // ─── Original Policy Tests ───
 
@@ -202,21 +198,6 @@ describe("PolicyParser", () => {
   })
 })
 
-// ─── Process Manager Tests ───
-
-describe("ProcessManager", () => {
-  it("has correct constants", () => {
-    expect(OUTPUT_MAX_BYTES).toBe(256 * 1024)
-    expect(IO_DRAIN_TIMEOUT_MS).toBe(2000)
-    expect(DEFAULT_EXEC_COMMAND_TIMEOUT_MS).toBe(10_000)
-    expect(MAX_EXEC_OUTPUT_DELTAS_PER_CALL).toBe(10_000)
-  })
-  it("reports active count", () => {
-    const pm = new ProcessManager()
-    expect(pm.activeCount).toBe(0)
-  })
-})
-
 // ─── Sandbox Violation Tests ───
 
 describe("isLikelySandboxDenied", () => {
@@ -279,52 +260,5 @@ describe("isNetworkViolation", () => {
   })
   it("blocks when an allow list excludes the host", () => {
     expect(isNetworkViolation("other.com", ["example.com"], [], false)).toBe(true)
-  })
-})
-
-// ─── State Database Tests ───
-
-describe("State Database", () => {
-  it("initializes databases", () => {
-    resetDatabase()
-    const db = getDatabase()
-    expect(db).toBeDefined()
-    expect(db.getAllThreads).toBeDefined()
-    expect(db.getEvents).toBeDefined()
-  })
-  it("supports thread CRUD", () => {
-    resetDatabase()
-    const db = getDatabase()
-    db.saveThread("test-1", { source: "cli", model: "test" })
-    const thread = db.getThread("test-1")
-    expect(thread).toBeDefined()
-    expect((thread as Record<string, unknown>).metadata).toBeDefined()
-  })
-  it("supports event logging", () => {
-    resetDatabase()
-    const db = getDatabase()
-    db.appendEvent("session-1", "test", { data: "test" })
-    const events = db.getEvents("session-1")
-    expect(events.length).toBeGreaterThanOrEqual(1)
-  })
-  it("supports violation recording", () => {
-    resetDatabase()
-    const db = getDatabase()
-    db.recordViolation("filesystem", "/etc/passwd", "read", 1234)
-    const violations = db.getViolations()
-    expect(violations.length).toBeGreaterThanOrEqual(1)
-  })
-  it("supports audit trail", () => {
-    resetDatabase()
-    const db = getDatabase()
-    db.recordAudit("tool.execute", "agent", "bash", "success")
-    const threads = db.getAllThreads()
-    expect(threads).toBeDefined()
-  })
-  it("supports search", () => {
-    resetDatabase()
-    const db = getDatabase()
-    const results = db.searchThreads("test")
-    expect(results).toBeDefined()
   })
 })
