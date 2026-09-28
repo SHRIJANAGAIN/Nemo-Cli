@@ -58,6 +58,11 @@ export class ProcessManager {
 
   /**
    * Spawn a child process with full lifecycle management.
+   *
+   * The handle resolves as soon as the child exists. Completion is reported
+   * by `exitCode`: it resolves with the process exit code, or rejects when
+   * the command times out, is aborted, or when `signal` was already aborted
+   * before the call (in which case this method itself rejects).
    */
   spawn(options: {
     command: string[]
@@ -79,48 +84,83 @@ export class ProcessManager {
       env,
       timeoutMs = DEFAULT_EXEC_COMMAND_TIMEOUT_MS,
       outputCap = EXEC_OUTPUT_MAX_BYTES,
+      processGroup,
       signal,
     } = options
 
     return new Promise((resolve, reject) => {
+      // Already cancelled: nothing to run. Reject outright instead of
+      // spawning a corpse and handing back a handle to it.
+      if (signal?.aborted) {
+        reject(new Error("Process aborted"))
+        return
+      }
+
+      // `processGroup` (bash passes true) makes a POSIX child its own
+      // process-group leader so killProcessGroup's `process.kill(-pid)`
+      // reaches grandchildren; without it the group kill silently misses
+      // (ESRCH) and only the direct child dies. Windows kills the whole
+      // tree with `taskkill /T` and needs no detached child.
+      const ownProcessGroup = processGroup === true && process.platform !== "win32"
       const child = spawn(command[0], command.slice(1), {
         cwd,
         env,
-        signal,
         windowsHide: true,
+        detached: ownProcessGroup,
       })
 
       const pid = child.pid ?? 0
       let timeout: ReturnType<typeof setTimeout> | null = null
 
-      if (timeoutMs > 0) {
-        timeout = setTimeout(() => {
-          this.forceKill(child, pid)
-          reject(new Error(`Command timed out after ${timeoutMs}ms`))
-        }, timeoutMs)
-      }
-
-      if (signal) {
-        signal.addEventListener("abort", () => {
-          this.forceKill(child, pid)
-          reject(new Error("Process aborted"))
-        })
-      }
-
       const output = this.readOutputWithCap(child, outputCap)
 
-      const exitCode = new Promise<number>((resolveExit) => {
-        child.on("close", (code: number | null) => {
+      const exitCode = new Promise<number>((resolveExit, rejectExit) => {
+        // Completion settles exactly once: the first of close/error/timeout/
+        // abort wins, later events are no-ops. Timeout and abort reject with
+        // a real error so callers can tell them apart from an exit 1.
+        let completionSettled = false
+        let onAbort: (() => void) | undefined
+
+        const finish = (error: Error | null, code: number | null): void => {
+          if (completionSettled) return
+          completionSettled = true
           if (timeout) clearTimeout(timeout)
+          if (signal && onAbort) signal.removeEventListener("abort", onAbort)
           this.activeProcesses.delete(pid)
-          resolveExit(code ?? 1)
-        })
-        child.on("error", () => {
-          if (timeout) clearTimeout(timeout)
-          this.activeProcesses.delete(pid)
-          resolveExit(1)
-        })
+          if (error) rejectExit(error)
+          else resolveExit(code ?? 1)
+        }
+
+        if (timeoutMs > 0) {
+          timeout = setTimeout(() => {
+            this.forceKill(child, pid)
+            finish(new Error(`Command timed out after ${timeoutMs}ms`), null)
+          }, timeoutMs)
+        }
+
+        if (signal) {
+          onAbort = () => {
+            this.forceKill(child, pid)
+            finish(new Error("Process aborted"), null)
+          }
+          // The signal is deliberately NOT forwarded to child_process: Node
+          // registers its abort listener inside spawn(), before this one, and
+          // emits the child's 'error' synchronously — which would settle
+          // exitCode first and swallow the rejection. Owning the listener
+          // keeps the settle order deterministic: abort rejects, close/error
+          // defer to the guard above.
+          signal.addEventListener("abort", onAbort, { once: true })
+        }
+
+        child.on("close", (code: number | null) => finish(null, code))
+        child.on("error", () => finish(null, 1))
       })
+
+      // Timeout/abort must not crash a caller that walked away (bash.ts
+      // resolves on its own timer and never awaits exitCode — an unhandled
+      // rejection there is fatal on Node ≥15). This observer marks the
+      // rejection handled; later awaiters still receive it.
+      exitCode.catch(() => {})
 
       this.activeProcesses.set(pid, { child, timeout })
 

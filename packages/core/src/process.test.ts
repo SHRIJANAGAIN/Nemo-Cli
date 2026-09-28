@@ -32,6 +32,21 @@ function spawnWith(pm: ProcessManager, script: string, extra: Record<string, unk
   } as Parameters<ProcessManager["spawn"]>[0])
 }
 
+/**
+ * True iff a process group with id `pid` exists — i.e. `pid` leads its own
+ * group. `getpgid` is not exposed by Node, so this probes the group with
+ * signal 0 exactly the way `killProcessGroup` targets it with a real signal.
+ */
+function leadsOwnProcessGroup(pid: number): boolean {
+  if (process.platform === "win32") return false
+  try {
+    process.kill(-pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 describe("ProcessManager.spawn output capture", () => {
   it("captures stdout and reports a zero exit code", async () => {
     const pm = new ProcessManager()
@@ -133,7 +148,48 @@ describe("ProcessManager lifecycle", () => {
 
     controller.abort()
 
-    expect(await handle.exitCode).not.toBe(0)
+    await expect(handle.exitCode).rejects.toThrow("Process aborted")
+    expect(pm.activeCount).toBe(0)
+  })
+
+  it("rejects exitCode when the command times out", async () => {
+    const pm = new ProcessManager()
+    const handle = await spawnWith(pm, "setInterval(() => {}, 1000)", { timeoutMs: 250 })
+
+    await expect(handle.exitCode).rejects.toThrow("Command timed out after 250ms")
+    expect(pm.activeCount).toBe(0)
+    // The killed child's pipes still close, so partial output is delivered.
+    await expect(handle.output).resolves.toBeTypeOf("string")
+  })
+
+  it("rejects spawn() itself when the signal is already aborted", async () => {
+    const pm = new ProcessManager()
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      pm.spawn({
+        command: [node, "-e", 'process.stdout.write("never runs")'],
+        cwd: process.cwd(),
+        env: childEnv(),
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow("Process aborted")
+    expect(pm.activeCount).toBe(0)
+  })
+
+  const posixOnly = process.platform === "win32" ? it.skip : it
+
+  posixOnly("processGroup:true makes the child its own process-group leader", async () => {
+    const pm = new ProcessManager()
+
+    const grouped = await spawnWith(pm, "setInterval(() => {}, 1000)", { processGroup: true })
+    expect(leadsOwnProcessGroup(grouped.pid)).toBe(true)
+
+    const plain = await spawnWith(pm, "setInterval(() => {}, 1000)")
+    expect(leadsOwnProcessGroup(plain.pid)).toBe(false)
+
+    await pm.killAll()
     expect(pm.activeCount).toBe(0)
   })
 
