@@ -5,7 +5,7 @@
  */
 
 /**
- * TRAYAMBAK TUI — full theme system.
+ * TRAYAMBAK TUI â€” full theme system.
  * Token-based color themes with truecolor ANSI output,
  * luminance-aware selection foreground, and bundled palettes.
  */
@@ -739,7 +739,7 @@ const themes: Theme[] = [
   VELVET_PURPLE,
   EVERGREEN,
   ARCTIC_FOX,
-  // SKT AI LABS Code port — 36 palettes (dark side), see scripts/convert-skt-themes.mjs
+  // SKT AI LABS Code port â€” 36 palettes (dark side), see scripts/convert-skt-themes.mjs
   ...SKT_SPECS.map(build),
 ]
 
@@ -791,7 +791,7 @@ export function setThemeByName(name: string): Theme | undefined {
 /** Luminance-aware selection foreground (black on bright, white on dark). */
 export function selectedForeground(bgColor?: Rgb): Rgb {
   const target = bgColor ?? active.primary
-  // Luminance ranges 0–255 (not 0–1): the old `> 0.5` returned white for
+  // Luminance ranges 0â€“255 (not 0â€“1): the old `> 0.5` returned white for
   // every non-black background, so near-black surfaces got unreadable
   // black-on-near-black selection text.
   const luminance = 0.299 * target.r + 0.587 * target.g + 0.114 * target.b
@@ -845,7 +845,7 @@ export function stripAnsi(s: string): string {
 }
 
 /** Visible width of a string (ANSI-aware).
- *  Delegates to npm string-width — the same module Ink wraps Text with —
+ *  Delegates to npm string-width â€” the same module Ink wraps Text with â€”
  *  because the old `stripAnsi(s).length` counted UTF-16 units: Devanagari
  *  matras/virama (separate code points inside the base glyph's cell) blew
  *  the count up, pads came out short and Hindi boxes lost their right

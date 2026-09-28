@@ -17,7 +17,7 @@ function loadLogo(): string {
   // Deterministic order: explicit override, then the canonical logo sitting
   // next to this module (resolves in source ink-app/, CJS ink-app/, and the
   // flattened ink-app-esm/ alike), then well-known repo locations. The legacy
-  // cwd-relative assets come last — they used to rank ABOVE the canonical
+  // cwd-relative assets come last â€” they used to rank ABOVE the canonical
   // logo, so some launch contexts showed a different logo than others.
   const candidates = [
     process.env.TRAYAMBAK_LOGO_PATH ?? "",
@@ -72,7 +72,7 @@ export function TrayambakLogo({ compact = false }: TrayambakLogoProps): ReactNod
   return (
     <Box flexDirection="column" alignItems="flex-start">
       {/* truncate, never wrap: ASCII/ANSI art has spaceless block runs
-          (¯/¦¦¦¦) that word-wrap tears into stairs at narrow widths, and a
+          (â–ˆ/â–ˆâ–ˆâ–ˆâ–ˆ) that word-wrap tears into stairs at narrow widths, and a
           centered wide logo overflows both sides. Clipping one side keeps
           the mark recognizable at any width. */}
       <Text wrap="truncate">{logo}</Text>

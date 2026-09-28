@@ -18,7 +18,7 @@ export interface SessionPickerProps {
   onArchive?: (session: SessionEntry) => void
   /** Inline rename of the selected session (SKT AI LABS history-panel parity). */
   onRename?: (session: SessionEntry, name: string) => void
-  /** Delete the selected session ó always gated behind a y/n confirm. */
+  /** Delete the selected session ‚Äî always gated behind a y/n confirm. */
   onDelete?: (session: SessionEntry) => void
   /** Fork the selected session into a new one (copy of its transcript). */
   onFork?: (session: SessionEntry) => void
@@ -56,10 +56,10 @@ export const SessionPicker = ({
   const [sort, setSort] = useState<SortMode>("updated")
   const [selected, setSelected] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
-  /** Inline rename editor ó owns all input while true. */
+  /** Inline rename editor ‚Äî owns all input while true. */
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState("")
-  // Blinky rename caret ó same cell, solid ¶ ? space every 530ms, exactly
+  // Blinky rename caret ‚Äî same cell, solid ‚ñà/space every 530ms, exactly
   // like the composer's (the hardware caret is hidden app-wide, so a
   // permanently-lit block reads as stuck).
   const [caretOn, setCaretOn] = useState(true)
@@ -68,7 +68,7 @@ export const SessionPicker = ({
     const timer = setInterval(() => setCaretOn((v) => !v), 530)
     return () => clearInterval(timer)
   }, [editing])
-  /** Armed delete confirmation ó owns all input while true. */
+  /** Armed delete confirmation ‚Äî owns all input while true. */
   const [confirmDelete, setConfirmDelete] = useState(false)
   const MAX_VISIBLE = 20
   const hasNewChat = !!onNewChat
@@ -109,7 +109,7 @@ export const SessionPicker = ({
   const visible = filtered.slice(scrollTop, scrollTop + MAX_VISIBLE)
 
   // A delete (or a shrinking search) can leave `selected`/`scrollTop` past
-  // the end of the list ó clamp so Enter/arrows always address a real row
+  // the end of the list ‚Äî clamp so Enter/arrows always address a real row
   // and at least one row stays visible (off-by-one fix).
   useEffect(() => {
     const maxIdx = Math.max(0, filtered.length - 1 + offset)
@@ -118,7 +118,7 @@ export const SessionPicker = ({
     if (scrollTop > maxTop) setScrollTop(maxTop)
   }, [filtered.length])
 
-  // Restart selection at the top of a freshly filtered list ó keeping the
+  // Restart selection at the top of a freshly filtered list ‚Äî keeping the
   // old index would make Enter resume a DIFFERENT session mid-search
   // (search hijack fix).
   const resetSelection = (): void => {
@@ -169,7 +169,7 @@ export const SessionPicker = ({
       return
     }
     if (isEnter(input, key)) {
-      // "+ New Chat" row: `filtered[-1]` was never a row ó selecting it by
+      // "+ New Chat" row: `filtered[-1]` was never a row ‚Äî selecting it by
       // index 0 must work without a filtered hit (off-by-one fix).
       if (hasNewChat && selected === 0) {
         onNewChat?.()
@@ -197,7 +197,7 @@ export const SessionPicker = ({
       return
     }
 
-    // Single-letter commands only while the search box is empty ó otherwise
+    // Single-letter commands only while the search box is empty ‚Äî otherwise
     // every letter belongs to the query ("profile" must not hit the filter
     // key; search hijack fix).
     if (!query) {
@@ -274,7 +274,7 @@ export const SessionPicker = ({
           Resume Session
         </Text>
         <Text dimColor>
-          {filtered.length} sessions ∑ Filter: {filter} ∑ Sort: {sort}
+          {filtered.length} sessions ‚Äî Filter: {filter} ‚Äî Sort: {sort}
         </Text>
       </Box>
 
@@ -282,12 +282,12 @@ export const SessionPicker = ({
         <Box marginBottom={1}>
           <Text color={theme.warning}>
             ? Rename: {editName}
-            {caretOn ? "¶" : " "} (Enter save ∑ Esc cancel)
+            {caretOn ? "‚ñà" : " "} (Enter save ‚Äî Esc cancel)
           </Text>
         </Box>
       ) : confirmDelete && selectedEntry ? (
         <Box marginBottom={1}>
-          <Text color={theme.error}>? Delete "{selectedEntry.sessionName}"? y confirm ∑ n/esc cancel</Text>
+          <Text color={theme.error}>? Delete "{selectedEntry.sessionName}"? y confirm ‚Äî n/esc cancel</Text>
         </Box>
       ) : (
         <Box marginBottom={1}>
@@ -300,7 +300,7 @@ export const SessionPicker = ({
         {hasNewChat && (
           <Box key="new-chat">
             <Text color={selected === 0 ? theme.primary : undefined} bold={selected === 0}>
-              {selected === 0 ? "? " : "  "}
+              {selected === 0 ? "‚ùØ " : "  "}
             </Text>
             <Text color="green">+ New Chat</Text>
           </Box>
@@ -314,7 +314,7 @@ export const SessionPicker = ({
             return (
               <Box key={session.sessionId}>
                 <Text color={isActive ? theme.primary : undefined} bold={isActive}>
-                  {isActive ? "? " : "  "}
+                  {isActive ? "‚ùØ " : "  "}
                 </Text>
                 <Text color={STATUS_COLORS[session.status]}>{STATUS_LABELS[session.status]}</Text>
                 <Text> </Text>
@@ -338,7 +338,7 @@ export const SessionPicker = ({
           {" enter"} select {" esc"} exit {" r"} rename {" d"} delete {" F"} fork {" ctrl+a"} archive
         </Text>
         <Text dimColor>
-          {" f"} filter {" s"} sort {" ?/?"} browse ∑ f/s/r/d/F apply only while search is empty
+          {" f"} filter {" s"} sort {" ‚Üë/‚Üì"} browse ‚Äî f/s/r/d/F apply only while search is empty
         </Text>
       </Box>
     </Box>

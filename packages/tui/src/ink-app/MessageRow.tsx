@@ -19,9 +19,9 @@ export interface MessageRowProps {
   isTranscriptMode?: boolean
   isStreaming?: boolean
   /** Turn phase: while "running" (text streaming) the reasoning spinner
-   *  STANDS DOWN ó reasoning finished, showing "ThinkingÖ" above the
+   *  STANDS DOWN ‚Äî reasoning finished, showing "Thinking‚Ä¶" above the
    *  growing answer was a lie ("AI GENERATE KR RHA HAI AUR THINKING
-   *  DIKHA RAHA"). Undefined/other ? old behavior. */
+   *  DIKHA RAHA"). Undefined/other ‚Äî old behavior. */
   phase?: AppStatus
   /** Ctrl+O: tool outputs + compaction markers render full instead of
    *  preview/collapsed. */
@@ -48,7 +48,7 @@ export const MessageRow = ({
 }: MessageRowProps): ReactNode => {
   const theme = useThemeColors()
 
-  // Subagent ("task") cards render as their own row kind ó this must come
+  // Subagent ("task") cards render as their own row kind ‚Äî this must come
   // before the role switch (cards are role "system" and would otherwise spin).
   if (message.subagentId) {
     return <SubagentRow message={message} />
@@ -59,15 +59,15 @@ export const MessageRow = ({
   if (message.role === "user") {
     // Ctrl+O collapses compaction summaries: the "[Context auto-compaction]
     // ..." marker folds to its first line (full text back on expand). Plain
-    // prompts are untouched ó only the marker prefix collapses.
+    // prompts are untouched ‚Äî only the marker prefix collapses.
     const content = message.content ?? ""
     const isCompactionMarker = content.startsWith("[Context auto-compaction]")
     const shownContent =
-      isCompactionMarker && !expandOutput ? content.split("\n")[0] + (content.includes("\n") ? " Ö" : "") : content
+      isCompactionMarker && !expandOutput ? content.split("\n")[0] + (content.includes("\n") ? " ‚Ä¶" : "") : content
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         <Text color={theme.primary} bold>
-          {"?"} {shownContent}
+          {"‚ùØ"} {shownContent}
         </Text>
       </Box>
     )
@@ -104,7 +104,7 @@ export const MessageRow = ({
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         {hasActiveThinking && isStreaming && phase !== "running" && (
           <Box flexDirection="row" marginLeft={2} marginTop={1}>
-            <Spinner color={theme.warning}>ThinkingÖ</Spinner>
+            <Spinner color={theme.warning}>Thinking‚Ä¶</Spinner>
           </Box>
         )}
         {message.parts && message.parts.length > 0 ? (
@@ -148,7 +148,7 @@ export const MessageRow = ({
           </Box>
         ) : message.content ? (
           // column (not default row): a row-hugged Text measures/wraps
-          // differently from the column-stretched parts-path Text above ó
+          // differently from the column-stretched parts-path Text above ‚Äî
           // one-col wrap jumps between the two.
           <Box marginLeft={1} flexDirection="column">
             <Text color={theme.markdownText}>{normalizeStairIndent(message.content)}</Text>
@@ -161,12 +161,12 @@ export const MessageRow = ({
   if (message.role === "system") {
     // Static marker: system rows are durable transcript entries (banners,
     // answers, resumed-session notes). The old always-on animated spinner
-    // rewrote its line forever ó on a resumed history every banner spun at
+    // rewrote its line forever ‚Äî on a resumed history every banner spun at
     // once and churned Ink's frame writer into overlapping garbage.
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         <Text color={message.isError ? theme.error : theme.textMuted}>
-          {message.isError ? "?" : "?"} {message.content}
+          {message.isError ? "‚úó" : "‚óè"} {message.content}
         </Text>
       </Box>
     )
@@ -175,23 +175,23 @@ export const MessageRow = ({
   if (message.role === "tool") {
     const isError = message.isError ?? false
     const statusColor = isError ? theme.error : theme.success
-    const statusIcon = isError ? "?" : "?"
+    const statusIcon = isError ? "‚úó" : "‚úì"
     // SKT AI LABS port: tool results collapse to ONE line. A resumed session used
-    // to dump every result's full JSON payload inline ó walls of raw
+    // to dump every result's full JSON payload inline ‚Äî walls of raw
     // interleave that buried the conversation under tool output.
     // Ctrl+O unfolds to full text (200-line cap, wrapped) instead.
     const raw = (message.content ?? "").replace(/\s+/g, " ").trim()
-    const preview = raw.length > 120 ? `${raw.slice(0, 120)}Ö` : raw
+    const preview = raw.length > 120 ? `${raw.slice(0, 120)}‚Ä¶` : raw
     // Ctrl+O: full text (20k-char cap with a marker past it) instead of
     // the one-line preview. Collapsed default is unchanged behavior.
     const shown = expandOutput ? raw.slice(0, 20000) : preview
     const overflowNote =
-      expandOutput && raw.length > shown.length ? ` Ö +${raw.length - shown.length} chars (truncated)` : ""
+      expandOutput && raw.length > shown.length ? ` ‚Äî +${raw.length - shown.length} chars (truncated)` : ""
 
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         {/* ONE truncating text node: as 3 sibling flex rows the name could
-            wrap to line 2 at 100ñ119 cols while the preview stayed on line 1
+            wrap to line 2 at 100‚Äì119 cols while the preview stayed on line 1
             ("Called bash" below its own arguments). Nested <Text> children
             share one line + truncate-end instead (same fix as ToolCallItem). */}
         <Text wrap="truncate-end">
@@ -202,7 +202,7 @@ export const MessageRow = ({
           </Text>
           {preview ? (
             <Text color={theme.textMuted}>
-              {" ó "}
+              {" ‚Äî "}
               {shown}
               {overflowNote}
             </Text>

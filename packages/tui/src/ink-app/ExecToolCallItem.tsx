@@ -14,7 +14,7 @@ import { useThemeColors, type ThemeSnapshot } from "./themeColors.js"
 import { useBorderPulse } from "./use-border-pulse.js"
 
 /** Bind the active Ink theme's syntax tokens onto bash roles (/theme now
- *  recolors code blocks ó the old hardcoded night-owl hues ignored it). */
+ *  recolors code blocks ‚Äî the old hardcoded night-owl hues ignored it). */
 function bashPalette(theme: ThemeSnapshot): BashPalette {
   return {
     keyword: theme.syntaxKeyword,
@@ -85,17 +85,17 @@ export const ExecToolCallItem = ({
     } else if (success === false) {
       bullet = (
         <Text color={theme.error} bold>
-          ï
+          ‚úó
         </Text>
       )
     } else if (success === true) {
       bullet = (
         <Text color={theme.success} bold>
-          ï
+          ‚úì
         </Text>
       )
     } else {
-      bullet = <Text color={theme.textMuted}>ï</Text>
+      bullet = <Text color={theme.textMuted}>‚óè</Text>
     }
   }
 
@@ -138,7 +138,7 @@ export const ExecToolCallItem = ({
       width={toolBoxWidth(termWidth)}
       borderColor={isFinished ? (isError ? theme.error : theme.border) : isRunning ? pulse.color : theme.borderActive}
       // One lit edge trips around the box while running (chase), static
-      // colour when finished ó and round corners, matching the frame.
+      // colour when finished ‚Äî and round corners, matching the frame.
       borderTopColor={isRunning ? pulse.top : undefined}
       borderRightColor={isRunning ? pulse.right : undefined}
       borderBottomColor={isRunning ? pulse.bottom : undefined}
@@ -155,7 +155,7 @@ export const ExecToolCallItem = ({
         {/* Column, bounded (flexGrow + minWidth 0): the old row-in-row laid
             multi-line commands side-by-side on ONE visual line ("echo a"
             glued next to "+ echo b"), and the unbounded inner row meant
-            truncate-end never fired ó long commands stretched the border
+            truncate-end never fired ‚Äî long commands stretched the border
             past the terminal and pushed ?/duration off-screen. Each command
             line is now its own row; the status mark rides a row of its own
             so it can never be clipped by command text. */}
@@ -185,16 +185,16 @@ export const ExecToolCallItem = ({
             </Box>
           ))}
           {highlightedLines.length > maxLines && (
-            <Text color={theme.textMuted}>{"  + Ö +" + (highlightedLines.length - maxLines) + " lines"}</Text>
+            <Text color={theme.textMuted}>{"  + ‚Ä¶ +" + (highlightedLines.length - maxLines) + " lines"}</Text>
           )}
           {/* Ported resultLine palette: ? green bold / ? red bold before
-              the (dim) duration ó on its own row, always visible. */}
+              the (dim) duration ‚Äî on its own row, always visible. */}
           {isFinished && (
             <Text wrap="truncate-end">
               <Text bold color={isError ? theme.error : theme.success}>
-                {isError ? "?" : "?"}
+                {isError ? "‚úó" : "‚úì"}
               </Text>
-              {durationMs !== undefined && <Text color={theme.textMuted}> ï {durationMs}ms</Text>}
+              {durationMs !== undefined && <Text color={theme.textMuted}> ‚Äî {durationMs}ms</Text>}
             </Text>
           )}
         </Box>
@@ -215,7 +215,7 @@ export const ExecToolCallItem = ({
             if (all.length > limit) {
               rows.push(
                 <Text key="more" color={theme.textMuted}>
-                  {expandOutput ? `Ö +${all.length - limit} more lines (still collapsed past 200)` : "Ö"}
+                  {expandOutput ? `‚Ä¶ +${all.length - limit} more lines (still collapsed past 200)` : "‚Ä¶"}
                 </Text>,
               )
             }

@@ -39,7 +39,7 @@ export interface TrayambakMessage {
   result?: string
   toolStatus?: "running" | "completed" | "error" | "pending"
   durationMs?: number
-  /* Subagent ("task") card fields — set on transcript cards created for
+  /* Subagent ("task") card fields â€” set on transcript cards created for
    * subagent_start / subagent_background_start lifecycle events. */
   subagentId?: string
   subagentName?: string
@@ -53,7 +53,7 @@ export interface TrayambakMessage {
   subagentDurationMs?: number
   subagentDetail?: string
   /* TTL'd transient notice (addSystemMessage { ttlMs }): once the clock runs
-   * out, the LIVE frame renders nothing for this row — while the messages
+   * out, the LIVE frame renders nothing for this row â€” while the messages
    * array, every index, and the <Static> scrollback copy stay untouched.
    * Never splice the row out: the print-once frontier indexes into this
    * array, and a removal would shift later ids and re-print history. */
@@ -94,7 +94,7 @@ export interface PermissionRequest {
   tool: string
   reason: string
   args: Record<string, unknown>
-  /** Sensitive operation — must be answered interactively, even under auto-approve. */
+  /** Sensitive operation â€” must be answered interactively, even under auto-approve. */
   forceAsk?: boolean
 }
 
@@ -123,24 +123,24 @@ export interface StatusBarInfo {
   status: AppStatus
   statusBarText?: string
   tokenCount?: number
-  /** Model context window — drives the footer's `ctx N%` segment. */
+  /** Model context window â€” drives the footer's `ctx N%` segment. */
   contextWindow?: number
   isStreaming?: boolean
   queuedCount?: number
   backgroundCount?: number
-  /** Transient footer hint, e.g. "? task finished — Ctrl+B to view". */
+  /** Transient footer hint, e.g. "âœ“ task finished â€” Ctrl+B to view". */
   taskHint?: string
 }
 
 export function formatSubagentTitle(agent: string, description: string, background: boolean): string {
-  return `${agent} Task${background ? " (background)" : ""} — ${description}`
+  return `${agent} Task${background ? " (background)" : ""} â€” ${description}`
 }
 
 /** Explicit tool-box width (no width="100%" on bordered boxes).
  *
  *  Measured: yoga draws this codebase's borders OUTSIDE the width, so a
  *  width="100%" tool box landed its right edge exactly ON the fullscreen
- *  frame's right border column (repro: corner + at columns-1) — the box
+ *  frame's right border column (repro: corner + at columns-1) â€” the box
  *  "escaped the conversation box". Geometry: tool origin is terminal col
  *  2 (static row margin 1 + message margin 1; col 3 when addMargin/grouped
  *  adds one more), frame inner ends at columns-2. termWidth-5 fits every
@@ -156,7 +156,7 @@ export function formatSubagentToolcalls(count: number): string {
 
 export function formatCompletedSubagentDetail(toolcalls: number, duration: string): string {
   if (toolcalls === 0) return duration
-  return `${formatSubagentToolcalls(toolcalls)} · ${duration}`
+  return `${formatSubagentToolcalls(toolcalls)} â€” ${duration}`
 }
 
 export const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
@@ -212,8 +212,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     description: "Checkpoints on/off switch",
     category: "Session",
     chooser: [
-      { value: "on", description: "On — capture before every turn, /undo works (default)" },
-      { value: "off", description: "Off — no captures, undo/redo report the state" },
+      { value: "on", description: "On â€” capture before every turn, /undo works (default)" },
+      { value: "off", description: "Off â€” no captures, undo/redo report the state" },
       { value: "status", description: "Show on/off + stored points" },
     ],
   },
@@ -252,7 +252,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "init", description: "Scan the repo and write/update AGENTS.md + durable memory", category: "Agent" },
   {
     name: "subagents",
-    description: "Open the subagents panel — foreground + background tasks (Ctrl+S)",
+    description: "Open the subagents panel â€” foreground + background tasks (Ctrl+S)",
     category: "Agent",
   },
   { name: "goal", description: "Set, show, or clear the persistent goal", category: "Session" },
@@ -264,11 +264,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     description: "Toggle permission mode: read-only / plan / ask / auto / full-access",
     category: "Developer",
     chooser: [
-      { value: "read-only", description: "Read-only — no writes, no edits (safest)" },
-      { value: "plan", description: "Plan — explore only; mutations denied, model proposes a plan" },
-      { value: "ask", description: "Ask — approval before writes/edits (default)" },
-      { value: "auto-approve", description: "Auto-approve — writes/edits allowed" },
-      { value: "full-access", description: "Full access — danger, no approvals needed" },
+      { value: "read-only", description: "Read-only â€” no writes, no edits (safest)" },
+      { value: "plan", description: "Plan â€” explore only; mutations denied, model proposes a plan" },
+      { value: "ask", description: "Ask â€” approval before writes/edits (default)" },
+      { value: "auto-approve", description: "Auto-approve â€” writes/edits allowed" },
+      { value: "full-access", description: "Full access â€” danger, no approvals needed" },
     ],
   },
   {

@@ -35,16 +35,16 @@ function formatArgs(args: Record<string, unknown>, maxLen: number = MAX_ARG_LENG
       }
     }
     // Width- and cluster-safe: raw `.length`/`.slice` cut Devanagari matras
-    // off their base, leaving a stray mark at the "Ö" (Hindi args rendered
+    // off their base, leaving a stray mark at the "‚Ä¶" (Hindi args rendered
     // broken in the tool-call row).
     if (stringWidth(valStr) > maxLen) {
-      valStr = sliceByWidth(valStr, maxLen - 1) + "Ö"
+      valStr = sliceByWidth(valStr, maxLen - 1) + "‚Ä¶"
     }
     return `${key}=${valStr}`
   })
   const result = formatted.join(" ")
   if (stringWidth(result) > maxLen) {
-    return sliceByWidth(result, maxLen - 1) + "Ö"
+    return sliceByWidth(result, maxLen - 1) + "‚Ä¶"
   }
   return result
 }
@@ -94,7 +94,7 @@ export const MCPToolCallItem = ({
     // Width-aware args budget (mirrors ToolCallItem): a fixed 60 chars let
     // the truncate eat the ?/duration tail at ~100 cols. Reserve room for
     // bullet + labels + server.name + parens + mark + duration.
-    const durationTail = durationMs !== undefined && isFinished ? ` ï ${durationMs}ms`.length : 0
+    const durationTail = durationMs !== undefined && isFinished ? ` ‚Äî ${durationMs}ms`.length : 0
     const argBudget = Math.max(20, Math.min(60, termWidth - (server?.length ?? 0) - name.length - 25 - durationTail))
     const argsStr = formatArgs(args, argBudget)
     headerText = `${server}.${name}(${argsStr})`
@@ -110,17 +110,17 @@ export const MCPToolCallItem = ({
     } else if (success === false) {
       bullet = (
         <Text color={theme.error} bold>
-          ï
+          ‚úó
         </Text>
       )
     } else if (success === true) {
       bullet = (
         <Text color={theme.success} bold>
-          ï
+          ‚úì
         </Text>
       )
     } else {
-      bullet = <Text color={theme.textMuted}>ï</Text>
+      bullet = <Text color={theme.textMuted}>‚óè</Text>
     }
   }
 
@@ -132,7 +132,7 @@ export const MCPToolCallItem = ({
       width={toolBoxWidth(termWidth)}
       borderColor={isFinished ? (isError ? theme.error : theme.border) : isRunning ? pulse.color : theme.borderActive}
       // One lit edge trips around the box while running (chase), static
-      // colour when finished ó and round corners, matching the frame.
+      // colour when finished ‚Äî and round corners, matching the frame.
       borderTopColor={isRunning ? pulse.top : undefined}
       borderRightColor={isRunning ? pulse.right : undefined}
       borderBottomColor={isRunning ? pulse.bottom : undefined}
@@ -146,7 +146,7 @@ export const MCPToolCallItem = ({
             {bullet}
           </Box>
         )}
-        {/* ONE truncating text node ó sibling rows let yoga drop labels to
+        {/* ONE truncating text node ‚Äî sibling rows let yoga drop labels to
             a second line whenever the header exceeded the box (narrow
             terminals); nested <Text> children share one line instead. */}
         <Text wrap="truncate-end">
@@ -173,13 +173,13 @@ export const MCPToolCallItem = ({
               </Text>
             </>
           )}
-          {/* Ported resultLine palette: ? green bold / ? red bold. */}
+          {/* Ported resultLine palette: ‚úì green bold / ‚úó red bold. */}
           {isFinished && (
             <Text bold color={isError ? theme.error : theme.success}>
-              {isError ? " ?" : " ?"}
+              {isError ? " ‚úó" : " ‚úì"}
             </Text>
           )}
-          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> ï {durationMs}ms</Text>}
+          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> ‚Äî {durationMs}ms</Text>}
         </Text>
       </Box>
 
@@ -198,7 +198,7 @@ export const MCPToolCallItem = ({
             if (all.length > limit) {
               rows.push(
                 <Text key="more" color={theme.textMuted}>
-                  {expandOutput ? `Ö +${all.length - limit} more lines (still collapsed past 200)` : "Ö"}
+                  {expandOutput ? `‚Ä¶ +${all.length - limit} more lines (still collapsed past 200)` : "‚Ä¶"}
                 </Text>,
               )
             }

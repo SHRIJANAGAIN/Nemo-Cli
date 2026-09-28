@@ -117,4 +117,4 @@ default. Details: [Security](security.md); reporting SLA and scope in
 
 **License**
 
-Apache-2.0 — see [`LICENSE`](../LICENSE) (Apache License 2.0, SKT AI LABS PRIVATE LIMITED).
+Apache-2.0 â€” see [`LICENSE`](../LICENSE) (Apache License 2.0, SKT AI LABS PRIVATE LIMITED).

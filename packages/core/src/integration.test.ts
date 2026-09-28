@@ -1,13 +1,15 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { AgentRegistry, getAgentRegistry, resetAgentRegistry } from "./agent_registry.js";
+import { AgentRegistry, AgentStatus, getAgentRegistry, resetAgentRegistry } from "./agent_registry.js";
 import { AgentCommunicationManager, getAgentCommunicationManager } from "./agent_communication.js";
 import { AgentCommunicationKind } from "./agent_communication.js";
 import { ExtensionRegistry, getExtensionRegistry } from "./extension_api.js";
 import { PluginManager, getPluginManager } from "./extension_api.js";
 import { AnalyticsManager, getAnalyticsManager } from "./analytics.js";
-import { ThreadStore, getThreadStore, ThreadStatus, ThreadSource } from "./session_store.js";
+import { ThreadStore, resetThreadStore, ThreadStatus, ThreadSource } from "./session_store.js";
+import { tmpdir } from "os";
+import { join } from "path";
 import { loadProjectInstructions, discoverAgentsMdFiles, findProjectRoot } from "./agents_md.js";
 import { RolloutBudget, getRolloutBudget } from "./rollout_budget.js";
 import { HookRuntime, getHookRuntime, HookEventName, HookExecutionMode, HookSource } from "./hook_runtime.js";
@@ -37,7 +39,7 @@ describe("AgentRegistry", () => {
         const result = registry.registerAgent("thread-1", {});
         const agent = registry.getAgent(result.agentId);
         expect(agent?.status).toBeDefined();
-        registry.updateStatus(result.agentId, { status: AgentStatus.Completed });
+        registry.updateStatus(result.agentId, AgentStatus.Completed);
         expect(registry.getAgent(result.agentId)?.status).toBe("completed");
     });
 
@@ -171,7 +173,7 @@ describe("AnalyticsManager", () => {
 
     it("records hook run facts", () => {
         const analytics = getAnalyticsManager();
-        analytics.recordHookRun("pre-tool-use", 10, "success", "allowed");
+        analytics.recordHookRun({ eventName: "pre-tool-use", durationMs: 10, status: "success", output: "allowed" });
         expect(analytics.getHookRunFacts().length).toBe(1);
     });
 });
@@ -179,12 +181,13 @@ describe("AnalyticsManager", () => {
 describe("ThreadStore", () => {
     let store: ThreadStore;
     beforeEach(() => {
-        store = ThreadStore.getInstance();
-        store.clear();
+        // Isolated per-test directory — never the real ~/.trayambak/threads.
+        const dir = join(tmpdir(), `trayambak-threads-${process.pid}-${Math.random().toString(36).slice(2)}`);
+        store = resetThreadStore(dir);
     });
 
     it("creates and reads a thread", () => {
-        const thread = store.createThread("thread-1", ThreadSource.User, ThreadStatus.Active);
+        const thread = store.createThread("thread-1", { source: ThreadSource.User, status: ThreadStatus.Active });
         expect(thread.metadata.id).toBe("thread-1");
         const read = store.readThread("thread-1");
         expect(read).not.toBeNull();
@@ -192,7 +195,7 @@ describe("ThreadStore", () => {
     });
 
     it("archives and unarchives a thread", () => {
-        store.createThread("thread-1", ThreadSource.User, ThreadStatus.Active);
+        store.createThread("thread-1", { source: ThreadSource.User, status: ThreadStatus.Active });
         const archived = store.archiveThread("thread-1");
         expect(archived?.metadata.status).toBe("archived");
         const unarchived = store.unarchiveThread("thread-1");
@@ -200,7 +203,7 @@ describe("ThreadStore", () => {
     });
 
     it("forks a thread", () => {
-        const original = store.createThread("thread-1", ThreadSource.User, ThreadStatus.Active);
+        const original = store.createThread("thread-1", { source: ThreadSource.User, status: ThreadStatus.Active });
         const forked = store.forkThread("thread-1", "thread-2");
         expect(forked?.metadata.forkedFrom).toBe("thread-1");
         expect(forked?.metadata.parentThreadId).toBe("thread-1");
@@ -208,14 +211,14 @@ describe("ThreadStore", () => {
     });
 
     it("deletes a thread", () => {
-        store.createThread("thread-1", ThreadSource.User, ThreadStatus.Active);
+        store.createThread("thread-1", { source: ThreadSource.User, status: ThreadStatus.Active });
         expect(store.getThreadCount()).toBe(1);
         store.deleteThread("thread-1");
         expect(store.getThreadCount()).toBe(0);
     });
 
     it("searches threads", () => {
-        store.createThread("thread-1", ThreadSource.User, ThreadStatus.Active);
+        store.createThread("thread-1", { source: ThreadSource.User, status: ThreadStatus.Active });
         store.addMessages("thread-1", [{ role: "user", content: "hello world", timestamp: Date.now() }]);
         const results = store.searchThreads("hello");
         expect(results.length).toBe(1);
@@ -267,14 +270,14 @@ describe("HookRuntime", () => {
             timeoutMs: 5000,
             handler: async () => { called = true; return { shouldStop: false, additionalContext: [] }; },
         });
-        const summary = await runtime.runEvent({ eventName: HookEventName.SessionStart, source: HookSource.User, cwd: "/tmp" });
+        const summary = await runtime.runEvent({ eventName: HookEventName.SessionStart, source: HookSource.User, cwd: "/tmp", config: {}, permissions: {} });
         expect(called).toBe(true);
         expect(summary.eventName).toBe(HookEventName.SessionStart);
     });
 
     it("pre-tool-use hook evaluation", async () => {
         const runtime = getHookRuntime();
-        const result = await runtime.evaluatePreToolUse("bash", { command: "echo hi" }, { eventName: HookEventName.PreToolUse, source: HookSource.Model, cwd: "/tmp" });
+        const result = await runtime.evaluatePreToolUse("bash", { command: "echo hi" }, { eventName: HookEventName.PreToolUse, source: HookSource.Model, cwd: "/tmp", config: {}, permissions: {} });
         expect(result.decision).toBe("allow");
     });
 });

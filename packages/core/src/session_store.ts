@@ -9,7 +9,7 @@
 
 import { join, dirname } from "path";
 import { homedir } from "os";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, renameSync, rmSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, renameSync, rmSync } from "fs";
 
 /** Thread status states. */
 export enum ThreadStatus {
@@ -90,6 +90,18 @@ export class ThreadStore {
         if (!ThreadStore.instance) {
             ThreadStore.instance = new ThreadStore(storeDir);
         }
+        return ThreadStore.instance;
+    }
+
+    /**
+     * Reset the singleton, optionally pointing it at a different directory.
+     *
+     * Tests must call this with a temp directory: the default store lives in
+     * `~/.trayambak/threads`, so running the suite against the default would
+     * clear the user's real conversation history.
+     */
+    static resetInstance(storeDir?: string): ThreadStore {
+        ThreadStore.instance = new ThreadStore(storeDir);
         return ThreadStore.instance;
     }
 
@@ -372,13 +384,20 @@ export class ThreadStore {
         return `checksum_${Math.abs(hash).toString(36)}`;
     }
 
+    /**
+     * List thread IDs in the store.
+     *
+     * Returns bare IDs (without the `.json` suffix) because every caller —
+     * `readThread(id)`, `getEntryPath(id)`, `clear()` — appends the extension
+     * itself. Reading the store *directory* as a file (the previous
+     * implementation) always threw EISDIR, so count/list/search silently
+     * returned empty results.
+     */
     private listFiles(): string[] {
-        if (!existsSync(this.storeDir)) return [];
         try {
-            return readFileSync(this.storeDir)
-                .toString()
-                .split("\n")
-                .filter(f => f.endsWith(".json"));
+            return readdirSync(this.storeDir)
+                .filter(f => f.endsWith(".json"))
+                .map(f => f.slice(0, -".json".length));
         } catch {
             return [];
         }
@@ -388,6 +407,11 @@ export class ThreadStore {
 /** Get the singleton ThreadStore. */
 export function getThreadStore(storeDir?: string): ThreadStore {
     return ThreadStore.getInstance(storeDir);
+}
+
+/** Reset the singleton to a fresh store. Tests only. */
+export function resetThreadStore(storeDir?: string): ThreadStore {
+    return ThreadStore.resetInstance(storeDir);
 }
 
 /**

@@ -56,14 +56,14 @@ const MAX_VISIBLE = 12
  *  lines exist to paint. Ink's Box defaults to flexShrink:1, so content
  *  that doesn't fit gets SQUEEZED while its Text still paints at natural
  *  height - stacking rows on top of each other: the header landed inside
- *  the logo, "? 41 more" painted over "Orange Light", and the accent line
+ *  the logo, "▼ 41 more" painted over "Orange Light", and the accent line
  *  overwrote the preview's bottom border. Fit everything up front (logo
  *  first, the preview is the luxury item), and the children below also
  *  carry flexShrink={0} so a budget shortfall can never overlap again. */
 function fitLayout(rows: number): { logoCompact: boolean; showPreview: boolean; visible: number } {
   const avail = Math.max(4, rows - 4)
   // per-child cost, margins included: logo+1, header+margin 3, list (worst
-  // case both ?/? marker rows) + margin 3, help 1, preview (border 2 +
+  // case both ↑/↓ marker rows) + margin 3, help 1, preview (border 2 +
   // code pad 2 + 4 code lines + accent line) + margin 10.
   const room = (logoRows: number, preview: boolean): number => avail - (logoRows + 1) - 3 - 3 - 1 - (preview ? 10 : 0)
   const pick = (logoRows: number, showPreview: boolean, min: number) => {
@@ -134,18 +134,18 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
       </Box>
       <Box flexDirection="column" alignItems="center" marginBottom={1} flexShrink={0}>
         <Text bold color="green">
-          Trayambak � Choose a Theme
+          Trayambak — Choose a Theme
         </Text>
         <Text dimColor>Pick the text style that looks best with your terminal (one-time setup)</Text>
       </Box>
       <Box flexDirection="column" marginBottom={1} flexShrink={0}>
-        {scrollTop > 0 ? <Text dimColor> ? {scrollTop} more</Text> : null}
+        {scrollTop > 0 ? <Text dimColor> ▼ {scrollTop} more</Text> : null}
         {themes.slice(scrollTop, scrollTop + visible).map((theme, i) => {
           const idx = scrollTop + i
           return (
             <Box key={theme.name}>
               <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>
-                {idx === selected ? "? " : "  "}
+                {idx === selected ? "❯ " : "  "}
               </Text>
               <Text color={theme.swatch} bold={idx === selected}>
                 {theme.label}
@@ -155,7 +155,7 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
           )
         })}
         {scrollTop + visible < themes.length ? (
-          <Text dimColor> ? {themes.length - scrollTop - visible} more</Text>
+          <Text dimColor> ▼ {themes.length - scrollTop - visible} more</Text>
         ) : null}
       </Box>
       {current && showPreview ? (
@@ -166,7 +166,7 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
       ) : null}
       <Box flexShrink={0}>
         <Text dimColor>
-          {" enter"} select {" ?/?"} browse {" esc"} keep default
+          {" enter"} select {" ↑/↓"} browse {" esc"} keep default
         </Text>
       </Box>
     </Box>

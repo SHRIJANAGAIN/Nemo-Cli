@@ -8,7 +8,7 @@ import React, { type ReactNode, useState, useEffect } from "react"
 import { Box, Text } from "ink"
 import { useThemeColors } from "./themeColors.js"
 
-const BLACK_CIRCLE = "?"
+const BLACK_CIRCLE = "‚óè"
 
 const BLINK_INTERVAL_MS = 600
 
@@ -53,8 +53,8 @@ export const ToolUseLoader = ({
     color = theme.success
   }
 
-  // Blink ? ? space. The pre-fix expression returned the raw BOOLEAN
-  // `isVisible` ó React/Ink render booleans as NOTHING, so a running tool
+  // Blink: BLACK_CIRCLE or " ". The pre-fix expression returned the raw BOOLEAN
+  // `isVisible` ‚Äî React/Ink render booleans as NOTHING, so a running tool
   // call showed an empty 2-col gutter and no animation at all ("must have
   // tool call animation, old to future"). A string keeps the box width
   // stable while the dot blinks. Affects every caller (ToolCallItem,
@@ -64,7 +64,7 @@ export const ToolUseLoader = ({
 
   return (
     <Box minWidth={2}>
-      {/* "animation bada do": the RUNNING bullet renders bold + undimmed ó
+      {/* "animation bada do": the RUNNING bullet renders bold + undimmed ‚Äî
           the old dim ? faded into the header and read as a static speck.
           Blink-off frames are " " (width-stable), and finished/queued
           dots keep their exact colours. */}
