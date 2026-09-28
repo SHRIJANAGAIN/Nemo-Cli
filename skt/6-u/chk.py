@@ -96,7 +96,7 @@ def check(
             new_mistakes.append(heading)
 
     improvements: List[str] = []
-    for heading, body in _read_sections(root / "skt" / "1-errors" / "IMPROVMENT.MD"):
+    for heading, body in _read_sections(root / "skt" / "1-errors" / "IMPROVEMENT.MD"):
         if not body:
             continue
         if _similar(response[:500], body[:500]) >= 0.7:

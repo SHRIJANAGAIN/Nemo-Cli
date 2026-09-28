@@ -29,7 +29,7 @@ Every row in this ledger is a **deduction** — a moment where the assistant los
 
 - `points.md` — the awards ledger (positive points)
 - `1-errors/MISTAKES.MD` — full mistake log with full context
-- `1-errors/IMPROVMENT.MD` — improvements recorded after each fix
+- `1-errors/IMPROVEMENT.MD` — improvements recorded after each fix
 - `6-u/HISTORY.MD` — improvement history
 - `6-u/reward.py` — adjusts future rewards based on exclusion rate
 

@@ -2,7 +2,7 @@
 """
 SKT AI LABS - Evaluation Engine
 ===============================
-Reads MISTAKES.MD, IMPROVMENT.MD, HISTORY.MD and the excluded-points
+Reads MISTAKES.MD, IMPROVEMENT.MD, HISTORY.MD and the excluded-points
 ledger to compute per-task reliability scores and a global reputation.
 
 Reliability formula:
@@ -96,12 +96,12 @@ def evaluate(root: str | os.PathLike[str] = ".") -> EvalReport:
     root = Path(root)
     err_dir = root / "skt" / "1-errors"
     hist_md = root / "skt" / "6-u" / "HISTORY.MD"
-    improvements = _count_recent(err_dir / "IMPROVMENT.MD", r".")
+    improvements = _count_recent(err_dir / "IMPROVEMENT.MD", r".")
     repeats = _count_recent(err_dir / "2nd-mistake.md", r".")
     reliability = improvements / max(1, improvements + repeats)
     by_type: Dict[str, float] = {}
     for t, weight in TASK_RUBRIC.items():
-        type_improvements = _count_recent(err_dir / "IMPROVMENT.MD", t) if t else improvements
+        type_improvements = _count_recent(err_dir / "IMPROVEMENT.MD", t) if t else improvements
         type_repeats = _count_recent(err_dir / "2nd-mistake.md", t) if t else repeats
         by_type[t] = type_improvements / max(1, type_improvements + type_repeats) * weight
     notes: List[str] = []

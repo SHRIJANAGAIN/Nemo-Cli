@@ -129,7 +129,7 @@ export class LogUpdate {
     // to clear when the viewport gets shorter (i.e. the cursor position drifts)
     // or when it gets thinner (and text wraps). We _could_ figure out how to
     // not reset here but that would involve predicting the current layout
-    // _after_ the viewport change which means calcuating text wrapping.
+    // _after_ the viewport change which means calculating text wrapping.
     // Resizing is a rare enough event that it's not practically a big issue.
     if (
       next.viewport.height < prev.viewport.height ||

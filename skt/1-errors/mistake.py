@@ -178,8 +178,8 @@ class MistakeLedger:
         self.jsonl = self.dir / "mistakes.jsonl"
         self.md = self.dir / "MISTAKES.MD"
         self.second_md = self.dir / "2nd-mistake.md"
-        self.improvement_md = self.dir / "IMPROVMENT.MD"
-        self.penalty_py = self.dir / "PENATLITY.py"
+        self.improvement_md = self.dir / "IMPROVEMENT.MD"
+        self.penalty_py = self.dir / "PENALTY.py"
         self._lock = threading.RLock()
         self._bootstrap()
 

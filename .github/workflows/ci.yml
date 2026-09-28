@@ -181,5 +181,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: codespell-project/actions-codespell@v2
         with:
-          ignore_words_list: datas
+          # .codespellrc is the single source of truth for skip + ignore words.
+          # codespell unions config-file lists with CLI lists (never replaces),
+          # so this skip input and the action's './.git' default only add to it.
+          config: .codespellrc
           skip: ./node_modules,./dist,./.git
