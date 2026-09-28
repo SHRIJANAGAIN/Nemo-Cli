@@ -102,13 +102,17 @@ export interface SpawnRequest {
   env: Record<string, string>
   /** Network sandbox policy. */
   networkPolicy: NetworkSandboxPolicy
-  /** Filesystem sandbox policy. */
+  /**
+   * Filesystem sandbox policy. Carries writable roots and read-only carve-
+   * outs for policy consumers; spawnProcess does not yet apply these to the
+   * OS sandbox itself (enforcement defaults to policy-only).
+   */
   filesystemPolicy: FileSystemSandboxPolicy
   /** Windows-specific configuration. */
   windowsConfig?: WindowsSandboxConfig
-  /** Output byte cap. */
+  /** Output byte cap — the default ceiling for SpawnedProcess.readAll. */
   outputCap: number
-  /** Timeout in milliseconds. */
+  /** Timeout in milliseconds. Enforced by spawnProcess (<= 0 disables). */
   timeoutMs: number
   /** Abort signal. */
   signal?: AbortSignal
