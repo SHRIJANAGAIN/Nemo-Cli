@@ -258,5 +258,173 @@
     "totalTokens": 0,
     "status": "completed",
     "endedAt": "2026-09-28T01:44:39.537Z"
+  },
+  {
+    "sessionId": "sess_mukm1iei",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T02:10:25.770Z",
+    "messageCount": 69,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T02:10:50.846Z"
+  },
+  {
+    "sessionId": "sess_mukm3blj",
+    "sessionName": "Greeting and Assistance Offer",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T02:11:50.263Z",
+    "messageCount": 12,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T02:26:46.354Z"
+  },
+  {
+    "sessionId": "sess_mukmqd5r",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T02:29:45.375Z",
+    "messageCount": 58,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_mukmsl26",
+    "sessionName": "Handling Connection Refused Error",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T02:31:28.926Z",
+    "messageCount": 60,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T02:38:41.522Z"
+  },
+  {
+    "sessionId": "sess_mukmzp1y",
+    "sessionName": "Initial Greeting Exchange",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T02:37:00.694Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_muko6rsh",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:10:30.449Z",
+    "messageCount": 78,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:10:55.482Z"
+  },
+  {
+    "sessionId": "sess_muko78rt",
+    "sessionName": "Initial Greeting",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:10:52.457Z",
+    "messageCount": 8,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:15:07.060Z"
+  },
+  {
+    "sessionId": "sess_mukodq94",
+    "sessionName": "Greeting and Offer Assistance",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:15:55.048Z",
+    "messageCount": 3,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:17:21.861Z"
+  },
+  {
+    "sessionId": "sess_mukog97x",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:17:52.941Z",
+    "messageCount": 82,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:18:17.970Z"
+  },
+  {
+    "sessionId": "sess_mukogo52",
+    "sessionName": "Greeting and offering coding help",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:18:12.278Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:21:31.408Z"
+  },
+  {
+    "sessionId": "sess_mukol66l",
+    "sessionName": "Initial greeting exchange",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:21:42.285Z",
+    "messageCount": 8,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:33:29.715Z"
+  },
+  {
+    "sessionId": "sess_mukp0xh4",
+    "sessionName": "hi",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:33:57.496Z",
+    "messageCount": 3,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:49:34.974Z"
+  },
+  {
+    "sessionId": "sess_mukpkatq",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:49:01.262Z",
+    "messageCount": 78,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:49:26.290Z"
+  },
+  {
+    "sessionId": "sess_mukpl5g0",
+    "sessionName": "Initial greeting and assistance",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:49:40.944Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T03:55:31.681Z"
+  },
+  {
+    "sessionId": "sess_mukpstnj",
+    "sessionName": "Initial greeting exchange",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T03:55:38.911Z",
+    "messageCount": 7,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T04:43:09.379Z"
+  },
+  {
+    "sessionId": "sess_muksiemm",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T05:11:31.726Z",
+    "messageCount": 77,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T05:11:56.685Z"
+  },
+  {
+    "sessionId": "sess_mukx2vsu",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-28T07:19:25.566Z",
+    "messageCount": 40,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-28T07:19:50.688Z"
   }
 ]
