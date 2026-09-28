@@ -6,6 +6,7 @@ paths:
   - "**/oh-package.json5"
   - "**/build-profile.json5"
 ---
+
 # HarmonyOS / ArkTS Coding Style
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with HarmonyOS and ArkTS-specific content.
@@ -126,8 +127,8 @@ try {
   const result = await riskyOperation()
   return result
 } catch (error) {
-  hilog.error(0x0000, 'TAG', 'Operation failed: %{public}s', error)
-  throw new Error('User-friendly error message')
+  hilog.error(0x0000, "TAG", "Operation failed: %{public}s", error)
+  throw new Error("User-friendly error message")
 }
 ```
 
@@ -138,7 +139,7 @@ Follow the common immutability principles - create new objects instead of mutati
 ```typescript
 // BAD: mutation
 function updateUser(user: UserModel, name: string): UserModel {
-  user.name = name  // direct mutation
+  user.name = name // direct mutation
   return user
 }
 

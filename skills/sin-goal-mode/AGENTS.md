@@ -1,4 +1,5 @@
 <!-- gitnexus:start -->
+
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **SIN-Code-Goal-Mode-Skill** (661 symbols, 1530 relationships, 55 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
@@ -22,22 +23,22 @@ This project is indexed by GitNexus as **SIN-Code-Goal-Mode-Skill** (661 symbols
 
 ## Resources
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/clusters` | All functional areas |
-| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/processes` | All execution flows |
-| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/process/{name}` | Step-by-step execution trace |
+| Resource                                                  | Use for                                  |
+| --------------------------------------------------------- | ---------------------------------------- |
+| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/clusters`       | All functional areas                     |
+| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/processes`      | All execution flows                      |
+| `gitnexus://repo/SIN-Code-Goal-Mode-Skill/process/{name}` | Step-by-step execution trace             |
 
 ## CLI
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.trayambak/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.trayambak/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.trayambak/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.trayambak/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.trayambak/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.trayambak/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Task                                         | Read this skill file                                           |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| Understand architecture / "How does X work?" | `.trayambak/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"  | `.trayambak/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"             | `.trayambak/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor          | `.trayambak/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference           | `.trayambak/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands      | `.trayambak/skills/gitnexus/gitnexus-cli/SKILL.md`             |
 
 <!-- gitnexus:end -->

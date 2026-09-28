@@ -16,22 +16,22 @@ window) first — do not open a public issue.
 
 Things to review before running an untrusted prompt:
 
-| Surface | Variable / setting |
-| --- | --- |
-| Local model binary | `TRAYAMBAK_LLAMACPP_BIN` + GGUF source (`TRAYAMBAK_MODEL_PATH`) |
-| Working directory | `TRAYAMBAK_CWD` / `--cwd` |
-| MCP servers | `TRAYAMBAK_MCP_SERVERS` / `mcpServers` config |
-| Tool hooks | `hooks.preToolUse` / `hooks.postToolUse` (arbitrary shell commands) |
-| Skills & agent profiles | `TRAYAMBAK_SKILLS_DIR`, `TRAYAMBAK_AGENT_PROFILE_DIRS` |
+| Surface                 | Variable / setting                                                  |
+| ----------------------- | ------------------------------------------------------------------- |
+| Local model binary      | `TRAYAMBAK_LLAMACPP_BIN` + GGUF source (`TRAYAMBAK_MODEL_PATH`)     |
+| Working directory       | `TRAYAMBAK_CWD` / `--cwd`                                           |
+| MCP servers             | `TRAYAMBAK_MCP_SERVERS` / `mcpServers` config                       |
+| Tool hooks              | `hooks.preToolUse` / `hooks.postToolUse` (arbitrary shell commands) |
+| Skills & agent profiles | `TRAYAMBAK_SKILLS_DIR`, `TRAYAMBAK_AGENT_PROFILE_DIRS`              |
 
 ## Secret storage
 
-| Secret | Location | Protection |
-| --- | --- | --- |
-| API key (`trayambak login`) | `~/.trayambak/credentials.json` (`TRAYAMBAK_CREDENTIALS_FILE`) | `0600`, atomic tmp + rename |
-| Config incl. `apiKey`, `providers[].apiKey` | `./.trayambak/config.json` or `~/.trayambak/config.json` | `0600`, atomic; previous file rotates to `.bak` |
-| Session transcripts & index | `~/.trayambak/sessions*`, `sessions.json` | `0600` |
-| MCP OAuth tokens | `~/.trayambak/mcp-auth.json` (`TRAYAMBAK_MCP_AUTH_FILE`) | `0600` |
+| Secret                                      | Location                                                       | Protection                                      |
+| ------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| API key (`trayambak login`)                 | `~/.trayambak/credentials.json` (`TRAYAMBAK_CREDENTIALS_FILE`) | `0600`, atomic tmp + rename                     |
+| Config incl. `apiKey`, `providers[].apiKey` | `./.trayambak/config.json` or `~/.trayambak/config.json`       | `0600`, atomic; previous file rotates to `.bak` |
+| Session transcripts & index                 | `~/.trayambak/sessions*`, `sessions.json`                      | `0600`                                          |
+| MCP OAuth tokens                            | `~/.trayambak/mcp-auth.json` (`TRAYAMBAK_MCP_AUTH_FILE`)       | `0600`                                          |
 
 - Prefer **`TRAYAMBAK_API_KEY`** (per-process env var) over a key in
   `config.json` on shared hosts; there is **no OS keychain integration yet**.
@@ -71,11 +71,11 @@ legacy rules.
 
 ### Modes
 
-| Where | Values |
-| --- | --- |
-| TUI `/permissions` (UI mode) | `read-only`, `plan`, `ask` (default), `auto-approve`, `full-access` |
-| TUI `/mode` | Mode stack: `/mode <name>` switches, `/mode exit` returns |
-| Config `permissions.mode` | `default`, `coder`, `yolo`, `browser`, `planner` (`yolo` == `askByDefault: false`) |
+| Where                        | Values                                                                             |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| TUI `/permissions` (UI mode) | `read-only`, `plan`, `ask` (default), `auto-approve`, `full-access`                |
+| TUI `/mode`                  | Mode stack: `/mode <name>` switches, `/mode exit` returns                          |
+| Config `permissions.mode`    | `default`, `coder`, `yolo`, `browser`, `planner` (`yolo` == `askByDefault: false`) |
 
 `full-access` / `yolo` disables approvals — audit `permissions` before using
 it, and read the [Sandbox](#sandbox) section first.
@@ -84,23 +84,23 @@ it, and read the [Sandbox](#sandbox) section first.
 
 `packages/sandbox/src/index.ts` — in-process policy engine:
 
-| Policy | Meaning |
-| --- | --- |
-| `danger-full-access` | Everything allowed |
-| `read-only` | Reads only; writes denied |
-| `workspace-write` | Writes limited to `writableRoots` (and cwd); `readOnlySubpaths` carve-outs; reads free |
-| `external-sandbox` | Reads allowed, writes denied |
+| Policy               | Meaning                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| `danger-full-access` | Everything allowed                                                                     |
+| `read-only`          | Reads only; writes denied                                                              |
+| `workspace-write`    | Writes limited to `writableRoots` (and cwd); `readOnlySubpaths` carve-outs; reads free |
+| `external-sandbox`   | Reads allowed, writes denied                                                           |
 
-| Backend | How it is detected |
-| --- | --- |
-| `seatbelt` | darwin **and** `/usr/bin/sandbox-exec` actually exists |
-| `bwrap` (bubblewrap) | linux **and** `/usr/bin/bwrap` actually exists |
-| `fallback` | anything else — the honest default (incl. Windows today) |
+| Backend                          | How it is detected                                                  |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `seatbelt`                       | darwin **and** `/usr/bin/sandbox-exec` actually exists              |
+| `bwrap` (bubblewrap)             | linux **and** `/usr/bin/bwrap` actually exists                      |
+| `fallback`                       | anything else — the honest default (incl. Windows today)            |
 | `windows-restricted`, `landlock` | reserved type values; never returned until an implementation exists |
 
 **Honesty note:** every check reports `enforcement: "policy-only"`. This is
 in-process policy evaluation — no OS sandbox process is spawned, so the
-backend name describes the available *integration point*, not kernel-level
+backend name describes the available _integration point_, not kernel-level
 isolation. Actual command/file enforcement in the runtime comes from the
 agent-loop permission gate (`packages/protocol/src/permission-rules.ts`);
 deny rules are an absolute veto and "ask" routes to an interactive
@@ -150,13 +150,13 @@ Treat any `hooks` entry you did not write as code execution — it is.
 
 ## Network exposure at a glance
 
-| Feature | Default exposure |
-| --- | --- |
-| CLI / REPL | none (outbound provider calls only) |
-| `trayambak web` | `127.0.0.1:8787`; **no auth unless a token is set** — see [Web](web.md) |
-| `trayambak acp` | stdio only |
-| `trayambak mcp-server` | stdio only (and `tools/call` is a stub today) |
-| `trayambak serve` | llama.cpp server — loopback port by default |
+| Feature                | Default exposure                                                        |
+| ---------------------- | ----------------------------------------------------------------------- |
+| CLI / REPL             | none (outbound provider calls only)                                     |
+| `trayambak web`        | `127.0.0.1:8787`; **no auth unless a token is set** — see [Web](web.md) |
+| `trayambak acp`        | stdio only                                                              |
+| `trayambak mcp-server` | stdio only (and `tools/call` is a stub today)                           |
+| `trayambak serve`      | llama.cpp server — loopback port by default                             |
 
 ## Related
 

@@ -15,22 +15,22 @@ trayambak web --token mysecret     # require Authorization: Bearer mysecret
 The process stays in the foreground until you stop it (the CLI keeps the event
 loop alive after `listen`).
 
-| Input | Where it comes from |
-| --- | --- |
-| Port | `--port` → else **8787** (`TRAYAMBAK_SERVER_PORT` is read by `startServer()` when no port option is passed, e.g. library use) |
-| Host | `--host` → else `127.0.0.1` |
-| Token | `--token` → else `TRAYAMBAK_WEB_TOKEN` |
+| Input | Where it comes from                                                                                                           |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Port  | `--port` → else **8787** (`TRAYAMBAK_SERVER_PORT` is read by `startServer()` when no port option is passed, e.g. library use) |
+| Host  | `--host` → else `127.0.0.1`                                                                                                   |
+| Token | `--token` → else `TRAYAMBAK_WEB_TOKEN`                                                                                        |
 
 ## Endpoints
 
-| Method + path | Behaviour |
-| --- | --- |
-| `GET /health` | `{"status":"ok","model":"<configured model>"}` — always `200`, never requires the token |
-| `GET /openapi.json` | OpenAPI 3.0 spec (`{"info":{"title":"Trayambak Agent API","version":"0.5.0"}}`) |
-| `GET /v1/models` | `{"data":[{"id":"<configured model>"}]}` |
-| `GET /api/sessions` | `{"sessions":[…]}` — the transcript index (see [Sessions](sessions.md)) |
-| `POST /v1/agent` | Runs the agent, streams **SSE** events |
-| anything else | `404 {"error":"not found"}` |
+| Method + path       | Behaviour                                                                               |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `GET /health`       | `{"status":"ok","model":"<configured model>"}` — always `200`, never requires the token |
+| `GET /openapi.json` | OpenAPI 3.0 spec (`{"info":{"title":"Trayambak Agent API","version":"0.5.0"}}`)         |
+| `GET /v1/models`    | `{"data":[{"id":"<configured model>"}]}`                                                |
+| `GET /api/sessions` | `{"sessions":[…]}` — the transcript index (see [Sessions](sessions.md))                 |
+| `POST /v1/agent`    | Runs the agent, streams **SSE** events                                                  |
+| anything else       | `404 {"error":"not found"}`                                                             |
 
 ### `POST /v1/agent`
 

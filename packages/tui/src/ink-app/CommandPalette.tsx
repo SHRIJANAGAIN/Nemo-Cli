@@ -9,6 +9,7 @@ import { Box, Text } from "ink"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
 import { buildPaletteRows, type PaletteEntry } from "./command-palette.js"
+import { g } from "./glyphs.js"
 
 /** Rows shown at once — windowed like ThemePicker so long command lists
  * stay inside a small viewport (▲/▼ indicators mark the hidden rows). */
@@ -112,7 +113,7 @@ export function CommandPalette({ entries, onSelect, onClose }: CommandPalettePro
           return (
             <Box key={row.rowId}>
               <Text color={active ? "#6cb6f5" : undefined} bold={active}>
-                {active ? "❯ " : "  "}
+                {active ? `${g("picker")} ` : "  "}
               </Text>
               <Text dimColor>{`[${row.category}] `}</Text>
               <Text bold={active}>{row.entry.title}</Text>

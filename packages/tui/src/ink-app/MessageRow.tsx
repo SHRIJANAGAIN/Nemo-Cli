@@ -12,6 +12,7 @@ import { SubagentRow } from "./SubagentRow.js"
 import type { TrayambakMessage, ToolCallStatus, MessagePart, AppStatus } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
 import { normalizeStairIndent } from "./text-format.js"
+import { g } from "./glyphs.js"
 
 export interface MessageRowProps {
   message: TrayambakMessage
@@ -19,9 +20,9 @@ export interface MessageRowProps {
   isTranscriptMode?: boolean
   isStreaming?: boolean
   /** Turn phase: while "running" (text streaming) the reasoning spinner
-   *  STANDS DOWN — reasoning finished, showing "Thinking…" above the
+   *  STANDS DOWN â€” reasoning finished, showing "Thinkingâ€¦" above the
    *  growing answer was a lie ("AI GENERATE KR RHA HAI AUR THINKING
-   *  DIKHA RAHA"). Undefined/other ? old behavior. */
+   *  DIKHA RAHA"). Undefined/other â†’ old behavior. */
   phase?: AppStatus
   /** Ctrl+O: tool outputs + compaction markers render full instead of
    *  preview/collapsed. */
@@ -48,7 +49,7 @@ export const MessageRow = ({
 }: MessageRowProps): ReactNode => {
   const theme = useThemeColors()
 
-  // Subagent ("task") cards render as their own row kind — this must come
+  // Subagent ("task") cards render as their own row kind â€” this must come
   // before the role switch (cards are role "system" and would otherwise spin).
   if (message.subagentId) {
     return <SubagentRow message={message} />
@@ -59,15 +60,15 @@ export const MessageRow = ({
   if (message.role === "user") {
     // Ctrl+O collapses compaction summaries: the "[Context auto-compaction]
     // ..." marker folds to its first line (full text back on expand). Plain
-    // prompts are untouched — only the marker prefix collapses.
+    // prompts are untouched â€” only the marker prefix collapses.
     const content = message.content ?? ""
     const isCompactionMarker = content.startsWith("[Context auto-compaction]")
     const shownContent =
-      isCompactionMarker && !expandOutput ? content.split("\n")[0] + (content.includes("\n") ? " …" : "") : content
+      isCompactionMarker && !expandOutput ? content.split("\n")[0] + (content.includes("\n") ? " â€¦" : "") : content
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         <Text color={theme.primary} bold>
-          {"?"} {shownContent}
+          {g("prompt")} {shownContent}
         </Text>
       </Box>
     )
@@ -104,7 +105,7 @@ export const MessageRow = ({
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         {hasActiveThinking && isStreaming && phase !== "running" && (
           <Box flexDirection="row" marginLeft={2} marginTop={1}>
-            <Spinner color={theme.warning}>Thinking…</Spinner>
+            <Spinner color={theme.warning}>Thinkingâ€¦</Spinner>
           </Box>
         )}
         {message.parts && message.parts.length > 0 ? (
@@ -148,7 +149,7 @@ export const MessageRow = ({
           </Box>
         ) : message.content ? (
           // column (not default row): a row-hugged Text measures/wraps
-          // differently from the column-stretched parts-path Text above —
+          // differently from the column-stretched parts-path Text above â€”
           // one-col wrap jumps between the two.
           <Box marginLeft={1} flexDirection="column">
             <Text color={theme.markdownText}>{normalizeStairIndent(message.content)}</Text>
@@ -161,12 +162,12 @@ export const MessageRow = ({
   if (message.role === "system") {
     // Static marker: system rows are durable transcript entries (banners,
     // answers, resumed-session notes). The old always-on animated spinner
-    // rewrote its line forever — on a resumed history every banner spun at
+    // rewrote its line forever â€” on a resumed history every banner spun at
     // once and churned Ink's frame writer into overlapping garbage.
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         <Text color={message.isError ? theme.error : theme.textMuted}>
-          {message.isError ? "?" : "?"} {message.content}
+          {message.isError ? g("fail") : g("ok")} {message.content}
         </Text>
       </Box>
     )
@@ -175,23 +176,23 @@ export const MessageRow = ({
   if (message.role === "tool") {
     const isError = message.isError ?? false
     const statusColor = isError ? theme.error : theme.success
-    const statusIcon = isError ? "?" : "?"
+    const statusIcon = isError ? g("fail") : g("ok")
     // SKT AI LABS port: tool results collapse to ONE line. A resumed session used
-    // to dump every result's full JSON payload inline — walls of raw
+    // to dump every result's full JSON payload inline â€” walls of raw
     // interleave that buried the conversation under tool output.
     // Ctrl+O unfolds to full text (200-line cap, wrapped) instead.
     const raw = (message.content ?? "").replace(/\s+/g, " ").trim()
-    const preview = raw.length > 120 ? `${raw.slice(0, 120)}…` : raw
+    const preview = raw.length > 120 ? `${raw.slice(0, 120)}â€¦` : raw
     // Ctrl+O: full text (20k-char cap with a marker past it) instead of
     // the one-line preview. Collapsed default is unchanged behavior.
     const shown = expandOutput ? raw.slice(0, 20000) : preview
     const overflowNote =
-      expandOutput && raw.length > shown.length ? ` … +${raw.length - shown.length} chars (truncated)` : ""
+      expandOutput && raw.length > shown.length ? ` â€¦ +${raw.length - shown.length} chars (truncated)` : ""
 
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         {/* ONE truncating text node: as 3 sibling flex rows the name could
-            wrap to line 2 at 100–119 cols while the preview stayed on line 1
+            wrap to line 2 at 100â€“119 cols while the preview stayed on line 1
             ("Called bash" below its own arguments). Nested <Text> children
             share one line + truncate-end instead (same fix as ToolCallItem). */}
         <Text wrap="truncate-end">
@@ -202,7 +203,7 @@ export const MessageRow = ({
           </Text>
           {preview ? (
             <Text color={theme.textMuted}>
-              {" — "}
+              {" â€” "}
               {shown}
               {overflowNote}
             </Text>

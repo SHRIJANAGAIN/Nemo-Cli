@@ -167,6 +167,7 @@ describe("agent loop hook wiring", () => {
     let ran = false
     const tool = {
       definition: {
+        timeoutMs: 30_000,
         name: "bash",
         description: "run",
         parameters: { type: "object", properties: {}, required: [] },

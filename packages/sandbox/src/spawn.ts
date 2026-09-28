@@ -66,7 +66,7 @@ async function spawnUnderSeatbelt(
   const child = spawn(sandboxExec, args, { cwd, env, signal, windowsHide: true })
   const pgid = process.platform !== "win32" ? getPgid(child.pid ?? 0) : 0
 
-  return createSpawnedProcess(child, true, SandboxType.MacosSeatbelt, pgid)
+  return createSpawnedProcess(child, /*isSandboxed*/ true, SandboxType.MacosSeatbelt, pgid)
 }
 
 /**
@@ -107,7 +107,7 @@ async function spawnUnderLandlock(
   const child = spawn(bwrap, args, { cwd, env, signal, windowsHide: true })
   const pgid = process.platform !== "win32" ? getPgid(child.pid ?? 0) : 0
 
-  return createSpawnedProcess(child, true, SandboxType.LinuxSeccomp, pgid)
+  return createSpawnedProcess(child, /*isSandboxed*/ true, SandboxType.LinuxSeccomp, pgid)
 }
 
 /**
@@ -127,7 +127,7 @@ async function spawnUnderWindowsRestrictedToken(
   const child = spawn(command[0], args.slice(1), { cwd, env, signal, windowsHide: true })
   const pgid = 0 // Windows doesn't have process groups like Unix
 
-  return createSpawnedProcess(child, true, SandboxType.WindowsRestrictedToken, pgid)
+  return createSpawnedProcess(child, /*isSandboxed*/ true, SandboxType.WindowsRestrictedToken, pgid)
 }
 
 /**
@@ -143,7 +143,7 @@ async function spawnUnsandboxed(
   const child = spawn(command[0], command.slice(1), { cwd, env, signal, windowsHide: true })
   const pgid = process.platform !== "win32" ? getPgid(child.pid ?? 0) : 0
 
-  return createSpawnedProcess(child, false, SandboxType.None, pgid)
+  return createSpawnedProcess(child, /*isSandboxed*/ false, SandboxType.None, pgid)
 }
 
 /**

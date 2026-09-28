@@ -10,12 +10,12 @@
  * Unreachable baseUrl: runAgent adds the user message SYNCHRONOUSLY before
  * ensureAgent, and the subsequent connection error only adds a system message
  * — both replace the welcome screen, so no network is ever needed. */
-import { PassThrough } from "node:stream";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import path from "node:path";
+import { PassThrough } from "node:stream"
+import { fileURLToPath, pathToFileURL } from "node:url"
+import path from "node:path"
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const distEsm = pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "src", "ink-app-esm")).href;
+const here = path.dirname(fileURLToPath(import.meta.url))
+const distEsm = pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "src", "ink-app-esm")).href
 
 // Session hermeticity: a full-App boot creates real sessions in
 // skt/8-conversations — without isolation, completed runs flip the next
@@ -23,43 +23,43 @@ const distEsm = pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "
 // flake. Same TRAYAMBAK_HOME sandbox as smoke-theme-switch; empty store =
 // clean Welcome boot, and nothing touches real user sessions.
 {
-  const fs = await import("node:fs");
-  const os = await import("node:os");
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-submit-"));
-  const convDir = path.join(sandbox, "skt", "8-conversations");
-  fs.mkdirSync(convDir, { recursive: true });
-  fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "submit-smoke" }));
-  fs.writeFileSync(path.join(convDir, "sessions.json"), "[]");
-  process.env.TRAYAMBAK_HOME = sandbox;
+  const fs = await import("node:fs")
+  const os = await import("node:os")
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-submit-"))
+  const convDir = path.join(sandbox, "skt", "8-conversations")
+  fs.mkdirSync(convDir, { recursive: true })
+  fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "submit-smoke" }))
+  fs.writeFileSync(path.join(convDir, "sessions.json"), "[]")
+  process.env.TRAYAMBAK_HOME = sandbox
 }
 
 // Raw terminal end: byte-for-byte what a real TTY delivers (isTTY/setRawMode
 // faked exactly like smoke-enter-ui — Ink's raw-mode path needs both).
-const stdin = new PassThrough();
-stdin.isTTY = true;
-stdin.setRawMode = () => {};
-stdin.ref = () => {};
-stdin.unref = () => {};
+const stdin = new PassThrough()
+stdin.isTTY = true
+stdin.setRawMode = () => {}
+stdin.ref = () => {}
+stdin.unref = () => {}
 
-const { createSanitizedStdin } = await import(`${distEsm}/stdin-sanitizer.js`);
-const sanitizedStdin = createSanitizedStdin(stdin);
+const { createSanitizedStdin } = await import(`${distEsm}/stdin-sanitizer.js`)
+const sanitizedStdin = createSanitizedStdin(stdin)
 
 // Match the user's reported environment: mid-width window (footer shows the
 // narrow hint tier in their screenshot), TTY stdout.
-const stdout = new PassThrough();
-stdout.isTTY = true;
-stdout.columns = 154;
-stdout.rows = 40;
-let sink = "";
+const stdout = new PassThrough()
+stdout.isTTY = true
+stdout.columns = 154
+stdout.rows = 40
+let sink = ""
 stdout.on("data", (chunk) => {
-  sink += chunk.toString();
-});
+  sink += chunk.toString()
+})
 
-const React = (await import("react")).default;
-const { render } = await import("ink");
-const { TrayambakApp } = await import(`${distEsm}/index.js`);
+const React = (await import("react")).default
+const { render } = await import("ink")
+const { TrayambakApp } = await import(`${distEsm}/index.js`)
 
-const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "");
+const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "")
 
 const instance = render(
   React.createElement(TrayambakApp, {
@@ -75,65 +75,65 @@ const instance = render(
     onExit: () => {},
   }),
   { stdin: sanitizedStdin, stdout },
-);
+)
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-let failures = 0;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+let failures = 0
 function assert(cond, label) {
   if (cond) {
-    console.log("ok:", label);
+    console.log("ok:", label)
   } else {
-    failures += 1;
-    console.error("FAIL:", label);
-    console.error("--- stripped sink tail ---");
-    console.error(stripAnsi(sink).slice(-700));
+    failures += 1
+    console.error("FAIL:", label)
+    console.error("--- stripped sink tail ---")
+    console.error(stripAnsi(sink).slice(-700))
   }
 }
 
-const welcomePresent = () => stripAnsi(sink).includes("Welcome To Trayambak CLI");
+const welcomePresent = () => stripAnsi(sink).includes("Welcome To Trayambak CLI")
 
 // Boot the app and confirm the fresh-session state we're about to disturb.
-await wait(600);
-assert(welcomePresent(), "boot renders Welcome screen (messages.length === 0)");
+await wait(600)
+assert(welcomePresent(), "boot renders Welcome screen (messages.length === 0)")
 
 // ── Shape 1: separate chars + CR (human typing on any standard terminal) ──
-stdin.write("HI");
-await wait(120);
+stdin.write("HI")
+await wait(120)
 // Reset the cumulative sink JUST BEFORE Enter: `welcomePresent()` only
 // makes sense over frames written from now on (boot/typing frames still
 // legitimately show the welcome screen, and their marker bytes can never
 // leave an append-only sink — 81/88 would be contradictory otherwise).
-sink = "";
-stdin.write("\r");
-await wait(500);
-assert(!welcomePresent(), 'type "HI" + CR → welcome screen gone (message entered transcript)');
-assert(stripAnsi(sink).includes("HI"), 'transcript contains "HI"');
+sink = ""
+stdin.write("\r")
+await wait(500)
+assert(!welcomePresent(), 'type "HI" + CR → welcome screen gone (message entered transcript)')
+assert(stripAnsi(sink).includes("HI"), 'transcript contains "HI"')
 
 // ── Shape 2: coalesced chunk "YO\r" (Windows console drains last char + Enter
 //    in one read — the original stuck-Enter repro shape) ─────────────────────
-stdin.write("\x0c"); // ctrl+l clears the composer so a stranded draft shows up
-await wait(80);
-stdin.write("YO\r");
-await wait(500);
-const stripped = stripAnsi(sink);
-assert(stripped.includes("YO"), 'coalesced "YO\\r" also reaches the transcript');
+stdin.write("\x0c") // ctrl+l clears the composer so a stranded draft shows up
+await wait(80)
+stdin.write("YO\r")
+await wait(500)
+const stripped = stripAnsi(sink)
+assert(stripped.includes("YO"), 'coalesced "YO\\r" also reaches the transcript')
 
-instance.unmount();
+instance.unmount()
 
 // Production launcher must keep the sanitizer wired (same guard as
 // smoke-enter-ui — this is the file that actually runs in the user's terminal).
-import { readFileSync } from "node:fs";
+import { readFileSync } from "node:fs"
 for (const [label, file] of [
   ["src", path.join(here, "..", "packages", "tui", "src", "repl", "ink-repl.mjs")],
   ["dist", path.join(here, "..", "dist", "packages", "tui", "src", "repl", "ink-repl.mjs")],
 ]) {
-  const text = readFileSync(file, "utf8");
+  const text = readFileSync(file, "utf8")
   assert(
     /stdin:\s*createSanitizedStdin\(/.test(text),
     `${label} ink-repl.mjs routes stdin through createSanitizedStdin`,
-  );
-  assert(/createResizeRedrawGuard\(/.test(text), `${label} ink-repl.mjs wires the resize guard`);
+  )
+  assert(/createResizeRedrawGuard\(/.test(text), `${label} ink-repl.mjs wires the resize guard`)
 }
 
-console.log(failures === 0 ? "APP_SUBMIT_SMOKE_OK" : `APP_SUBMIT_SMOKE_FAIL ${failures}`);
-process.exit(failures === 0 ? 0 : 1);
+console.log(failures === 0 ? "APP_SUBMIT_SMOKE_OK" : `APP_SUBMIT_SMOKE_FAIL ${failures}`)
+process.exit(failures === 0 ? 0 : 1)

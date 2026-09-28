@@ -18,7 +18,7 @@ export interface WelcomeScreenProps {
 
 /** Idle-home animation: the welcome line breathes through the brand hues
  *  (~0.5 s per step) so the first screen isn't a frozen poster. Content
- *  never changes — only the colour — so width/oracles stay exact. */
+ *  never changes â€” only the colour â€” so width/oracles stay exact. */
 const WELCOME_CYCLE_MS = 500
 
 export function WelcomeScreen(): ReactNode {

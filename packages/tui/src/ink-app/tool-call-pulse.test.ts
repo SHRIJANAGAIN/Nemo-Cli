@@ -23,6 +23,7 @@ const OLD_FORCE_COLOR = process.env.FORCE_COLOR
 process.env.FORCE_COLOR = "3"
 
 import { afterAll, describe, expect, it } from "vitest"
+import { resetGlyphCache } from "./glyphs.js"
 import React from "react"
 import { PassThrough } from "node:stream"
 import type { Instance } from "ink"
@@ -59,6 +60,11 @@ const snap = (): {
   }
 }
 
+// Glyphs under test render through glyphs.ts, which auto-selects ASCII on
+// plain Windows consoles (this CI/dev box) — assertions below pin Unicode
+// shapes, so force unicode mode here. resetGlyphCache covers shared workers.
+process.env.TRAYAMBAK_GLYPHS = "unicode"
+resetGlyphCache()
 describe("ToolCallItem running-border pulse", () => {
   it("keeps re-rendering a running box (border colour cycles)", async () => {
     const h = snap()

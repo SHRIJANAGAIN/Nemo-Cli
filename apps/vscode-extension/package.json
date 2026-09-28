@@ -5,15 +5,41 @@
   "version": "0.7.0",
   "publisher": "SKT-AI-LABS",
   "license": "Apache-2.0",
-  "engines": { "vscode": "^1.84.0" },
-  "categories": ["AI", "Other"],
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
-    "viewsContainers": { "activitybar": [{ "id": "trayambak", "title": "Trayambak", "icon": "assets/icon.svg" }] },
-    "views": { "trayambak": [{ "id": "trayambak.sidebar", "name": "Trayambak" }] },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "trayambak",
+          "title": "Trayambak",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "trayambak": [
+        {
+          "id": "trayambak.sidebar",
+          "name": "Trayambak"
+        }
+      ]
+    },
     "commands": [
-      { "command": "trayambak.run", "title": "Trayambak: Run prompt" },
-      { "command": "trayambak.openWeb", "title": "Trayambak: Open web UI" }
+      {
+        "command": "trayambak.run",
+        "title": "Trayambak: Run prompt"
+      },
+      {
+        "command": "trayambak.openWeb",
+        "title": "Trayambak: Open web UI"
+      }
     ]
   },
   "scripts": {

@@ -8,6 +8,7 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import type { McpOAuthConfig } from "../../../packages/mcp/src/oauth.js"
+import { parseTokenBudget } from "../../../packages/core/src/token_budget.js"
 
 export interface TrayambakConfig {
   baseUrl: string
@@ -30,6 +31,10 @@ export interface TrayambakConfig {
   maxTurns: number
   /** Hard cap on tool calls per prompt (anti-runaway / anti-hallucination). */
   maxToolCalls: number
+  /** Session budget spec: token cap ("50k", "1.5M", "50000 tokens") or turn
+   *  cap ("40 turns"); "-1" disables. Applied by runAgentLoop on entry.
+   *  Invalid specs fall back to no budget WITH a warning (never throw). */
+  budget?: string
   /** Max distinct tool names allowed per session across the whole run. */
   maxDistinctToolCalls: number
   /** Max tool calls allowed per second (rate limit). */
@@ -194,6 +199,7 @@ const DEFAULTS: TrayambakConfig = {
   maxOutputBytes: 256 * 1024,
   maxTurns: 64,
   maxToolCalls: 100,
+  budget: undefined,
   maxDistinctToolCalls: 1000,
   toolCallRate: 2,
   maxRetries: 2,
@@ -312,6 +318,7 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   if (process.env.TRAYAMBAK_MAX_OUTPUT_BYTES) envConfig.maxOutputBytes = Number(process.env.TRAYAMBAK_MAX_OUTPUT_BYTES)
   if (process.env.TRAYAMBAK_MAX_TURNS) envConfig.maxTurns = Number(process.env.TRAYAMBAK_MAX_TURNS)
   if (process.env.TRAYAMBAK_MAX_TOOL_CALLS) envConfig.maxToolCalls = Number(process.env.TRAYAMBAK_MAX_TOOL_CALLS)
+  if (process.env.TRAYAMBAK_BUDGET) envConfig.budget = process.env.TRAYAMBAK_BUDGET
   if (process.env.TRAYAMBAK_MAX_DISTINCT_TOOL_CALLS)
     envConfig.maxDistinctToolCalls = Number(process.env.TRAYAMBAK_MAX_DISTINCT_TOOL_CALLS)
   if (process.env.TRAYAMBAK_TOOL_CALL_RATE) envConfig.toolCallRate = Number(process.env.TRAYAMBAK_TOOL_CALL_RATE)
@@ -644,6 +651,7 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
     maxOutputBytes: Math.max(1, Math.min(500 * 1024 * 1024, numDefault(cfg.maxOutputBytes, DEFAULTS.maxOutputBytes))),
     maxTurns: Math.max(1, Math.min(10_000, numDefault(cfg.maxTurns, DEFAULTS.maxTurns))),
     maxToolCalls: Math.max(0, Math.min(1_000, numDefault(cfg.maxToolCalls, DEFAULTS.maxToolCalls))),
+    budget: cleanBudget(cfg.budget),
     maxDistinctToolCalls: Math.max(
       0,
       Math.min(10_000, numDefault(cfg.maxDistinctToolCalls, DEFAULTS.maxDistinctToolCalls)),
@@ -783,4 +791,26 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
         : undefined,
   }
   return safe
+}
+
+/**
+ * Validate the session budget spec. Config rules: invalid values fall back
+ * WITH a warning — never throw. Returns the normalized spec, or undefined
+ * (no budget) when the value is missing or garbage.
+ */
+function cleanBudget(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null) return undefined
+  const candidate = typeof raw === "number" ? String(raw) : raw
+  if (typeof candidate !== "string") {
+    console.warn(`trayambak: ignoring budget ${String(candidate)} — expected a spec like "50k" or "40 turns"`)
+    return undefined
+  }
+  const spec = candidate.trim()
+  if (spec === "") return undefined
+  const parsed = parseTokenBudget(spec)
+  if (!parsed.ok) {
+    console.warn(`trayambak: ignoring budget "${spec}" — ${parsed.reason}`)
+    return undefined
+  }
+  return spec
 }

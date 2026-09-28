@@ -3,9 +3,32 @@
 All notable changes to trayambak are documented here. The format is based on keeping an
 `Unreleased` section; released sections are immutable.
 
+## [Unreleased]
+
+### Added — subagent engine + budget enforcement + checkpoint/rewind (power round)
+
+- **Subagent spawning is real and guarded**: `apps/runtime/src/agent/agent.ts` injects a depth-guarded runner through the `trayambak__Agent` tool — each spawn gets a fresh `Session`, reuses the parent provider (or the `model` override), strips fan-out tools (`trayambak__Agent`/`RunTeam`/`ParallelReview`/`ParallelExecute`) and routes through `SubagentEngine` (`packages/core/src/subagents.ts`): `maxDepth` 3 with a structured `depth_limit_exceeded` refusal _before_ any child loop, per-task usage summaries (`turns`/`toolCalls`/`durationMs`/tokens), background registry (start/status/await/cancel via `AbortController`), emitting the existing `subagent_start/end` + `subagent_background_start/end` protocol events. Harness: `subagent-spawn.test.ts` proves a child loop really runs (tool result lands in the child session only), the parent gains summary-only, and a depth-3 agent is refused before any level-4 provider call.
+- **Budget enforcement in the loop** (previously silently bypassed — nothing consulted `shouldBlockForBudget()`): `runAgentLoop` applies `config.budget` on entry, checks `shouldContinueTurn()` at the top of every turn, and stops with a new `budget_exhausted` protocol event (`{used, max, remaining}`, one additive union member — all consumers grepped first) followed by `agent_end`. Never silently continues; integration test proves `providerCalls` stays bounded (2 calls instead of 50).
+- **Budget surface**: `budget` config field, `TRAYAMBAK_BUDGET` env (rides the existing config env allowlist — no new lint warnings), and a global `--budget <spec>` flag (`50k`, `1.5M`, `50000 tokens`, `40 turns`; `-1` disables). Invalid specs warn + fall back per config rules. `packages/core/src/token_budget.ts` rewritten (`parseTokenBudget`, `toRolloutBudgetConfig`, `applyBudget`, `budgetStatus`, `shouldContinueTurn`) — `rollout_budget.ts` touched only through its public API. Token usage per response uses the documented `ceil(chars/4)` estimator (protocol carries no real usage fields — labeled estimated everywhere); dollars are rejected on purpose (no pricing tables — would invent precision).
+- **Checkpoint/rewind tools**: `trayambak__Checkpoint` (sha256 manifest, 10MB/file + 100MB total caps, atomic tmp+rename with manifest written last, cwd-only + symlink-escape guards, refuses `.trayambak/checkpoints/**` self-recursion) and `trayambak__Rewind` (verifies hashes _before any write_, stashes current bytes under `<id>/replaced/`, subset restore, id/label lookup, no path ever joined from raw input). Both registered in the `core` toolset so `Arsenal.resolveTools` actually delivers them to the model. 20 tests (1 privilege-gated skip on non-elevated Windows).
+- Docs/help: root help Environment block lists `TRAYAMBAK_BUDGET`; `docs/getting-started.md` documents `--budget`.
+- Tests: +66 across the three features (24 budget, 22 subagent, 20 checkpoint) — suite at 123 files / 1,465 passed; coverage totals now 48.44/74.19/59.91/48.44 vs thresholds 42/72/51/42.
+
 ## [0.6.0]
 
-### Changed — Apache-2.0 relicense (owner-authorized) + WIP stabilization
+### Added — core systems (AGENTS.md module map)
+
+- `packages/core/src/feature_flags.ts` (+test): `STABLE_FEATURES` + `FEATURE_<NAME>` env overrides; surfaced as `trayambak flags`.
+- `packages/core/src/permissions.ts` (+test): `Tool(glob)` rule engine, deny-first evaluation, `DenialTracker`.
+- `packages/core/src/plan_mode.ts` (+test): read-only tool gate, 0600 plan files under `.trayambak/plans/`, approved-command checks.
+- `packages/core/src/subagents.ts` (+test): isolated Task workers with `MAX_SUBAGENT_DEPTH` guard + usage summaries (injected runner: deterministic, network-free).
+- `packages/core/src/token_budget.ts` (+test): `128k`/`1.5M` budget parsing, `TurnBudget` consumption/exhaustion/bounded continuation.
+- `docs/architecture.md` module table updated.
+
+### Fixed — TUI glyph corruption (broken `?` symbols)
+
+- New `packages/tui/src/ink-app/glyphs.ts`: single glyph table (`g()`) + `TRAYAMBAK_GLYPHS=ascii|unicode` override (Unicode default with `❯` user markers; ASCII strictly opt-in). Restored all recoded literals (`?`/U+FFFD → ●○◌✓✗★❯█⚠) across 19 components; `vitest.setup.ts` pins Unicode so the suite is OS-deterministic.
+- Resume picker: rows render as one truncating text node on exact fixed-width columns (status/date padded, name budgeted with …); wrapped tails no longer collide. Picker opens with list-time backfill (`backfillUntitledSessions` + test) so default-named sessions show their real title immediately; resume-select backfill kept as well.
 - `LICENSE`: Proprietary v1.0 → Apache License 2.0 (© 2026 SKT AI LABS PRIVATE LIMITED); `package.json` license `Apache-2.0`; 400 source headers + `AGENTS.md`/`docs/README.md`/vscode-extension manifest updated.
 - Fixed concurrent-author WIP so the tree is green again: sandbox `spawn.ts` (seatbelt names, pid guards, signal casts), `core/process.ts` (no require, typed signals/streams), `core/env_filter.ts` (ProcessEnv input), `core/state_db.ts` (JSON-file backend — no native `better-sqlite3` dep; same API), `core/hook_runtime.ts` (`additionalContext`), `core/agent_registry.ts` (`uuid()`), `command-exec/bash.ts` (no `ctx.emit`, unknown-cast permissions), `prompt/auto-title.test.ts` (unknown-shape helper), `tools/text/*.test.ts` (protocol import), `tui/ui/footer*.ts` (Theme import, indicator fn), sandbox `index.ts` (dedup re-exports).
 

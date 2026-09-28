@@ -9,6 +9,7 @@ import { textResult, type Tool, type ToolContext } from "../types.js"
 import { discoverAgentProfiles, type AgentProfile } from "../../agent/specialist-agents.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__AgentCatalog",
   description:
     "List all available specialized subagents with their categories, descriptions, and capabilities for parallel execution.",

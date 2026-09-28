@@ -11,9 +11,12 @@ import * as path from "node:path"
 // Live runtime file (what App.tsx imports) — not session.ts.
 import {
   appendConversation,
+  backfillUntitledSessions,
   createSession,
   isTransientNotice,
   loadConversation,
+  loadSessions,
+  titleFromConversation,
   updateConversationToolResult,
 } from "./session.js"
 
@@ -93,5 +96,33 @@ describe("session tool-result persistence", () => {
     appendConversation(s.sessionId, "user", "hi")
     const loaded = loadConversation(s.sessionId)
     expect(loaded.map((e) => e.content)).toEqual(["hi"])
+  })
+
+  it("titles from the first user message (5 words max)", () => {
+    expect(
+      titleFromConversation([
+        { role: "system", content: "x", ts: "t" },
+        { role: "user", content: "  please list all files recursively  ", ts: "t" },
+      ]),
+    ).toBe("please list all files recursively")
+    expect(titleFromConversation([{ role: "user", content: "a b c d e f g", ts: "t" }])).toBe("a b c d e")
+    expect(titleFromConversation([])).toBe("")
+    expect(titleFromConversation([{ role: "assistant", content: "hi", ts: "t" }])).toBe("")
+  })
+
+  it("backfills default names from transcript content, never touching custom names", () => {
+    const untitled = createSession("New conversation", "")
+    appendConversation(untitled.sessionId, "user", "deploy the billing service now please")
+    const named = createSession("My custom name", "")
+    appendConversation(named.sessionId, "user", "something else entirely here")
+    const empty = createSession("New conversation", "")
+    const fresh = backfillUntitledSessions()
+    const byId = new Map(fresh.map((s) => [s.sessionId, s.sessionName]))
+    expect(byId.get(untitled.sessionId)).toBe("deploy the billing service now")
+    expect(byId.get(named.sessionId)).toBe("My custom name")
+    expect(byId.get(empty.sessionId)).toBe("New conversation")
+    expect(loadSessions().find((s) => s.sessionId === untitled.sessionId)?.sessionName).toBe(
+      "deploy the billing service now",
+    )
   })
 })

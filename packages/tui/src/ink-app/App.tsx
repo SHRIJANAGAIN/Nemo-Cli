@@ -16,6 +16,8 @@ import {
   endSession,
   deleteSession,
   renameSession,
+  titleFromConversation,
+  DEFAULT_SESSION_NAME,
   type SessionEntry,
 } from "../../../../skt/9-session/session.js"
 import { Agent } from "../../../../apps/runtime/src/agent/agent.js"
@@ -48,6 +50,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { useAppInput } from "./useAppInput.js"
 import { onMouseScroll } from "./mouse-input.js"
+import { pageScrollOffset, scrollOffsetAfterGrowth, wheelScrollOffset } from "./scroll-math.js"
 import { useBorderPulse } from "./use-border-pulse.js"
 import { useThemeColors, rgbToHex } from "./themeColors.js"
 import { ThemePicker } from "./ThemePicker.js"
@@ -117,6 +120,7 @@ import {
   verifyProviderKey,
 } from "../../../provider/src/catalog.js"
 import { todoListForSession } from "../../../../apps/cli/src/commands/todo.js"
+import { g } from "./glyphs.js"
 
 function enableBracketedPaste(): () => void {
   if (process.stdout.isTTY) {
@@ -287,12 +291,12 @@ export const TrayambakApp = ({
    *  prop): the root frame then drops its TOP border so the evicted
    *  segment's │ walls continue into the frame's — ONE continuous
    *  conversation box, never cut by a mid-transcript ┌────┐ divider. */
-  const [hasStaticPrefix, setHasStaticPrefix] = useState(false)
+  const [hasStaticPrefix, setHasStaticPrefix] = useState(/*initial*/ false)
   /** True while the composer holds a draft — PermissionOverlay stands down
    *  on y/n/Enter then (Ink broadcasts every key to every handler). */
-  const [composerHasText, setComposerHasText] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isStreaming, setIsStreaming] = useState(false)
+  const [composerHasText, setComposerHasText] = useState(/*initial*/ false)
+  const [isLoading, setIsLoading] = useState(/*initial*/ false)
+  const [isStreaming, setIsStreaming] = useState(/*initial*/ false)
   const [status, setStatus] = useState<AppStatus>("idle")
   // Boot from the PERSISTED mode when valid: the launcher prop defaults to
   // "ask" and the old code took it blindly, so every restart silently
@@ -307,65 +311,89 @@ export const TrayambakApp = ({
   // FIFO and run automatically when the current turn finishes.
   const [queuedPrompts, setQueuedPrompts] = useState<string[]>([])
   const queueRef = useRef<string[]>([])
-  const isRunningRef = useRef(false)
+  const isRunningRef = useRef(/*initialValue*/ false)
   const checkpointStoreRef = useRef<CheckpointStore | null>(null)
   /** One-shot flag for the session-scoped oversize transcript notice. */
-  const cpTooBigNotedRef = useRef(false)
+  const cpTooBigNotedRef = useRef(/*initialValue*/ false)
   const [pendingQuestion, setPendingQuestion] = useState<QuestionRequest | null>(null)
   const { stdout } = useStdout()
   // Terminal discipline for the whole app lifetime: the hardware caret is
   // HIDDEN (Ink never positions it — it floated mid-frame/border after
   // every write: "wo blinker show ho raha") and the composer draws its own
   // static block caret (PromptInput `▌`, at the typing position).
+  // Mouse reporting is ON for the TUI's LIFETIME (1000+1006, alongside the
+  // caret hide below): the wheel then ALWAYS arrives on the mouse-input bus
+  // (StdinSanitizer parses it) → scrollBack below → MessageList slides its
+  // window IN-APP, which token/caret writes can't yank. The old turn-scoped
+  // design left IDLE wheel-ups to native terminal scroll — exactly where a
+  // terminal that snaps output back to the live view struck ("scroll karke
+  // chhodo to wapas bottom pe snap" — the caret blinks a write every 530ms,
+  // same yank as "generation ke dauran ek jagah pe dubara aa jati hai").
+  // Trade-off: native wheel / drag-select over the printed <Static> prefix
+  // now needs Shift (xterm override) or /copy — and a scrolled frame re-shows
+  // those same rows in-app, so nothing becomes unreachable. Cleanup restores
+  // wheel + caret to the terminal on unmount.
   useEffect(() => {
     stdout?.write("\x1b[?25l")
+    stdout?.write("\x1b[?1000h\x1b[?1006h")
     return () => {
       stdout?.write("\x1b[?1000l\x1b[?1006l")
       stdout?.write("\x1b[?25h")
     }
   }, [stdout])
-  // Mouse reporting is TURN-SCOPED. At idle it stays OFF: the transcript's
-  // stable history lives in terminal SCROLLBACK (<Static> above the
-  // frame), and capturing the wheel/drag there would take native scroll +
-  // drag-select copy away from it — /copy is the keyboard path to the same
-  // text. While a turn RUNS it is ON, because per-token writes YANK native
-  // scroll straight back to the live view ("generation ke dauran ek jagah
-  // pe dubara aa jati hai jab tak pura response complete nahi ho jata" —
-  // wheel-up was unusable exactly when the transcript was longest). The
-  // wheel then arrives on the mouse-input bus (StdinSanitizer parses it)
-  // → scrollBack below → MessageList slides its window in-app, which
-  // writes can't yank. Boot writes nothing (reporting starts off).
   const turnActive = isLoading || isStreaming
-  const mouseOnRef = useRef(false)
-  useEffect(() => {
-    if (turnActive === mouseOnRef.current) return
-    mouseOnRef.current = turnActive
-    stdout?.write(turnActive ? "\x1b[?1000h\x1b[?1006h" : "\x1b[?1000l\x1b[?1006l")
-  }, [turnActive, stdout])
   /** Wheel offset into history: messages the frame window sits BEHIND the
-   *  live end (0 = live). 3 messages per notch, clamped to the first
-   *  message up / 0 down. */
+   *  live end (0 = live). 3 messages per notch (wheelScrollOffset),
+   *  clamped to the first message up / 0 down — and ANCHORED while
+   *  scrolled (scrollOffsetAfterGrowth below): rows appended behind the
+   *  window can't slide the history being read out of frame. */
   const [scrollBack, setScrollBack] = useState(0)
+  const scrollLenRef = useRef(messages.length)
   useEffect(() => {
-    // Only receives events while reporting is ON = while a turn runs.
+    // Reporting is on for the TUI's lifetime, so the bus delivers wheel
+    // notches at idle and mid-turn alike (native terminal scroll never
+    // competes with this window).
     return onMouseScroll((dir) => {
-      setScrollBack((s) => {
-        const max = Math.max(0, messages.length - 1)
-        return dir === "up" ? Math.min(max, s + 3) : Math.max(0, s - 3)
-      })
+      setScrollBack((s) => wheelScrollOffset(dir, s, messages.length))
     })
   }, [messages.length])
-  // Back to live the moment the turn ends: reporting flips OFF there and a
-  // stale in-app offset would park an older window in-frame while the
-  // wheel reverts to NATIVE scroll over the printed prefix (duplicates
-  // visible). Same reset on a wholesale history replace (/clear, restore,
-  // new chat → epoch bump).
+  // Anchor: every message appended while scrolled (tool rows land two-per-
+  // call mid-turn) is matched by +1 on the offset, so endIdx =
+  // length − scrollBack — the exact window the user is reading — never
+  // moves toward live ("history hide nahi honi chahiye, pura show hoti
+  // rahe"). Live (0) stays live; wholesale replaces reset via staticEpoch.
   useEffect(() => {
-    if (!turnActive) setScrollBack(0)
+    // Capture prev BEFORE the updater runs: the queued updater reads the
+    // ref when React flushes it — mutating scrollLenRef on the next line
+    // made it see (new, new) → delta 0 → anchor dead → the reading window
+    // slid toward live on every append (diag-scroll.mjs pins it: after a
+    // mid-turn wheel, S_after must keep endIdx=1, err=0).
+    const prev = scrollLenRef.current
+    setScrollBack((s) => scrollOffsetAfterGrowth(prev, messages.length, s))
+    scrollLenRef.current = messages.length
+  }, [messages.length])
+  // Snap to live when a turn STARTS — the user just submitted (or a queued
+  // prompt fired), so the new exchange must be in-frame. The position now
+  // SURVIVES turn end (it used to force scrollBack→0 the moment the turn
+  // ended — "scroll karke chhodo to turn khatam hote hi wapas bottom pe
+  // snap ho jata tha"): wheel reporting is on for the TUI's lifetime, so a
+  // parked offset stays wheel-usable at idle and only moves away when the
+  // user scrolls/pages back down to live (0). Wholesale history replaces
+  // (/clear, restore, new chat → epoch bump) still reset: those swap in
+  // different rows entirely.
+  useEffect(() => {
+    if (turnActive) setScrollBack(0)
   }, [turnActive])
   useEffect(() => {
     setScrollBack(0)
   }, [staticEpoch])
+  /** PageUp/PageDown (PromptInput's onHistoryScroll): a 10-message stride
+   *  through history — same offset state, same clamps, same growth anchor
+   *  as the wheel's 3-notch steps ("easy scrollable": one keypress pages a
+   *  long transcript instead of a wheel marathon). */
+  const handleHistoryScroll = (dir: "up" | "down"): void => {
+    setScrollBack((s) => pageScrollOffset(dir, s, messages.length))
+  }
   // The CONVERSATION BOX itself joins the edge-chase while the AI works
   // ("animations dalo UI me"): one outline edge lights up and travels
   // round the ╭╮╰╯ frame — same language as the tool boxes and the footer
@@ -374,19 +402,19 @@ export const TrayambakApp = ({
   // with a light running round it. Idle → palette[0] = primary, byte-
   // identical to the old solid outline.
   const rootPulse = useBorderPulse(turnActive, [theme.primary, theme.accent, theme.info, theme.success], theme.primary)
-  const [waitingCustom, setWaitingCustom] = useState(false)
+  const [waitingCustom, setWaitingCustom] = useState(/*initial*/ false)
   const [tokenCount, setTokenCount] = useState(0)
   const [backgroundSubagents, setBackgroundSubagents] = useState<Map<string, BackgroundSubagentState>>(new Map())
   /* Subagent UI (SKT AI LABS parity): overlay panel, agent picker, transient footer
    * hint, and a derived count for status/notify effects. */
-  const [showSubagentPanel, setShowSubagentPanel] = useState(false)
+  const [showSubagentPanel, setShowSubagentPanel] = useState(/*initial*/ false)
   const [panelInitialTab, setPanelInitialTab] = useState<"all" | "background">("all")
-  const [showAgentPicker, setShowAgentPicker] = useState(false)
-  const [showWhichKey, setShowWhichKey] = useState(false)
+  const [showAgentPicker, setShowAgentPicker] = useState(/*initial*/ false)
+  const [showWhichKey, setShowWhichKey] = useState(/*initial*/ false)
   const [taskHint, setTaskHint] = useState<string | null>(null)
   /** Ctrl+O: tool outputs + compaction summaries render full instead of
    *  preview/collapsed. Drilled to MessageList → MessageRow → tool items. */
-  const [expandOutput, setExpandOutput] = useState(false)
+  const [expandOutput, setExpandOutput] = useState(/*initial*/ false)
   /** Ctrl-C idle double-press: epoch ms of the arming press + its hint
    *  timer (single Ctrl-C never exits — see resolveCtrlCPress). */
   const lastCtrlCRef = useRef(0)
@@ -398,7 +426,7 @@ export const TrayambakApp = ({
    *  at all then hijacked every later launch, and only a factory reset
    *  cleared it. Sessions stay one command away — /sessions, /resume, or
    *  the Ctrl+K q leader action — but nothing opens them by itself. */
-  const [showPicker, setShowPicker] = useState(false)
+  const [showPicker, setShowPicker] = useState(/*initial*/ false)
 
   const themeToPickerOption = (theme: TrayambakTheme) => ({
     name: theme.name,
@@ -410,9 +438,9 @@ export const TrayambakApp = ({
     swatch: rgbToHex(theme.primary),
   })
   const [showThemePicker, setShowThemePicker] = useState(() => !config?.themeName)
-  const [showPalette, setShowPalette] = useState(false)
-  const [showModelPicker, setShowModelPicker] = useState(false)
-  const [showProviderPicker, setShowProviderPicker] = useState(false)
+  const [showPalette, setShowPalette] = useState(/*initial*/ false)
+  const [showModelPicker, setShowModelPicker] = useState(/*initial*/ false)
+  const [showProviderPicker, setShowProviderPicker] = useState(/*initial*/ false)
   /** First-run onboarding (codex Welcome → theme → sandbox order): splash
    *  first, then the existing theme picker, then sandbox setup. Returning
    *  users (theme already saved) skip all three. */
@@ -423,11 +451,11 @@ export const TrayambakApp = ({
    *  (a reset environment has none, yet must not boot into onboarding).
    *  Falls back to the file when the prop carries no theme. */
   const [isFirstRun] = useState(() => !(config?.themeName ?? loadConfig().themeName))
-  const [splashDone, setSplashDone] = useState(false)
-  const [sandboxDone, setSandboxDone] = useState(false)
+  const [splashDone, setSplashDone] = useState(/*initial*/ false)
+  const [sandboxDone, setSandboxDone] = useState(/*initial*/ false)
   const showSplash = isFirstRun && !splashDone
   const showSandboxSetup = isFirstRun && splashDone && !showThemePicker && !sandboxDone
-  const [showSidebar, setShowSidebar] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(/*initial*/ false)
   const [modelFavorites, setModelFavorites] = useState<string[]>(() => loadConfig().modelFavorites ?? [])
   const [modelRecents, setModelRecents] = useState<string[]>(() => loadConfig().modelRecents ?? [])
   const [availableModels, setAvailableModels] = useState<string[] | null>(null)
@@ -459,8 +487,8 @@ export const TrayambakApp = ({
   }
   /** Honest fetch suffix: silent fallbacks made stale lists look live. */
   const fetchWarn = (error?: string): string => {
-    if (error === "auth") return " — ⚠ endpoint rejected the key (401); run /provider key with a fresh key"
-    if (error === "network") return " — ⚠ endpoint unreachable"
+    if (error === "auth") return ` — ${g("warn")} endpoint rejected the key (401); run /provider key with a fresh key`
+    if (error === "network") return ` — ${g("warn")} endpoint unreachable`
     return ""
   }
 
@@ -614,7 +642,7 @@ export const TrayambakApp = ({
     if (opts?.persist === false) return
     if (msg.role === "user" || msg.role === "assistant" || msg.role === "system") {
       if (!sessionIdRef.current) {
-        const session = createSession("New conversation", "")
+        const session = createSession(DEFAULT_SESSION_NAME, "")
         sessionIdRef.current = session.sessionId
         currentSessionRef.current = session
       }
@@ -634,6 +662,9 @@ export const TrayambakApp = ({
     }
   }
 
+  /** Slash-dispatch flag: while handleSlashCommand is on the stack, addSystemMessage defaults to a 10s TTL so command feedback clears itself — the same transientHidden mechanism as the mode notices (never spliced: message indices and the print-once frontier stay intact). Async continuations pass ttlMs explicitly; an explicit ttlMs always wins (0 opts out). */
+  const slashTtlRef = useRef(/*initialValue*/ false)
+
   const addSystemMessage = (content: string, opts?: { persist?: boolean; ttlMs?: number }): void => {
     const id = `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     addMessage(
@@ -651,10 +682,14 @@ export const TrayambakApp = ({
     // re-print scrollback. The flag makes the live frame skip the row while
     // array, indices, and the <Static> copy stay byte-identical (rows already
     // evicted keep their printed scrollback content — off-screen anyway).
-    if (opts?.ttlMs && opts.ttlMs > 0) {
+    // Slash default (flagged by runSlash): command feedback clears itself in
+    // 10s. Explicit ttlMs wins — 0 opts out (wizard prompts that say what to
+    // type next must stay on screen).
+    const ttlMs = opts?.ttlMs ?? (slashTtlRef.current ? 10_000 : undefined)
+    if (ttlMs && ttlMs > 0) {
       const timer = setTimeout(() => {
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, transientHidden: true } : m)))
-      }, opts.ttlMs)
+      }, ttlMs)
       ;(timer as { unref?: () => void }).unref?.() // a pending notice never holds the process open
     }
   }
@@ -695,13 +730,16 @@ export const TrayambakApp = ({
     // Transient confirmation that clears itself (same TTL as the mode
     // notices); the setMessages it triggers also re-renders the Sidebar
     // title, which reads sessionName off currentSessionRef.
-    addSystemMessage(`📌 Session titled: ${title}`, { persist: false, ttlMs: 10_000 })
+    addSystemMessage(`${g("star")} Session titled: ${title}`, { persist: false, ttlMs: 10_000 })
   }
   useEffect(() => {
     if (turnActive) return // wait for the exchange to settle before titling
     const sid = sessionIdRef.current
     if (!sid || titledSessionIdRef.current === sid) return
-    if (currentSessionRef.current?.sessionId === sid && currentSessionRef.current.sessionName !== "New conversation") {
+    if (
+      currentSessionRef.current?.sessionId === sid &&
+      currentSessionRef.current.sessionName !== DEFAULT_SESSION_NAME
+    ) {
       titledSessionIdRef.current = sid // the user's own name wins — ever
       return
     }
@@ -761,11 +799,11 @@ export const TrayambakApp = ({
 
     if (event.type === "agent_start") {
       setStatus("thinking")
-      setIsStreaming(true)
+      setIsStreaming(/*isStreaming*/ true)
     }
 
     if (event.type === "turn_start") {
-      setIsLoading(true)
+      setIsLoading(/*isLoading*/ true)
     }
 
     if (event.type === "message_start") {
@@ -1105,7 +1143,7 @@ export const TrayambakApp = ({
         return next
       })
       finalizeSubagentCardById(event.subagentId, "completed", event.result ?? "")
-      setTaskHint(`✓ ${event.name} finished — Ctrl+B to view`)
+      setTaskHint(`${g("ok")} ${event.name} finished — Ctrl+B to view`)
       // Auto-notify the main agent: without a transcript row the completion
       // is invisible to the model (only a footer hint + panel state) — the
       // "background finished but nobody told me" gap. Skipped for stale
@@ -1150,8 +1188,8 @@ export const TrayambakApp = ({
     }
 
     if (event.type === "agent_end") {
-      setIsLoading(false)
-      setIsStreaming(false)
+      setIsLoading(/*isLoading*/ false)
+      setIsStreaming(/*isStreaming*/ false)
       setStatus("idle")
       // No "Done" balloon on abort: agent-loop emits agent_end on the abort
       // path too, and celebrating a cancellation is a lie (and steals focus).
@@ -1162,7 +1200,7 @@ export const TrayambakApp = ({
 
     if (event.type === "compaction") {
       addSystemMessage(
-        `🧹 Context compacted: ~${event.estimatedBefore} → ~${event.estimatedAfter} tokens (freed ~${event.freedTokens}` +
+        `${g("ok")} Context compacted: ~${event.estimatedBefore} → ~${event.estimatedAfter} tokens (freed ~${event.freedTokens}` +
           `${event.removedMessages > 0 ? `, ${event.removedMessages} messages folded` : ""}` +
           `${event.prunedToolOutputs > 0 ? `, ${event.prunedToolOutputs} tool outputs pruned` : ""}).`,
       )
@@ -1211,7 +1249,7 @@ export const TrayambakApp = ({
               .map((o, i) => `${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}`)
               .join("\n")
             addSystemMessage(
-              `❓ ${request.question}\n\n` +
+              `${g("warn")} ${request.question}\n\n` +
                 `Options:\n${opts}\n\n` +
                 (request.multiSelect
                   ? "Type numbers separated by spaces (e.g. 1 3), or type 'other' for custom text."
@@ -1220,17 +1258,17 @@ export const TrayambakApp = ({
           })
         },
         onRequestPermission: (tool, args, reason) => {
-          if (tool === "trayambak__AskUserQuestion") return Promise.resolve(true)
+          if (tool === "trayambak__AskUserQuestion") return Promise.resolve(/*value*/ true)
           const cfg =
             ((agentRef.current?.config.permissions ?? DEFAULT_PERMISSIONS) as PermissionConfig | undefined) ??
             DEFAULT_PERMISSIONS
           const decision = evaluatePermission(tool, args, cfg, { uiMode: permissionModeRef.current })
-          if (decision.action === "allow") return Promise.resolve(true)
+          if (decision.action === "allow") return Promise.resolve(/*value*/ true)
           if (decision.action === "deny") {
             addSystemMessage(
-              `⛔ ${tool} denied by permission rule${decision.rule ? ` (${decision.rule.tool} ${decision.rule.pattern ?? "*"})` : ""}.`,
+              `${g("fail")} ${tool} denied by permission rule${decision.rule ? ` (${decision.rule.tool} ${decision.rule.pattern ?? "*"})` : ""}.`,
             )
-            return Promise.resolve(false)
+            return Promise.resolve(/*value*/ false)
           }
           const rowId = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
           const row: PermissionRequest = {
@@ -1268,9 +1306,9 @@ export const TrayambakApp = ({
       content: prompt,
     })
 
-    setIsLoading(true)
+    setIsLoading(/*isLoading*/ true)
     setStatus("thinking")
-    setIsStreaming(true)
+    setIsStreaming(/*isStreaming*/ true)
 
     abortControllerRef.current = new AbortController()
 
@@ -1286,8 +1324,8 @@ export const TrayambakApp = ({
         { persist: false },
       )
       isRunningRef.current = false
-      setIsLoading(false)
-      setIsStreaming(false)
+      setIsLoading(/*isLoading*/ false)
+      setIsStreaming(/*isStreaming*/ false)
       setStatus("idle")
       sweepOrphanedDialogs()
       return
@@ -1310,7 +1348,7 @@ export const TrayambakApp = ({
       debugInputLog(`STAGE capture-skip msg=${error instanceof Error ? error.message : String(error)}`)
       if (error instanceof CheckpointTooBigError && !cpTooBigNotedRef.current) {
         cpTooBigNotedRef.current = true
-        addSystemMessage(`⚠ ${error.message} (undo keeps the previous point).`, { persist: false })
+        addSystemMessage(`${g("warn")} ${error.message} (undo keeps the previous point).`, { persist: false })
       }
     }
     debugInputLog("STAGE capture-done")
@@ -1359,7 +1397,7 @@ export const TrayambakApp = ({
           const fresh = extractAndStoreMemories(prompt, sessionIdRef.current ?? undefined)
           if (fresh.length > 0) {
             addSystemMessage(
-              `🧠 Saved to memory: ${fresh.map((e) => e.content.slice(0, 80)).join(" · ")}  (/memory lists all)`,
+              `${g("ok")} Saved to memory: ${fresh.map((e) => e.content.slice(0, 80)).join(" · ")}  (/memory lists all)`,
               { persist: false },
             )
           }
@@ -1379,8 +1417,8 @@ export const TrayambakApp = ({
       })
     } finally {
       isRunningRef.current = false
-      setIsLoading(false)
-      setIsStreaming(false)
+      setIsLoading(/*isLoading*/ false)
+      setIsStreaming(/*isStreaming*/ false)
       setStatus("idle")
       // The agent unwound: any dialog rows it was awaiting are orphans and
       // would keep the composer disabled forever ("stuck" input). Sweep them
@@ -1391,7 +1429,7 @@ export const TrayambakApp = ({
         const next = queueRef.current.shift()
         setQueuedPrompts([...queueRef.current])
         if (next !== undefined) {
-          addSystemMessage(`▶ Running queued prompt (${queueRef.current.length} still queued)`)
+          addSystemMessage(`${g("dot")} Running queued prompt (${queueRef.current.length} still queued)`)
           void runAgent(next).catch(reportTurnError)
         }
       }
@@ -1402,13 +1440,13 @@ export const TrayambakApp = ({
    *  Node's default unhandled-rejection handling would take the whole TUI
    *  down — surface it inline and flip the footer to error instead. */
   const reportTurnError = (error: unknown): void => {
-    addSystemMessage(`✖ ${error instanceof Error ? error.message : String(error)}`)
+    addSystemMessage(`${g("fail")} ${error instanceof Error ? error.message : String(error)}`)
     setStatus("error")
-    setIsLoading(false)
+    setIsLoading(/*isLoading*/ false)
     // Without this the last message stays "unstable" forever (MessageList
     // pins the last row dynamic while isStreaming) and <Static> never
     // prints it — footer spinner stuck after a queued-turn rejection.
-    setIsStreaming(false)
+    setIsStreaming(/*isStreaming*/ false)
     sweepOrphanedDialogs()
   }
 
@@ -1427,7 +1465,7 @@ export const TrayambakApp = ({
       if (raw.startsWith("/") && raw.length > 1) {
         addSystemMessage(
           "Finish the provider connect first (or Esc to cancel) — slash commands are paused mid-connect.",
-          { persist: false },
+          { persist: false, ttlMs: 10_000 },
         )
         return
       }
@@ -1435,7 +1473,7 @@ export const TrayambakApp = ({
       return
     }
     if (waitingCustom && pendingQuestion) {
-      setWaitingCustom(false)
+      setWaitingCustom(/*waitingCustom*/ false)
       const q = pendingQuestion
       const answer = value.trim()
       setPendingQuestion(null)
@@ -1461,7 +1499,7 @@ export const TrayambakApp = ({
       }
       if (input === "other") {
         if (mode === "choose") return
-        setWaitingCustom(true)
+        setWaitingCustom(/*waitingCustom*/ true)
         addSystemMessage("Type your custom answer (press Enter to submit):")
         return
       }
@@ -1533,12 +1571,12 @@ export const TrayambakApp = ({
       const desc = flattened.length > 60 ? `${flattened.slice(0, 60)}…` : flattened
       const name = formatSubagentTitle(type, desc, background)
       addSystemMessage(
-        `${background ? "⏪" : "⚡"} Launching ${background ? "background " : ""}subagent [${type}]: ${desc}`,
+        `${background ? g("ring") : g("dot")} Launching ${background ? "background " : ""}subagent [${type}]: ${desc}`,
       )
       const results = await agent.runSubagents([{ name, prompt, subagentType: type, background }], emit)
       const first = results[0]
       if (first?.error) {
-        addSystemMessage(`✖ Subagent [${type}] failed: ${first.error}`)
+        addSystemMessage(`${g("fail")} Subagent [${type}] failed: ${first.error}`)
       }
     } catch (error) {
       addSystemMessage(`Subagent error: ${error instanceof Error ? error.message : String(error)}`)
@@ -1563,7 +1601,7 @@ export const TrayambakApp = ({
       return next
     })
     finalizeSubagentCardById(id, "error", "Cancelled by user.")
-    setTaskHint(`◌ ${job.name} cancelled`)
+    setTaskHint(`${g("spinnerDot")} ${job.name} cancelled`)
   }
 
   const getCheckpointStore = (): CheckpointStore => {
@@ -1714,7 +1752,7 @@ export const TrayambakApp = ({
         // session, but the visible transcript keeps every row. Without this
         // note the next answers look unhinged relative to what's on screen.
         addSystemMessage(
-          `🧹 Compacted: ~${res.estimatedBefore} → ~${res.estimatedAfter} tokens` +
+          `${g("ok")} Compacted: ~${res.estimatedBefore} → ~${res.estimatedAfter} tokens` +
             `${res.removedMessages > 0 ? ` · ${res.removedMessages} messages folded` : ""}` +
             `${res.prunedToolOutputs > 0 ? ` · ${res.prunedToolOutputs} tool outputs pruned` : ""}. ` +
             `Note: the transcript above is unchanged — the model now sees the compacted version.`,
@@ -1733,7 +1771,7 @@ export const TrayambakApp = ({
           addSystemMessage(
             res.removed === 0 && res.bytes === 0
               ? "Nothing to prune — no checkpoint data on disk."
-              : `🧹 Pruned ${res.removed} checkpoint${res.removed === 1 ? "" : "s"}, reclaimed ${(res.bytes / 1048576).toFixed(1)}MB. Undo history starts fresh.`,
+              : `${g("ok")} Pruned ${res.removed} checkpoint${res.removed === 1 ? "" : "s"}, reclaimed ${(res.bytes / 1048576).toFixed(1)}MB. Undo history starts fresh.`,
           )
           break
         }
@@ -1765,8 +1803,8 @@ export const TrayambakApp = ({
           saveConfig({ checkpointsEnabled: next })
           addSystemMessage(
             next
-              ? "✅ Checkpoints ON — captured before every turn (saved — survives restart)."
-              : "🛑 Checkpoints OFF — no captures; /undo and /redo report the state (saved — survives restart).",
+              ? `${g("ok")} Checkpoints ON — captured before every turn (saved — survives restart).`
+              : `${g("fail")} Checkpoints OFF — no captures; /undo and /redo report the state (saved — survives restart).`,
           )
         } else {
           const count = (() => {
@@ -1939,8 +1977,8 @@ export const TrayambakApp = ({
         if (entry?.needsApiKey && !cfg.apiKey) {
           setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: cfg.baseUrl, apiKey: "", models: null })
           addSystemMessage(
-            `◉ ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
-            { persist: false },
+            `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
+            { persist: false, ttlMs: 0 },
           )
           break
         }
@@ -1948,12 +1986,12 @@ export const TrayambakApp = ({
         void fetchModelsDetailed(prov, cfg.baseUrl, cfg.apiKey).then((res) => {
           const { models, tag } = resolveModels(prov, res)
           setAvailableModels(models)
-          setShowModelPicker(true)
+          setShowModelPicker(/*showModelPicker*/ true)
           addSystemMessage(
             models.length > 0
               ? `Choose in the picker ↑↓ Enter (${models.length} ${tag}).`
               : `No models returned — check the provider/key/endpoint.${fetchWarn(res.error)}`,
-            { persist: false },
+            { persist: false, ttlMs: 10_000 },
           )
         })
         break
@@ -1980,14 +2018,14 @@ export const TrayambakApp = ({
           const activeId = (cfg.provider ?? "nvidia").toLowerCase()
           if (rest[0] === "all" || rest[0] === "full") {
             const lines = PROVIDER_CATALOG.map((e) => {
-              const mark = activeId === e.id ? "● " : "  "
-              const keyMark = activeId === e.id && cfg.apiKey ? " (key ✓)" : ""
+              const mark = activeId === e.id ? `${g("dot")} ` : "  "
+              const keyMark = activeId === e.id && cfg.apiKey ? ` (key ${g("ok")})` : ""
               return `${mark}${e.label} (${e.id}) — ${e.defaultBaseUrl}${keyMark}`
             })
             addSystemMessage(`Providers:\n${lines.join("\n")}`)
           } else {
             addSystemMessage(
-              `● ${providerLabelFor(cfg.provider ?? "nvidia")} · ${cfg.model}${cfg.apiKey ? " · key ✓" : " · no key"}\n` +
+              `${g("dot")} ${providerLabelFor(cfg.provider ?? "nvidia")} · ${cfg.model}${cfg.apiKey ? ` · key ${g("ok")}` : " · no key"}\n` +
                 `/provider — backend chooser · /provider use <id> [model] · /provider add — guided connect · /provider key — set/check API keys · /provider models — chooser`,
             )
           }
@@ -2000,7 +2038,7 @@ export const TrayambakApp = ({
           const sameKey = (cfg.provider ?? "").toLowerCase() === id ? cfg.apiKey : readStoredKey(id).apiKey
           if (!entry) {
             addSystemMessage(
-              `● ${providerLabelFor(cfg.provider ?? "nvidia")} · ${cfg.model}\nUsage: /provider use <id> [model] — ids: ${PROVIDER_CATALOG.map((e) => e.id).join(", ")}`,
+              `${g("dot")} ${providerLabelFor(cfg.provider ?? "nvidia")} · ${cfg.model}\nUsage: /provider use <id> [model] — ids: ${PROVIDER_CATALOG.map((e) => e.id).join(", ")}`,
             )
           } else if (rest.length > 1) {
             const model = rest.slice(1).join(" ")
@@ -2014,9 +2052,13 @@ export const TrayambakApp = ({
             const base = (cfg.provider ?? "").toLowerCase() === id ? cfg.baseUrl : entry.defaultBaseUrl
             if (entry.needsApiKey && !sameKey) {
               setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: base, apiKey: "", models: null })
-              addSystemMessage(`◉ ${entry.label}: enter API key (models fetch + chooser follow). Esc to abort.`, {
-                persist: false,
-              })
+              addSystemMessage(
+                `${g("prompt")} ${entry.label}: enter API key (models fetch + chooser follow). Esc to abort.`,
+                {
+                  persist: false,
+                  ttlMs: 0,
+                },
+              )
             } else {
               void fetchAndPickModel(entry.id, base, sameKey)
             }
@@ -2033,8 +2075,8 @@ export const TrayambakApp = ({
             if (isActive && entry.needsApiKey && !key) {
               setLoginFlow({ stage: "apiKey", providerId: id, baseUrl: base, apiKey: "", models: null })
               addSystemMessage(
-                `◉ ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
-                { persist: false },
+                `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
+                { persist: false, ttlMs: 0 },
               )
               break
             }
@@ -2044,12 +2086,12 @@ export const TrayambakApp = ({
                 // Active backend → straight into the chooser, no text dump.
                 const { models, tag } = resolveModels(id, res)
                 setAvailableModels(models)
-                setShowModelPicker(true)
+                setShowModelPicker(/*showModelPicker*/ true)
                 addSystemMessage(
                   models.length > 0
                     ? `Choose in the picker ↑↓ Enter (${models.length} ${tag}).`
                     : `No models for ${entry.label} — check key/endpoint.${fetchWarn(res.error)}`,
-                  { persist: false },
+                  { persist: false, ttlMs: 10_000 },
                 )
                 return
               }
@@ -2058,6 +2100,7 @@ export const TrayambakApp = ({
                 res.models.length > 0
                   ? `${entry.label} models (${res.models.length}, ${res.source}):\n${res.models.slice(0, 10).join("\n")}${res.models.length > 10 ? `\n… +${res.models.length - 10} more — /provider use ${id} to choose` : ""}${fetchWarn(res.error)}`
                   : `No models for ${entry.label} — check key/endpoint.${fetchWarn(res.error)}`,
+                { ttlMs: 10_000 },
               )
             })
           }
@@ -2091,18 +2134,19 @@ export const TrayambakApp = ({
                   // id like VS Code's custom provider config.
                   applyProviderSwitch(entry.id, "", base, key, [])
                   setLoginFlow({ stage: "model", providerId: entry.id, baseUrl: base, apiKey: key, models: [] })
-                  addSystemMessage(`✅ ${entry.label} connected at ${base} — type the exact model id to use.`, {
+                  addSystemMessage(`${g("ok")} ${entry.label} connected at ${base} — type the exact model id to use.`, {
                     persist: false,
+                    ttlMs: 0,
                   })
                   return
                 }
                 // Switch first (no model flash), then open the chooser so the
                 // user picks directly instead of reading a text dump.
                 applyProviderSwitch(entry.id, models[0] ?? entry.defaultModel, base, key, models)
-                setShowModelPicker(true)
+                setShowModelPicker(/*showModelPicker*/ true)
                 addSystemMessage(
-                  `✅ ${entry.label} connected · choose in the picker ↑↓ Enter (${models.length} ${tag}). Esc keeps ${models[0] ?? entry.defaultModel}.`,
-                  { persist: false },
+                  `${g("ok")} ${entry.label} connected · choose in the picker ↑↓ Enter (${models.length} ${tag}). Esc keeps ${models[0] ?? entry.defaultModel}.`,
+                  { persist: false, ttlMs: 10_000 },
                 )
               })
             }
@@ -2117,10 +2161,10 @@ export const TrayambakApp = ({
           const looksLikeKey = (s: string): boolean => s.length >= 8 && !getCatalogEntry(s)
           if (rest.length === 0) {
             const lines = PROVIDER_CATALOG.map((e) => {
-              const active = (cfgKey.provider ?? "nvidia").toLowerCase() === e.id ? "● " : "  "
+              const active = (cfgKey.provider ?? "nvidia").toLowerCase() === e.id ? `${g("dot")} ` : "  "
               const stored =
                 readStoredKey(e.id).apiKey || ((cfgKey.provider ?? "").toLowerCase() === e.id ? cfgKey.apiKey : "")
-              return `${active}${e.label} (${e.id}) — ${stored ? `key ✓ (${stored.length} chars)` : "no key"}`
+              return `${active}${e.label} (${e.id}) — ${stored ? `key ${g("ok")} (${stored.length} chars)` : "no key"}`
             })
             addSystemMessage(
               `API keys (values never shown):\n${lines.join("\n")}\n\n/provider key <apikey> — set for active · /provider key <id> <apikey> [baseUrl]`,
@@ -2170,8 +2214,9 @@ export const TrayambakApp = ({
               }
               addSystemMessage(
                 check.ok
-                  ? `✅ Key works on ${entry?.label ?? id} (chat ping ${check.status}). Saved — switching back here later reuses it.`
-                  : `⚠ Key REJECTED on ${entry?.label ?? id}${check.status ? ` (HTTP ${check.status})` : ""} — saved anyway for retry.\n${check.hint ?? "Check the key and endpoint."}`,
+                  ? `${g("ok")} Key works on ${entry?.label ?? id} (chat ping ${check.status}). Saved — switching back here later reuses it.`
+                  : `${g("warn")} Key REJECTED on ${entry?.label ?? id}${check.status ? ` (HTTP ${check.status})` : ""} — saved anyway for retry.\n${check.hint ?? "Check the key and endpoint."}`,
+                { ttlMs: 10_000 },
               )
             })
           }
@@ -2235,10 +2280,10 @@ export const TrayambakApp = ({
       }
       case "sessions":
       case "resume":
-        setShowPicker(true)
+        setShowPicker(/*showPicker*/ true)
         return
       case "newchat":
-        setShowPicker(false)
+        setShowPicker(/*showPicker*/ false)
         sessionIdRef.current = null
         currentSessionRef.current = null
         setMessages([])
@@ -2257,7 +2302,7 @@ export const TrayambakApp = ({
             addSystemMessage(`Unknown theme "${args}". Run /themes to see available options.`)
           }
         } else {
-          setShowThemePicker(true)
+          setShowThemePicker(/*showThemePicker*/ true)
         }
         return
       }
@@ -2268,7 +2313,9 @@ export const TrayambakApp = ({
         const liveName = getLiveTheme().name
         const current = allThemes.find((t: TrayambakTheme) => t.name === liveName)
         const list = allThemes
-          .map((t: TrayambakTheme) => `  ${t === current ? "● " : "  "}${t.name} (${t.dark ? "dark" : "light"})`)
+          .map(
+            (t: TrayambakTheme) => `  ${t === current ? `${g("dot")} ` : "  "}${t.name} (${t.dark ? "dark" : "light"})`,
+          )
           .join("\n")
         addSystemMessage(`Available themes:\n${list}`)
         break
@@ -2288,11 +2335,14 @@ export const TrayambakApp = ({
         void copyTextToClipboard(text)
           .then(() =>
             addSystemMessage(
-              `📋 Copied ${text.length} characters (${scope === "last" ? "last reply" : "transcript"}) to the clipboard.`,
+              `${g("ok")} Copied ${text.length} characters (${scope === "last" ? "last reply" : "transcript"}) to the clipboard.`,
+              { ttlMs: 10_000 },
             ),
           )
           .catch((error) =>
-            addSystemMessage(`⚠ Copy failed: ${error instanceof Error ? error.message : String(error)}`),
+            addSystemMessage(`${g("warn")} Copy failed: ${error instanceof Error ? error.message : String(error)}`, {
+              ttlMs: 10_000,
+            }),
           )
         break
       }
@@ -2320,8 +2370,12 @@ export const TrayambakApp = ({
       case "todo":
         slashCommandService
           .dispatch(`/todo ${args}`.trim())
-          .then((output) => addSystemMessage(output))
-          .catch((error) => addSystemMessage(`/todo failed: ${error instanceof Error ? error.message : String(error)}`))
+          .then((output) => addSystemMessage(output, { ttlMs: 10_000 }))
+          .catch((error) =>
+            addSystemMessage(`/todo failed: ${error instanceof Error ? error.message : String(error)}`, {
+              ttlMs: 10_000,
+            }),
+          )
         break
       case "memory": {
         // Real persistent store (USEMEMORY.MD via the memory tool layer) —
@@ -2390,7 +2444,11 @@ export const TrayambakApp = ({
           )
           .join("\n")
         const context = tail.length > 0 ? `Recent conversation:\n${tail.slice(0, 2400)}\n` : ""
-        void launchSubagent("general", `${context}Fork directive (work autonomously): ${directive}`, true)
+        void launchSubagent(
+          "general",
+          `${context}Fork directive (work autonomously): ${directive}`,
+          /*background*/ true,
+        )
         break
       }
       case "cron": {
@@ -2412,7 +2470,7 @@ export const TrayambakApp = ({
       }
       case "background":
         setPanelInitialTab("background")
-        setShowSubagentPanel(true)
+        setShowSubagentPanel(/*showSubagentPanel*/ true)
         setTaskHint(null)
         break
       case "forget":
@@ -2481,13 +2539,13 @@ export const TrayambakApp = ({
       }
       case "subagents":
         setPanelInitialTab("all")
-        setShowSubagentPanel(true)
+        setShowSubagentPanel(/*showSubagentPanel*/ true)
         setTaskHint(null)
         break
       case "agent": {
         const rest = args.trim()
         if (!rest) {
-          setShowAgentPicker(true)
+          setShowAgentPicker(/*showAgentPicker*/ true)
           return
         }
         const parts = rest.split(/\s+/)
@@ -2569,16 +2627,30 @@ export const TrayambakApp = ({
         slashCommandService
           .dispatch(`/${command} ${args}`.trim())
           .then((output) => {
-            addSystemMessage(output)
+            addSystemMessage(output, { ttlMs: 10_000 })
           })
           .catch((error) => {
-            addSystemMessage(`Command failed: ${error instanceof Error ? error.message : String(error)}`)
+            addSystemMessage(`Command failed: ${error instanceof Error ? error.message : String(error)}`, {
+              ttlMs: 10_000,
+            })
           })
     }
   }
 
+  /** Slash entry wrapper: the handler runs synchronously, so flagging around it covers every readout a case prints; try/finally keeps a throwing case from leaving the flag stuck ON, and save/restore keeps a nested dispatch from clearing the outer flag. Also snaps to live first: a slash is new activity, so its readout (often TTL'd — see addSystemMessage) must land in-frame even if the user was parked reading history. */
+  const runSlash = (command: string, args: string): void => {
+    setScrollBack(0)
+    const prev = slashTtlRef.current
+    slashTtlRef.current = true
+    try {
+      handleSlashCommand(command, args)
+    } finally {
+      slashTtlRef.current = prev
+    }
+  }
+
   const handleChoose = (command: string, value: string): void => {
-    handleSlashCommand(command, value)
+    runSlash(command, value)
   }
 
   /** Push the live UI mode into the agent's permission config so the
@@ -2638,10 +2710,10 @@ export const TrayambakApp = ({
   const sweepOrphanedDialogs = (): void => {
     const orphans = resolverQueueRef.current.splice(0, resolverQueueRef.current.length)
     if (orphans.length > 0) {
-      for (const entry of orphans) entry.resolve(false)
+      for (const entry of orphans) entry.resolve(/*value*/ false)
       setPendingPermissions([])
       addSystemMessage(
-        `🧹 Cleared ${orphans.length} unanswered permission request(s) from the finished turn — resend the message to retry.`,
+        `${g("ok")} Cleared ${orphans.length} unanswered permission request(s) from the finished turn — resend the message to retry.`,
       )
     }
     const bgAlive = Array.from(backgroundSubagents.values()).some((j) => j.status === "running")
@@ -2650,7 +2722,7 @@ export const TrayambakApp = ({
       const resolve = questionResolverRef.current
       questionResolverRef.current = null
       setPendingQuestion(null)
-      setWaitingCustom(false)
+      setWaitingCustom(/*waitingCustom*/ false)
       resolve([])
     }
   }
@@ -2675,7 +2747,9 @@ export const TrayambakApp = ({
         const live = agentRef.current.config.permissions ?? {}
         agentRef.current.config.permissions = { ...live, rulesV2: [...(live.rulesV2 ?? []), rule] }
       }
-      addSystemMessage(`${action === "allow" ? "✅ Always allow" : "🚫 Never allow"} saved: ${row.tool} → ${pattern}`)
+      addSystemMessage(
+        `${action === "allow" ? `${g("ok")} Always allow` : `${g("fail")} Never allow`} saved: ${row.tool} → ${pattern}`,
+      )
     } catch (err) {
       addSystemMessage(`Failed to save permission rule: ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -2693,10 +2767,11 @@ export const TrayambakApp = ({
     syncUiMode(next.current)
     if (next.current === "plan") {
       addSystemMessage(
-        "🧭 Plan mode ON — mutating tools are denied; ask the model for a plan, then cycle modes to execute it.",
+        `${g("warn")} Plan mode ON — mutating tools are denied; ask the model for a plan, then cycle modes to execute it.`,
+        { ttlMs: 10_000 },
       )
     } else if (prev.current === "plan") {
-      addSystemMessage("Plan mode OFF — mutating tools are available again.")
+      addSystemMessage("Plan mode OFF — mutating tools are available again.", { ttlMs: 10_000 })
     }
   }
 
@@ -2711,10 +2786,11 @@ export const TrayambakApp = ({
     syncUiMode(next.current)
     if (next.current === "plan") {
       addSystemMessage(
-        "🧭 Plan mode ON — mutating tools are denied; ask the model for a plan, then Shift-Tab again to execute it.",
+        `${g("warn")} Plan mode ON — mutating tools are denied; ask the model for a plan, then Shift-Tab again to execute it.`,
+        { ttlMs: 10_000 },
       )
     } else {
-      addSystemMessage("Plan mode OFF — mutating tools are available again.")
+      addSystemMessage("Plan mode OFF — mutating tools are available again.", { ttlMs: 10_000 })
     }
   }
 
@@ -2729,10 +2805,10 @@ export const TrayambakApp = ({
       lastPressAtMs: lastCtrlCRef.current,
     })
     if (action === "deny-dialog") {
-      for (const p of pendingPermissions) resolvePermission(p.id, false)
+      for (const p of pendingPermissions) resolvePermission(p.id, /*approved*/ false)
       if (pendingQuestion !== null || waitingCustom) {
         setPendingQuestion(null)
-        setWaitingCustom(false)
+        setWaitingCustom(/*waitingCustom*/ false)
         questionResolverRef.current?.([])
         questionResolverRef.current = null
         addSystemMessage("Question dismissed (Ctrl-C).", { persist: false })
@@ -2832,13 +2908,13 @@ export const TrayambakApp = ({
     if (key.ctrl && input === "p" && !overlayOpen) {
       // SKT AI LABS parity: ctrl+p opens the command palette; the permission-mode
       // cycle remains on Ctrl+K P (leader table).
-      setShowPalette(true)
+      setShowPalette(/*showPalette*/ true)
     }
     if (key.ctrl && input === "g" && !overlayOpen) {
       // Subagents panel lives here now: Ctrl+S became inject-mid-stream,
       // so the panel moved one key right (still in /keymap + which-key).
       setPanelInitialTab("all")
-      setShowSubagentPanel(true)
+      setShowSubagentPanel(/*showSubagentPanel*/ true)
       setTaskHint(null)
     }
     if (key.ctrl && input === "o" && !overlayOpen) {
@@ -2857,11 +2933,11 @@ export const TrayambakApp = ({
     }
     if (key.ctrl && input === "b" && !overlayOpen) {
       setPanelInitialTab("background")
-      setShowSubagentPanel(true)
+      setShowSubagentPanel(/*showSubagentPanel*/ true)
       setTaskHint(null)
     }
     if (key.ctrl && input === "k" && !overlayOpen) {
-      setShowWhichKey(true)
+      setShowWhichKey(/*showWhichKey*/ true)
     }
     // Esc cancels a mid-flight provider connect (typed key/model steps).
     // Picker overlays own their own Esc (they stand down the composer), and
@@ -2973,7 +3049,7 @@ export const TrayambakApp = ({
     const now = bgRunningCount > 0
     prevBgRunningRef.current = now
     if (prev && !now) {
-      setTaskHint("✓ Background task finished — Ctrl+B to view")
+      setTaskHint(`${g("ok")} Background task finished — Ctrl+B to view`)
       void notifyTerminalActivity({ activity: "task-done", detail: "Background task finished" })
     }
   }, [bgRunningCount])
@@ -2984,13 +3060,13 @@ export const TrayambakApp = ({
   // could not be typed ("no input" during a pending question).
   useEffect(() => {
     if (pendingQuestion !== null || pendingPermissions.length > 0) {
-      setShowSubagentPanel(false)
-      setShowAgentPicker(false)
-      setShowThemePicker(false)
-      setShowWhichKey(false)
-      setShowPicker(false)
-      setShowPalette(false)
-      setShowModelPicker(false)
+      setShowSubagentPanel(/*showSubagentPanel*/ false)
+      setShowAgentPicker(/*showAgentPicker*/ false)
+      setShowThemePicker(/*showThemePicker*/ false)
+      setShowWhichKey(/*showWhichKey*/ false)
+      setShowPicker(/*showPicker*/ false)
+      setShowPalette(/*showPalette*/ false)
+      setShowModelPicker(/*showModelPicker*/ false)
     }
   }, [pendingQuestion, pendingPermissions.length])
 
@@ -3018,7 +3094,7 @@ export const TrayambakApp = ({
       if (models.length === 0) {
         addSystemMessage(
           `No models returned by ${providerLabelFor(prov)} — check key/endpoint, then /models retries.${fetchWarn(res.error)}`,
-          { persist: false },
+          { persist: false, ttlMs: 10_000 },
         )
       }
     })
@@ -3032,12 +3108,12 @@ export const TrayambakApp = ({
     if (entry?.needsApiKey && !cfg.apiKey && availableModels === null) {
       setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: cfg.baseUrl, apiKey: "", models: null })
       addSystemMessage(
-        `◉ ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
-        { persist: false },
+        `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
+        { persist: false, ttlMs: 0 },
       )
       return
     }
-    setShowModelPicker(true)
+    setShowModelPicker(/*showModelPicker*/ true)
     // Refetch when we have nothing OR an empty (earlier failed) list — an
     // empty list must never become a permanent dead picker.
     if (availableModels === null || availableModels.length === 0) refreshModels()
@@ -3102,8 +3178,11 @@ export const TrayambakApp = ({
       return
     }
     setLoginFlow({ stage: "provider", providerId: "", baseUrl: "", apiKey: "", models: null })
-    setShowProviderPicker(true)
-    addSystemMessage("🔑 Choose a provider ↑↓ Enter (or type its number/id).", { persist: false })
+    setShowProviderPicker(/*showProviderPicker*/ true)
+    addSystemMessage(`${g("prompt")} Choose a provider ↑↓ Enter (or type its number/id).`, {
+      persist: false,
+      ttlMs: 10_000,
+    })
   }
 
   /** Shared fetch → model-chooser step: live model list, then straight into
@@ -3120,8 +3199,8 @@ export const TrayambakApp = ({
     if (entry?.needsApiKey && !key) {
       setLoginFlow({ stage: "apiKey", providerId, baseUrl, apiKey: "", models: null })
       addSystemMessage(
-        `◉ ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
-        { persist: false },
+        `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
+        { persist: false, ttlMs: 0 },
       )
       return
     }
@@ -3150,17 +3229,18 @@ export const TrayambakApp = ({
           : ` Key check FAILED${check.status ? ` (HTTP ${check.status})` : ""}: ${check.hint ?? "check the key."}`
       }
       addSystemMessage(
-        `✅ ${entry?.label ?? providerId} connected (no model list available — using default).${fetchWarn(res.error)}${keyNote}`,
+        `${g("ok")} ${entry?.label ?? providerId} connected (no model list available — using default).${fetchWarn(res.error)}${keyNote}`,
+        { ttlMs: 10_000 },
       )
       return
     }
     setProviderInfo({ label: providerLabelFor(providerId), host: providerHostFor(baseUrl) })
     setLoginFlow({ stage: "model", providerId, baseUrl, apiKey: key, models: usable })
     setAvailableModels(usable)
-    setShowModelPicker(true)
+    setShowModelPicker(/*showModelPicker*/ true)
     addSystemMessage(
       `Choose a model in the picker ↑↓ Enter (${usable.length} ${tag} from ${entry?.label ?? providerId}). Esc cancels the whole connect.`,
-      { persist: false },
+      { persist: false, ttlMs: 10_000 },
     )
   }
 
@@ -3173,12 +3253,12 @@ export const TrayambakApp = ({
       addSystemMessage(`Unknown provider "${providerId}".`, { persist: false })
       return
     }
-    setShowProviderPicker(false)
+    setShowProviderPicker(/*showProviderPicker*/ false)
     if (entry.needsBaseUrl) {
       setLoginFlow({ stage: "baseUrl", providerId: entry.id, baseUrl: "", apiKey: "", models: null })
       addSystemMessage(
-        `◉ ${entry.label}: enter Base URL (default ${entry.defaultBaseUrl}) — Enter or 'default' takes the default, Esc cancels.`,
-        { persist: false },
+        `${g("prompt")} ${entry.label}: enter Base URL (default ${entry.defaultBaseUrl}) — Enter or 'default' takes the default, Esc cancels.`,
+        { persist: false, ttlMs: 0 },
       )
     } else if (entry.needsApiKey) {
       const stored = readStoredKey(entry.id)
@@ -3187,11 +3267,17 @@ export const TrayambakApp = ({
         void fetchAndPickModel(entry.id, stored.baseUrl || entry.defaultBaseUrl, stored.apiKey)
       } else {
         setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: entry.defaultBaseUrl, apiKey: "", models: null })
-        addSystemMessage(`◉ ${entry.label}: enter API key, or type 'skip'. Esc cancels.`, { persist: false })
+        addSystemMessage(`${g("prompt")} ${entry.label}: enter API key, or type 'skip'. Esc cancels.`, {
+          persist: false,
+          ttlMs: 0,
+        })
       }
     } else {
       setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: entry.defaultBaseUrl, apiKey: "", models: null })
-      addSystemMessage(`◉ ${entry.label}: enter API key (optional — type 'skip' to skip).`, { persist: false })
+      addSystemMessage(`${g("prompt")} ${entry.label}: enter API key (optional — type 'skip' to skip).`, {
+        persist: false,
+        ttlMs: 0,
+      })
     }
   }
 
@@ -3201,7 +3287,7 @@ export const TrayambakApp = ({
       return
     }
     setLoginFlow(null)
-    setShowProviderPicker(false)
+    setShowProviderPicker(/*showProviderPicker*/ false)
     addSystemMessage("Provider connect cancelled.", { persist: false })
   }
 
@@ -3249,14 +3335,15 @@ export const TrayambakApp = ({
           applyProviderSwitch(flow.providerId, entry?.defaultModel ?? "", base, "")
           setLoginFlow(null)
           addSystemMessage(
-            `✅ ${entry.label} connected at ${base} (no model list — set one via /provider use ${flow.providerId} <model>).`,
+            `${g("ok")} ${entry.label} connected at ${base} (no model list — set one via /provider use ${flow.providerId} <model>).`,
+            { ttlMs: 10_000 },
           )
           return
         }
         setProviderInfo({ label: providerLabelFor(flow.providerId), host: providerHostFor(base) })
         setAvailableModels(pre.models)
         setLoginFlow({ stage: "model", providerId: flow.providerId, baseUrl: base, apiKey: "", models: pre.models })
-        setShowModelPicker(true)
+        setShowModelPicker(/*showModelPicker*/ true)
         addSystemMessage(
           `Choose a model in the picker ↑↓ Enter (${res.models.length} live from ${base}). Esc closes it — then type the exact id.`,
           { persist: false },
@@ -3264,7 +3351,10 @@ export const TrayambakApp = ({
         return
       }
       setLoginFlow({ stage: "apiKey", providerId: flow.providerId, baseUrl: base, apiKey: "", models: null })
-      addSystemMessage(`◉ Base URL set to ${base}. Now enter API key, or type 'skip'.`, { persist: false })
+      addSystemMessage(`${g("prompt")} Base URL set to ${base}. Now enter API key, or type 'skip'.`, {
+        persist: false,
+        ttlMs: 0,
+      })
       return
     }
     if (flow.stage === "apiKey") {
@@ -3280,7 +3370,10 @@ export const TrayambakApp = ({
       if (!key && entry?.needsApiKey) {
         // A skipped/missing key on a gated backend can only 401 into the
         // tiny static list — refuse and re-prompt instead of opening it.
-        addSystemMessage(`◉ ${entry.label} needs an API key — paste it, or Esc to cancel.`, { persist: false })
+        addSystemMessage(`${g("prompt")} ${entry.label} needs an API key — paste it, or Esc to cancel.`, {
+          persist: false,
+          ttlMs: 0,
+        })
         return
       }
       await fetchAndPickModel(flow.providerId, flow.baseUrl, key)
@@ -3306,7 +3399,7 @@ export const TrayambakApp = ({
       applyProviderSwitch(flow.providerId, picked, flow.baseUrl, flow.apiKey)
       setLoginFlow(null)
       const entry = getCatalogEntry(flow.providerId)
-      addSystemMessage(`✅ Connected: ${entry?.label ?? flow.providerId} · ${picked}`)
+      addSystemMessage(`${g("ok")} Connected: ${entry?.label ?? flow.providerId} · ${picked}`, { ttlMs: 10_000 })
       return
     }
   }
@@ -3316,7 +3409,7 @@ export const TrayambakApp = ({
    *  construction, so agentConfigRef is updated and agentRef nulled — the
    *  next run rebuilds against the new model. */
   const selectModel = (id: string): void => {
-    setShowModelPicker(false)
+    setShowModelPicker(/*showModelPicker*/ false)
     if (id === activeModel) return
     const nextRecents = pushRecent(modelRecents, id)
     saveConfig({ model: id, modelRecents: nextRecents })
@@ -3340,12 +3433,12 @@ export const TrayambakApp = ({
    *  the flow's provider/baseUrl/apiKey instead of only swapping the model. */
   const selectModelDuringLogin = (id: string): void => {
     const flow = loginFlowRef.current
-    setShowModelPicker(false)
+    setShowModelPicker(/*showModelPicker*/ false)
     if (!flow || flow.stage !== "model") return
     setLoginFlow(null)
     const models = flow.models ?? []
     applyProviderSwitch(flow.providerId, id, flow.baseUrl, flow.apiKey, models)
-    addSystemMessage(`✅ Connected: ${providerLabelFor(flow.providerId)} · ${id}`)
+    addSystemMessage(`${g("ok")} Connected: ${providerLabelFor(flow.providerId)} · ${id}`, { ttlMs: 10_000 })
   }
 
   const leaderActions: WhichKeyAction[] = [
@@ -3354,7 +3447,7 @@ export const TrayambakApp = ({
       label: "subagents panel",
       run: () => {
         setPanelInitialTab("all")
-        setShowSubagentPanel(true)
+        setShowSubagentPanel(/*showSubagentPanel*/ true)
         setTaskHint(null)
       },
     },
@@ -3363,20 +3456,20 @@ export const TrayambakApp = ({
       label: "background tasks panel",
       run: () => {
         setPanelInitialTab("background")
-        setShowSubagentPanel(true)
+        setShowSubagentPanel(/*showSubagentPanel*/ true)
         setTaskHint(null)
       },
     },
-    { key: "a", label: "agent picker", run: () => setShowAgentPicker(true) },
-    { key: "t", label: "theme picker", run: () => setShowThemePicker(true) },
+    { key: "a", label: "agent picker", run: () => setShowAgentPicker(/*showAgentPicker*/ true) },
+    { key: "t", label: "theme picker", run: () => setShowThemePicker(/*showThemePicker*/ true) },
     { key: "m", label: "model picker", run: openModelPicker },
     { key: "i", label: "sidebar", run: () => setShowSidebar((open) => !open) },
-    { key: "q", label: "session picker", run: () => setShowPicker(true) },
+    { key: "q", label: "session picker", run: () => setShowPicker(/*showPicker*/ true) },
     {
       key: "n",
       label: "new chat",
       run: () => {
-        setShowPicker(false)
+        setShowPicker(/*showPicker*/ false)
         sessionIdRef.current = null
         currentSessionRef.current = null
         setMessages([])
@@ -3430,7 +3523,7 @@ export const TrayambakApp = ({
       title: "Keyboard shortcut help",
       category: "Actions",
       keybinding: "ctrl+k",
-      run: () => setShowWhichKey(true),
+      run: () => setShowWhichKey(/*showWhichKey*/ true),
     },
     ...slashCommandService.registry.all().map((cmd, i): PaletteEntry => ({
       id: `cmd.${cmd.name}.${i}`,
@@ -3438,7 +3531,7 @@ export const TrayambakApp = ({
       description: cmd.description,
       category: cmd.category || "Commands",
       suggested: cmd.name === "theme" || cmd.name === "models",
-      run: () => handleSlashCommand(cmd.name, ""),
+      run: () => runSlash(cmd.name, ""),
     })),
   ]
 
@@ -3464,15 +3557,15 @@ export const TrayambakApp = ({
       borderTop={hasStaticPrefix ? false : undefined}
     >
       {showSplash ? (
-        <SplashScreen onDone={() => setSplashDone(true)} />
+        <SplashScreen onDone={() => setSplashDone(/*splashDone*/ true)} />
       ) : showPalette ? (
         <CommandPalette
           entries={paletteEntries}
           onSelect={(entry) => {
-            setShowPalette(false)
+            setShowPalette(/*showPalette*/ false)
             entry.run()
           }}
-          onClose={() => setShowPalette(false)}
+          onClose={() => setShowPalette(/*showPalette*/ false)}
         />
       ) : showThemePicker ? (
         <ThemePicker
@@ -3481,11 +3574,11 @@ export const TrayambakApp = ({
           onSelect={(name) => {
             applyTrayambakTheme(name)
             saveConfig({ themeName: name })
-            setShowThemePicker(false)
+            setShowThemePicker(/*showThemePicker*/ false)
           }}
           onExit={() => {
             applyTrayambakTheme(config?.themeName ?? "trayambak-dark")
-            setShowThemePicker(false)
+            setShowThemePicker(/*showThemePicker*/ false)
           }}
         />
       ) : showSandboxSetup ? (
@@ -3494,32 +3587,32 @@ export const TrayambakApp = ({
           onSelect={(mode) => {
             setPermissionMode(mode)
             syncUiMode(mode)
-            setSandboxDone(true)
+            setSandboxDone(/*sandboxDone*/ true)
             addSystemMessage(`Sandbox ready (${mode}) — change anytime with /mode.`)
           }}
         />
       ) : showWhichKey ? (
-        <WhichKey actions={leaderActions} onClose={() => setShowWhichKey(false)} />
+        <WhichKey actions={leaderActions} onClose={() => setShowWhichKey(/*showWhichKey*/ false)} />
       ) : showSubagentPanel ? (
         <SubagentPanel
           cards={messages.filter((m) => !!m.subagentId)}
           background={Array.from(backgroundSubagents.values())}
           initialTab={panelInitialTab}
-          onClose={() => setShowSubagentPanel(false)}
+          onClose={() => setShowSubagentPanel(/*showSubagentPanel*/ false)}
           onCancel={cancelBackgroundJob}
         />
       ) : showAgentPicker ? (
         <AgentPicker
           profiles={listAgentProfiles()}
           onSelect={(value) => {
-            setShowAgentPicker(false)
+            setShowAgentPicker(/*showAgentPicker*/ false)
             pendingAgentTypeRef.current = value
             addSystemMessage(
               `Agent selected: ${value}\nType the task prompt and press Enter (prefix --bg to run it in the background, or /agent to re-select).`,
               { persist: false },
             )
           }}
-          onExit={() => setShowAgentPicker(false)}
+          onExit={() => setShowAgentPicker(/*showAgentPicker*/ false)}
         />
       ) : showProviderPicker ? (
         <ProviderPicker
@@ -3540,7 +3633,7 @@ export const TrayambakApp = ({
           onExit={() => {
             // Mid-connect Esc exits the whole connect (no stranded flow).
             if (loginFlowRef.current) cancelLogin()
-            else setShowProviderPicker(false)
+            else setShowProviderPicker(/*showProviderPicker*/ false)
           }}
         />
       ) : showModelPicker ? (
@@ -3557,14 +3650,14 @@ export const TrayambakApp = ({
           onClose={() => {
             // Mid-connect Esc exits the whole connect (no stranded flow).
             if (loginFlowRef.current) cancelLogin()
-            else setShowModelPicker(false)
+            else setShowModelPicker(/*showModelPicker*/ false)
           }}
         />
       ) : showPicker ? (
         <SessionPicker
           sessions={loadSessions()}
           onSelect={(session) => {
-            setShowPicker(false)
+            setShowPicker(/*showPicker*/ false)
             // Re-picking the session already on screen is a no-op:
             // reloading would replace LIVE state with log.jsonl, which
             // lags it (assistant replies persist only on message_end) —
@@ -3574,6 +3667,18 @@ export const TrayambakApp = ({
             sessionIdRef.current = session.sessionId
             currentSessionRef.current = session
             const history = loadConversation(session.sessionId)
+            // Backfill: sessions stuck at the default name (titled before
+            // auto-title existed, or a failed title call) get a real title
+            // from their own first user message on resume — deterministic,
+            // no provider round-trip. A user-chosen name is never touched.
+            if (session.sessionName === DEFAULT_SESSION_NAME) {
+              const backfill = titleFromConversation(history)
+              if (backfill) {
+                renameSession(session.sessionId, backfill)
+                session.sessionName = backfill
+                currentSessionRef.current = { ...session }
+              }
+            }
             // Rebuild live-shaped messages from the persisted pair: each
             // tool call is logged as an args-only assistant row PLUS a tool
             // row carrying id/result — restoring the raw pair rendered junk
@@ -3619,9 +3724,9 @@ export const TrayambakApp = ({
               { persist: false },
             )
           }}
-          onExit={() => setShowPicker(false)}
+          onExit={() => setShowPicker(/*showPicker*/ false)}
           onNewChat={() => {
-            setShowPicker(false)
+            setShowPicker(/*showPicker*/ false)
             sessionIdRef.current = null
             currentSessionRef.current = null
             setMessages([])
@@ -3679,15 +3784,15 @@ export const TrayambakApp = ({
             permissionMode={permissionMode}
             pendingRequests={pendingPermissions}
             composerHasText={composerHasText}
-            onApprove={(id) => resolvePermission(id, true)}
-            onDeny={(id) => resolvePermission(id, false)}
+            onApprove={(id) => resolvePermission(id, /*approved*/ true)}
+            onDeny={(id) => resolvePermission(id, /*approved*/ false)}
             onApproveSession={(id) => {
               const row = pendingPermissions.find((p) => p.id === id)
               if (row) {
                 addSessionPermissionRule({ tool: row.tool, pattern: permissionSubject(row.args), action: "allow" })
                 addSystemMessage(`Session rule: allow ${row.tool} → ${permissionSubject(row.args)}`)
               }
-              resolvePermission(id, true)
+              resolvePermission(id, /*approved*/ true)
             }}
             onApproveAlways={(id) => persistAndResolve(id, "allow")}
             onDenyAlways={(id) => persistAndResolve(id, "deny")}
@@ -3737,8 +3842,9 @@ export const TrayambakApp = ({
         !showAgentPicker && (
           <PromptInput
             onSubmit={handleInput}
-            onSlashCommand={handleSlashCommand}
+            onSlashCommand={runSlash}
             onChoose={handleChoose}
+            onHistoryScroll={handleHistoryScroll}
             onEnhance={enhanceDraft}
             isLoading={isLoading}
             disabled={showPicker}

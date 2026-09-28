@@ -237,7 +237,7 @@ export class LlamaCppProvider implements Provider {
         // silently - the request never started, so nothing is duplicated.
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
           setTimeout(() => {
-            this.postJson(path, payload, signal, callbacks, true).then(resolve, reject)
+            this.postJson(path, payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)
           return
         }

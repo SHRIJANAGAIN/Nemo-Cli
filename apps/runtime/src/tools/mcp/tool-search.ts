@@ -10,6 +10,7 @@ import { getConnectorRegistry } from "./registry.js"
 import { loadConfig, saveConfig } from "../../config.js"
 
 const searchDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "tool_search",
   description: "Search for available tools and MCP connectors. Use this to discover what tools are available.",
   parameters: {

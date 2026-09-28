@@ -16,6 +16,7 @@ import { Spinner } from "./Spinner.js"
 import type { TrayambakMessage } from "./types.js"
 import { formatSubagentToolcalls, formatCompletedSubagentDetail } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
+import { g } from "./glyphs.js"
 
 export interface SubagentRowProps {
   message: TrayambakMessage
@@ -44,7 +45,7 @@ export const SubagentRow = ({ message }: SubagentRowProps): ReactNode => {
   const sec = Math.floor(durationMs / 1000)
 
   const statusColor = state === "running" ? theme.warning : state === "completed" ? theme.success : theme.error
-  const statusIcon = state === "completed" ? "●" : state === "error" ? "✖" : ""
+  const statusIcon = state === "completed" ? g("dot") : state === "error" ? g("fail") : ""
 
   const detail = (message.subagentDetail ?? "").trim()
   const shownDetail = detail.length > MAX_DETAIL_CHARS ? `${detail.slice(0, MAX_DETAIL_CHARS)}…` : detail
@@ -67,7 +68,7 @@ export const SubagentRow = ({ message }: SubagentRowProps): ReactNode => {
         {state === "running" ? (
           <Spinner color={theme.warning} />
         ) : (
-          <Text color={statusColor}>{state === "completed" ? "✓" : "✗"}</Text>
+          <Text color={statusColor}>{state === "completed" ? g("ok") : g("fail")}</Text>
         )}
         <Text color={statusColor}>
           {state === "running" ? " running" : state === "completed" ? " completed" : " failed"}

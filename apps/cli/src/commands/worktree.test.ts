@@ -33,7 +33,7 @@ function freshDir(prefix: string): string {
 
 function gitAvailable(): boolean {
   try {
-    execSync("git --version", { stdio: "ignore" })
+    execSync("git --version", { stdio: "ignore", timeout: 30_000 })
     return true
   } catch {
     return false
@@ -119,10 +119,10 @@ describe("worktreeCommand with a real repository", () => {
     if (!gitAvailable()) return skip()
 
     const repo = freshDir("trayambak-worktree-repo-")
-    execSync("git init -q", { cwd: repo, stdio: "ignore" })
+    execSync("git init -q", { cwd: repo, stdio: "ignore", timeout: 30_000 })
     execSync(
       "git -c commit.gpgsign=false -c user.email=test@example.com -c user.name=test commit -q --allow-empty -m init",
-      { cwd: repo, stdio: "ignore" },
+      { cwd: repo, stdio: "ignore", timeout: 30_000 },
     )
     process.chdir(repo)
 
@@ -149,10 +149,10 @@ describe("worktreeCommand with a real repository", () => {
     if (!gitAvailable()) return skip()
 
     const repo = freshDir("trayambak-worktree-repo2-")
-    execSync("git init -q", { cwd: repo, stdio: "ignore" })
+    execSync("git init -q", { cwd: repo, stdio: "ignore", timeout: 30_000 })
     execSync(
       "git -c commit.gpgsign=false -c user.email=test@example.com -c user.name=test commit -q --allow-empty -m init",
-      { cwd: repo, stdio: "ignore" },
+      { cwd: repo, stdio: "ignore", timeout: 30_000 },
     )
     process.chdir(repo)
 

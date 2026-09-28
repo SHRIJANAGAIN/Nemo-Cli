@@ -12,6 +12,7 @@ const MAX_BYTES = 50 * 1024
 const MAX_LINES = 500
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "read_file",
   description:
     "Read a text file from the project. Returns line-numbered contents. Optionally read a slice with offset/limit (1-based line numbers).",
@@ -31,24 +32,27 @@ export function createReadFileTool(): Tool {
     definition,
     async execute(_id, args, signal, _update, context) {
       try {
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         const ctx = context as ToolContext
         const rawPath = String(args.path ?? "")
-        if (!rawPath) return textResult("Missing 'path'.", true)
+        if (!rawPath) return textResult("Missing 'path'.", /*isError*/ true)
 
         let target: string
         try {
           target = resolveConstrainedPath(rawPath, ctx.cwd)
         } catch (error) {
-          return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
+          return textResult(
+            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            /*isError*/ true,
+          )
         }
 
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         assertExternalDirectory(target, ctx.cwd)
 
-        if (!fs.existsSync(target)) return textResult(`File not found: ${rawPath}`, true)
-        if (signal?.aborted) return textResult("aborted", true)
-        if (!fs.statSync(target).isFile()) return textResult(`Not a file: ${rawPath}`, true)
+        if (!fs.existsSync(target)) return textResult(`File not found: ${rawPath}`, /*isError*/ true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
+        if (!fs.statSync(target).isFile()) return textResult(`Not a file: ${rawPath}`, /*isError*/ true)
 
         const offset = typeof args.offset === "number" && Number.isInteger(args.offset) ? Math.max(1, args.offset) : 1
         let limit = typeof args.limit === "number" && Number.isInteger(args.limit) ? Math.max(1, args.limit) : 2000
@@ -66,7 +70,7 @@ export function createReadFileTool(): Tool {
 
         return textResult(`File: ${rawPath} (${lines.length} lines)\n${numbered}${more}${capped}`)
       } catch (error) {
-        return textResult(`Read error: ${error instanceof Error ? error.message : String(error)}`, true)
+        return textResult(`Read error: ${error instanceof Error ? error.message : String(error)}`, /*isError*/ true)
       }
     },
   }

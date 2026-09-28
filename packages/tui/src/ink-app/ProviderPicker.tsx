@@ -8,6 +8,7 @@ import { Box, Text } from "ink"
 import { TrayambakLogo } from "./TrayambakLogo.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
+import { g } from "./glyphs.js"
 
 export interface ProviderPickRow {
   id: string
@@ -82,14 +83,14 @@ export function ProviderPicker({ providers, currentId, onSelect, onExit }: Provi
         {providers.map((row, idx) => (
           <Box key={row.id}>
             <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>
-              {idx === selected ? "❯ " : "  "}
+              {idx === selected ? `${g("picker")} ` : "  "}
             </Text>
             <Text dimColor>{`${idx + 1}. `}</Text>
             <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>
               {row.label}
             </Text>
-            {row.active ? <Text color="green"> ● active</Text> : null}
-            {row.hasKey ? <Text color="green"> key ✓</Text> : null}
+            {row.active ? <Text color="green"> {g("dot")} active</Text> : null}
+            {row.hasKey ? <Text color="green"> key {g("ok")}</Text> : null}
             <Text dimColor>{`  ${row.endpoint}${row.needsBaseUrl ? " · needs Base URL" : ""}`}</Text>
           </Box>
         ))}

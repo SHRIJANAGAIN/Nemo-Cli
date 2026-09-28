@@ -88,8 +88,25 @@ describe("RepetitionDetector", () => {
   it("escalates semantic repetition to critical at >= 95% similarity", () => {
     const d = new RepetitionDetector()
     const words = [
-      "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india",
-      "juliet", "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra",
+      "alpha",
+      "bravo",
+      "charlie",
+      "delta",
+      "echo",
+      "foxtrot",
+      "golf",
+      "hotel",
+      "india",
+      "juliet",
+      "kilo",
+      "lima",
+      "mike",
+      "november",
+      "oscar",
+      "papa",
+      "quebec",
+      "romeo",
+      "sierra",
     ]
     const s1 = words.join(" ")
     const s2 = `${s1} zulu`

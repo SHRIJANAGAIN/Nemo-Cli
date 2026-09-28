@@ -5,17 +5,17 @@ terminal coding agent by SKT AI LABS PRIVATE LIMITED.
 
 ## Pages
 
-| Page | What's in it |
-| --- | --- |
+| Page                                  | What's in it                                                                                          |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | [Getting started](getting-started.md) | Install, launch, every subcommand, global flags, configuration precedence, env vars, where files live |
-| [Sessions](sessions.md) | Transcript layout, picker keys, archive/delete, compaction, checkpoints |
-| [Providers](providers.md) | The 10 backends, defaults, key handling, model listing, fully local models |
-| [MCP](mcp.md) | Configuring servers, `trayambak mcp …`, OAuth tokens, connector registry, `mcp-server` |
-| [ACP](acp.md) | `trayambak acp` — stdio JSON-RPC methods, examples, when to use it |
-| [Web](web.md) | `trayambak web` — endpoints, SSE agent runs, token auth, CORS |
-| [Security](security.md) | Permissions, sandbox, secret storage, hooks, network exposure |
-| [Troubleshooting](troubleshooting.md) | `doctor`-driven diagnosis, 401s, config recovery, Windows shims, debug aids |
-| [Architecture](architecture.md) | Monorepo layout, build pipeline, CI, runtime data flow |
+| [Sessions](sessions.md)               | Transcript layout, picker keys, archive/delete, compaction, checkpoints                               |
+| [Providers](providers.md)             | The 10 backends, defaults, key handling, model listing, fully local models                            |
+| [MCP](mcp.md)                         | Configuring servers, `trayambak mcp …`, OAuth tokens, connector registry, `mcp-server`                |
+| [ACP](acp.md)                         | `trayambak acp` — stdio JSON-RPC methods, examples, when to use it                                    |
+| [Web](web.md)                         | `trayambak web` — endpoints, SSE agent runs, token auth, CORS                                         |
+| [Security](security.md)               | Permissions, sandbox, secret storage, hooks, network exposure                                         |
+| [Troubleshooting](troubleshooting.md) | `doctor`-driven diagnosis, 401s, config recovery, Windows shims, debug aids                           |
+| [Architecture](architecture.md)       | Monorepo layout, build pipeline, CI, runtime data flow                                                |
 
 ## Quick reference
 
@@ -117,4 +117,4 @@ default. Details: [Security](security.md); reporting SLA and scope in
 
 **License**
 
-Apache-2.0 � see [`LICENSE`](../LICENSE) (Apache License 2.0, SKT AI LABS PRIVATE LIMITED).
+Apache-2.0 — see [`LICENSE`](../LICENSE) (Apache License 2.0, SKT AI LABS PRIVATE LIMITED).

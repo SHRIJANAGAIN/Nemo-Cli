@@ -7,6 +7,7 @@ paths:
   - "**/*.pipe.ts"
   - "**/*.spec.ts"
 ---
+
 # Angular Hooks
 
 > This file extends [common/hooks.md](../common/hooks.md) with Angular specific content.

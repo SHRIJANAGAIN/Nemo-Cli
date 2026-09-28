@@ -28,6 +28,7 @@ Plan and execute a marketing campaign from brief to full content suite.
 ### Full Campaign Mode
 
 Provide a product brief containing:
+
 - Product name and description
 - Target audience (specific, not generic)
 - Core problem the product solves
@@ -58,6 +59,7 @@ Requires positioning to be defined first. Run full mode or provide the angle bef
 ```
 
 Returns a structured audit against:
+
 - 5-second clarity test (above-fold copy)
 - CTA quality (specific, earned, one per piece)
 - Brand tone consistency
@@ -112,6 +114,7 @@ Confirm the save location before writing files.
 ## Agent Delegation
 
 This command invokes:
+
 - `marketing-agent` — campaign planning and copy production
 - `brand-voice` — voice capture when tone needs locking across multiple outputs
 - `content-engine` — platform-native social content production
@@ -126,4 +129,4 @@ This command invokes:
 
 ---
 
-*Part of [Everything Trayambak Code](https://github.com/affaan-m/trayambak)*
+_Part of [Everything Trayambak Code](https://github.com/affaan-m/trayambak)_

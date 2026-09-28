@@ -4,6 +4,7 @@ paths:
   - "**/pubspec.yaml"
   - "**/analysis_options.yaml"
 ---
+
 # Dart/Flutter Testing
 
 > This file extends [common/testing.md](../common/testing.md) with Dart and Flutter-specific content.
@@ -18,12 +19,12 @@ paths:
 
 ## Test Types
 
-| Type | Tool | Location | When to Write |
-|------|------|----------|---------------|
-| Unit | `dart:test` | `test/unit/` | All domain logic, state managers, repositories |
-| Widget | `flutter_test` | `test/widget/` | All widgets with meaningful behavior |
-| Golden | `flutter_test` | `test/golden/` | Design-critical UI components |
-| Integration | `integration_test` | `integration_test/` | Critical user flows on real device/emulator |
+| Type        | Tool               | Location            | When to Write                                  |
+| ----------- | ------------------ | ------------------- | ---------------------------------------------- |
+| Unit        | `dart:test`        | `test/unit/`        | All domain logic, state managers, repositories |
+| Widget      | `flutter_test`     | `test/widget/`      | All widgets with meaningful behavior           |
+| Golden      | `flutter_test`     | `test/golden/`      | Design-critical UI components                  |
+| Integration | `integration_test` | `integration_test/` | Critical user flows on real device/emulator    |
 
 ## Unit Tests: State Managers
 

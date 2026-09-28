@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest"
+import { resetGlyphCache } from "./glyphs.js"
 import React from "react"
 import { PassThrough } from "node:stream"
 import { render, Box, type Instance } from "ink"
@@ -72,6 +73,11 @@ const themes: ThemeOption[] = Array.from({ length: 53 }, (_, i) => ({
 
 const TITLE = "Trayambak — Choose a Theme"
 
+// Glyphs under test render through glyphs.ts, which auto-selects ASCII on
+// plain Windows consoles (this CI/dev box) — assertions below pin Unicode
+// shapes, so force unicode mode here. resetGlyphCache covers shared workers.
+process.env.TRAYAMBAK_GLYPHS = "unicode"
+resetGlyphCache()
 describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
   it("short terminal (rows=27): header below the full logo, exact ▼ row, no preview", async () => {
     const { stdin, stdout, sink } = openStdio(124, 27)

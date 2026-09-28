@@ -6,6 +6,7 @@ paths:
   - "**/*.psgi"
   - "**/*.cgi"
 ---
+
 # Perl Patterns
 
 > This file extends [common/patterns.md](../common/patterns.md) with Perl-specific content.

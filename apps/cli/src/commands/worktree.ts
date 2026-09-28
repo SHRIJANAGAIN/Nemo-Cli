@@ -22,7 +22,11 @@ export interface WorktreeEntry {
 
 export function listWorktrees(): WorktreeEntry[] {
   try {
-    const output = execSync("git worktree list --porcelain", { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 })
+    const output = execSync("git worktree list --porcelain", {
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 30_000,
+    })
     const entries: WorktreeEntry[] = []
     let current: Partial<WorktreeEntry> = {}
     for (const line of output.split("\n")) {
@@ -56,12 +60,20 @@ export function worktreeCommand(options: WorktreeOptions): string {
         const targetPath = options.path ?? options.name
         if (!targetPath) return "Missing path or name"
         const branch = options.branch ?? options.name ?? `wt-${Date.now().toString(36)}`
-        execSync(`git worktree add "${targetPath}" -b "${branch}"`, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 })
+        execSync(`git worktree add "${targetPath}" -b "${branch}"`, {
+          encoding: "utf8",
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 60_000,
+        })
         return `Created worktree at ${targetPath} on branch ${branch}`
       }
       case "remove": {
         if (!options.path) return "Missing path"
-        execSync(`git worktree remove "${options.path}"`, { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 })
+        execSync(`git worktree remove "${options.path}"`, {
+          encoding: "utf8",
+          maxBuffer: 10 * 1024 * 1024,
+          timeout: 60_000,
+        })
         return `Removed worktree at ${options.path}`
       }
       case "switch": {

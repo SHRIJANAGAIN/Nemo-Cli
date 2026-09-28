@@ -18,65 +18,82 @@
  *
  * Run: node scripts/fix-logo-canvas.mjs        (idempotent — no-op once clean)
  */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const logoPath = path.join(here, "..", "packages", "tui", "src", "ink-app", "logo_ansi.txt");
-const backupPath = `${logoPath}.orig`;
-const DARK_MAX = 90;
+const here = path.dirname(fileURLToPath(import.meta.url))
+const logoPath = path.join(here, "..", "packages", "tui", "src", "ink-app", "logo_ansi.txt")
+const backupPath = `${logoPath}.orig`
+const DARK_MAX = 90
 
-const raw = fs.readFileSync(logoPath, "utf8");
-if (!fs.existsSync(backupPath)) fs.copyFileSync(logoPath, backupPath);
+const raw = fs.readFileSync(logoPath, "utf8")
+if (!fs.existsSync(backupPath)) fs.copyFileSync(logoPath, backupPath)
 
-const cell =
-  /\x1b\[38;2;(\d+);(\d+);(\d+)m(?:\x1b\[48;2;(\d+);(\d+);(\d+)m|\x1b\[49m)(▀|▄)\x1b\[0m/g;
+const cell = /\x1b\[38;2;(\d+);(\d+);(\d+)m(?:\x1b\[48;2;(\d+);(\d+);(\d+)m|\x1b\[49m)(▀|▄)\x1b\[0m/g
 
-let transparentTop = 0;
-let transparentBottom = 0;
-let cleared = 0;
-let cells = 0;
+let transparentTop = 0
+let transparentBottom = 0
+let cleared = 0
+let cells = 0
 
 const out = raw.replace(cell, (_all, fr, fg, fb, br, bg, bb, glyph) => {
-  cells++;
-  const top = glyph === "▀" ? [Number(fr), Number(fg), Number(fb)] : br !== undefined ? [Number(br), Number(bg), Number(bb)] : null;
-  const bottom = glyph === "▄" ? [Number(fr), Number(fg), Number(fb)] : br !== undefined ? [Number(br), Number(bg), Number(bb)] : null;
-  const topDark = top === null || Math.max(...top) <= DARK_MAX;
-  const bottomDark = bottom === null || Math.max(...bottom) <= DARK_MAX;
-  if (topDark && bottomDark) { cleared++; return " "; }
-  if (topDark) {
-    if (br === undefined) return _all; // already the 49m form: top transparent, bottom art -> fine
-    transparentTop++;
-    return `\x1b[38;2;${br};${bg};${bb}m\x1b[49m▄\x1b[0m`;
+  cells++
+  const top =
+    glyph === "▀"
+      ? [Number(fr), Number(fg), Number(fb)]
+      : br !== undefined
+        ? [Number(br), Number(bg), Number(bb)]
+        : null
+  const bottom =
+    glyph === "▄"
+      ? [Number(fr), Number(fg), Number(fb)]
+      : br !== undefined
+        ? [Number(br), Number(bg), Number(bb)]
+        : null
+  const topDark = top === null || Math.max(...top) <= DARK_MAX
+  const bottomDark = bottom === null || Math.max(...bottom) <= DARK_MAX
+  if (topDark && bottomDark) {
+    cleared++
+    return " "
   }
-  if (bottomDark) { transparentBottom++; return `\x1b[38;2;${fr};${fg};${fb}m\x1b[49m▀\x1b[0m`; }
-  return _all;
-});
+  if (topDark) {
+    if (br === undefined) return _all // already the 49m form: top transparent, bottom art -> fine
+    transparentTop++
+    return `\x1b[38;2;${br};${bg};${bb}m\x1b[49m▄\x1b[0m`
+  }
+  if (bottomDark) {
+    transparentBottom++
+    return `\x1b[38;2;${fr};${fg};${fb}m\x1b[49m▀\x1b[0m`
+  }
+  return _all
+})
 
 // Cells still in code form + cells already reduced to a plain space must total 400.
-const spacesBefore = (raw.match(/ /g) ?? []).length;
+const spacesBefore = (raw.match(/ /g) ?? []).length
 if (cells + spacesBefore !== 400) {
-  console.error(`ABORT: parsed ${cells} cells + ${spacesBefore} spaces != 400 (glyph/structure drift?)`);
-  process.exit(1);
+  console.error(`ABORT: parsed ${cells} cells + ${spacesBefore} spaces != 400 (glyph/structure drift?)`)
+  process.exit(1)
 }
 
-const spaces = (out.match(/ /g) ?? []).length;
-const glyphs = (out.match(/[▀▄]/g) ?? []).length;
-fs.writeFileSync(logoPath, out);
-console.log(`cells cleared to space: ${cleared} | top made transparent: ${transparentTop} | bottom: ${transparentBottom}`);
-console.log(`units after: ${spaces} spaces + ${glyphs} glyphs = ${spaces + glyphs} (want 400)`);
-if (spaces + glyphs !== 400) process.exit(1);
+const spaces = (out.match(/ /g) ?? []).length
+const glyphs = (out.match(/[▀▄]/g) ?? []).length
+fs.writeFileSync(logoPath, out)
+console.log(
+  `cells cleared to space: ${cleared} | top made transparent: ${transparentTop} | bottom: ${transparentBottom}`,
+)
+console.log(`units after: ${spaces} spaces + ${glyphs} glyphs = ${spaces + glyphs} (want 400)`)
+if (spaces + glyphs !== 400) process.exit(1)
 
 // Any remaining dark half would still speck the corners on a black terminal.
 const leftover = [...out.matchAll(cell)].filter((m) => {
-  const g = m[7];
-  const fg = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const bg = m[4] !== undefined ? [Number(m[4]), Number(m[5]), Number(m[6])] : null;
-  const top = g === "▀" ? fg : bg;
-  const bottom = g === "▄" ? fg : bg;
-  return (top && Math.max(...top) <= DARK_MAX) || (bottom && Math.max(...bottom) <= DARK_MAX);
-}).length;
-console.log(`dark halves left: ${leftover} (must be 0)`);
-if (leftover > 0) process.exit(1);
-console.log(`OK: ${path.relative(process.cwd(), logoPath)} (original: ${path.basename(backupPath)})`);
+  const g = m[7]
+  const fg = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const bg = m[4] !== undefined ? [Number(m[4]), Number(m[5]), Number(m[6])] : null
+  const top = g === "▀" ? fg : bg
+  const bottom = g === "▄" ? fg : bg
+  return (top && Math.max(...top) <= DARK_MAX) || (bottom && Math.max(...bottom) <= DARK_MAX)
+}).length
+console.log(`dark halves left: ${leftover} (must be 0)`)
+if (leftover > 0) process.exit(1)
+console.log(`OK: ${path.relative(process.cwd(), logoPath)} (original: ${path.basename(backupPath)})`)

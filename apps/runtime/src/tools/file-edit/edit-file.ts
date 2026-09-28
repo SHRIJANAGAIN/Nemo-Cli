@@ -19,6 +19,7 @@ import { findOldStringSpans } from "./fuzzy-match.js"
 import { miniDiff } from "../text/diff-render.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "edit_file",
   description:
     "Edit a file by replacing text. Provide old_string (unique in the file) and new_string. Set replace_all to change every occurrence. Exact matches win; when nothing matches exactly, a whitespace/unicode-tolerant unique match is accepted (indentation drift, trailing spaces, CRLF/LF, smart quotes). Fails if old_string is not found or is not unique (unless replace_all).",
@@ -42,34 +43,37 @@ export function createEditFileTool(): Tool {
     definition,
     async execute(_id, args, signal, _update, context) {
       try {
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         const ctx = context as ToolContext
         const rawPath = String(args.path ?? "")
         const oldStr = String(args.old_string ?? "")
         const newStr = String(args.new_string ?? "")
         const replaceAll = Boolean(args.replace_all)
-        if (!rawPath) return textResult("Missing 'path'.", true)
-        if (!oldStr) return textResult("Missing 'old_string'.", true)
+        if (!rawPath) return textResult("Missing 'path'.", /*isError*/ true)
+        if (!oldStr) return textResult("Missing 'old_string'.", /*isError*/ true)
 
         let target: string
         try {
           target = resolveConstrainedPath(rawPath, ctx.cwd)
         } catch (error) {
-          return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
+          return textResult(
+            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            /*isError*/ true,
+          )
         }
 
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
         if (ctx.requestPermission) {
           const ok = await ctx.requestPermission("edit_file", rawPath, "Trayambak approval required for edit_file")
-          if (!ok) return textResult("Permission denied for edit_file: " + rawPath, true)
+          if (!ok) return textResult("Permission denied for edit_file: " + rawPath, /*isError*/ true)
         }
 
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         assertExternalDirectory(target, ctx.cwd)
         assertMutablePath(target)
 
-        if (!fs.existsSync(target)) return textResult(`File not found: ${rawPath}`, true)
+        if (!fs.existsSync(target)) return textResult(`File not found: ${rawPath}`, /*isError*/ true)
 
         const original = fs.readFileSync(target, "utf8")
         const count = original.split(oldStr).length - 1
@@ -78,11 +82,11 @@ export function createEditFileTool(): Tool {
           // unicode). Applied only when UNIQUE — an ambiguous loose match
           // still errors rather than guessing which span to rewrite.
           const spans = findOldStringSpans(original, oldStr)
-          if (spans.length === 0) return textResult(`old_string not found in ${rawPath}`, true)
+          if (spans.length === 0) return textResult(`old_string not found in ${rawPath}`, /*isError*/ true)
           if (spans.length > 1) {
             return textResult(
               `old_string is not unique (${spans.length} whitespace-tolerant matches). Make it unique or set replace_all.`,
-              true,
+              /*isError*/ true,
             )
           }
           const span = spans[0] as { start: number; end: number; pass: string }
@@ -93,7 +97,10 @@ export function createEditFileTool(): Tool {
           return textResult(`Edited ${rawPath} (1 occurrence, ${span.pass} match).${note}\n${preview}`)
         }
         if (count > 1 && !replaceAll) {
-          return textResult(`old_string is not unique (${count} matches). Make it unique or set replace_all.`, true)
+          return textResult(
+            `old_string is not unique (${count} matches). Make it unique or set replace_all.`,
+            /*isError*/ true,
+          )
         }
         const updated = replaceAll ? original.split(oldStr).join(newStr) : original.replace(oldStr, newStr)
         fs.writeFileSync(target, updated, "utf8")
@@ -105,7 +112,7 @@ export function createEditFileTool(): Tool {
         const preview = miniDiff(oldStr, newStr).join("\n")
         return textResult(`Edited ${rawPath} (${count} occurrence${count > 1 ? "s" : ""}).${note}\n${preview}`)
       } catch (error) {
-        return textResult(`Edit error: ${error instanceof Error ? error.message : String(error)}`, true)
+        return textResult(`Edit error: ${error instanceof Error ? error.message : String(error)}`, /*isError*/ true)
       }
     },
   }

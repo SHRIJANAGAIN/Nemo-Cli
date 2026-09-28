@@ -7,6 +7,7 @@ paths:
   - "**/Directory.Build.props"
   - "**/Directory.Build.targets"
 ---
+
 # C# Hooks
 
 > This file extends [common/hooks.md](../common/hooks.md) with C#-specific content.

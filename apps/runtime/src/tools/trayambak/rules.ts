@@ -89,6 +89,7 @@ export function getRulesContextBlock(cwd: string): string {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__Rules",
   description:
     "Manage project rules from AGENTS.md/CLAUDE.md/CONTEXT.md files. Read existing rules, write new rules, list available rules, or initialize a default AGENTS.md for the project.",
@@ -124,7 +125,8 @@ export function createRulesTool(): Tool {
         case "read": {
           const rules = loadRules(cwd)
           const rule = rules.find((r) => r.name === name)
-          if (!rule) return textResult(`No rule file '${name}' found. Use 'list' to see available rules.`, true)
+          if (!rule)
+            return textResult(`No rule file '${name}' found. Use 'list' to see available rules.`, /*isError*/ true)
           return textResult(rule.content)
         }
 
@@ -140,7 +142,7 @@ export function createRulesTool(): Tool {
 
         case "write": {
           const content = String(args.content ?? "")
-          if (!content) return textResult("Missing 'content' for write action.", true)
+          if (!content) return textResult("Missing 'content' for write action.", /*isError*/ true)
           const scope = (args.scope as string) === "global" ? "global" : "project"
           let targetDir: string
           if (scope === "global") {
@@ -182,7 +184,7 @@ export function createRulesTool(): Tool {
         }
 
         default:
-          return textResult(`Unknown action: ${action}. Use read, write, list, or init.`, true)
+          return textResult(`Unknown action: ${action}. Use read, write, list, or init.`, /*isError*/ true)
       }
     },
   }

@@ -108,6 +108,7 @@ function githubCompare(owner: string, repo: string, base: string, head: string, 
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "github",
   description:
     "Interact with GitHub repositories: list files, read files, copy files, compare branches. Use this for GitHub-related tasks.",
@@ -140,7 +141,10 @@ export function createGithubTool(token?: string): Tool {
       const action = String(args.action ?? "")
       const parsed = parseRepo(repoInput)
       if (!parsed)
-        return textResult(`github: invalid repo format "${repoInput}". Use owner/repo or full GitHub URL.`, true)
+        return textResult(
+          `github: invalid repo format "${repoInput}". Use owner/repo or full GitHub URL.`,
+          /*isError*/ true,
+        )
       const { owner, repo } = parsed
       switch (action) {
         case "get_tree":
@@ -150,14 +154,14 @@ export function createGithubTool(token?: string): Tool {
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean)
-          if (paths.length === 0) return textResult("github: path is required for read_files.", true)
+          if (paths.length === 0) return textResult("github: path is required for read_files.", /*isError*/ true)
           return textResult(await githubReadFiles(owner, repo, paths, ghToken))
         }
         case "copy_files": {
           const source = String(args.source_path ?? "")
           const dest = String(args.dest_path ?? "")
           if (!source || !dest)
-            return textResult("github: source_path and dest_path are required for copy_files.", true)
+            return textResult("github: source_path and dest_path are required for copy_files.", /*isError*/ true)
           return textResult(await githubCopyFiles(owner, repo, source, dest))
         }
         case "compare": {
@@ -168,7 +172,7 @@ export function createGithubTool(token?: string): Tool {
         default:
           return textResult(
             `github: unknown action "${action}". Use get_tree, read_files, copy_files, or compare.`,
-            true,
+            /*isError*/ true,
           )
       }
     },

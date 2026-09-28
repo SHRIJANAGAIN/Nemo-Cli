@@ -28,15 +28,26 @@ export function detectWorkspaceState(cwd: string = process.cwd()): AutonomousAct
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
+      timeout: 30_000,
     }).trim()
     if (gitStatus) {
       for (const line of gitStatus.split("\n")) {
         const file = line.slice(3).trim()
         if (file) modifiedFiles.push(file)
       }
-      gitDiff = execSync("git diff HEAD", { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()
+      gitDiff = execSync("git diff HEAD", {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 30_000,
+      }).trim()
       if (!gitDiff) {
-        gitDiff = execSync("git diff", { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()
+        gitDiff = execSync("git diff", {
+          cwd,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+          timeout: 30_000,
+        }).trim()
       }
     }
   } catch {

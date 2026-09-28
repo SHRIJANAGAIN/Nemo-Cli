@@ -18,6 +18,15 @@ import type { Tool, ToolContext } from "../tools/index.js"
 import type { ToolResult } from "../../../../packages/protocol/src/index.js"
 import type { Session } from "../session/session.js"
 import type { DeveloperModeEngine } from "../developer-mode/index.js"
+import { getRolloutBudget } from "../../../../packages/core/src/rollout_budget.js"
+import {
+  applyBudget,
+  budgetStatus,
+  estimateTokens,
+  parseTokenBudget,
+  resetBudget,
+  shouldContinueTurn,
+} from "../../../../packages/core/src/token_budget.js"
 import { DEFAULT_PERMISSIONS, type PermissionConfig } from "../../../../packages/protocol/src/permissions.js"
 import { evaluatePermission } from "../../../../packages/protocol/src/permission-rules.js"
 import { compactMessages, policyFromConfig } from "../compaction.js"
@@ -101,6 +110,17 @@ async function chatWithRetry(run: RunConfig, request: Parameters<Provider["chat"
 }
 
 export async function runAgentLoop(prompt: string, run: RunConfig): Promise<AgentMessage[]> {
+  // Rollout budget (AGENTS.md: budget awareness — never silently exhaust):
+  // apply this run's configured budget ONCE on entry. The loop is the source
+  // of truth for enforcement (the orchestrator file is not involved), so a
+  // subagent run applies its own spec here too. An invalid spec already fell
+  // back with a warning in loadConfig; if one reaches the loop anyway
+  // (config bypassed sanitize), fall back to NO budget — never throw.
+  if (run.config.budget) {
+    const parsed = parseTokenBudget(run.config.budget)
+    if (parsed.ok) applyBudget(parsed.budget)
+    else resetBudget()
+  }
   const userMessage: AgentMessage = { role: "user", content: prompt }
   run.session.add(userMessage)
   await run.emit({ type: "message_start", message: userMessage })
@@ -126,6 +146,21 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
       return run.session.messages
     }
     if (run.signal?.aborted) {
+      await run.emit({ type: "agent_end", messages: run.session.messages })
+      return run.session.messages
+    }
+    // Budget check at the TOP of every turn: an exhausted budget ends the run
+    // LOUDLY (budget_exhausted + agent_end + return) — AGENTS.md: "Budget
+    // exhaustion stops the loop ... Never silently continue."
+    if (!shouldContinueTurn(turns)) {
+      const status = budgetStatus(turns)
+      await run.emit({
+        type: "budget_exhausted",
+        used: status.used,
+        max: status.max,
+        // Infinity (unlimited token cap + turn budget) is not JSON-safe.
+        remaining: Number.isFinite(status.remaining) ? status.remaining : 0,
+      })
       await run.emit({ type: "agent_end", messages: run.session.messages })
       return run.session.messages
     }
@@ -167,6 +202,10 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
     if (!assistant) {
       break
     }
+    // Every assistant response is charged against the rollout budget (the
+    // numbers are ESTIMATED — see recordAssistantUsage). The next loop
+    // iteration's top-of-turn check stops the run once they run out.
+    recordAssistantUsage(run, assistant)
 
     const toolCalls = assistant.content.filter((c) => c.type === "toolCall")
     if (toolCalls.length === 0) {
@@ -216,6 +255,32 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
   }
 
   return run.session.messages
+}
+
+/**
+ * Charge one assistant response against the rollout budget.
+ *
+ * Usage numbers are ESTIMATES: the provider protocol carries no usage/token
+ * fields anywhere (`Provider.chat` returns a bare `AssistantMessage`), so
+ * both sides use the repo-wide `ceil(chars / 4)` convention — output = the
+ * response's text/thinking/tool-argument chars, input = the wire messages
+ * actually sent this turn. The budget's accounting weights `output_tokens`
+ * (`samplingTokenWeight`), so the input estimate is reported only. Recording
+ * is best-effort: budget bookkeeping must never break a turn.
+ */
+function recordAssistantUsage(run: RunConfig, assistant: AssistantMessage): void {
+  try {
+    const outputText = assistant.content
+      .map((part) => (part.type === "toolCall" ? JSON.stringify(part.arguments ?? {}) : part.text))
+      .join("\n")
+    const inputText = JSON.stringify(run.session.toWireMessages())
+    getRolloutBudget().recordUsage({
+      input_tokens: estimateTokens(inputText),
+      output_tokens: estimateTokens(outputText),
+    })
+  } catch {
+    /* budget accounting is best-effort — never break a turn over it */
+  }
 }
 
 async function streamAssistant(

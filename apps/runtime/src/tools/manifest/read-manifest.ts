@@ -24,6 +24,7 @@ const MANIFESTS: Array<{ file: string; project: string }> = [
 ]
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "read_manifest",
   description:
     "Detect and summarize the project manifest(s) in a directory: package.json, pyproject.toml, requirements.txt, Cargo.toml, go.mod, pom.xml, build.gradle, Gemfile, composer.json, or tsconfig.json. Returns project name/version plus a compact list of scripts and dependencies so you can plan builds, tests, and install commands.",

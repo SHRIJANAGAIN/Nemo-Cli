@@ -6,6 +6,7 @@
 
 import { createBashTool } from "./command-exec/bash.js"
 import { createEditFileTool } from "./file-edit/edit-file.js"
+import { createCheckpointTool, createRewindTool } from "./checkpoint/index.js"
 import { createReadFileTool } from "./file-edit/read-file.js"
 import { createWriteFileTool } from "./file-edit/write-file.js"
 import { createListDirTool } from "./directory/list-dir.js"
@@ -65,6 +66,8 @@ export { createBashTool } from "./command-exec/bash.js"
 export { createReadFileTool } from "./file-edit/read-file.js"
 export { createWriteFileTool } from "./file-edit/write-file.js"
 export { createEditFileTool } from "./file-edit/edit-file.js"
+export { createCheckpointTool } from "./checkpoint/checkpoint.js"
+export { createRewindTool } from "./checkpoint/rewind.js"
 export { createListDirTool } from "./directory/list-dir.js"
 export { createGrepTool } from "./regex/grep.js"
 export { createGlobTool } from "./globber/glob.js"
@@ -198,6 +201,8 @@ export function createDefaultTools(
     createReadFileTool(),
     createWriteFileTool(),
     createEditFileTool(),
+    createCheckpointTool(),
+    createRewindTool(),
     createListDirTool(),
     createGrepTool(),
     createGlobTool(),
@@ -347,6 +352,8 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
       "read_file",
       "write_file",
       "edit_file",
+      "trayambak__Checkpoint",
+      "trayambak__Rewind",
       "list_dir",
       "grep",
       "glob",

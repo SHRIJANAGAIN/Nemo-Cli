@@ -57,40 +57,40 @@ npx webpack-bundle-analyzer
 
 **Critical Performance Indicators:**
 
-| Metric | Target | Action if Exceeded |
-|--------|--------|-------------------|
-| First Contentful Paint | < 1.8s | Optimize critical path, inline critical CSS |
-| Largest Contentful Paint | < 2.5s | Lazy load images, optimize server response |
-| Time to Interactive | < 3.8s | Code splitting, reduce JavaScript |
-| Cumulative Layout Shift | < 0.1 | Reserve space for images, avoid layout thrashing |
-| Total Blocking Time | < 200ms | Break up long tasks, use web workers |
-| Bundle Size (gzipped) | < 200KB | Tree shaking, lazy loading, code splitting |
+| Metric                   | Target  | Action if Exceeded                               |
+| ------------------------ | ------- | ------------------------------------------------ |
+| First Contentful Paint   | < 1.8s  | Optimize critical path, inline critical CSS      |
+| Largest Contentful Paint | < 2.5s  | Lazy load images, optimize server response       |
+| Time to Interactive      | < 3.8s  | Code splitting, reduce JavaScript                |
+| Cumulative Layout Shift  | < 0.1   | Reserve space for images, avoid layout thrashing |
+| Total Blocking Time      | < 200ms | Break up long tasks, use web workers             |
+| Bundle Size (gzipped)    | < 200KB | Tree shaking, lazy loading, code splitting       |
 
 ### 2. Algorithmic Analysis
 
 Check for inefficient algorithms:
 
-| Pattern | Complexity | Better Alternative |
-|---------|------------|-------------------|
-| Nested loops on same data | O(n²) | Use Map/Set for O(1) lookups |
-| Repeated array searches | O(n) per search | Convert to Map for O(1) |
-| Sorting inside loop | O(n² log n) | Sort once outside loop |
-| String concatenation in loop | O(n²) | Use array.join() |
-| Deep cloning large objects | O(n) each time | Use shallow copy or immer |
-| Recursion without memoization | O(2^n) | Add memoization |
+| Pattern                       | Complexity      | Better Alternative           |
+| ----------------------------- | --------------- | ---------------------------- |
+| Nested loops on same data     | O(n²)           | Use Map/Set for O(1) lookups |
+| Repeated array searches       | O(n) per search | Convert to Map for O(1)      |
+| Sorting inside loop           | O(n² log n)     | Sort once outside loop       |
+| String concatenation in loop  | O(n²)           | Use array.join()             |
+| Deep cloning large objects    | O(n) each time  | Use shallow copy or immer    |
+| Recursion without memoization | O(2^n)          | Add memoization              |
 
 ```typescript
 // BAD: O(n²) - searching array in loop
 for (const user of users) {
-  const posts = allPosts.filter(p => p.userId === user.id); // O(n) per user
+  const posts = allPosts.filter((p) => p.userId === user.id) // O(n) per user
 }
 
 // GOOD: O(n) - group once with Map
-const postsByUser = new Map<number, Post[]>();
+const postsByUser = new Map<number, Post[]>()
 for (const post of allPosts) {
-  const userPosts = postsByUser.get(post.userId) || [];
-  userPosts.push(post);
-  postsByUser.set(post.userId, userPosts);
+  const userPosts = postsByUser.get(post.userId) || []
+  userPosts.push(post)
+  postsByUser.set(post.userId, userPosts)
 }
 // Now O(1) lookup per user
 ```
@@ -157,26 +157,26 @@ du -sh node_modules/* | sort -hr | head -20
 
 **Optimization Strategies:**
 
-| Issue | Solution |
-|-------|----------|
+| Issue               | Solution                           |
+| ------------------- | ---------------------------------- |
 | Large vendor bundle | Tree shaking, smaller alternatives |
-| Duplicate code | Extract to shared module |
-| Unused exports | Remove dead code with knip |
-| Moment.js | Use date-fns or dayjs (smaller) |
-| Lodash | Use lodash-es or native methods |
-| Large icons library | Import only needed icons |
+| Duplicate code      | Extract to shared module           |
+| Unused exports      | Remove dead code with knip         |
+| Moment.js           | Use date-fns or dayjs (smaller)    |
+| Lodash              | Use lodash-es or native methods    |
+| Large icons library | Import only needed icons           |
 
 ```javascript
 // BAD: Import entire library
-import _ from 'lodash';
-import moment from 'moment';
+import _ from "lodash"
+import moment from "moment"
 
 // GOOD: Import only what you need
-import debounce from 'lodash/debounce';
-import { format, addDays } from 'date-fns';
+import debounce from "lodash/debounce"
+import { format, addDays } from "date-fns"
 
 // Or use lodash-es with tree shaking
-import { debounce, throttle } from 'lodash-es';
+import { debounce, throttle } from "lodash-es"
 ```
 
 ### 5. Database & Query Optimization
@@ -220,34 +220,31 @@ CREATE INDEX idx_orders_user_id ON orders(user_id);
 
 ```typescript
 // BAD: Multiple sequential requests
-const user = await fetchUser(id);
-const posts = await fetchPosts(user.id);
-const comments = await fetchComments(posts[0].id);
+const user = await fetchUser(id)
+const posts = await fetchPosts(user.id)
+const comments = await fetchComments(posts[0].id)
 
 // GOOD: Parallel requests when independent
-const [user, posts] = await Promise.all([
-  fetchUser(id),
-  fetchPosts(id)
-]);
+const [user, posts] = await Promise.all([fetchUser(id), fetchPosts(id)])
 
 // GOOD: Batch requests when possible
-const results = await batchFetch(['user1', 'user2', 'user3']);
+const results = await batchFetch(["user1", "user2", "user3"])
 
 // Implement request caching
 const fetchWithCache = async (url: string, ttl = 300000) => {
-  const cached = cache.get(url);
-  if (cached) return cached;
+  const cached = cache.get(url)
+  if (cached) return cached
 
-  const data = await fetch(url).then(r => r.json());
-  cache.set(url, data, ttl);
-  return data;
-};
+  const data = await fetch(url).then((r) => r.json())
+  cache.set(url, data, ttl)
+  return data
+}
 
 // Debounce rapid API calls
 const debouncedSearch = debounce(async (query: string) => {
-  const results = await searchAPI(query);
-  setResults(results);
-}, 300);
+  const results = await searchAPI(query)
+  setResults(results)
+}, 300)
 ```
 
 **Network Optimization Checklist:**
@@ -267,51 +264,51 @@ const debouncedSearch = debounce(async (query: string) => {
 ```typescript
 // BAD: Event listener without cleanup
 useEffect(() => {
-  window.addEventListener('resize', handleResize);
+  window.addEventListener("resize", handleResize)
   // Missing cleanup!
-}, []);
+}, [])
 
 // GOOD: Clean up event listeners
 useEffect(() => {
-  window.addEventListener('resize', handleResize);
-  return () => window.removeEventListener('resize', handleResize);
-}, []);
+  window.addEventListener("resize", handleResize)
+  return () => window.removeEventListener("resize", handleResize)
+}, [])
 
 // BAD: Timer without cleanup
 useEffect(() => {
-  setInterval(() => pollData(), 1000);
+  setInterval(() => pollData(), 1000)
   // Missing cleanup!
-}, []);
+}, [])
 
 // GOOD: Clean up timers
 useEffect(() => {
-  const interval = setInterval(() => pollData(), 1000);
-  return () => clearInterval(interval);
-}, []);
+  const interval = setInterval(() => pollData(), 1000)
+  return () => clearInterval(interval)
+}, [])
 
 // BAD: Holding references in closures
 const Component = () => {
-  const largeData = useLargeData();
+  const largeData = useLargeData()
   useEffect(() => {
-    eventEmitter.on('update', () => {
-      console.log(largeData); // Closure keeps reference
-    });
-  }, [largeData]);
-};
+    eventEmitter.on("update", () => {
+      console.log(largeData) // Closure keeps reference
+    })
+  }, [largeData])
+}
 
 // GOOD: Use refs or proper dependencies
-const largeDataRef = useRef(largeData);
+const largeDataRef = useRef(largeData)
 useEffect(() => {
-  largeDataRef.current = largeData;
-}, [largeData]);
+  largeDataRef.current = largeData
+}, [largeData])
 
 useEffect(() => {
   const handleUpdate = () => {
-    console.log(largeDataRef.current);
-  };
-  eventEmitter.on('update', handleUpdate);
-  return () => eventEmitter.off('update', handleUpdate);
-}, []);
+    console.log(largeDataRef.current)
+  }
+  eventEmitter.on("update", handleUpdate)
+  return () => eventEmitter.off("update", handleUpdate)
+}, [])
 ```
 
 **Memory Leak Detection:**
@@ -363,13 +360,13 @@ npx lighthouse https://your-app.com --only-categories=performance
 
 ```typescript
 // Track Core Web Vitals (web-vitals v4 API)
-import { onCLS, onINP, onLCP, onFCP, onTTFB } from 'web-vitals';
+import { onCLS, onINP, onLCP, onFCP, onTTFB } from "web-vitals"
 
-onCLS(console.log);  // Cumulative Layout Shift
-onINP(console.log);  // Interaction to Next Paint
-onLCP(console.log);  // Largest Contentful Paint
-onFCP(console.log);  // First Contentful Paint
-onTTFB(console.log); // Time to First Byte
+onCLS(console.log) // Cumulative Layout Shift
+onINP(console.log) // Interaction to Next Paint
+onLCP(console.log) // Largest Contentful Paint
+onFCP(console.log) // First Contentful Paint
+onTTFB(console.log) // Time to First Byte
 ```
 
 ## Performance Report Template
@@ -378,27 +375,31 @@ onTTFB(console.log); // Time to First Byte
 # Performance Audit Report
 
 ## Executive Summary
+
 - **Overall Score**: X/100
 - **Critical Issues**: X
 - **Recommendations**: X
 
 ## Bundle Analysis
-| Metric | Current | Target | Status |
-|--------|---------|--------|--------|
-| Total Size (gzip) | XXX KB | < 200 KB | WARNING: |
-| Main Bundle | XXX KB | < 100 KB | PASS: |
-| Vendor Bundle | XXX KB | < 150 KB | WARNING: |
+
+| Metric            | Current | Target   | Status   |
+| ----------------- | ------- | -------- | -------- |
+| Total Size (gzip) | XXX KB  | < 200 KB | WARNING: |
+| Main Bundle       | XXX KB  | < 100 KB | PASS:    |
+| Vendor Bundle     | XXX KB  | < 150 KB | WARNING: |
 
 ## Web Vitals
-| Metric | Current | Target | Status |
-|--------|---------|--------|--------|
-| LCP | X.Xs | < 2.5s | PASS: |
-| INP | XXms | < 200ms | PASS: |
-| CLS | X.XX | < 0.1 | WARNING: |
+
+| Metric | Current | Target  | Status   |
+| ------ | ------- | ------- | -------- |
+| LCP    | X.Xs    | < 2.5s  | PASS:    |
+| INP    | XXms    | < 200ms | PASS:    |
+| CLS    | X.XX    | < 0.1   | WARNING: |
 
 ## Critical Issues
 
 ### 1. [Issue Title]
+
 **File**: path/to/file.ts:42
 **Impact**: High - Causes XXXms delay
 **Fix**: [Description of fix]
@@ -412,14 +413,17 @@ const fastCode = ...;
 ```
 
 ### 2. [Issue Title]
+
 ...
 
 ## Recommendations
+
 1. [Priority recommendation]
 2. [Priority recommendation]
 3. [Priority recommendation]
 
 ## Estimated Impact
+
 - Bundle size reduction: XX KB (XX%)
 - LCP improvement: XXms
 - Time to Interactive improvement: XXms
@@ -433,13 +437,13 @@ const fastCode = ...;
 
 ## Red Flags - Act Immediately
 
-| Issue | Action |
-|-------|--------|
-| Bundle > 500KB gzip | Code split, lazy load, tree shake |
-| LCP > 4s | Optimize critical path, preload resources |
+| Issue                | Action                                    |
+| -------------------- | ----------------------------------------- |
+| Bundle > 500KB gzip  | Code split, lazy load, tree shake         |
+| LCP > 4s             | Optimize critical path, preload resources |
 | Memory usage growing | Check for leaks, review useEffect cleanup |
-| CPU spikes | Profile with Chrome DevTools |
-| Database query > 1s | Add index, optimize query, cache results |
+| CPU spikes           | Profile with Chrome DevTools              |
+| Database query > 1s  | Add index, optimize query, cache results  |
 
 ## Success Metrics
 

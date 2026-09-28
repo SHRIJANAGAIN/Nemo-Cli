@@ -4,9 +4,10 @@
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type { Tool } from "../types.js"
+import type { Tool, ToolResult } from "../types.js"
 import { textResult, resolveConstrainedPath } from "../types.js"
 import * as fs from "fs"
+import * as path from "path"
 
 /** Classic LCS-based line diff producing unified-format hunks. */
 export function diffLines(a: string[], b: string[]): Array<{ op: " " | "-" | "+"; line: string }> {
@@ -87,6 +88,7 @@ export function unifiedDiff(fileA: string, fileB: string, a: string[], b: string
 export function createDiffTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "diff",
       description:
         "Generate a unified diff between two files (or a file and inline text). Use this to show exactly what changed between two versions.",
@@ -108,12 +110,12 @@ export function createDiffTool(): Tool {
         if (typeof args.text_b === "string") bText = args.text_b
         else if (typeof args.file_b === "string")
           bText = fs.readFileSync(resolveConstrainedPath(String(args.file_b), process.cwd()), "utf8")
-        else return textResult("Provide either file_b or text_b to diff against.", true)
+        else return textResult("Provide either file_b or text_b to diff against.", /*isError*/ true)
         return textResult(
           unifiedDiff(String(args.file_a), String(args.file_b ?? "<text>"), aText.split(/\r?\n/), bText.split(/\r?\n/)),
         )
       } catch (e) {
-        return textResult(`diff failed: ${e instanceof Error ? e.message : String(e)}`, true)
+        return textResult(`diff failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }
     },
   }
@@ -181,29 +183,163 @@ export function applyUnifiedPatch(content: string, patch: string): string {
 export function createPatchTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "patch",
       description:
-        "Apply a unified diff patch to a file. Input is unified diff format with @@ hunks (as produced by the diff tool). Fails safely with a clear error if context mismatches — the file is never left partially modified.",
+        "Apply a unified diff patch to one or more files. Provide either 'file' + 'patch' (single file) or 'files' (array of {file, patch}) to apply several patches ATOMICALLY: every patch is validated against the current file contents first, and if any one of them fails, NO file is written. Input is unified diff format with @@ hunks (as produced by the diff tool). Fails safely with a clear error if context mismatches — files are never left partially modified.",
       parameters: {
         type: "object",
+        // Either file+patch (single) or files[] (multi) — nothing is
+        // unconditionally required; execute() validates the shape at runtime.
+        required: [],
         properties: {
-          file: { type: "string", description: "Path to the file to patch" },
-          patch: { type: "string", description: "Unified diff patch text" },
+          file: { type: "string", description: "Path to the file to patch (single-file mode)." },
+          patch: { type: "string", description: "Unified diff patch text (single-file mode)." },
+          files: {
+            type: "array",
+            description:
+              "Multi-file mode: several {file, patch} entries applied all-or-nothing. Each item is an object with file (string path) and patch (string unified diff text) — both required.",
+            items: {
+              type: "object",
+              description: "One patch entry: file (path to patch) + patch (unified diff text for this file).",
+            },
+          },
         },
-        required: ["file", "patch"],
       },
     },
     async execute(_id, args) {
-      try {
-        const p = resolveConstrainedPath(String(args.file), process.cwd())
-        const content = fs.readFileSync(p, "utf8")
-        const patchStr = applyUnifiedPatch(content, String(args.patch))
-        if (patchStr === content) return textResult("Patch applied cleanly but produced no changes.")
-        fs.writeFileSync(p, patchStr, "utf8")
-        return textResult(`Patched ${args.file}: ${content.split("\n").length} -> ${patchStr.split("\n").length} lines`)
-      } catch (e) {
-        return textResult(`patch failed: ${e instanceof Error ? e.message : String(e)}`, true)
+      const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+      const multiInput = args.files !== undefined
+      if (multiInput && args.file !== undefined) {
+        return textResult("Provide either 'file' + 'patch' or 'files', not both.", /*isError*/ true)
       }
+
+      // ── Phase 0: parse argument shape (single vs multi) ──
+      const jobs: Array<{ file: string; resolved: string; patch: string }> = []
+      if (multiInput) {
+        if (!Array.isArray(args.files)) {
+          return textResult("'files' must be an array of {file, patch} objects.", /*isError*/ true)
+        }
+        if (args.files.length === 0) {
+          return textResult("'files' is empty — provide at least one {file, patch} entry.", /*isError*/ true)
+        }
+        const seen = new Set<string>()
+        for (let i = 0; i < args.files.length; i++) {
+          const entry: unknown = args.files[i]
+          if (
+            typeof entry !== "object" ||
+            entry === null ||
+            typeof (entry as { file?: unknown }).file !== "string" ||
+            typeof (entry as { patch?: unknown }).patch !== "string"
+          ) {
+            return textResult(`files[${i}] must be an object with string 'file' and 'patch'.`, /*isError*/ true)
+          }
+          const file = (entry as { file: string }).file
+          const patch = (entry as { patch: string }).patch
+          let resolved: string
+          try {
+            resolved = resolveConstrainedPath(file, process.cwd())
+          } catch (e) {
+            return textResult(`patch failed for ${file}: ${errText(e)}`, /*isError*/ true)
+          }
+          const dupKey = path.normalize(resolved).toLowerCase()
+          if (seen.has(dupKey)) {
+            return textResult(`Duplicate file in 'files': ${file} — each file may appear only once.`, /*isError*/ true)
+          }
+          seen.add(dupKey)
+          jobs.push({ file, resolved, patch })
+        }
+      } else {
+        if (args.file === undefined || args.patch === undefined) {
+          return textResult(
+            "Missing arguments: provide 'file' + 'patch', or 'files' (array of {file, patch}).",
+            /*isError*/ true,
+          )
+        }
+        let resolved: string
+        try {
+          resolved = resolveConstrainedPath(String(args.file), process.cwd())
+        } catch (e) {
+          return textResult(`patch failed: ${errText(e)}`, /*isError*/ true)
+        }
+        jobs.push({ file: String(args.file), resolved, patch: String(args.patch) })
+      }
+      const multi = multiInput
+      const failFor = (file: string, e: unknown): ToolResult =>
+        textResult(multi ? `patch failed for ${file}: ${errText(e)}` : `patch failed: ${errText(e)}`, /*isError*/ true)
+
+      // ── Phase 1: validate + compute EVERY target in memory. Any failure
+      //    here aborts before a single byte is written (all-or-nothing). ──
+      const computed: Array<{
+        job: (typeof jobs)[number]
+        oldContent: string
+        newContent: string
+        changed: boolean
+      }> = []
+      for (const job of jobs) {
+        let oldContent: string
+        try {
+          oldContent = fs.readFileSync(job.resolved, "utf8")
+        } catch (e) {
+          return failFor(job.file, e)
+        }
+        let newContent: string
+        try {
+          newContent = applyUnifiedPatch(oldContent, job.patch)
+        } catch (e) {
+          return failFor(job.file, e)
+        }
+        computed.push({ job, oldContent, newContent, changed: newContent !== oldContent })
+      }
+
+      // ── Phase 2: write. If a write fails mid-batch, restore every file
+      //    already written from the in-memory originals (rollback). ──
+      const written: Array<{ resolved: string; oldContent: string }> = []
+      for (const c of computed) {
+        if (!c.changed) continue
+        try {
+          fs.writeFileSync(c.job.resolved, c.newContent, "utf8")
+        } catch (e) {
+          let restored = 0
+          for (let i = written.length - 1; i >= 0; i--) {
+            try {
+              fs.writeFileSync(written[i].resolved, written[i].oldContent, "utf8")
+              restored++
+            } catch {
+              /* best-effort rollback */
+            }
+          }
+          const rollback =
+            written.length === 0
+              ? ""
+              : restored > 0
+                ? `; rolled back ${restored} earlier write(s)`
+                : "; rollback of earlier writes failed"
+          if (multi) {
+            return textResult(`patch failed for ${c.job.file} (write): ${errText(e)}${rollback}`, /*isError*/ true)
+          }
+          return textResult(`patch failed: ${errText(e)}`, /*isError*/ true)
+        }
+        written.push({ resolved: c.job.resolved, oldContent: c.oldContent })
+      }
+
+      const anyChanged = computed.some((c) => c.changed)
+      if (!anyChanged) return textResult("Patch applied cleanly but produced no changes.")
+      if (!multi) {
+        const c = computed[0]
+        return textResult(
+          `Patched ${c.job.file}: ${c.oldContent.split("\n").length} -> ${c.newContent.split("\n").length} lines`,
+        )
+      }
+      const changedCount = computed.filter((c) => c.changed).length
+      const perFile = computed
+        .map((c) =>
+          c.changed
+            ? `  ${c.job.file}: ${c.oldContent.split("\n").length} -> ${c.newContent.split("\n").length} lines`
+            : `  ${c.job.file}: no changes`,
+        )
+        .join("\n")
+      return textResult(`Patched ${changedCount} of ${computed.length} file(s):\n${perFile}`)
     },
   }
 }

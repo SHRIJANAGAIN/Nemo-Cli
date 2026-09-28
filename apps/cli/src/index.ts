@@ -98,6 +98,32 @@ function optionalPort(raw: string | undefined, fallback?: number): number | unde
   return port
 }
 
+/**
+ * Journal rows as they exist on disk. `MistakeEntry` is the canonical shape,
+ * but legacy journals also carry `status`/`title`/`description`/`id` aliases
+ * that this path still reads, so every field is optional here.
+ */
+type JournalEntry = {
+  errorId?: string
+  id?: string
+  errorName?: string
+  title?: string
+  errorDescription?: string
+  errorParagraph?: string
+  description?: string
+  assistantOutput?: string
+  userInput?: string
+  whyAssistantDidIt?: string
+  reasonItHeld?: string
+  isUserMistake?: boolean
+  isAssistantMistake?: boolean
+  isDeviceError?: boolean
+  howToResolve?: string
+  futurePrevention?: string
+  isFixed?: boolean
+  status?: string
+}
+
 async function runForcedEvalrCheck(): Promise<void> {
   try {
     if (!process.argv.includes("--evalr")) return
@@ -107,8 +133,8 @@ async function runForcedEvalrCheck(): Promise<void> {
     }
     const evalModule = await import("../../../skt/5-eval/eval.js")
     const mistakeModule = await import("../../../skt/1-errors/mistake.js")
-    const mistakes = mistakeModule.loadMistakes() as any[]
-    const unfixed = mistakes.filter((m: any) => !m.isFixed && m.status !== "fixed")
+    const mistakes = mistakeModule.loadMistakes() as JournalEntry[]
+    const unfixed = mistakes.filter((m) => !m.isFixed && m.status !== "fixed")
     if (unfixed.length > 0) {
       const template = evalModule.loadEvalrTemplate()
       if (template) {
@@ -209,6 +235,9 @@ async function main(): Promise<void> {
     if (flags.model) overrides.model = flags.model
     if (flags.provider) overrides.provider = flags.provider as TrayambakConfig["provider"]
     if (flags.cwd) overrides.cwd = flags.cwd
+    // `--budget <spec>`: session budget (token/turn cap); loadConfig
+    // validates it and runAgentLoop applies it on entry.
+    if (flags.budget) overrides.budget = flags.budget
     // `--config <file>`: export as TRAYAMBAK_CONFIG so configPath() (and
     // every command that resolves config independently) honours it.
     if (flags.config) process.env.TRAYAMBAK_CONFIG = flags.config
@@ -362,6 +391,16 @@ async function main(): Promise<void> {
     case "mcp-server":
       runMcpServer()
       return
+    case "flags": {
+      const { listFlags } = await import("../../../packages/core/src/feature_flags.js")
+      const flags = listFlags()
+      process.stdout.write(
+        `${Object.entries(flags)
+          .map(([name, on]) => `${on ? "on " : "off"} ${name}`)
+          .join("\n")}\n`,
+      )
+      return
+    }
     case "modes": {
       const { loadRoomodes, DEFAULT_MODES } = await import("../../../packages/modes/src/index.js")
       const custom = loadRoomodes(process.cwd())
@@ -445,9 +484,9 @@ main().catch(async (err) => {
       0,
       "Fatal unhandled exception in CLI main",
       "Top-level catch in main()",
-      false,
-      true,
-      false,
+      /*isUserMistake*/ false,
+      /*isAssistantMistake*/ true,
+      /*isDeviceError*/ false,
       "Check stack trace and improve error handling",
     )
   } catch {

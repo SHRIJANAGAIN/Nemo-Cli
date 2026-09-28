@@ -82,15 +82,9 @@ describe("applyUnifiedPatch", () => {
   })
 
   it("applies multiple hunks in reverse order with correct positions", () => {
-    const patch = [
-      "diff --git a/f.txt b/f.txt",
-      "@@ -1,1 +1,1 @@",
-      "-l1",
-      "+L1",
-      "@@ -5,1 +5,1 @@",
-      "-l5",
-      "+L5",
-    ].join("\n")
+    const patch = ["diff --git a/f.txt b/f.txt", "@@ -1,1 +1,1 @@", "-l1", "+L1", "@@ -5,1 +5,1 @@", "-l5", "+L5"].join(
+      "\n",
+    )
     expect(applyUnifiedPatch("l1\nl2\nl3\nl4\nl5", patch)).toBe("L1\nl2\nl3\nl4\nL5")
   })
 
@@ -208,5 +202,144 @@ describe("diff and patch tools", () => {
     const res = await runPatch({ file: "missing.txt", patch: "@@ -1,1 +1,1 @@\n l1" })
     expect(res.isError).toBe(true)
     expect(textOf(res).startsWith("patch failed:")).toBe(true)
+  })
+})
+
+describe("multi-file atomic patch", () => {
+  let tmp = ""
+  let originalCwd = ""
+
+  beforeEach(() => {
+    originalCwd = process.cwd()
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-patchmulti-"))
+    process.chdir(tmp)
+  })
+
+  afterEach(() => {
+    process.chdir(originalCwd)
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  const runPatch = async (args: Record<string, unknown>): Promise<ToolResult> =>
+    createPatchTool().execute("call-1", args, undefined)
+
+  const textOf = (res: ToolResult): string => (res.content[0] as { text: string }).text
+
+  it("applies patches to several files and reports each", async () => {
+    fs.writeFileSync(path.join(tmp, "a.txt"), "l1\nl2\nl3", "utf8")
+    fs.writeFileSync(path.join(tmp, "b.txt"), "x1\nx2", "utf8")
+    const res = await runPatch({
+      files: [
+        { file: "a.txt", patch: "@@ -1,3 +1,3 @@\n l1\n-l2\n+L2\n l3" },
+        { file: "b.txt", patch: "@@ -1,2 +1,2 @@\n-x1\n+X1\n x2" },
+      ],
+    })
+    expect(res.isError).toBe(false)
+    expect(textOf(res)).toBe("Patched 2 of 2 file(s):\n  a.txt: 3 -> 3 lines\n  b.txt: 2 -> 2 lines")
+    expect(fs.readFileSync(path.join(tmp, "a.txt"), "utf8")).toBe("l1\nL2\nl3")
+    expect(fs.readFileSync(path.join(tmp, "b.txt"), "utf8")).toBe("X1\nx2")
+  })
+
+  it("writes nothing when any single patch fails validation", async () => {
+    fs.writeFileSync(path.join(tmp, "a.txt"), "l1\nl2", "utf8")
+    fs.writeFileSync(path.join(tmp, "b.txt"), "b1\nb2", "utf8")
+    const res = await runPatch({
+      files: [
+        { file: "a.txt", patch: "@@ -1,2 +1,2 @@\n l1\n-l2\n+L2" },
+        { file: "b.txt", patch: "@@ -1,2 +1,2 @@\n-WRONG\n b1\n b2" },
+      ],
+    })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("patch failed for b.txt:")
+    expect(textOf(res)).toContain("context mismatch")
+    expect(fs.readFileSync(path.join(tmp, "a.txt"), "utf8")).toBe("l1\nl2")
+    expect(fs.readFileSync(path.join(tmp, "b.txt"), "utf8")).toBe("b1\nb2")
+  })
+
+  it("rejects the same file listed twice", async () => {
+    fs.writeFileSync(path.join(tmp, "a.txt"), "l1", "utf8")
+    const res = await runPatch({
+      files: [
+        { file: "a.txt", patch: "@@ -1,1 +1,1 @@\n-l1\n+L1" },
+        { file: "./a.txt", patch: "@@ -1,1 +1,1 @@\n-L1\n+L2" },
+      ],
+    })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("Duplicate file in 'files': ./a.txt")
+    expect(fs.readFileSync(path.join(tmp, "a.txt"), "utf8")).toBe("l1")
+  })
+
+  it("reports unchanged files alongside changed ones", async () => {
+    fs.writeFileSync(path.join(tmp, "a.txt"), "l1\nl2", "utf8")
+    fs.writeFileSync(path.join(tmp, "b.txt"), "b1", "utf8")
+    const res = await runPatch({
+      files: [
+        { file: "a.txt", patch: "@@ -1,2 +1,2 @@\n l1\n-l2\n+L2" },
+        { file: "b.txt", patch: "@@ -1,1 +1,1 @@\n b1" },
+      ],
+    })
+    expect(res.isError).toBe(false)
+    expect(textOf(res)).toBe("Patched 1 of 2 file(s):\n  a.txt: 2 -> 2 lines\n  b.txt: no changes")
+    expect(fs.readFileSync(path.join(tmp, "b.txt"), "utf8")).toBe("b1")
+  })
+
+  it("returns the no-op message when no entry changes anything", async () => {
+    fs.writeFileSync(path.join(tmp, "a.txt"), "l1", "utf8")
+    const res = await runPatch({ files: [{ file: "a.txt", patch: "@@ -1,1 +1,1 @@\n l1" }] })
+    expect(textOf(res)).toBe("Patch applied cleanly but produced no changes.")
+    expect(fs.readFileSync(path.join(tmp, "a.txt"), "utf8")).toBe("l1")
+  })
+
+  it("rejects malformed argument shapes with clear messages", async () => {
+    const missing = await runPatch({})
+    expect(missing.isError).toBe(true)
+    expect(textOf(missing)).toContain("Missing arguments")
+
+    const notArray = await runPatch({ files: "a.txt" })
+    expect(notArray.isError).toBe(true)
+    expect(textOf(notArray)).toContain("'files' must be an array")
+
+    const empty = await runPatch({ files: [] })
+    expect(empty.isError).toBe(true)
+    expect(textOf(empty)).toContain("'files' is empty")
+
+    const badEntry = await runPatch({ files: [{ file: "a.txt" }] })
+    expect(badEntry.isError).toBe(true)
+    expect(textOf(badEntry)).toContain("files[0] must be an object")
+
+    const bothModes = await runPatch({ file: "a.txt", patch: "x", files: [] })
+    expect(bothModes.isError).toBe(true)
+    expect(textOf(bothModes)).toContain("not both")
+  })
+
+  it("names the file whose path escapes the workspace", async () => {
+    const escapePath = path.join(os.homedir(), "..", "..", "evil.txt")
+    const res = await runPatch({ files: [{ file: escapePath, patch: "@@ -1,1 +1,1 @@\n x" }] })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain(`patch failed for ${escapePath}:`)
+    expect(textOf(res)).toContain("escapes")
+  })
+
+  it("rolls back earlier writes when a later write fails", async () => {
+    const aPath = path.join(tmp, "a.txt")
+    const bPath = path.join(tmp, "b.txt")
+    fs.writeFileSync(aPath, "a1\na2", "utf8")
+    fs.writeFileSync(bPath, "b1\nb2", "utf8")
+    fs.chmodSync(bPath, 0o444)
+    try {
+      const res = await runPatch({
+        files: [
+          { file: "a.txt", patch: "@@ -1,2 +1,2 @@\n a1\n-a2\n+A2" },
+          { file: "b.txt", patch: "@@ -1,2 +1,2 @@\n b1\n-b2\n+B2" },
+        ],
+      })
+      expect(res.isError).toBe(true)
+      expect(textOf(res)).toContain("patch failed for b.txt")
+      expect(textOf(res)).toContain("rolled back 1 earlier write(s)")
+    } finally {
+      fs.chmodSync(bPath, 0o644)
+    }
+    expect(fs.readFileSync(aPath, "utf8")).toBe("a1\na2")
+    expect(fs.readFileSync(bPath, "utf8")).toBe("b1\nb2")
   })
 })

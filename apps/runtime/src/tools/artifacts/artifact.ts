@@ -9,6 +9,7 @@ import { textResult, type Tool, type ToolContext } from "../types.js"
 import { ArtifactManager } from "../../artifacts/index.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "artifact",
   description:
     "Create, update, or list artifacts (deliverable files like HTML, Markdown, code, documents). Artifacts are saved to the artifact store and can be delivered to the user. Use this for any substantial output the user would want to keep or share.",
@@ -46,7 +47,7 @@ export function createArtifactTool(): Tool {
             const content = String(args.content ?? "")
             const language = String(args.language ?? "text")
             if (!filename || !content)
-              return textResult("artifact: filename and content are required for create.", true)
+              return textResult("artifact: filename and content are required for create.", /*isError*/ true)
             const metadata = (args.metadata as Record<string, string> | undefined) ?? {}
             const artifact = manager.create(filename, content, language, metadata)
             return textResult(
@@ -56,17 +57,18 @@ export function createArtifactTool(): Tool {
           case "update": {
             const id = String(args.id ?? "")
             const content = String(args.content ?? "")
-            if (!id || !content) return textResult("artifact: id and content are required for update.", true)
+            if (!id || !content)
+              return textResult("artifact: id and content are required for update.", /*isError*/ true)
             const metadata = (args.metadata as Record<string, string> | undefined) ?? {}
             const updated = manager.update(id, content, metadata)
-            if (!updated) return textResult(`artifact: id ${id} not found.`, true)
+            if (!updated) return textResult(`artifact: id ${id} not found.`, /*isError*/ true)
             return textResult(`Updated artifact: ${updated.filename} (id=${updated.id}, version=${updated.version})`)
           }
           case "get": {
             const id = String(args.id ?? "")
-            if (!id) return textResult("artifact: id is required for get.", true)
+            if (!id) return textResult("artifact: id is required for get.", /*isError*/ true)
             const artifact = manager.get(id)
-            if (!artifact) return textResult(`artifact: id ${id} not found.`, true)
+            if (!artifact) return textResult(`artifact: id ${id} not found.`, /*isError*/ true)
             return textResult(
               `Artifact: ${artifact.filename} (id=${artifact.id}, version=${artifact.version}, language=${artifact.language})\n${artifact.content}`,
             )
@@ -82,13 +84,13 @@ export function createArtifactTool(): Tool {
           }
           case "delete": {
             const id = String(args.id ?? "")
-            if (!id) return textResult("artifact: id is required for delete.", true)
+            if (!id) return textResult("artifact: id is required for delete.", /*isError*/ true)
             const deleted = manager.delete(id)
             return textResult(deleted ? `Deleted artifact ${id}.` : `artifact: id ${id} not found.`)
           }
           case "search": {
             const query = String(args.query ?? "")
-            if (!query) return textResult("artifact: query is required for search.", true)
+            if (!query) return textResult("artifact: query is required for search.", /*isError*/ true)
             const results = manager.search(query)
             if (results.length === 0) return textResult(`No artifacts matching "${query}".`)
             const lines = results.map((a) => `- ${a.filename} (id=${a.id}, v${a.version}, ${a.language})`)
@@ -97,11 +99,11 @@ export function createArtifactTool(): Tool {
           default:
             return textResult(
               `artifact: unknown action "${action}". Use create, update, get, list, delete, or search.`,
-              true,
+              /*isError*/ true,
             )
         }
       } catch (err) {
-        return textResult(`artifact error: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(`artifact error: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true)
       }
     },
   }

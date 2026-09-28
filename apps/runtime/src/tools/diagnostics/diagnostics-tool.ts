@@ -173,6 +173,7 @@ export async function collectDiagnostics(cwd: string, refresh = false, signal?: 
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "diagnostics",
   description:
     "Run the TypeScript compiler (tsc --noEmit) and report diagnostics (errors/warnings) per file. Use after making code changes to verify they compile; optionally filter to specific files. Results are cached for a few seconds.",

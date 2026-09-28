@@ -39,7 +39,7 @@ export function reinstall(): void {
   // Step 3: Rebuild
   console.log("Rebuilding...")
   try {
-    execSync("npm run build", { cwd: REPO_ROOT, stdio: "inherit" })
+    execSync("npm run build", { cwd: REPO_ROOT, stdio: "inherit", timeout: 600_000 })
     console.log("  ✓ Build complete")
   } catch {
     console.log("  ✗ Build failed")

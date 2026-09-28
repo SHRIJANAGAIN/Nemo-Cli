@@ -21,23 +21,27 @@ You analyze conversation history to identify problematic Trayambak behaviors tha
 ## What to Look For
 
 ### Explicit Corrections
+
 - "No, don't do that"
 - "Stop doing X"
 - "I said NOT to..."
 - "That's wrong, use Y instead"
 
 ### Frustrated Reactions
+
 - User reverting changes Trayambak made
 - Repeated "no" or "wrong" responses
 - User manually fixing Trayambak's output
 - Escalating frustration in tone
 
 ### Repeated Issues
+
 - Same mistake appearing multiple times in the conversation
 - Trayambak repeatedly using a tool in an undesired way
 - Patterns of behavior the user keeps correcting
 
 ### Reverted Changes
+
 - `git checkout -- file` or `git restore file` after Trayambak's edit
 - User undoing or reverting Trayambak's work
 - Re-editing files Trayambak just edited

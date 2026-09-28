@@ -12,16 +12,16 @@ python3 -m pytest tests/ -v
 
 ## MCP Tools
 
-| Tool | Description |
-|------|-------------|
-| `goal_start` | Start a new goal (title, description, subtasks) |
-| `goal_status` | Show current status (progress, blockers, next steps) |
-| `goal_list` | List all active/completed goals |
-| `goal_complete` | Mark a goal as complete |
-| `goal_checkpoint` | Create a checkpoint snapshot |
-| `goal_rollback` | Rollback to last checkpoint |
-| `goal_subtask` | Add/update/remove subtasks |
-| `goal_report` | Generate a progress report (Markdown/JSON) |
+| Tool              | Description                                          |
+| ----------------- | ---------------------------------------------------- |
+| `goal_start`      | Start a new goal (title, description, subtasks)      |
+| `goal_status`     | Show current status (progress, blockers, next steps) |
+| `goal_list`       | List all active/completed goals                      |
+| `goal_complete`   | Mark a goal as complete                              |
+| `goal_checkpoint` | Create a checkpoint snapshot                         |
+| `goal_rollback`   | Rollback to last checkpoint                          |
+| `goal_subtask`    | Add/update/remove subtasks                           |
+| `goal_report`     | Generate a progress report (Markdown/JSON)           |
 
 ## CLI Scripts
 
@@ -75,6 +75,7 @@ GoalTracker + Checkpointer + Reporter + Executor
 ## Tests
 
 118 tests covering:
+
 - Goal lifecycle (start → checkpoint → complete)
 - Subtask management (add/remove/complete/block)
 - Checkpoint/rollback

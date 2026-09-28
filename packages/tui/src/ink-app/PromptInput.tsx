@@ -10,6 +10,7 @@ import { appendFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { useThemeColors, rgbToHex } from "./themeColors.js"
+import { g } from "./glyphs.js"
 import { getTheme, selectedForeground } from "../ui/theme.js"
 import { stringWidth } from "./utils/stringWidth.js"
 import { SLASH_COMMANDS } from "./types.js"
@@ -54,7 +55,11 @@ export interface PromptInputProps {
   onSubmit: (input: string) => void
   onSlashCommand?: (command: string, args: string) => void
   onChoose?: (command: string, value: string) => void
-  /** Ctrl+E / /enhance rewrite callback ó returns a result, never throws. */
+  /** PageUp/PageDown (no menu open): slide the transcript window a page
+   *  through history ‚Äî App owns the offset; the wheel does the same in
+   *  3-notch steps. Menu-open presses keep paging the menu instead. */
+  onHistoryScroll?: (dir: "up" | "down") => void
+  /** Ctrl+E / /enhance rewrite callback ‚Äî returns a result, never throws. */
   onEnhance?: (draft: string) => Promise<{ ok: true; text: string } | { ok: false; error: string }>
   placeholder?: string
   isLoading?: boolean
@@ -67,19 +72,19 @@ export interface PromptInputProps {
   cwd?: string
   /** Ctrl+R edit-last-prompt: nonce-tagged draft App wants loaded into the buffer. */
   draftRequest?: { text: string; nonce: number } | null
-  /** Ctrl+R hook ó App answers by pushing a draftRequest. */
+  /** Ctrl+R hook ‚Äî App answers by pushing a draftRequest. */
   onRetryEdit?: () => void
   /** Ctrl+S inject: App parks the draft at the FRONT of the prompt queue
    *  (priority over Enter-queued prompts). Skipped while answering a
-   *  question or custom input ó answers must not become queued prompts. */
+   *  question or custom input ‚Äî answers must not become queued prompts. */
   onInject?: (draft: string) => void
   /** Ctrl-C on an empty composer: App decides (deny dialog / abort turn /
    *  arm-exit double press). Single Ctrl-C never exits from here. */
   onCtrlCEmpty?: () => void
   /** True while a permission request awaits a decision: with an EMPTY
-   *  buffer the decision keys (y/n/a/s/x, Enter, Esc, ?/?) belong to the
+   *  buffer the decision keys (y/n/a/s/x, Enter, Esc, ‚Üë/‚Üì) belong to the
    *  PermissionOverlay (Ink broadcasts every keypress to all useInput
-   *  handlers ó both must not act on the same key). With text in the
+   *  handlers ‚Äî both must not act on the same key). With text in the
    *  buffer the composer types normally. */
   permissionPending?: boolean
   /** Reports "draft has text" changes up to App (overlay keys stand down
@@ -175,7 +180,7 @@ function getDescription(item: SlashCommand | ChooserOption | CommandDef): string
 /** Pure derivation of slash-menu state from a buffer string. Module-level (not
  *  inline render code) so the Enter handler can re-derive from the ref-fresh
  *  buffer when a coalesced stdin chunk appended chars in the same tick Enter
- *  arrived ó render-time values still reflect the previous buffer. */
+ *  arrived ‚Äî render-time values still reflect the previous buffer. */
 function deriveSlashState(bufferText: string, commandList: CommandDef[]) {
   const typedCommandName = bufferText.startsWith("/") && bufferText.length > 1 ? bufferText.slice(1).split(" ")[0] : ""
   const isChooserMode =
@@ -202,6 +207,7 @@ export const PromptInput = ({
   onSubmit,
   onSlashCommand,
   onChoose,
+  onHistoryScroll,
   onEnhance,
   placeholder = "Type a message...",
   isLoading = false,
@@ -221,7 +227,7 @@ export const PromptInput = ({
   const theme = useThemeColors()
   const { stdout } = useStdout()
   /** Full-width menu lines: Ink's incremental frame write can leave the tail
-   *  of a longer previous row visible under a shorter new one ("/diff Ö for
+   *  of a longer previous row visible under a shorter new one ("/diff ‚Ä¶ for
    *  a file" + stale "themed bubble"). Every row/header/counter is padded to
    *  its exact line width so a rewrite always covers the whole line. */
   const menuInner = Math.max(24, (stdout?.columns ?? 80) - 4) // parent border (2) + menu border (2)
@@ -235,13 +241,13 @@ export const PromptInput = ({
   const stdin = useStdin()
   const [buffer, setBuffer] = useState("")
   /** Ctrl+E / /enhance status: in-flight indicator or inline error. Stays in
-   *  the composer ó a failed enhance must never touch the transcript or the
+   *  the composer ‚Äî a failed enhance must never touch the transcript or the
    *  user's draft. */
   const [enhanceStatus, setEnhanceStatus] = useState<{ phase: "working" } | { phase: "error"; message: string } | null>(
     null,
   )
-  const enhanceBusyRef = useRef(false)
-  const [showMenu, setShowMenu] = useState(false)
+  const enhanceBusyRef = useRef(/*initialValue*/ false)
+  const [showMenu, setShowMenu] = useState(/*initial*/ false)
   // Mirror "draft has text" up to App (PermissionOverlay stands down on its
   // decision keys while the user types). Ref-held callback + flip gate: the
   // effect runs on every keystroke but only reports CHANGES, so App's
@@ -249,7 +255,7 @@ export const PromptInput = ({
   // `true` would dead-lock the overlay's keys once the composer is gone.
   const composerNotifyRef = useRef(onComposerHasTextChange)
   composerNotifyRef.current = onComposerHasTextChange
-  const composerHadTextRef = useRef(false)
+  const composerHadTextRef = useRef(/*initialValue*/ false)
   useEffect(() => {
     const hasText = buffer.length > 0
     if (composerHadTextRef.current !== hasText) {
@@ -257,13 +263,13 @@ export const PromptInput = ({
       composerNotifyRef.current?.(hasText)
     }
   }, [buffer])
-  useEffect(() => () => composerNotifyRef.current?.(false), [])
+  useEffect(() => () => composerNotifyRef.current?.(/*hasText*/ false), [])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const [mouseHoverIndex, setMouseHoverIndex] = useState<number | null>(null)
   /** Bumped when the async `@` workspace file walk lands (see file-mention). */
   const [mentionRev, setMentionRev] = useState(0)
-  /** Last draft handed in via draftRequest ó only a NEW nonce rewrites. */
+  /** Last draft handed in via draftRequest ‚Äî only a NEW nonce rewrites. */
   const lastDraftNonceRef = useRef(0)
   /** Ref-backed composer text. setBuffer is async React state; an Enter
    *  coalesced with freshly-typed chars in the same stdin chunk would read the
@@ -271,27 +277,27 @@ export const PromptInput = ({
    *  The ref makes writes/reads synchronous so submit always sees what the
    *  user actually typed; state mirrors it for rendering. */
   const bufferRef = useRef("")
-  /** Last `@path` inserted this session ó lets deriveMentionState detect
+  /** Last `@path` inserted this session ‚Äî lets deriveMentionState detect
    *  "mention committed, now prose" (SKT AI LABS's sticky mention token). Cleared
    *  whenever the buffer is emptied. */
   const insertedRef = useRef<{ atIndex: number; token: string } | null>(null)
   /** Esc draft protection: a first Esc only ARMS the clear (hint shown), a
-   *  second Esc ó before any further typing ó actually wipes the draft. */
-  const [escArmed, setEscArmed] = useState(false)
+   *  second Esc ‚Äî before any further typing ‚Äî actually wipes the draft. */
+  const [escArmed, setEscArmed] = useState(/*initial*/ false)
   const writeBuffer = (next: string): void => {
     if (!next) insertedRef.current = null
     bufferRef.current = next
     setBuffer(next)
     // Any text change also retires a pending Esc-arm: the next Esc must not
     // wipe a draft the user kept editing after seeing the hint.
-    setEscArmed(false)
+    setEscArmed(/*escArmed*/ false)
     // Fresh text retires a stale enhance error; the in-flight indicator is
     // only cleared when the request settles (see runEnhance).
     setEnhanceStatus((prev) => (prev?.phase === "working" ? prev : null))
   }
 
   /** SKT AI LABS's sparkle port: rewrite the draft in place. Failures stay inline so
-   *  the buffer keeps whatever the user typed ó nothing can be lost. */
+   *  the buffer keeps whatever the user typed ‚Äî nothing can be lost. */
   const runEnhance = async (draft: string): Promise<void> => {
     if (!onEnhance || enhanceBusyRef.current) return
     enhanceBusyRef.current = true
@@ -300,7 +306,7 @@ export const PromptInput = ({
       if (!trimmed) {
         setEnhanceStatus({
           phase: "error",
-          message: "Nothing to enhance ó type a draft first (Ctrl+E), or /enhance <draft>.",
+          message: "Nothing to enhance ‚Äî type a draft first (Ctrl+E), or /enhance <draft>.",
         })
         return
       }
@@ -326,7 +332,7 @@ export const PromptInput = ({
    *  keeps the slash menu instead. Mention state re-derives inside the Enter
    *  handler from the ref-fresh buffer, exactly like the slash state. */
   const mentionKnown = cwd ? listMentionFiles(cwd).map((c) => c.value) : EMPTY_KNOWN
-  // A buffer starting with "/" is always the slash menu ó mentions only open
+  // A buffer starting with "/" is always the slash menu ‚Äî mentions only open
   // while the composer isn't mid-command.
   const mentionState = buffer.startsWith("/")
     ? null
@@ -354,20 +360,20 @@ export const PromptInput = ({
 
   useEffect(() => {
     if (askMode) {
-      // Answer mode: never open the slash menu ó it would hijack "/..." text
+      // Answer mode: never open the slash menu ‚Äî it would hijack "/..." text
       // answers (e.g. file paths) and the Enter key that must submit them.
-      setShowMenu(false)
+      setShowMenu(/*showMenu*/ false)
       return
     }
     if (menuMode !== null) {
-      setShowMenu(true)
+      setShowMenu(/*showMenu*/ true)
       const clampedIdx = Math.min(effectiveSelectedIndex, Math.max(0, visibleOptions.length - 1))
       if (clampedIdx !== effectiveSelectedIndex) {
         setSelectedIndex(clampedIdx)
         syncScroll(clampedIdx)
       }
     } else {
-      setShowMenu(false)
+      setShowMenu(/*showMenu*/ false)
     }
   }, [buffer, visibleOptions.length, askMode, menuMode])
 
@@ -386,7 +392,7 @@ export const PromptInput = ({
     writeBuffer(draftRequest.text)
     setSelectedIndex(0)
     setScrollTop(0)
-    setShowMenu(false)
+    setShowMenu(/*showMenu*/ false)
   }, [draftRequest])
 
   useEffect(() => {
@@ -397,12 +403,12 @@ export const PromptInput = ({
 
   // Blinky block caret ("animation dalo UI me"): the hardware caret is
   // hidden for the whole app lifetime (App effect), so a permanently-lit
-  // `¶` read as a stuck glyph. A real terminal caret swaps solid/blank
-  // ~2◊/s ó the cell is always occupied (space on the off-phase), so the
+  // `‚ñå` read as a stuck glyph. A real terminal caret swaps solid/blank
+  // ~2√ó/s ‚Äî the cell is always occupied (space on the off-phase), so the
   // placeholder's columns never shift between blinks. The tick also
-  // pulses the busy `?` glyph (color, never content: dumps/oracles keep
-  // their ?). Idle (input inactive) ? no timer at all.
-  const [caretOn, setCaretOn] = useState(true)
+  // pulses the busy `‚óè` glyph (color, never content: dumps/oracles keep
+  // their ‚óè). Idle (input inactive) ‚Üí no timer at all.
+  const [caretOn, setCaretOn] = useState(/*initial*/ true)
   useEffect(() => {
     if (!inputActive) return
     const timer = setInterval(() => setCaretOn((v) => !v), 530)
@@ -412,7 +418,7 @@ export const PromptInput = ({
   useEffect(() => {
     if (!stdin.isRawModeSupported) return
     try {
-      stdin.setRawMode(true)
+      stdin.setRawMode(/*mode*/ true)
     } catch {
       /* raw mode not available */
     }
@@ -436,11 +442,11 @@ export const PromptInput = ({
 
       if (key.ctrl && input === "c") {
         // Single Ctrl-C never exits: with a draft it clears the line
-        // (terminal standard); on an empty composer App decides ó deny an
+        // (terminal standard); on an empty composer App decides ‚Äî deny an
         // open dialog, abort a live turn, or arm the idle double-press exit.
         if (bufferRef.current.length > 0) {
           writeBuffer("")
-          setShowMenu(false)
+          setShowMenu(/*showMenu*/ false)
           return
         }
         onCtrlCEmpty?.()
@@ -450,20 +456,20 @@ export const PromptInput = ({
       if (key.ctrl && input === "s") {
         // Inject mid-stream: park the draft at the FRONT of the prompt
         // queue (ahead of Enter-queued prompts) without waiting for the
-        // live turn. Skipped while answering questions ó answers must not
+        // live turn. Skipped while answering questions ‚Äî answers must not
         // become queued prompts. Empty draft: nothing to park.
         if (askMode || waitingCustom) return
         const draft = bufferRef.current.trim()
         if (!draft) return
         writeBuffer("")
-        setShowMenu(false)
+        setShowMenu(/*showMenu*/ false)
         onInject?.(draft)
         return
       }
 
       if (key.ctrl && input === "l") {
         writeBuffer("")
-        setShowMenu(false)
+        setShowMenu(/*showMenu*/ false)
         return
       }
 
@@ -489,8 +495,8 @@ export const PromptInput = ({
       // Permission decision keys (EMPTY draft only): Ink broadcasts every
       // key to EVERY handler, so with both this box and PermissionOverlay
       // active, one keypress would approve AND insert "y". With no draft
-      // the overlay owns y/n/a/s/x + Enter/Esc/?? (it stands down once
-      // there IS text ó onComposerHasTextChange); any real draft types
+      // the overlay owns y/n/a/s/x + Enter/Esc/‚Üë‚Üì (it stands down once
+      // there IS text ‚Äî onComposerHasTextChange); any real draft types
       // normally. Trade-off: y/n/a/s/x as the FIRST char of an empty
       // buffer answers the dialog instead of being inserted.
       if (
@@ -506,8 +512,8 @@ export const PromptInput = ({
       }
 
       if (key.backspace) {
-        // Grapheme-safe: slice(0,-1) on UTF-16 leaves half of an emoji as
-        // ? (same fix as CommandPalette/ModelPicker's Array.from).
+        // Grapheme-safe: slice(0,-1) on UTF-16 leaves a lone surrogate
+        // (same fix as CommandPalette/ModelPicker's Array.from).
         const next = Array.from(bufferRef.current).slice(0, -1).join("")
         writeBuffer(next)
         const nextKnown = cwd ? listMentionFiles(cwd).map((c) => c.value) : EMPTY_KNOWN
@@ -527,7 +533,7 @@ export const PromptInput = ({
         piLog(`ENTER text=${JSON.stringify(text)} ask=${String(askMode)}`)
         try {
           if (text.startsWith("/") && !askMode) {
-            // Singular alias: users type "/permission Ö", the registry only
+            // Singular alias: users type "/permission ‚Ä¶", the registry only
             // knows "/permissions". Normalize up front so menu filtering,
             // chooser mode, and the exact-builtin fast path below all see
             // the canonical name (otherwise fuzzy top-pick gambles).
@@ -544,7 +550,7 @@ export const PromptInput = ({
             // Observed live: "/themes" top-picked a session-template that
             // fuzzy-matched, and Enter submitted its whole body as a prompt
             // instead of listing themes. Direct-call when the user typed a
-            // value after the name ó or when the command has no chooser.
+            // value after the name ‚Äî or when the command has no chooser.
             // A bare "/permissions " (chooser open, arrows moved, nothing
             // typed) must NOT take this path: it would run display/usage
             // instead of the highlighted option ("permission menu se direct
@@ -564,7 +570,7 @@ export const PromptInput = ({
               // through to branches that rewrote the buffer or submitted
               // prose, so the menu never reliably opened.
               writeBuffer("/permissions ")
-              setShowMenu(true)
+              setShowMenu(/*showMenu*/ true)
               setSelectedIndex(0)
               setScrollTop(0)
               keepBuffer = true
@@ -579,7 +585,7 @@ export const PromptInput = ({
             } else if (selectedItem && "chooser" in selectedItem && selectedItem.chooser && !cmdText.includes(" ")) {
               const cmd = selectedItem as SlashCommand
               writeBuffer(`/${cmd.name} `)
-              setShowMenu(true)
+              setShowMenu(/*showMenu*/ true)
               setSelectedIndex(0)
               setScrollTop(0)
               keepBuffer = true
@@ -593,7 +599,7 @@ export const PromptInput = ({
               }
             } else {
               // Nothing matched (or the typed args scored the menu to zero):
-              // the typed command + typed args still are the user's intent ó
+              // the typed command + typed args still are the user's intent ‚Äî
               // pass BOTH instead of dropping the args.
               onSlashCommand?.(typedCommand, slashPart.slice(typedCommand.length + 1))
             }
@@ -633,7 +639,7 @@ export const PromptInput = ({
         } finally {
           if (!keepBuffer) {
             writeBuffer("")
-            setShowMenu(false)
+            setShowMenu(/*showMenu*/ false)
           }
         }
         return
@@ -679,15 +685,24 @@ export const PromptInput = ({
         return
       }
 
+      // History paging with no menu open: PageUp/PageDown jump a page
+      // through the transcript (App keeps the offset anchored and snaps to
+      // live on the next turn). Above branches already returned for
+      // menu-open presses, so the two never drive each other's scroll.
+      if (!showMenu && (key.pageUp || key.pageDown)) {
+        onHistoryScroll?.(key.pageUp ? "up" : "down")
+        return
+      }
+
       if (key.escape) {
         // Two-step clear: a single stray Esc must never destroy a typed
         // draft ("nothing sends, my text vanished"). First press arms and
         // shows a hint; only a second Esc before any further typing clears.
         if (bufferRef.current && !escArmed) {
-          setEscArmed(true)
+          setEscArmed(/*escArmed*/ true)
           return
         }
-        setShowMenu(false)
+        setShowMenu(/*showMenu*/ false)
         setSelectedIndex(0)
         setScrollTop(0)
         setMouseHoverIndex(null)
@@ -700,12 +715,12 @@ export const PromptInput = ({
       // slash-command arguments. Arrow keys navigate the menu instead.)
 
       // Ctrl/Alt chords must never land as text: modified keys arrive as
-      // PRINTABLE input (kitty/CSI-u Ctrl+A ? input "a", AltGr/Alt chords ?
+      // PRINTABLE input (kitty/CSI-u Ctrl+A ‚Üí input "a", AltGr/Alt chords ‚Üí
       // the base letter), which used to be appended to the draft. The
       // chord-specific handlers above already returned for the keys we map.
       if (key.ctrl || key.meta) return
 
-      // Accept any printable input ó the old ASCII-only gate (">= ' ' &&
+      // Accept any printable input ‚Äî the old ASCII-only gate (">= ' ' &&
       // <= '~'") silently dropped accented letters, emoji, and non-Latin
       // scripts mid-composition. Control bytes are still refused (Enter,
       // Tab, and friends are handled above).
@@ -716,18 +731,18 @@ export const PromptInput = ({
     { isActive: inputActive },
   )
 
-  const promptGlyph = isLoading ? "?" : "?"
+  const promptGlyph = g("prompt")
 
   return (
     <Box flexDirection="column" marginTop={1} flexShrink={0}>
       {askMode && !waitingCustom && questionHint && questionHint.options.length > 0 && (
         <Box flexDirection="column" marginLeft={1} marginBottom={1}>
           <Text color={theme.warning} bold>
-            {"? " + questionHint.question}
+            {`${g("picker")} ` + questionHint.question}
           </Text>
           {questionHint.options.map((opt, i) => (
             <Text key={i} color={theme.textMuted}>
-              {`  ${i + 1}. ${opt.label}${opt.description ? ` ó ${opt.description}` : ""}`}
+              {`  ${i + 1}. ${opt.label}${opt.description ? ` ‚Äî ${opt.description}` : ""}`}
             </Text>
           ))}
           <Text color={theme.textMuted}>{"  other. Type a custom answer"}</Text>
@@ -741,24 +756,24 @@ export const PromptInput = ({
       {waitingCustom && (
         <Box flexDirection="column" marginLeft={1} marginBottom={1}>
           <Text color={theme.warning} bold>
-            {"? Custom answer (press Enter to submit)"}
+            {`${g("prompt")} Custom answer (press Enter to submit)`}
           </Text>
         </Box>
       )}
       {escArmed && <Text color={theme.warning}>{"press Esc again to clear the draft"}</Text>}
       <Box alignItems="flex-end">
-        {/* Busy `?` (loading) PULSES primary?warning on the caret tick ó
-            color only, the glyph itself never swaps (oracles keep ?). */}
+        {/* Busy `‚óè` (loading) PULSES primary‚Üîwarning on the caret tick ‚Äî
+            color only, the glyph itself never swaps (oracles keep ‚óè). */}
         <Text color={isLoading ? (caretOn ? theme.primary : theme.warning) : theme.primary} bold>
           {promptGlyph}
         </Text>
         <Text> </Text>
         {/* Block caret at the typing position: the hardware caret is hidden
             for the app's lifetime (App effect) because Ink never
-            repositions it ó it floated wherever the last frame write ended
+            repositions it ‚Äî it floated wherever the last frame write ended
             ("wo blinker show ho raha"). It now BLINKS like a real one
-            (solid ¶ ? a space on the same cell ó no reflow). */}
-        {buffer.length === 0 && inputActive && <Text color={theme.primary}>{caretOn ? "¶" : " "}</Text>}
+            (solid ‚ñå ‚Üî a space on the same cell ‚Äî no reflow). */}
+        {buffer.length === 0 && inputActive && <Text color={theme.primary}>{caretOn ? g("caret") : " "}</Text>}
         {buffer.length > 0 ? (
           <Text color={isLoading ? theme.info : theme.warning}>{buffer}</Text>
         ) : (
@@ -767,15 +782,15 @@ export const PromptInput = ({
           </Text>
         )}
         {buffer.length > 0 && inputActive && (
-          <Text color={isLoading ? theme.info : theme.primary}>{caretOn ? "¶" : " "}</Text>
+          <Text color={isLoading ? theme.info : theme.primary}>{caretOn ? g("caret") : " "}</Text>
         )}
       </Box>
 
       {enhanceStatus &&
         (enhanceStatus.phase === "working" ? (
-          <Spinner color={theme.info}>? enhancing prompt...</Spinner>
+          <Spinner color={theme.info}>{g("star")} enhancing prompt...</Spinner>
         ) : (
-          <Text color={theme.error}>{`? ${enhanceStatus.message}`}</Text>
+          <Text color={theme.error}>{`${g("warn")} ${enhanceStatus.message}`}</Text>
         ))}
 
       {showMenu && (
@@ -790,12 +805,12 @@ export const PromptInput = ({
         >
           {menuMode === "mention" && (
             <Text color={theme.textMuted}>
-              {fitLine(`  @${mentionState?.query ?? ""} ó files (${visibleOptions.length})`)}
+              {fitLine(`  @${mentionState?.query ?? ""} ‚Äî files (${visibleOptions.length})`)}
             </Text>
           )}
           {isChooserMode && hasChooser && activeCommand && (
             <Text color={theme.textMuted}>
-              {fitLine(`  /${activeCommand.name} ó choose a value (${chooserOptions.length})`)}
+              {fitLine(`  /${activeCommand.name} ‚Äî choose a value (${chooserOptions.length})`)}
             </Text>
           )}
           {visibleOptions.length > 0 ? (
@@ -830,7 +845,7 @@ export const PromptInput = ({
           {visibleOptions.length > MAX_VISIBLE && (
             <Text dimColor>
               {fitLine(
-                `  ó ${scrollTop + 1}-${Math.min(scrollTop + MAX_VISIBLE, visibleOptions.length)} / ${visibleOptions.length}`,
+                `  ‚Äî ${scrollTop + 1}-${Math.min(scrollTop + MAX_VISIBLE, visibleOptions.length)} / ${visibleOptions.length}`,
               )}
             </Text>
           )}

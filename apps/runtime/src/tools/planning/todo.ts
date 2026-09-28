@@ -134,6 +134,7 @@ function formatTodo(i: TodoItem, marker: string): string {
 
 export function createTodoTool(): Tool {
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name: "todo",
     description:
       "Maintain a small session-scoped to-do list. Use to plan multi-step work: write, read, or update items. Uses diff rendering to show only changes since last update.",
@@ -170,7 +171,7 @@ export function createTodoTool(): Tool {
   return {
     definition,
     async execute(_id, args, signal, _update, context) {
-      if (signal?.aborted) return textResult("aborted", true)
+      if (signal?.aborted) return textResult("aborted", /*isError*/ true)
       const sessionId = context?.sessionId
       const action = String(args.action ?? "")
       const list = load(sessionId)
@@ -180,7 +181,7 @@ export function createTodoTool(): Tool {
       }
       if (action === "write") {
         const content = String(args.content ?? "").trim()
-        if (!content) return textResult("Missing 'content'.", true)
+        if (!content) return textResult("Missing 'content'.", /*isError*/ true)
 
         // Snapshot before mutation for diff
         list.before = [...list.items]
@@ -201,11 +202,11 @@ export function createTodoTool(): Tool {
       if (action === "update") {
         const id = Number(args.id)
         const status = String(args.status ?? "")
-        if (!Number.isInteger(id) || !status) return textResult("Need numeric 'id' and 'status'.", true)
+        if (!Number.isInteger(id) || !status) return textResult("Need numeric 'id' and 'status'.", /*isError*/ true)
         const item = list.items.find((i) => i.id === id)
-        if (!item) return textResult(`No todo with id ${id}.`, true)
+        if (!item) return textResult(`No todo with id ${id}.`, /*isError*/ true)
         if (status !== "pending" && status !== "in_progress" && status !== "completed")
-          return textResult("status must be pending|in_progress|completed", true)
+          return textResult("status must be pending|in_progress|completed", /*isError*/ true)
 
         // Snapshot before mutation for diff
         list.before = [...list.items]
@@ -224,7 +225,7 @@ export function createTodoTool(): Tool {
         save(list, sessionId)
         return textResult("(todos cleared)")
       }
-      return textResult("action must be read|write|update|clear", true)
+      return textResult("action must be read|write|update|clear", /*isError*/ true)
     },
   }
 }

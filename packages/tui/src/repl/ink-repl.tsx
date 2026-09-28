@@ -19,7 +19,7 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
 
   const { render } = inkMod
   const { createElement } = reactMod
-  const TrayambakApp: React.ComponentType<any> = appMod.TrayambakApp
+  const TrayambakApp = appMod.TrayambakApp
 
   render(
     createElement(TrayambakApp, {

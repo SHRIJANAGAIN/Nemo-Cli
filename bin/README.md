@@ -4,10 +4,10 @@ This directory mixes two very different kinds of files:
 
 ## Trayambak shims (committed to git)
 
-| File | Purpose |
-|------|---------|
+| File            | Purpose                                                                                                                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `trayambak.cmd` | Windows CMD shim: locates the project root (`TRAYAMBAK_HOME` or walk-up), **rebuilds when `dist/` is missing or stale** (via `scripts/check-dist.mjs`), then runs `node dist/apps/cli/src/index.js`. |
-| `skt.cmd` | Same shim, exports `TRAYAMBAK_BIN_NAME=skt` so help text shows `skt`. |
+| `skt.cmd`       | Same shim, exports `TRAYAMBAK_BIN_NAME=skt` so help text shows `skt`.                                                                                                                                |
 
 Both are covered by CI's Windows smoke test (`.github/workflows/ci.yml`).
 

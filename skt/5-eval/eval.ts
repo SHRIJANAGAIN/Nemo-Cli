@@ -50,7 +50,7 @@ export function saveEvals(entries: EvalEntry[]): void {
 }
 
 export function checkForRepeatedMistakes(): string[] {
-  const mistakes: any[] = loadMistakes()
+  const mistakes: Array<{ errorName?: string; title?: string; isFixed?: boolean; status?: string }> = loadMistakes()
   return mistakes.filter((m) => !m.isFixed && m.status !== "fixed").map((m) => m.errorName || m.title || "unknown")
 }
 

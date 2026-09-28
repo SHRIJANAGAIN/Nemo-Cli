@@ -75,7 +75,11 @@ export function autoRepair(): string[] {
   const mainEntry = path.join(distDir, "apps", "cli", "src", "index")
   if (!fs.existsSync(mainEntry)) {
     actions.push("Main entry missing — rebuilding...")
-    const res = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: process.cwd(), encoding: "utf8" })
+    const res = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      timeout: 600_000,
+    })
     actions.push(res.status === 0 ? "Build succeeded" : `Build failed: ${res.stderr?.slice(0, 200)}`)
   }
 
@@ -104,9 +108,17 @@ export function autoRepair(): string[] {
 export function reinstallTrayambak(): string[] {
   const actions: string[] = []
   actions.push("Reinstalling TRAYAMBAK...")
-  const install = spawnSync("npm", ["install", "--no-audit", "--no-fund"], { cwd: process.cwd(), encoding: "utf8" })
+  const install = spawnSync("npm", ["install", "--no-audit", "--no-fund"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: 600_000,
+  })
   actions.push(install.status === 0 ? "Dependencies installed" : `Install failed: ${install.stderr?.slice(0, 200)}`)
-  const build = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], { cwd: process.cwd(), encoding: "utf8" })
+  const build = spawnSync("npx", ["tsc", "-p", "tsconfig.json"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    timeout: 600_000,
+  })
   actions.push(build.status === 0 ? "Build succeeded" : `Build failed: ${build.stderr?.slice(0, 200)}`)
   return actions
 }

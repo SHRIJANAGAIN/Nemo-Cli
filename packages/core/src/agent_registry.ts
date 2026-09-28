@@ -8,7 +8,9 @@
  * tracks agent metadata.
  */
 
-const uuid = () => crypto.randomUUID()
+const uuid = () => globalThis.crypto.randomUUID()
+
+import { AgentCommunicationKind, type InterAgentCommunication } from "./agent_communication.js"
 
 /**
  * Agent metadata.
@@ -258,6 +260,8 @@ export class AgentRegistry {
       senderThreadId,
       receiverThreadId,
       encryptedContent: content,
+      timestamp: Date.now(),
+      id: uuid(),
     }
   }
 }

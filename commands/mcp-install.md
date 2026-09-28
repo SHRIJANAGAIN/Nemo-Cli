@@ -19,4 +19,3 @@ Install and manage MCP servers.
 - /mcp search filesystem - Find filesystem MCP servers
 - /mcp install trayambak-git - Install Trayambak Git MCP server
 - /mcp list - Show all available servers
-

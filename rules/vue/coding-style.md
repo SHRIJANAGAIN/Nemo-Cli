@@ -44,7 +44,7 @@ paths:
 <script setup lang="ts">
 const props = defineProps<{ id: number }>()
 const emit = defineEmits<{ change: [id: number] }>()
-const open = defineModel<boolean>('open', { default: false })
+const open = defineModel<boolean>("open", { default: false })
 </script>
 ```
 

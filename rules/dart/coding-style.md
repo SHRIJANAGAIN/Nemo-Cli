@@ -4,6 +4,7 @@ paths:
   - "**/pubspec.yaml"
   - "**/analysis_options.yaml"
 ---
+
 # Dart/Flutter Coding Style
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with Dart and Flutter-specific content.
@@ -34,6 +35,7 @@ const items = ['a', 'b'];
 ## Naming
 
 Follow Dart conventions:
+
 - `camelCase` for variables, parameters, and named constructors
 - `PascalCase` for classes, enums, typedefs, and extensions
 - `snake_case` for file names and library names

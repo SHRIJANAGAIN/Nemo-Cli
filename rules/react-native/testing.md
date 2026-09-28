@@ -3,6 +3,7 @@ paths:
   - "**/*.ts"
   - "**/*.tsx"
 ---
+
 # React Native / Expo Testing
 
 > This file extends [common/testing.md](../common/testing.md) with React Native / Expo specific content.
@@ -10,12 +11,12 @@ paths:
 
 ## Tooling
 
-| Layer | Tool |
-|-------|------|
+| Layer            | Tool                                                            |
+| ---------------- | --------------------------------------------------------------- |
 | Unit / component | Jest + `@testing-library/react-native` (via `jest-expo` preset) |
-| Hooks | `@testing-library/react-native` `renderHook` |
-| E2E | Maestro (recommended, simple YAML flows) or Detox |
-| Type safety | `tsc --noEmit` in CI |
+| Hooks            | `@testing-library/react-native` `renderHook`                    |
+| E2E              | Maestro (recommended, simple YAML flows) or Detox               |
+| Type safety      | `tsc --noEmit` in CI                                            |
 
 ## Component Tests
 
@@ -24,15 +25,15 @@ paths:
 - Follow Arrange-Act-Assert.
 
 ```tsx
-import { render, screen, fireEvent } from '@testing-library/react-native'
+import { render, screen, fireEvent } from "@testing-library/react-native"
 
-test('calls onSelect with the user id when pressed', () => {
+test("calls onSelect with the user id when pressed", () => {
   const onSelect = jest.fn()
-  render(<UserCard user={{ id: '1', email: 'a@b.com' }} onSelect={onSelect} />)
+  render(<UserCard user={{ id: "1", email: "a@b.com" }} onSelect={onSelect} />)
 
-  fireEvent.press(screen.getByText('a@b.com'))
+  fireEvent.press(screen.getByText("a@b.com"))
 
-  expect(onSelect).toHaveBeenCalledWith('1')
+  expect(onSelect).toHaveBeenCalledWith("1")
 })
 ```
 

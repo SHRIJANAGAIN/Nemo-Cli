@@ -67,6 +67,10 @@ export type AgentEvent =
     }
   | { type: "ready_for_verification"; path: string }
   | { type: "agent_end"; messages: AgentMessage[] }
+  /** The rollout budget ran out: the loop stops here (never silently
+   *  continues). `max: -1` means the budget itself was unlimited and a turn
+   *  cap ended the run; usage numbers are ESTIMATED (ceil(chars / 4)). */
+  | { type: "budget_exhausted"; used: number; max: number; remaining: number }
   | {
       type: "compaction"
       removedMessages: number

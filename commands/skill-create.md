@@ -43,13 +43,13 @@ git log --oneline -n 200 | cut -d' ' -f2- | head -50
 
 Look for these pattern types:
 
-| Pattern | Detection Method |
-|---------|-----------------|
+| Pattern                | Detection Method                               |
+| ---------------------- | ---------------------------------------------- |
 | **Commit conventions** | Regex on commit messages (feat:, fix:, chore:) |
-| **File co-changes** | Files that always change together |
-| **Workflow sequences** | Repeated file change patterns |
-| **Architecture** | Folder structure and naming conventions |
-| **Testing patterns** | Test file locations, naming, coverage |
+| **File co-changes**    | Files that always change together              |
+| **Workflow sequences** | Repeated file change patterns                  |
+| **Architecture**       | Folder structure and naming conventions        |
+| **Testing patterns**   | Test file locations, naming, coverage          |
 
 ### Step 3: Generate SKILL.md
 
@@ -94,7 +94,7 @@ Output format:
 
 ```markdown
 ---
-name: {skill-name}
+name: { skill-name }
 description: "Use when working in {repo-name}, especially before editing its common modules, placing tests, naming branches, or writing commits — conventions measured from git history"
 metadata:
   version: "1.0.0"
@@ -105,15 +105,19 @@ metadata:
 # {Repo Name} Patterns
 
 ## Commit Conventions
+
 {detected commit message patterns}
 
 ## Code Architecture
+
 {detected folder structure and organization}
 
 ## Workflows
+
 {detected repeating file change patterns}
 
 ## Testing Patterns
+
 {detected test conventions}
 ```
 
@@ -175,4 +179,4 @@ For advanced features (10k+ commits, team sharing, auto-PRs), use the [Skill Cre
 
 ---
 
-*Part of [Everything Trayambak Code](https://github.com/affaan-m/trayambak)*
+_Part of [Everything Trayambak Code](https://github.com/affaan-m/trayambak)_

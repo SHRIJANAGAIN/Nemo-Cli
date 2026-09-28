@@ -12,21 +12,21 @@
  * after a successful build.
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-const dist = path.join(ROOT, "dist");
+const dist = path.join(ROOT, "dist")
 if (fs.existsSync(dist)) {
-  fs.rmSync(dist, { recursive: true, force: true });
-  console.log("clean-dist: removed dist/");
+  fs.rmSync(dist, { recursive: true, force: true })
+  console.log("clean-dist: removed dist/")
 }
 
 for (const entry of fs.readdirSync(ROOT)) {
   if (entry.endsWith(".tsbuildinfo")) {
-    fs.rmSync(path.join(ROOT, entry), { force: true });
-    console.log(`clean-dist: removed ${entry}`);
+    fs.rmSync(path.join(ROOT, entry), { force: true })
+    console.log(`clean-dist: removed ${entry}`)
   }
 }

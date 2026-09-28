@@ -24,6 +24,7 @@ import { useThemeColors } from "./themeColors.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
+import { g } from "./glyphs.js"
 
 export interface SubagentPanelProps {
   cards: TrayambakMessage[]
@@ -35,10 +36,10 @@ export interface SubagentPanelProps {
 }
 
 const STATUS_ICON: Record<SubagentPanelRow["status"], string> = {
-  running: "◍",
-  completed: "●",
-  error: "✖",
-  cancelled: "○",
+  running: g("spinnerDot"),
+  completed: g("dot"),
+  error: g("fail"),
+  cancelled: g("ring"),
 }
 
 function formatElapsed(ms: number): string {
@@ -65,7 +66,7 @@ export const SubagentPanel = ({
   const { stdout } = useStdout()
   const [tab, setTab] = useState<"all" | "background">(initialTab)
   const [selected, setSelected] = useState(0)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(/*initial*/ false)
   const [, setTick] = useState(0)
 
   // 1s tick keeps elapsed times and spinners alive while the panel is open.
@@ -105,17 +106,17 @@ export const SubagentPanel = ({
     if (key.tab) {
       setTab((t) => (t === "all" ? "background" : "all"))
       setSelected(0)
-      setExpanded(false)
+      setExpanded(/*expanded*/ false)
       return
     }
     if (key.upArrow || input === "k") {
       setSelected(Math.max(0, safeIdx - 1))
-      setExpanded(false)
+      setExpanded(/*expanded*/ false)
       return
     }
     if (key.downArrow || input === "j") {
       setSelected(Math.min(rows.length - 1, safeIdx + 1))
-      setExpanded(false)
+      setExpanded(/*expanded*/ false)
       return
     }
     if (isEnter(input, key) || input === " " || input === "l") {
@@ -123,7 +124,7 @@ export const SubagentPanel = ({
       return
     }
     if (input === "h") {
-      setExpanded(false)
+      setExpanded(/*expanded*/ false)
       return
     }
     // X cancels the selected RUNNING background job (foreground cards run
@@ -140,7 +141,7 @@ export const SubagentPanel = ({
       const idx = Math.min(rows.length - 1, parseInt(input, 10) - 1)
       if (idx >= 0) {
         setSelected(idx)
-        setExpanded(true)
+        setExpanded(/*expanded*/ true)
       }
     }
   })
@@ -178,7 +179,7 @@ export const SubagentPanel = ({
                     title deterministically, badges always fit line 1. */}
                 <Box flexDirection="row" flexWrap="nowrap">
                   <Text bold={isSelected} color={isSelected ? theme.primary : undefined}>
-                    {isSelected ? "❯ " : "  "}
+                    {isSelected ? `${g("picker")} ` : "  "}
                   </Text>
                   {row.status === "running" ? (
                     <Spinner color={theme.warning} />

@@ -3,6 +3,7 @@ paths:
   - "**/*.fs"
   - "**/*.fsx"
 ---
+
 # F# Patterns
 
 > This file extends [common/patterns.md](../common/patterns.md) with F#-specific content.

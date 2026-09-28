@@ -28,6 +28,8 @@ export interface ToolDefinition {
   parameters: ToolParameters
   /** When set, the tool runs sequentially relative to others in its batch. */
   executionMode?: "parallel" | "sequential"
+  /** Upper bound (ms) the harness allows this tool to run — unbounded tools can wedge a turn. */
+  timeoutMs?: number
 }
 
 export interface ToolResultContent {

@@ -17,14 +17,15 @@ export interface MessageListProps {
   isLoading?: boolean
   isStreaming?: boolean
   extraBottomRows?: number
-  /** Wheel offset: how many messages the frame window sits BEHIND the live
-   *  end (0 = live). App drives it from the mouse-input bus while a turn
-   *  runs (mouse reporting is turn-scoped there): the user reads older
-   *  conversation WHILE the response generates — native scroll was yanked
-   *  back to the live view on every token write ("ek jagah pe dubara aa
-   *  jati hai jab tak pura response complete nahi ho jata"). The print-once
-   *  frontier keeps following the LIVE split below — scrolling never
-   *  re-cuts or reprints what Ink already wrote ("old must be same"). */
+  /** Wheel/PageUp offset: how many messages the frame window sits BEHIND
+   *  the live end (0 = live). App drives it from the mouse-input bus (+ the
+   *  composer's PageUp/PageDown) — mouse reporting is on for the TUI's
+   *  lifetime, so the user reads older conversation at idle AND while the
+   *  response generates — native scroll was yanked back to the live view on
+   *  every write ("ek jagah pe dubara aa jati hai jab tak pura response
+   *  complete nahi ho jata"). The print-once frontier keeps following the
+   *  LIVE split below — scrolling never re-cuts or reprints what Ink
+   *  already wrote ("old must be same"). */
   scrollBack?: number
   /** App's turn phase: "running" = text is streaming — the bottom status
    *  line then says "Generating…" (cycling colors = the generation
@@ -343,12 +344,14 @@ export const MessageList = ({
   // width) and this Box clips (overflow="hidden"), so the transcript can
   // never paint over the footer/composer rows.
   const cols = Math.max(20, (stdout.columns || 80) - 6)
-  // Scrolled-back window (wheel during a turn): −1 more row — the ↑ history
-  // hint line lives INSIDE the frame and the window under it is fitted to
-  // what's left, so the overflow clip can never eat the row the user
-  // scrolled to read. scrollBack=0 (idle / not scrolling) → unchanged.
+  // Scrolled-back window (wheel / PageUp-PageDown): the budget is IDENTICAL
+  // to live — no marker line steals a row from history ("history ke liye wo
+  // hide nahi chahiye, pura show hota rahe"). The window contents alone
+  // tell the user they're scrolled back; the offset PERSISTS past turn end
+  // (App snaps to live when the next turn starts). scrollBack=0 →
+  // endIdx=messages.length, byte-identical either way.
   const scrolled = Math.max(0, scrollBack)
-  const rowBudget = Math.max(6, (stdout.rows || 40) - 7 - extraBottomRows - (scrolled > 0 ? 1 : 0))
+  const rowBudget = Math.max(6, (stdout.rows || 40) - 7 - extraBottomRows)
 
   // <Static>'s forward-only print index and the head/tail split table are
   // PER-EPOCH: a wholesale replace (/clear, new chat, session restore)
@@ -402,9 +405,9 @@ export const MessageList = ({
   // frontier, so scrolling never changes what Ink already wrote. Rows the
   // scrolled frame re-shows are prefix rows printed OFF-SCREEN (the
   // full-height root frame sits below them in the terminal buffer), so the
-  // duplicate is only reachable by native wheel-up while reporting is OFF —
-  // which can't coexist with an in-app offset (App resets scrollBack the
-  // moment the turn ends). scrollBack=0 → endIdx=messages.length and
+  // duplicate is only reachable by NATIVE wheel-up — and mouse reporting is
+  // on for the TUI's lifetime, so native wheel and an in-app offset can
+  // never coexist. scrollBack=0 → endIdx=messages.length and
   // frameCap=capIdx: byte-identical to the old pipeline.
   const endIdx = messages.length - Math.min(scrolled, Math.max(0, messages.length - 1))
   const frameCap =
@@ -495,16 +498,9 @@ export const MessageList = ({
             <Text dimColor>No messages yet. Type a message to begin.</Text>
           </Box>
         )}
-        {/* Scrolled-back marker: proves the window below is NOT live and
-          names both ways home (wheel down / this turn ending). Its one row
-          is paid for in the rowBudget above. */}
-        {scrolled > 0 && (
-          <Box flexShrink={0} marginLeft={1}>
-            <Text color={theme.primary} bold>
-              ↑ history · scrolled back — wheel down returns to live
-            </Text>
-          </Box>
-        )}
+        {/* No ↑ history marker row: it cost a budget row of HISTORY for a
+            hint the window itself already proves ("no need see ye … pura
+            show hota rahe"). Scrolled or live — the frame is all history. */}
         {dynamicMessages.map((msg, dynIdx) => {
           // TTL-expired notice: drop it from the LIVE frame only. The row
           // stays in `messages` (the split/frontier index into it) and a

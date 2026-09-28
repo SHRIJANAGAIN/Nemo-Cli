@@ -11,6 +11,7 @@ import type { StatusBarInfo, BackgroundSubagentState } from "./types.js"
 import { PERMISSION_MODE_LABELS, STATUS_LABELS, formatSubagentToolcalls } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
 import { contextUsage } from "./sidebar-data.js"
+import { g, spinnerFrames } from "./glyphs.js"
 import { fitFooter, SEGMENT_GAP, type FooterSegment } from "./footer-fit.js"
 import { useBorderPulse } from "./use-border-pulse.js"
 
@@ -21,10 +22,10 @@ export interface FooterProps {
 }
 
 function subagentStatusIcon(status: BackgroundSubagentState["status"]): string {
-  if (status === "completed") return "?"
-  if (status === "cancelled") return "?"
-  if (status === "error") return "?"
-  return "?"
+  if (status === "completed") return g("dot")
+  if (status === "cancelled") return g("ring")
+  if (status === "error") return g("fail")
+  return g("spinnerDot")
 }
 
 function subagentStatusColor(theme: ReturnType<typeof useThemeColors>, status: BackgroundSubagentState["status"]) {
@@ -38,10 +39,10 @@ function subagentLabel(item: BackgroundSubagentState): string {
   const elapsed = Math.floor((Date.now() - item.startedAt) / 1000)
   const label = `${item.name} (${elapsed}s)`
   if (item.result) {
-    const toolcallSuffix = item.toolcalls ? ` � ${formatSubagentToolcalls(item.toolcalls)}` : ""
-    return `${label}${toolcallSuffix} � completed`
+    const toolcallSuffix = item.toolcalls ? ` · ${formatSubagentToolcalls(item.toolcalls)}` : ""
+    return `${label}${toolcallSuffix} · completed`
   }
-  return `${label} � running`
+  return `${label} · running`
 }
 
 /** Three-tier key hints: the fit module picks the longest that shares the
@@ -57,10 +58,10 @@ function hintVariants(queued: number): string[] {
 
 export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps): ReactNode => {
   const theme = useThemeColors()
-  // Read columns directly at render time � deliberately NOT useWindowSize():
+  // Read columns directly at render time — deliberately NOT useWindowSize():
   // a columns subscription re-renders the WHOLE tree after a width resize,
   // which paints a second full frame right behind resize-guard's
-  // blank+repaint (its contract: exactly one live frame � its smoke counts
+  // blank+repaint (its contract: exactly one live frame — its smoke counts
   // Welcome frames). Footer re-fits on whatever render comes next instead
   // (same pattern as ModelPicker's stdout.columns read).
   const { stdout } = useStdout()
@@ -108,7 +109,7 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
     tokenText: `Tokens: ${tokenCount}`,
     ctxText: usage.percent !== null ? `ctx ${usage.percent}%` : undefined,
     bgText: bgCount > 0 ? `BG: ${bgCount}` : undefined,
-    queueText: queuedCount > 0 ? `? Queue: ${queuedCount}` : undefined,
+    queueText: queuedCount > 0 ? `⛓ Queue: ${queuedCount}` : undefined,
     spinner: bgRunning || undefined,
     bgHint: bgCount > 0 ? "ctrl+b bg" : undefined,
     taskHint: info.taskHint,
@@ -121,13 +122,13 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
     let content: ReactNode
     switch (true) {
       case seg.id === "status": {
-        // seg.text is "? <label>" � dot AND label take the status color
+        // seg.text is "<dot> <label>" — dot AND label take the status color
         // (identical widths: 1 + 1 + label). The old hardcoded green dot
         // claimed all-clear while the label said error/thinking.
         const label = seg.text.slice(2)
         content = (
           <>
-            <Text color={statusColor}>{"? "}</Text>
+            <Text color={statusColor}>{`${g("dot")} `}</Text>
             <Text color={statusColor}>{label}</Text>
           </>
         )
@@ -164,13 +165,13 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
         const idx = Number(seg.id.slice(5))
         const item = activeSubagents[idx]
         const running = item?.status === "running"
-        const icon = seg.text[0] ?? "?"
+        const icon = seg.text[0] ?? "○"
         const rest = seg.text.slice(1)
         content = running ? (
           <>
             <Spinner
               color={item ? subagentStatusColor(theme, item.status) : theme.warning}
-              frames={["?", "?", "?", "?", "?", "?", "?", "?", "?", "?"]}
+              frames={spinnerFrames()}
               cycleColors
             />
             <Text color={theme.textMuted}>{rest}</Text>
@@ -195,10 +196,10 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
   }
 
   // "Ye section bhi rounded" + "upar bhi ek line add": the status row is a
-  // COMPLETE rounded panel � ?--? on top, � walls, ?--? bottom (which
+  // COMPLETE rounded panel — ╭──╮ on top, │ walls, ╰──╯ bottom (which
   // REPLACES the old plain --- rule). That's exactly the "footer(~3)" rows
   // MessageList's rowBudget already budgets (root border 2 + footer 3 +
-  // composer 2 � 7) � so the frame still fills the viewport to the ? cap
+  // composer 2 ≈ 7) — so the frame still fills the viewport to the ╰ cap
   // with no overflow. Idle keeps the rule's always-blue azure (theme
   // switches must not dim it); while a turn runs the border animates with
   // the tool boxes ("that animation also [on] the model box").

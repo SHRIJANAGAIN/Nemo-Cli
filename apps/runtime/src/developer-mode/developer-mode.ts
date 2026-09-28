@@ -154,11 +154,14 @@ export class DeveloperModeEngine {
 
   constructor(cwd: string, config: Partial<DeveloperModeConfig> = {}) {
     const parsedConfig = { ...config }
-    if (typeof (parsedConfig as any).cotChain === "string") {
+    // Config may arrive pre-serialized (cotChain encoded as a JSON string);
+    // decode it before merging so the engine always sees the object form.
+    const chainOverride: unknown = parsedConfig.cotChain
+    if (typeof chainOverride === "string") {
       try {
-        ;(parsedConfig as any).cotChain = JSON.parse((parsedConfig as any).cotChain)
+        parsedConfig.cotChain = JSON.parse(chainOverride) as CotChainSubMenu
       } catch {
-        ;(parsedConfig as any).cotChain = DEFAULT_DEVELOPER_MODE_CONFIG.cotChain
+        parsedConfig.cotChain = DEFAULT_DEVELOPER_MODE_CONFIG.cotChain
       }
     }
     this.config = { ...DEFAULT_DEVELOPER_MODE_CONFIG, ...parsedConfig }

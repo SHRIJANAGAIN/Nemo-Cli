@@ -66,6 +66,7 @@ function sanitizeHtml(html: string): string {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "web_fetch",
   description:
     "Fetch a URL over HTTP(S) and return its body as text. Truncates long responses. Uses a small in-memory cache (60s TTL by default). Set method=POST and body=... for write operations. Cache is skipped for non-GET requests. Supports format=markdown for HTML-to-markdown conversion, with automatic Cloudflare bypass retry.",
@@ -100,18 +101,18 @@ export function createWebFetchTool(): Tool {
   return {
     definition,
     async execute(_id, args, signal, _update, _context) {
-      if (signal?.aborted) return textResult("aborted", true)
+      if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
       const target = String(args.url ?? "")
-      if (!target) return textResult("Missing 'url'.", true)
+      if (!target) return textResult("Missing 'url'.", /*isError*/ true)
       let parsed: URL
       try {
         parsed = new url.URL(target)
       } catch {
-        return textResult(`Invalid URL: ${target}`, true)
+        return textResult(`Invalid URL: ${target}`, /*isError*/ true)
       }
       if (!parsed.protocol.startsWith("http")) {
-        return textResult(`URL must start with http:// or https://`, true)
+        return textResult(`URL must start with http:// or https://`, /*isError*/ true)
       }
 
       const method = typeof args.method === "string" ? args.method.toUpperCase() : "GET"
@@ -147,19 +148,19 @@ export function createWebFetchTool(): Tool {
         }
       }
 
-      if (signal?.aborted) return textResult("aborted", true)
+      if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
       return new Promise<ToolResult>((resolve) => {
         let aborted = false
         const onAbort = () => {
           aborted = true
           fetchWithRedirect(parsed, method, body, extraHeaders, 0, maxBytes, timeoutMs, signal, () => {
-            if (aborted) resolve(textResult("aborted", true))
+            if (aborted) resolve(textResult("aborted", /*isError*/ true))
           })
         }
 
         if (signal?.aborted) {
-          resolve(textResult("aborted", true))
+          resolve(textResult("aborted", /*isError*/ true))
           return
         }
 
@@ -177,15 +178,15 @@ export function createWebFetchTool(): Tool {
           (err, resBody, resStatus, resHeaders, finalUrl) => {
             signal?.removeEventListener("abort", onAbort)
             if (aborted) {
-              resolve(textResult("aborted", true))
+              resolve(textResult("aborted", /*isError*/ true))
               return
             }
             if (err) {
-              resolve(textResult(`Request failed: ${err.message}`, true))
+              resolve(textResult(`Request failed: ${err.message}`, /*isError*/ true))
               return
             }
             if (signal?.aborted) {
-              resolve(textResult("aborted", true))
+              resolve(textResult("aborted", /*isError*/ true))
               return
             }
 

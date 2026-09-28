@@ -50,25 +50,25 @@ Before marking code complete:
 
 ## Review Severity Levels
 
-| Level | Meaning | Action |
-|-------|---------|--------|
-| CRITICAL | Security vulnerability or data loss risk | **BLOCK** - Must fix before merge |
-| HIGH | Bug or significant quality issue | **WARN** - Should fix before merge |
-| MEDIUM | Maintainability concern, including an unexplained source file over the soft 800-line ceiling | **INFO** - Consider fixing |
-| LOW | Style or minor suggestion | **NOTE** - Optional |
+| Level    | Meaning                                                                                      | Action                             |
+| -------- | -------------------------------------------------------------------------------------------- | ---------------------------------- |
+| CRITICAL | Security vulnerability or data loss risk                                                     | **BLOCK** - Must fix before merge  |
+| HIGH     | Bug or significant quality issue                                                             | **WARN** - Should fix before merge |
+| MEDIUM   | Maintainability concern, including an unexplained source file over the soft 800-line ceiling | **INFO** - Consider fixing         |
+| LOW      | Style or minor suggestion                                                                    | **NOTE** - Optional                |
 
 ## Agent Usage
 
 Use these agents for code review:
 
-| Agent | Purpose |
-|-------|---------|
-| **code-reviewer** | General code quality, patterns, best practices |
-| **security-reviewer** | Security vulnerabilities, OWASP Top 10 |
-| **typescript-reviewer** | TypeScript/JavaScript specific issues |
-| **python-reviewer** | Python specific issues |
-| **go-reviewer** | Go specific issues |
-| **rust-reviewer** | Rust specific issues |
+| Agent                   | Purpose                                        |
+| ----------------------- | ---------------------------------------------- |
+| **code-reviewer**       | General code quality, patterns, best practices |
+| **security-reviewer**   | Security vulnerabilities, OWASP Top 10         |
+| **typescript-reviewer** | TypeScript/JavaScript specific issues          |
+| **python-reviewer**     | Python specific issues                         |
+| **go-reviewer**         | Go specific issues                             |
+| **rust-reviewer**       | Rust specific issues                           |
 
 ## Review Workflow
 

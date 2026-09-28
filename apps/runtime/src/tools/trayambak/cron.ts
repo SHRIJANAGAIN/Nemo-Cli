@@ -85,6 +85,7 @@ export function tickCronJobs(onFire: (job: CronJob) => Promise<void>): void {
 }
 
 const cronCreateDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__CronCreate",
   description: "Schedule a prompt to be re-injected at a future time. Use cron syntax: M H DoM Mon DoW.",
   parameters: {
@@ -105,7 +106,7 @@ export function createCronCreateTool(): Tool {
       const cron = String(args.cron ?? "")
       const prompt = String(args.prompt ?? "")
       const recurring = args.recurring !== false
-      if (!cron || !prompt) return textResult("Missing 'cron' or 'prompt'.", true)
+      if (!cron || !prompt) return textResult("Missing 'cron' or 'prompt'.", /*isError*/ true)
       const id = nextId()
       const nextFireAt = computeNextFire(cron)
       jobs.set(id, { id, cron, prompt, recurring, createdAt: Date.now(), nextFireAt })
@@ -117,6 +118,7 @@ export function createCronCreateTool(): Tool {
 }
 
 const cronDeleteDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__CronDelete",
   description: "Cancel a cron job previously scheduled with CronCreate.",
   parameters: {
@@ -131,7 +133,7 @@ export function createCronDeleteTool(): Tool {
     definition: cronDeleteDef,
     async execute(_id, args) {
       const id = String(args.id ?? "")
-      if (!jobs.has(id)) return textResult(`No such job: ${id}`, true)
+      if (!jobs.has(id)) return textResult(`No such job: ${id}`, /*isError*/ true)
       jobs.delete(id)
       return textResult(`Deleted ${id}`)
     },
@@ -139,6 +141,7 @@ export function createCronDeleteTool(): Tool {
 }
 
 const cronListDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__CronList",
   description: "List all cron jobs scheduled via CronCreate in this session.",
   parameters: { type: "object", required: [], properties: {} },

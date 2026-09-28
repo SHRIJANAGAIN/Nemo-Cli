@@ -7,18 +7,18 @@ per-backend defaults come from `PROVIDER_CATALOG` in
 
 ## The 10 backends
 
-| Provider id | Label | Default base URL | Default model | Key |
-| --- | --- | --- | --- | --- |
-| `nvidia` | NVIDIA | `https://integrate.api.nvidia.com` | `nvidia/nemotron-3-super-120b-a12b` | required |
-| `nvidia-nim` | NVIDIA NIM | `https://integrate.api.nvidia.com` | `nvidia/nemotron-3-super-120b-a12b` | required |
-| `openai` | OpenAI | `https://api.openai.com` | `gpt-4o` | required |
-| `anthropic` | Anthropic | `https://api.anthropic.com` | `claude-3-5-sonnet-latest` | required |
-| `google` | Google | `https://generativelanguage.googleapis.com/v1beta` | `gemini-2.5-flash` | required |
-| `xai` | xAI Grok | `https://api.x.ai` | `grok-4` | required |
-| `huggingface` | Hugging Face | `https://router.huggingface.co/v1` | `meta-llama/Llama-3.3-70B-Instruct` | required |
-| `ollama` | Ollama | `http://localhost:11434` | `llama3.1` | none (local) |
-| `custom` | Custom endpoint | `http://localhost:8080` | *(none — you must set one)* | optional |
-| `llamacpp` | llama.cpp (local) | *no per-provider default — use your `trayambak serve` port* | *no per-provider default — set your GGUF id* | none (local) |
+| Provider id   | Label             | Default base URL                                            | Default model                                | Key          |
+| ------------- | ----------------- | ----------------------------------------------------------- | -------------------------------------------- | ------------ |
+| `nvidia`      | NVIDIA            | `https://integrate.api.nvidia.com`                          | `nvidia/nemotron-3-super-120b-a12b`          | required     |
+| `nvidia-nim`  | NVIDIA NIM        | `https://integrate.api.nvidia.com`                          | `nvidia/nemotron-3-super-120b-a12b`          | required     |
+| `openai`      | OpenAI            | `https://api.openai.com`                                    | `gpt-4o`                                     | required     |
+| `anthropic`   | Anthropic         | `https://api.anthropic.com`                                 | `claude-3-5-sonnet-latest`                   | required     |
+| `google`      | Google            | `https://generativelanguage.googleapis.com/v1beta`          | `gemini-2.5-flash`                           | required     |
+| `xai`         | xAI Grok          | `https://api.x.ai`                                          | `grok-4`                                     | required     |
+| `huggingface` | Hugging Face      | `https://router.huggingface.co/v1`                          | `meta-llama/Llama-3.3-70B-Instruct`          | required     |
+| `ollama`      | Ollama            | `http://localhost:11434`                                    | `llama3.1`                                   | none (local) |
+| `custom`      | Custom endpoint   | `http://localhost:8080`                                     | _(none — you must set one)_                  | optional     |
+| `llamacpp`    | llama.cpp (local) | _no per-provider default — use your `trayambak serve` port_ | _no per-provider default — set your GGUF id_ | none (local) |
 
 Notes verified in code:
 
@@ -88,13 +88,13 @@ Keys are **never printed** by the pickers, and they are cleaned at every load
 Pasted keys frequently carry an env-var prefix that makes every request 401.
 `cleanApiKey()` strips these at load (and again when `/provider` saves one):
 
-| Pasted form | Stored as |
-| --- | --- |
-| `NVAPI_KEY nvapi-…` | `nvapi-…` |
-| `Bearer sk-…` / `bearer sk-…` | `sk-…` |
-| `HF_TOKEN=hf_…`, `API_KEY=…` | `hf_…` |
-| `"sk-…"` (quoted) | `sk-…` |
-| `hf_…` | kept as-is (valid) |
+| Pasted form                   | Stored as          |
+| ----------------------------- | ------------------ |
+| `NVAPI_KEY nvapi-…`           | `nvapi-…`          |
+| `Bearer sk-…` / `bearer sk-…` | `sk-…`             |
+| `HF_TOKEN=hf_…`, `API_KEY=…`  | `hf_…`             |
+| `"sk-…"` (quoted)             | `sk-…`             |
+| `hf_…`                        | kept as-is (valid) |
 
 ### Honest key check — `verifyProviderKey`
 
@@ -105,19 +105,19 @@ Hugging Face token. Anthropic is checked against `/v1/messages`, Google
 against `:generateContent`, everyone else against `/v1/chat/completions`
 with `max_tokens: 1`. Failures return a human hint, e.g.:
 
-- NVIDIA 401 → *use a bare `nvapi-…` key (no `NVAPI_KEY ` prefix) from build.nvidia.com*
-- Ollama unreachable → *is `ollama serve` running? Default http://localhost:11434*
+- NVIDIA 401 → _use a bare `nvapi-…` key (no `NVAPI_KEY ` prefix) from build.nvidia.com_
+- Ollama unreachable → _is `ollama serve` running? Default http://localhost:11434_
 
 ## Model listing per provider
 
 `listModelNames()` (`apps/cli/src/commands/run.ts`) adapts to each backend:
 
-| Provider | Request |
-| --- | --- |
-| OpenAI-compatible (nvidia, nvidia-nim, openai, xai, huggingface, custom) | `GET <base>/v1/models` + `Authorization: Bearer <key>` |
-| `anthropic` | `GET <base>/v1/models` + `x-api-key` + `anthropic-version: 2023-06-01` |
-| `ollama` | `GET <base>/api/tags` (Ollama-native list) |
-| `google` | `GET <base>/models?key=<key>` (the base URL already contains `/v1beta`) |
+| Provider                                                                 | Request                                                                 |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| OpenAI-compatible (nvidia, nvidia-nim, openai, xai, huggingface, custom) | `GET <base>/v1/models` + `Authorization: Bearer <key>`                  |
+| `anthropic`                                                              | `GET <base>/v1/models` + `x-api-key` + `anthropic-version: 2023-06-01`  |
+| `ollama`                                                                 | `GET <base>/api/tags` (Ollama-native list)                              |
+| `google`                                                                 | `GET <base>/models?key=<key>` (the base URL already contains `/v1beta`) |
 
 Fetches time out after 10s and fall back to the static list.
 

@@ -3,6 +3,7 @@ paths:
   - "**/*.kt"
   - "**/*.kts"
 ---
+
 # Kotlin Coding Style
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with Kotlin-specific content.
@@ -21,6 +22,7 @@ paths:
 ## Naming
 
 Follow Kotlin conventions:
+
 - `camelCase` for functions and properties
 - `PascalCase` for classes, interfaces, objects, and type aliases
 - `SCREAMING_SNAKE_CASE` for constants (`const val` or `@JvmStatic`)
@@ -58,12 +60,14 @@ Always use exhaustive `when` with sealed types — no `else` branch.
 ## Extension Functions
 
 Use extension functions for utility operations, but keep them discoverable:
+
 - Place in a file named after the receiver type (`StringExt.kt`, `FlowExt.kt`)
 - Keep scope limited — don't add extensions to `Any` or overly generic types
 
 ## Scope Functions
 
 Use the right scope function:
+
 - `let` — null check + transform: `user?.let { greet(it) }`
 - `run` — compute a result using receiver: `service.run { fetch(config) }`
 - `apply` — configure an object: `builder.apply { timeout = 30 }`

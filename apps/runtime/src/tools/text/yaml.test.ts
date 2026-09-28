@@ -16,14 +16,7 @@ const scalar = (node: unknown): string | undefined => (node as { scalar?: string
 describe("parseYamlComment", () => {
   it("parses unquoted, quoted, null, and tilde scalars", () => {
     const doc = parseYamlComment(
-      [
-        "name: trayambak",
-        'version: "2.0"',
-        "author: 'SKT AI LABS'",
-        "empty: null",
-        "tilde: ~",
-        "nothing:",
-      ].join("\n"),
+      ["name: trayambak", 'version: "2.0"', "author: 'SKT AI LABS'", "empty: null", "tilde: ~", "nothing:"].join("\n"),
     )
     expect(doc.kind).toBe("map")
     const entries: Record<string, string | undefined> = {}

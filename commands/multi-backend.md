@@ -25,6 +25,7 @@ Backend-focused workflow (Research → Ideation → Plan → Execute → Optimiz
 You are the **Backend Orchestrator**, coordinating multi-model collaboration for server-side tasks (Research → Ideation → Plan → Execute → Optimize → Review).
 
 **Collaborative Models**:
+
 - **Trayambak Code** – Backend logic, algorithms (**Backend authority, trustworthy**)
 - **Gemini** – Frontend perspective (**Backend opinions for reference only**)
 - **Trayambak (self)** – Orchestration, planning, execution, delivery
@@ -69,11 +70,11 @@ EOF",
 
 **Role Prompts**:
 
-| Phase | Trayambak Code |
-|-------|-------|
-| Analysis | `~/.trayambak/.ccg/prompts/trayambak/analyzer.md` |
+| Phase    | Trayambak Code                                     |
+| -------- | -------------------------------------------------- |
+| Analysis | `~/.trayambak/.ccg/prompts/trayambak/analyzer.md`  |
 | Planning | `~/.trayambak/.ccg/prompts/trayambak/architect.md` |
-| Review | `~/.trayambak/.ccg/prompts/trayambak/reviewer.md` |
+| Review   | `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`  |
 
 **Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` for subsequent phases. Save `TRAYAMBAK_SESSION` in Phase 2, use `resume` in Phases 3 and 5.
 
@@ -105,6 +106,7 @@ EOF",
 `[Mode: Ideation]` - Trayambak Code-led analysis
 
 **MUST call Trayambak Code** (follow call specification above):
+
 - ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/analyzer.md`
 - Requirement: Enhanced requirement (or $ARGUMENTS if not enhanced)
 - Context: Project context from Phase 1
@@ -119,6 +121,7 @@ Output solutions (at least 2), wait for user selection.
 `[Mode: Plan]` - Trayambak Code-led planning
 
 **MUST call Trayambak Code** (use `resume <TRAYAMBAK_SESSION>` to reuse session):
+
 - ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/architect.md`
 - Requirement: User's selected solution
 - Context: Analysis results from Phase 2
@@ -139,6 +142,7 @@ Trayambak synthesizes plan, save to `.trayambak/plan/task-name.md` after user ap
 `[Mode: Optimize]` - Trayambak Code-led review
 
 **MUST call Trayambak Code** (follow call specification above):
+
 - ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`
 - Requirement: Review the following backend code changes
 - Context: git diff or code content

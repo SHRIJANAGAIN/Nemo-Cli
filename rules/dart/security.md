@@ -5,6 +5,7 @@ paths:
   - "**/AndroidManifest.xml"
   - "**/Info.plist"
 ---
+
 # Dart/Flutter Security
 
 > This file extends [common/security.md](../common/security.md) with Dart, Flutter, and mobile-specific content.

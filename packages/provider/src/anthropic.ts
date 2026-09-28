@@ -63,7 +63,7 @@ export class AnthropicProvider implements Provider {
 
   async chat(input: ChatInput): Promise<AssistantMessage> {
     const body = this.buildBody(input)
-    return this.postMessages(body, input.signal, input.callbacks, false)
+    return this.postMessages(body, input.signal, input.callbacks, /*retried*/ false)
   }
 
   protected buildBody(input: ChatInput): Record<string, unknown> {
@@ -286,7 +286,7 @@ export class AnthropicProvider implements Provider {
       req.on("error", (err) => {
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
           setTimeout(() => {
-            this.postMessages(payload, signal, callbacks, true).then(resolve, reject)
+            this.postMessages(payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)
           return
         }

@@ -1,4 +1,4 @@
-# EVALR - Forced Mistake EvaluationOHK 
+# EVALR - Forced Mistake EvaluationOHK
 
 Auto-loaded by `5-eval/eval.ts`. Every time a mistake occurs, the assistant MUST answer these questions and write the summary to this file. Every chat/session has a different evaluation. This file forces self-critique.
 
@@ -7,15 +7,18 @@ Auto-loaded by `5-eval/eval.ts`. Every time a mistake occurs, the assistant MUST
 When ANY mistake happens (tool use syntax error, wrong output, missed step, etc.), the assistant MUST ask itself:
 
 ### 1. What is the mistake?
+
 - errorName:
 - errorDescription:
 - errorParagraph: (the full paragraph/context where the mistake occurred)
 
 ### 2. Why did I (the assistant) make this mistake?
+
 - whyAssistantDidIt:
 - reasonItHeld: (why did this mistake persist or go unnoticed?)
 
 ### 3. If I was in the place of the user, what would happen, and what would I do with the assistant?
+
 - isUserMistake: (yes/no — did the user's instruction cause or contribute?)
 - What would the user feel? (frustrated, confused, disappointed?)
 - What would the user expect the assistant to do differently?
@@ -23,18 +26,22 @@ When ANY mistake happens (tool use syntax error, wrong output, missed step, etc.
 - isDeviceError: (yes/no — was this a system/tool error?)
 
 ### 4. How can I fix this mistake?
+
 - howToResolve:
 
 ### 5. What is the solution of that mistake?
+
 - solution:
 
 ### 6. Did I fix the mistake?
+
 - isFixed: (yes/no)
 - If yes, verify:
   - Is the fix verified and tested? ___
   - Does the fix address the root cause? ___
 
 ### 7. If not fixed, why did I fail to fix it?
+
 - If isFixed = no:
   - whyFailed:
   - willRepeatInFuture: (yes/no)
@@ -62,4 +69,4 @@ When ANY mistake happens (tool use syntax error, wrong output, missed step, etc.
 
 ---
 
-*File: skt/5-eval/EVALR.MD — loaded before every task that involves tool use or code changes.*
+_File: skt/5-eval/EVALR.MD — loaded before every task that involves tool use or code changes._

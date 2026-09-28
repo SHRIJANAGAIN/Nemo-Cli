@@ -5,6 +5,7 @@ paths:
   - "**/phpunit.xml.dist"
   - "**/composer.json"
 ---
+
 # PHP Testing
 
 > This file extends [common/testing.md](../common/testing.md) with PHP specific content.

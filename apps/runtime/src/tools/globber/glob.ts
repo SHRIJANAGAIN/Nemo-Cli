@@ -8,8 +8,10 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
+import { searchRipgrep } from "../search/ripgrep.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "glob",
   description: "Find files by name pattern. Supports * and ** (e.g. 'src/**/*.ts'). Returns matching relative paths.",
   parameters: {
@@ -31,23 +33,36 @@ export function createGlobTool(): Tool {
     definition,
     async execute(_id, args, signal, _update, context) {
       try {
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         const ctx = context as ToolContext
         const pattern = String(args.pattern ?? "")
-        if (!pattern) return textResult("Missing 'pattern'.", true)
+        if (!pattern) return textResult("Missing 'pattern'.", /*isError*/ true)
 
         const rawBase = typeof args.path === "string" ? args.path : "."
         let base: string
         try {
           base = resolveConstrainedPath(path.resolve(ctx.cwd, rawBase), ctx.cwd)
         } catch (error) {
-          return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
+          return textResult(
+            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            /*isError*/ true,
+          )
         }
 
         let maxResults = typeof args.max_results === "number" ? Math.max(1, args.max_results) : DEFAULT_MAX_RESULTS
         if (maxResults > MAX_MAX_RESULTS) maxResults = MAX_MAX_RESULTS
 
         assertExternalDirectory(base, ctx.cwd)
+
+        // ── ripgrep fast path (`rg --files -g`): failure falls back to
+        //    the Node walker below. ──
+        const rg = await searchRipgrep({ cwd: base, glob: pattern, filesOnly: true }, { signal })
+        if (rg.kind === "ok") {
+          if (signal?.aborted) return textResult("aborted", /*isError*/ true)
+          const results = rg.hits.map((h) => h.path).slice(0, maxResults)
+          if (results.length === 0) return textResult(`No files matched '${pattern}'`)
+          return textResult(`${results.length} file(s):\n${results.join("\n")}`)
+        }
 
         const results: string[] = []
         walkFiles(base, (_abs, rel) => {
@@ -56,11 +71,11 @@ export function createGlobTool(): Tool {
           if (!matchGlob(pattern, rel)) return
           results.push(rel)
         })
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         if (results.length === 0) return textResult(`No files matched '${pattern}'`)
         return textResult(`${results.length} file(s):\n${results.join("\n")}`)
       } catch (error) {
-        return textResult(`Glob error: ${error instanceof Error ? error.message : String(error)}`, true)
+        return textResult(`Glob error: ${error instanceof Error ? error.message : String(error)}`, /*isError*/ true)
       }
     },
   }

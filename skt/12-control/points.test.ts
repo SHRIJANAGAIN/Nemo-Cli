@@ -23,9 +23,7 @@ describe("PointsSystem", () => {
 
   it("adds 10% streak bonus per consecutive award, capped at 50%", () => {
     const p = new PointsSystem()
-    const awarded = Array.from({ length: 8 }, (_, i) =>
-      p.award(`t${i}`, "task", "d", "normal", "done").points,
-    )
+    const awarded = Array.from({ length: 8 }, (_, i) => p.award(`t${i}`, "task", "d", "normal", "done").points)
     expect(awarded).toEqual([10, 11, 12, 13, 14, 15, 15, 15])
     expect(p.getStreak()).toBe(8)
     expect(p.getState().bestStreak).toBe(8)
@@ -85,9 +83,7 @@ describe("PointsSystem", () => {
 
   it("renders a report without penalties", () => {
     const p = new PointsSystem()
-    expect(p.getReport()).toBe(
-      "Total Points: 0\nCurrent Streak: 0\nBest Streak: 0\nTasks Completed: 0\nPenalties: 0",
-    )
+    expect(p.getReport()).toBe("Total Points: 0\nCurrent Streak: 0\nBest Streak: 0\nTasks Completed: 0\nPenalties: 0")
   })
 
   it("lists at most the five most recent penalties in the report", () => {

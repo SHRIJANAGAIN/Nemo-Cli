@@ -62,7 +62,12 @@ function runInherit(cmd: string, args: string[], cwd: string): Step {
 
 function headOf(root: string): string | undefined {
   try {
-    const result = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8", windowsHide: true })
+    const result = spawnSync("git", ["rev-parse", "HEAD"], {
+      cwd: root,
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 30_000,
+    })
     if (result.status === 0) return (result.stdout || "").trim()
     return undefined
   } catch {

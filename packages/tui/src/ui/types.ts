@@ -149,6 +149,8 @@ export interface ToolDefinition {
   description: string
   parameters: ToolParameters
   requiresArguments?: boolean
+  /** Upper bound (ms) the harness allows this tool to run — mirrors protocol ToolDefinition.timeoutMs. */
+  timeoutMs?: number
 }
 
 export type Role = "user" | "assistant" | "system"
@@ -348,6 +350,7 @@ export const ToolDefinitionSchema = z.object({
   description: z.string(),
   parameters: ToolParametersSchema,
   requiresArguments: z.boolean().optional(),
+  timeoutMs: z.number().optional(),
 })
 
 export const SlashCommandListSchema = z.array(SlashCommandSchema)

@@ -4,6 +4,7 @@ paths:
   - "**/composer.lock"
   - "**/composer.json"
 ---
+
 # PHP Security
 
 > This file extends [common/security.md](../common/security.md) with PHP specific content.

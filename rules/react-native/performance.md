@@ -3,6 +3,7 @@ paths:
   - "**/*.ts"
   - "**/*.tsx"
 ---
+
 # React Native / Expo Performance
 
 > This file extends [common/performance.md](../common/performance.md) with React Native / Expo specific content.

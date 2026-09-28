@@ -91,7 +91,7 @@ export class Tui extends EventEmitter {
 
   enableRawMode(): void {
     if (this.rawMode) return
-    this.stdin.setRawMode?.(true)
+    this.stdin.setRawMode?.(/*mode*/ true)
     this.stdin.resume()
     this.stdin.setEncoding("utf8")
     this.rawMode = true
@@ -99,7 +99,7 @@ export class Tui extends EventEmitter {
 
   disableRawMode(): void {
     if (!this.rawMode) return
-    this.stdin.setRawMode?.(false)
+    this.stdin.setRawMode?.(/*mode*/ false)
     this.stdin.pause()
     this.rawMode = false
   }
@@ -156,7 +156,7 @@ export class Tui extends EventEmitter {
   static restore(): void {
     try {
       if (process.stdin.isTTY) {
-        process.stdin.setRawMode(false)
+        process.stdin.setRawMode(/*mode*/ false)
       }
     } catch {
       // ignore

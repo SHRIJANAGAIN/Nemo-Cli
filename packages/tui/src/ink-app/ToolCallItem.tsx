@@ -14,6 +14,7 @@ import { toolBoxWidth } from "./types.js"
 import { truncateMiddleLines } from "../../../../apps/runtime/src/tools/text/diff-render.js"
 import { useThemeColors } from "./themeColors.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { g } from "./glyphs.js"
 
 export interface ToolCallItemProps {
   toolCall: ToolCallDisplay
@@ -53,10 +54,10 @@ export const ToolCallItem = ({
   const termWidth = stdout?.columns ?? width
   const theme = useThemeColors()
   // Live border chase ("animation bada do"): a RUNNING box trips a light
-  // around its edges (top ? right ? bottom ? left, palette colour per
-  // step) every 160ms — bigger than the old flat colour swap. Called
+  // around its edges (top â†’ right â†’ bottom â†’ left, palette colour per
+  // step) every 160ms â€” bigger than the old flat colour swap. Called
   // before the MCP/exec dispatches so the hook count never depends on the
-  // branch — but STAYS OFF when delegating (the inner item runs its own
+  // branch â€” but STAYS OFF when delegating (the inner item runs its own
   // chase; otherwise every MCP/exec row ran two intervals + double
   // renders).
   const delegated = isMCPToolCall(toolCall) || isExecToolCall(toolCall)
@@ -106,19 +107,19 @@ export const ToolCallItem = ({
   let bullet: ReactNode
   if (shouldShowDot) {
     if (isQueued) {
-      bullet = <Text dimColor>?</Text>
+      bullet = <Text dimColor>{g("ring")}</Text>
     } else if (isRunning) {
       bullet = <ToolUseLoader shouldAnimate={shouldAnimate} isUnresolved={true} isError={false} status={status} />
     } else if (isError) {
       bullet = (
         <Text color={theme.error} bold>
-          •
+          {g("fail")}
         </Text>
       )
     } else {
       bullet = (
         <Text color={theme.success} bold>
-          •
+          {g("ok")}
         </Text>
       )
     }
@@ -128,16 +129,16 @@ export const ToolCallItem = ({
   // props never fired (hover was always false, backgroundMenu dead code).
   const backgroundColor = isError ? theme.errorBg : isFinished ? theme.successBg : theme.backgroundPanel
 
-  // Budget the args slice so labels + ?/duration fit the box at this
+  // Budget the args slice so labels + âœ“/duration fit the box at this
   // terminal width (box inner = termWidth-5, bullet row = 3 more; labels
   // up to "Calling bash" = 12, parens 2, mark 2). The single-Text
   // truncate-end below is the hard guarantee if the estimate is off.
-  // A "…" marks the cut — the old bare slice ended headers mid-word
+  // A "â€¦" marks the cut â€” the old bare slice ended headers mid-word
   // ("Explore the) with no sign anything was hidden.
-  const durationTail = durationMs !== undefined && isFinished ? ` • ${durationMs}ms`.length : 0
+  const durationTail = durationMs !== undefined && isFinished ? ` â€¢ ${durationMs}ms`.length : 0
   const argBudget = Math.max(20, Math.min(100, termWidth - 25 - durationTail))
   const argRaw = Object.keys(args).length > 0 ? JSON.stringify(args) : ""
-  const argJson = argRaw.length > argBudget ? `${argRaw.slice(0, argBudget - 1)}…` : argRaw
+  const argJson = argRaw.length > argBudget ? `${argRaw.slice(0, argBudget - 1)}â€¦` : argRaw
 
   return (
     <Box
@@ -148,7 +149,7 @@ export const ToolCallItem = ({
       borderColor={isFinished ? (isError ? theme.error : theme.border) : isRunning ? pulse.color : theme.borderActive}
       // Chase: one lit edge (palette colour) trips around the box while
       // running; the other three sit dim. Finished boxes keep a static
-      // colour — and every box is round (the conversation-box corners are
+      // colour â€” and every box is round (the conversation-box corners are
       // round too; a sharp ++ nested inside ?? looked half-styled).
       borderTopColor={isRunning ? pulse.top : undefined}
       borderRightColor={isRunning ? pulse.right : undefined}
@@ -166,8 +167,8 @@ export const ToolCallItem = ({
         {/* ONE truncating text node for the whole header. As sibling flex
             rows, any header whose natural width exceeded the box (=119-col
             terminals with a 100-char args slice) made yoga push the
-            shrink-free label boxes to a second line while args/? stayed on
-            the first — "Called bash" rendered BELOW its own arguments.
+            shrink-free label boxes to a second line while args/âœ“ stayed on
+            the first â€” "Called bash" rendered BELOW its own arguments.
             Nested <Text> children share one line + truncate-end instead. */}
         <Text wrap="truncate-end">
           <Text bold>{isFinished ? "Called" : "Calling"}</Text>
@@ -180,26 +181,26 @@ export const ToolCallItem = ({
               ({argJson})
             </Text>
           )}
-          {/* Ported resultLine palette: ? green bold / ? red bold before
-              the (dim) duration — completed calls carry a visible status. */}
+          {/* Ported resultLine palette: âœ“ green bold / âœ— red bold before
+              the (dim) duration â€” completed calls carry a visible status. */}
           {isFinished && (
             <Text bold color={isError ? theme.error : theme.success}>
-              {isError ? " ?" : " ?"}
+              {isError ? ` ${g("fail")}` : ` ${g("ok")}`}
             </Text>
           )}
-          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
+          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> â€¢ {durationMs}ms</Text>}
         </Text>
       </Box>
 
       {result && (
         <Box flexDirection="column" marginLeft={2} marginTop={1}>
-          {/* Preview lines WRAP (was: hard slice(width-8) + truncate-end —
+          {/* Preview lines WRAP (was: hard slice(width-8) + truncate-end â€”
               with width stuck at its 80 default every result line was
               silently cut at ~72 chars on any terminal: "response of
               assistant are cutting"). Each line is bounded to ~3 wrapped
               rows so one minified blob can't swallow the transcript
-              budget; "…" marks the cut. Long output is head+tail
-              (codex live_output port) — first-5-only hid the tail, which
+              budget; "â€¦" marks the cut. Long output is head+tail
+              (codex live_output port) â€” first-5-only hid the tail, which
               usually holds the verdict. */}
           {((): ReactNode[] => {
             const all = result.split("\n")
@@ -207,7 +208,7 @@ export const ToolCallItem = ({
             // collapsed default keeps the head+tail preview.
             const shown = expandOutput
               ? all.length > 200
-                ? [...all.slice(0, 200), `… +${all.length - 200} more lines (still collapsed past 200)`]
+                ? [...all.slice(0, 200), `â€¦ +${all.length - 200} more lines (still collapsed past 200)`]
                 : all
               : all.length > 8
                 ? truncateMiddleLines(all, 4, 3)
@@ -215,7 +216,7 @@ export const ToolCallItem = ({
             return shown.map((line, i) => {
               const clean = line.replace(/\r/g, "")
               const cap = Math.max(40, (termWidth - 12) * 3)
-              const shownLine = clean.length > cap ? `${clean.slice(0, cap)}…` : clean
+              const shownLine = clean.length > cap ? `${clean.slice(0, cap)}â€¦` : clean
               return (
                 <Text key={i} color={theme.textMuted}>
                   {`${i === 0 ? "  + " : "    "}${shownLine || " "}`}
@@ -224,7 +225,7 @@ export const ToolCallItem = ({
             })
           })()}
           {result.split("\n").length > 5 && result.split("\n").length <= 8 && !expandOutput && (
-            <Text color={theme.textMuted}>…</Text>
+            <Text color={theme.textMuted}>â€¦</Text>
           )}
         </Box>
       )}

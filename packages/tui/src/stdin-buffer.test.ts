@@ -128,12 +128,7 @@ describe("StdinBuffer", () => {
     buf.process("\x1b]0;title\x1b\\")
     buf.process("\x1bPpayload\x1b\\")
     buf.process("\x1b_payload\x1b\\")
-    expect(out.data).toEqual([
-      "\x1b]0;title\x07",
-      "\x1b]0;title\x1b\\",
-      "\x1bPpayload\x1b\\",
-      "\x1b_payload\x1b\\",
-    ])
+    expect(out.data).toEqual(["\x1b]0;title\x07", "\x1b]0;title\x1b\\", "\x1bPpayload\x1b\\", "\x1b_payload\x1b\\"])
   })
 
   it("returns pending input from flush and an empty list when drained", () => {

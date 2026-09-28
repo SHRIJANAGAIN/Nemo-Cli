@@ -22,7 +22,7 @@ export const normalizeStairIndent = (text: string): string => {
   const lines = text.split("\n")
   // Pass 1: mark fenced regions (fence lines included). Scans from 0 so a
   // message that STARTS with a fence is covered too.
-  const fenced = new Array<boolean>(lines.length).fill(false)
+  const fenced = new Array<boolean>(lines.length).fill(/*value*/ false)
   let inFence = false
   for (let i = 0; i < lines.length; i += 1) {
     if (/^\s*(```|~~~)/.test(lines[i])) {

@@ -7,6 +7,7 @@ paths:
   - "**/spec/**/*.rb"
   - "**/config/routes.rb"
 ---
+
 # Ruby Testing
 
 > This file extends [common/testing.md](../common/testing.md) with Ruby and Rails specific content.

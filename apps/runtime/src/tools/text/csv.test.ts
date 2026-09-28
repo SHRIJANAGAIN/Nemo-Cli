@@ -26,7 +26,7 @@ describe("parseCsv", () => {
     ])
   })
 
-  it('unescapes doubled quotes as a literal quote', () => {
+  it("unescapes doubled quotes as a literal quote", () => {
     expect(parseCsv('"say ""hi""",x')).toEqual([['say "hi"', "x"]])
   })
 
@@ -35,10 +35,7 @@ describe("parseCsv", () => {
       ["a", "b"],
       ["1", "2"],
     ])
-    expect(parseCsv("a\rb")).toEqual([
-      ["a"],
-      ["b"],
-    ])
+    expect(parseCsv("a\rb")).toEqual([["a"], ["b"]])
   })
 
   it("accepts a custom delimiter", () => {

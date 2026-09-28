@@ -12,9 +12,10 @@ import { toolBoxWidth } from "./types.js"
 import { highlightBashToLines, type BashPalette } from "./syntax-highlight.js"
 import { useThemeColors, type ThemeSnapshot } from "./themeColors.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { g } from "./glyphs.js"
 
 /** Bind the active Ink theme's syntax tokens onto bash roles (/theme now
- *  recolors code blocks — the old hardcoded night-owl hues ignored it). */
+ *  recolors code blocks â€” the old hardcoded night-owl hues ignored it). */
 function bashPalette(theme: ThemeSnapshot): BashPalette {
   return {
     keyword: theme.syntaxKeyword,
@@ -79,23 +80,23 @@ export const ExecToolCallItem = ({
   let bullet: ReactNode
   if (shouldShowDot) {
     if (isQueued) {
-      bullet = <Text dimColor>?</Text>
+      bullet = <Text dimColor>{g("ring")}</Text>
     } else if (isRunning) {
       bullet = <ToolUseLoader shouldAnimate={shouldAnimate} isUnresolved={true} isError={false} status={status} />
     } else if (success === false) {
       bullet = (
         <Text color={theme.error} bold>
-          •
+          {g("fail")}
         </Text>
       )
     } else if (success === true) {
       bullet = (
         <Text color={theme.success} bold>
-          •
+          {g("ok")}
         </Text>
       )
     } else {
-      bullet = <Text color={theme.textMuted}>•</Text>
+      bullet = <Text color={theme.textMuted}>{g("bullet")}</Text>
     }
   }
 
@@ -138,7 +139,7 @@ export const ExecToolCallItem = ({
       width={toolBoxWidth(termWidth)}
       borderColor={isFinished ? (isError ? theme.error : theme.border) : isRunning ? pulse.color : theme.borderActive}
       // One lit edge trips around the box while running (chase), static
-      // colour when finished — and round corners, matching the frame.
+      // colour when finished â€” and round corners, matching the frame.
       borderTopColor={isRunning ? pulse.top : undefined}
       borderRightColor={isRunning ? pulse.right : undefined}
       borderBottomColor={isRunning ? pulse.bottom : undefined}
@@ -155,8 +156,8 @@ export const ExecToolCallItem = ({
         {/* Column, bounded (flexGrow + minWidth 0): the old row-in-row laid
             multi-line commands side-by-side on ONE visual line ("echo a"
             glued next to "+ echo b"), and the unbounded inner row meant
-            truncate-end never fired — long commands stretched the border
-            past the terminal and pushed ?/duration off-screen. Each command
+            truncate-end never fired â€” long commands stretched the border
+            past the terminal and pushed âœ“/duration off-screen. Each command
             line is now its own row; the status mark rides a row of its own
             so it can never be clipped by command text. */}
         <Box flexDirection="column" flexGrow={1} minWidth={0}>
@@ -185,16 +186,16 @@ export const ExecToolCallItem = ({
             </Box>
           ))}
           {highlightedLines.length > maxLines && (
-            <Text color={theme.textMuted}>{"  + … +" + (highlightedLines.length - maxLines) + " lines"}</Text>
+            <Text color={theme.textMuted}>{"  â”” â€¦ +" + (highlightedLines.length - maxLines) + " lines"}</Text>
           )}
-          {/* Ported resultLine palette: ? green bold / ? red bold before
-              the (dim) duration — on its own row, always visible. */}
+          {/* Ported resultLine palette: ok green bold / fail red bold before
+              the (dim) duration â€” on its own row, always visible. */}
           {isFinished && (
             <Text wrap="truncate-end">
               <Text bold color={isError ? theme.error : theme.success}>
-                {isError ? "?" : "?"}
+                {isError ? g("fail") : g("ok")}
               </Text>
-              {durationMs !== undefined && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
+              {durationMs !== undefined && <Text color={theme.textMuted}> â€¢ {durationMs}ms</Text>}
             </Text>
           )}
         </Box>
@@ -215,7 +216,7 @@ export const ExecToolCallItem = ({
             if (all.length > limit) {
               rows.push(
                 <Text key="more" color={theme.textMuted}>
-                  {expandOutput ? `… +${all.length - limit} more lines (still collapsed past 200)` : "…"}
+                  {expandOutput ? `â€¦ +${all.length - limit} more lines (still collapsed past 200)` : "â€¦"}
                 </Text>,
               )
             }

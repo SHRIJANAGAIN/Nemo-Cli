@@ -45,9 +45,9 @@ paths:
 - Critical: put the ref or computed ITSELF in the query key, never `.value`. Passing `.value` freezes the key and kills reactive refetch.
 
 ```ts
-useQuery({ queryKey: ['auction', id], queryFn: () => fetchAuction(toValue(id)) })
+useQuery({ queryKey: ["auction", id], queryFn: () => fetchAuction(toValue(id)) })
 // after a mutation
-queryClient.invalidateQueries({ queryKey: ['auction', id] })
+queryClient.invalidateQueries({ queryKey: ["auction", id] })
 ```
 
 ## Reference

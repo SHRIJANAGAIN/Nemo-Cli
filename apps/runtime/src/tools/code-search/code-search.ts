@@ -9,8 +9,10 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
+import { searchRipgrep, type RgHit } from "../search/ripgrep.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "code_search",
   description:
     "Search a project directory for an identifier or symbol using word-boundary matching. Returns file paths, line numbers, and the matched line. Prefer this over grep when locating definitions or usages of a function, class, variable, or API name.",
@@ -27,25 +29,80 @@ const definition: ToolDefinition = {
   },
 }
 
+/**
+ * Group ripgrep hits per file (first-seen order), capped at `maxResults`
+ * matches total — mirrors the walk-order grouping of the Node fallback.
+ */
+export function groupCodeSearchHits(
+  hits: RgHit[],
+  maxResults: number,
+): { total: number; groups: Array<{ file: string; lines: string[] }> } {
+  const groups: Array<{ file: string; lines: string[] }> = []
+  const index = new Map<string, number>()
+  let total = 0
+  for (const h of hits) {
+    if (!h.isMatch) continue
+    if (total >= maxResults) break
+    total++
+    let idx = index.get(h.path)
+    if (idx === undefined) {
+      idx = groups.length
+      index.set(h.path, idx)
+      groups.push({ file: h.path, lines: [] })
+    }
+    groups[idx].lines.push(`${h.line}: ${h.text.trim()}`)
+  }
+  return { total, groups }
+}
+
+/** Render grouped code-search results in the legacy display format. */
+export function formatCodeSearchResults(
+  query: string,
+  grouped: { total: number; groups: Array<{ file: string; lines: string[] }> },
+): string {
+  const body = grouped.groups
+    .map((f) => `  ${f.file} (${f.lines.length}):\n${f.lines.map((l) => `    ${l}`).join("\n")}`)
+    .join("\n")
+  return `${grouped.total} match(es) for '${query}':\n${body}`
+}
+
 export function createCodeSearchTool(): Tool {
   return {
     definition,
-    async execute(_id, args, _signal, _update, context) {
+    async execute(_id, args, signal, _update, context) {
       const ctx = context as ToolContext
       const query = String(args.query ?? "")
-      if (!query) return textResult("Missing 'query'.", true)
+      if (!query) return textResult("Missing 'query'.", /*isError*/ true)
       const base = path.resolve(ctx.cwd, typeof args.path === "string" ? args.path : ".")
       const glob = typeof args.glob === "string" ? args.glob : "*"
       const flags = args.ignore_case ? "i" : ""
       const maxResults = typeof args.max_results === "number" ? args.max_results : 120
 
+      // Word boundary around the identifier so `read` does not match `thread`.
+      // Fully escaped, so it is valid for both the JS engine and ripgrep.
+      const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
       let regex: RegExp
       try {
-        // Word boundary around the identifier so `read` does not match `thread`.
-        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
         regex = new RegExp(`\\b${escaped}\\b`, flags)
       } catch {
-        return textResult(`Invalid query: ${query}`, true)
+        return textResult(`Invalid query: ${query}`, /*isError*/ true)
+      }
+
+      // ── ripgrep fast path; failure falls back to the Node walk below. ──
+      const rg = await searchRipgrep(
+        {
+          cwd: base,
+          pattern: `\\b${escaped}\\b`,
+          ignoreCase: Boolean(args.ignore_case),
+          glob,
+        },
+        { signal },
+      )
+      if (rg.kind === "ok") {
+        const grouped = groupCodeSearchHits(rg.hits, maxResults)
+        if (grouped.total === 0) return textResult(`No identifiers matched '${query}' in ${base}`)
+        return textResult(formatCodeSearchResults(query, grouped))
       }
 
       const results: string[] = []

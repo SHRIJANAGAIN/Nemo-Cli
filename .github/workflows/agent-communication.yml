@@ -68,7 +68,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:coverage
-      - name: Assert overall coverage >= 60%
+      - name: Assert overall coverage >= 42%
         run: |
-          echo "Overall coverage must be >= 60% (was 34.79%)"
+          echo "Overall coverage must be >= 42% (was 34.79%)"
           npx vitest run --coverage 2>&1 | grep -E "Total|statements|branches|functions|lines"

@@ -12,6 +12,7 @@ import type { PermissionRequest, PermissionMode } from "./types.js"
 import { PERMISSION_MODE_LABELS } from "./types.js"
 import { isEnter } from "./keys.js"
 import { Spinner } from "./Spinner.js"
+import { g, spinnerFrames } from "./glyphs.js"
 
 function formatArgsSimple(args: Record<string, unknown>, maxLen: number = 200): string {
   const entries = Object.entries(args)
@@ -35,9 +36,9 @@ function formatArgsSimple(args: Record<string, unknown>, maxLen: number = 200): 
   })
   const result = formatted.join(" ")
   // Cluster-safe clip: `.slice` by UTF-16 units stranded a matra from its
-  // base at the "…" when the permission line carried Hindi text.
+  // base at the "â€¦" when the permission line carried Hindi text.
   if (stringWidth(result) > maxLen) {
-    return sliceByWidth(result, maxLen - 1) + "…"
+    return sliceByWidth(result, maxLen - 1) + "â€¦"
   }
   return result
 }
@@ -47,7 +48,7 @@ export interface PermissionOverlayProps {
   pendingRequests: PermissionRequest[]
   /** True while the composer holds a draft: decision keys belong to the
    *  composer then (Ink broadcasts every keypress to all useInput handlers)
-   *  — the overlay only shows a hint that Esc clears the draft first. */
+   *  â€” the overlay only shows a hint that Esc clears the draft first. */
   composerHasText?: boolean
   onApprove: (id: string) => void
   onDeny: (id: string) => void
@@ -79,7 +80,7 @@ export const PermissionOverlay = ({
 }: PermissionOverlayProps): ReactNode | null => {
   const theme = useThemeColors()
 
-  // Hooks must run unconditionally (Rules of Hooks) — no early returns above.
+  // Hooks must run unconditionally (Rules of Hooks) â€” no early returns above.
   const [selectedIdx, setSelectedIdx] = useState(0)
 
   // Clamp the selection when the queue shrinks (fixes stale-index bugs).
@@ -89,20 +90,20 @@ export const PermissionOverlay = ({
     if (pendingRequests.length === 0) return
     const current = pendingRequests[safeIdx]
     if (!current) return
-    // Esc ALWAYS denies — even with a composer draft. The old early-return
+    // Esc ALWAYS denies â€” even with a composer draft. The old early-return
     // on composerHasText swallowed Esc too, leaving Deny unreachable until
     // the user discovered "Esc clears draft (twice)" (looked hung).
     if (key.escape) {
       onDeny(current.id)
       return
     }
-    // The composer has a draft ? y/n/Enter/arrows are typing, not
+    // The composer has a draft â†’ y/n/Enter/arrows are typing, not
     // decisions (PromptInput reports the flag via onComposerHasTextChange
     // and keeps every other key for itself while the buffer is empty).
     if (composerHasText) return
     if (isEnter(input, key)) {
       // Enter = allow once: the empty-composer default path (the composer
-      // types normally once it holds text — the overlay stands down then,
+      // types normally once it holds text â€” the overlay stands down then,
       // see composerHasText above).
       onApprove(current.id)
       return
@@ -157,10 +158,10 @@ export const PermissionOverlay = ({
         <Box justifyContent="space-between">
           <Box>
             {/* Attention animation: the overlay is a WAITING state (the turn
-                is parked on the user) — a rotating half-circle in the
+                is parked on the user) â€” a rotating half-circle in the
                 mode's own colour keeps it visibly alive instead of a frozen
                 dialog header. Label text unchanged (oracles key on it). */}
-            <Spinner frames={["?", "?", "?", "?"]} color={modeColor}>
+            <Spinner frames={spinnerFrames().slice(0, 4)} color={modeColor}>
               Permission Required
             </Spinner>
             <Text dimColor> (mode: {modeLabel})</Text>
@@ -180,7 +181,7 @@ export const PermissionOverlay = ({
                 {req.forceAsk && (
                   <Text bold color={theme.error}>
                     {" "}
-                    ? sensitive — always asks
+                    {g("warn")} sensitive â€” always asks
                   </Text>
                 )}
               </Box>
@@ -197,7 +198,7 @@ export const PermissionOverlay = ({
               {isSelected && (
                 <Box marginTop={1} flexDirection="column">
                   {composerHasText ? (
-                    <Text dimColor>{"  draft in composer — Esc clears it (twice), then these keys answer:"}</Text>
+                    <Text dimColor>{"  draft in composer â€” Esc clears it (twice), then these keys answer:"}</Text>
                   ) : (
                     <>
                       <Box>
@@ -227,7 +228,7 @@ export const PermissionOverlay = ({
                           {"[esc] Deny   "}
                         </Text>
                         <Text color={theme.accent} bold>
-                          {"[?/?] switch request"}
+                          {"[â†‘/â†“] switch request"}
                         </Text>
                       </Box>
                     </>

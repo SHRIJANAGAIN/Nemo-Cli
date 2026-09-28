@@ -41,16 +41,16 @@ explains it and does not vendor or duplicate its code.
 This boundary is the core of the skill. Everything ECC can actually run is
 **local, deterministic, and offline**:
 
-| Operation | Deterministic? | ECC may run |
-|---|---|---|
-| Taste interview → profile | yes (offline) | yes |
-| Pack inspect / validate against schemas | yes | yes |
-| Distill profile (+ measured grounding) → spec | yes (dry-run semantics) | yes |
-| Apply pack cadence to local media → report + timeline | yes | yes |
-| Export EDL (CMX3600) / FCPXML 1.9 | yes | yes |
-| Provenance / lineage report | yes | yes |
-| Vision-model distillation of stills | **provider generation** | **no** |
-| Reference-to-video, image-to-3D, hosted compose | **provider generation** | **no** |
+| Operation                                             | Deterministic?          | ECC may run |
+| ----------------------------------------------------- | ----------------------- | ----------- |
+| Taste interview → profile                             | yes (offline)           | yes         |
+| Pack inspect / validate against schemas               | yes                     | yes         |
+| Distill profile (+ measured grounding) → spec         | yes (dry-run semantics) | yes         |
+| Apply pack cadence to local media → report + timeline | yes                     | yes         |
+| Export EDL (CMX3600) / FCPXML 1.9                     | yes                     | yes         |
+| Provenance / lineage report                           | yes                     | yes         |
+| Vision-model distillation of stills                   | **provider generation** | **no**      |
+| Reference-to-video, image-to-3D, hosted compose       | **provider generation** | **no**      |
 
 **Provider generation must fail closed in ECC.** Any live Fal (or other
 provider) call — generating shots, minting prop meshes, hosted VLM

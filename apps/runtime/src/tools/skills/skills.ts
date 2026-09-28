@@ -170,6 +170,7 @@ export function createSkillTool(skill: SkillSpec): Tool {
   // process. This replaces the old `echo "<name> skill loaded"` stubs.
   if (!skill.command) {
     const definition: ToolDefinition = {
+      timeoutMs: 30_000,
       name: `skill__${skill.name}`,
       description: `Read the '${skill.name}' skill guide: ${skill.description}`.trim(),
       parameters: { type: "object", required: [], properties: {} },
@@ -183,6 +184,7 @@ export function createSkillTool(skill: SkillSpec): Tool {
     }
   }
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name: `skill__${skill.name}`,
     description: `Run the automation skill '${skill.name}': ${skill.description}`,
     parameters: {
@@ -203,7 +205,7 @@ export function createSkillTool(skill: SkillSpec): Tool {
       } catch (err) {
         return textResult(
           `skill '${skill.name}': unsafe cwd (${err instanceof Error ? err.message : String(err)})`,
-          true,
+          /*isError*/ true,
         )
       }
       const toRun = `${skill.command}${typeof args.args === "string" && args.args ? " " + args.args : ""}`
@@ -222,10 +224,13 @@ export function createSkillTool(skill: SkillSpec): Tool {
             (err, stdout, stderr) => {
               const combined = `${stdout}${stderr ? "\n" + stderr : ""}`.trim() || "(no output)"
               if (err && (err as NodeJS.ErrnoException).code !== "ETIMEDOUT") {
-                resolve(textResult(`skill '${skill.name}' failed (${err.message}):\n${combined}`, true))
+                resolve(textResult(`skill '${skill.name}' failed (${err.message}):\n${combined}`, /*isError*/ true))
               } else if (err) {
                 resolve(
-                  textResult(`skill '${skill.name}' timed out after ${skill.timeout ?? 120}s.\n${combined}`, true),
+                  textResult(
+                    `skill '${skill.name}' timed out after ${skill.timeout ?? 120}s.\n${combined}`,
+                    /*isError*/ true,
+                  ),
                 )
               } else {
                 resolve(textResult(`${combined}`))
@@ -247,7 +252,7 @@ export function createSkillTool(skill: SkillSpec): Tool {
           resolve(
             textResult(
               `skill '${skill.name}': cannot start (${err instanceof Error ? err.message : String(err)})`,
-              true,
+              /*isError*/ true,
             ),
           )
         }

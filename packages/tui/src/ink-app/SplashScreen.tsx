@@ -8,6 +8,7 @@ import { Box, Text } from "ink"
 import { useAppInput } from "./useAppInput.js"
 import { isEnter } from "./keys.js"
 import { TrayambakLogo } from "./TrayambakLogo.js"
+import { spinnerFrames } from "./glyphs.js"
 
 export interface SplashScreenProps {
   /** Advance past the splash (timer expiry or keypress both call this). */
@@ -16,7 +17,7 @@ export interface SplashScreenProps {
   durationMs?: number
 }
 
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+const SPINNER: string[] = spinnerFrames()
 
 /**
  * First-run welcome splash (codex-style Welcome step): the SAME ASCII logo

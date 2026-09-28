@@ -27,15 +27,16 @@ Trayambak tracks every mistake, applies penalties, and computes a **reliability 
 2. **Repeat Detection** — `isRepeatedMistake()` checks if the same `errorName` exists and is still open. If a repeat is detected within the 24-hour sliding window, the **2nd-mistake detector** applies a 2× penalty multiplier.
 
 3. **Penalty** — `applyPenalty()` deducts points based on mistake severity:
-   | Error class | Base penalty |
-   |---|---|
-   | syntax / import / type | 1 |
-   | io / permission / config / network | 2 |
-   | logic / tool | 3 |
-   | timeout / oom | 4 |
-   | hallucination | 10 |
-   | device / user_error | 0 |
-   | unknown | 2 |
+
+   | Error class                        | Base penalty |
+   | ---------------------------------- | ------------ |
+   | syntax / import / type             | 1            |
+   | io / permission / config / network | 2            |
+   | logic / tool                       | 3            |
+   | timeout / oom                      | 4            |
+   | hallucination                      | 10           |
+   | device / user_error                | 0            |
+   | unknown                            | 2            |
 
    Repeated mistakes multiply the base by **2×**. User complaints multiply by **3×**.
 

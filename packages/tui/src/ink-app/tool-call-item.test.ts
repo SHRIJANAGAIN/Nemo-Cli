@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest"
+import { resetGlyphCache } from "./glyphs.js"
 import React from "react"
 import { PassThrough } from "node:stream"
 import { render, type Instance } from "ink"
@@ -61,6 +62,11 @@ const LONG_ARGS_TOOL: ToolCallDisplay = {
   result: "total 146844",
 }
 
+// Glyphs under test render through glyphs.ts, which auto-selects ASCII on
+// plain Windows consoles (this CI/dev box) — assertions below pin Unicode
+// shapes, so force unicode mode here. resetGlyphCache covers shared workers.
+process.env.TRAYAMBAK_GLYPHS = "unicode"
+resetGlyphCache()
 describe("ToolCallItem header (single truncating line)", () => {
   it("keeps labels + args + ✓ on ONE line at 119 cols (reported width)", async () => {
     const lines = await headerLineAt(119, LONG_ARGS_TOOL)

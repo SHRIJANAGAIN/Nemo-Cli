@@ -20,14 +20,14 @@ A **service** is the most common way to share data and functionality across an a
 Use the `providedIn: 'root'` option in the `@Injectable` decorator to make the service a singleton available throughout the entire application. This is the recommended approach for most services.
 
 ```ts
-import {Injectable} from '@angular/core';
+import { Injectable } from "@angular/core"
 
 @Injectable({
-  providedIn: 'root', // Makes this a singleton available everywhere
+  providedIn: "root", // Makes this a singleton available everywhere
 })
 export class AnalyticsLogger {
   trackEvent(category: string, value: string) {
-    console.log('Analytics event logged:', {category, value});
+    console.log("Analytics event logged:", { category, value })
   }
 }
 ```
@@ -49,23 +49,23 @@ Use Angular's `inject()` function to request dependencies.
 You can use the `inject()` function to get an instance of a service (or any other provided token).
 
 ```ts
-import {Component, inject} from '@angular/core';
-import {Router} from '@angular/router';
-import {AnalyticsLogger} from './analytics-logger.service';
+import { Component, inject } from "@angular/core"
+import { Router } from "@angular/router"
+import { AnalyticsLogger } from "./analytics-logger.service"
 
 @Component({
-  selector: 'app-navbar',
+  selector: "app-navbar",
   template: `<a href="#" (click)="navigateToDetail($event)">Detail Page</a>`,
 })
 export class Navbar {
   // Injecting dependencies using class field initializers
-  private router = inject(Router);
-  private analytics = inject(AnalyticsLogger);
+  private router = inject(Router)
+  private analytics = inject(AnalyticsLogger)
 
   navigateToDetail(event: Event) {
-    event.preventDefault();
-    this.analytics.trackEvent('navigation', '/details');
-    this.router.navigate(['/details']);
+    event.preventDefault()
+    this.analytics.trackEvent("navigation", "/details")
+    this.router.navigate(["/details"])
   }
 }
 ```
@@ -82,39 +82,35 @@ Valid places to call `inject()`:
 4. **Factory functions** used in providers
 
 ```typescript
-import {Component, Directive, Injectable, inject, ElementRef} from '@angular/core';
-import {HttpClient} from '@angular/common/http';
+import { Component, Directive, Injectable, inject, ElementRef } from "@angular/core"
+import { HttpClient } from "@angular/common/http"
 
 // 1. In a Component (Field Initializer & Constructor)
-@Component({
-  /*...*/
-})
+@Component({/*...*/})
 export class Example {
-  private service1 = inject(MyService); // Valid field initializer
+  private service1 = inject(MyService) // Valid field initializer
 
-  private service2: MyService;
+  private service2: MyService
   constructor() {
-    this.service2 = inject(MyService); // Valid constructor body
+    this.service2 = inject(MyService) // Valid constructor body
   }
 }
 
 // 2. In a Directive
-@Directive({
-  /*...*/
-})
+@Directive({/*...*/})
 export class MyDirective {
-  private element = inject(ElementRef); // Valid field initializer
+  private element = inject(ElementRef) // Valid field initializer
 }
 
 // 3. In a Service
-@Injectable({providedIn: 'root'})
+@Injectable({ providedIn: "root" })
 export class MyService {
-  private http = inject(HttpClient); // Valid field initializer
+  private http = inject(HttpClient) // Valid field initializer
 }
 
 // 4. In a Route Guard (Functional)
 export const authGuard = () => {
-  const auth = inject(AuthService); // Valid route guard
-  return auth.isAuthenticated();
-};
+  const auth = inject(AuthService) // Valid route guard
+  return auth.isAuthenticated()
+}
 ```

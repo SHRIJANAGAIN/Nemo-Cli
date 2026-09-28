@@ -3,11 +3,13 @@
 What this file does: validates the corresponding module via `pytest`.
 
 ## How to run
+
 ```bash
 python3 -m pytest tests/test_persistence.py -v
 ```
 
 ## Coverage
+
 - Goal lifecycle, status transitions, serialization
 - Tracker CRUD, progress calculation, blockers
 - Checkpoint create/rollback/delete
@@ -17,4 +19,5 @@ python3 -m pytest tests/test_persistence.py -v
 - Server MCP tool integration (all 8 tools)
 
 ## Known caveats
+
 - Server tests reset global state via a `tmp_path` fixture to avoid DB conflicts.

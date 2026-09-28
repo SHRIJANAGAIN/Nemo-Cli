@@ -10,6 +10,7 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { textResult, type Tool, type ToolContext, truncateOutput } from "../types.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "web_search",
   description:
     "Search the web using multiple providers (hsearch, DuckDuckGo, Mojeek, Bing, Brave, Qwant) with automatic failover. Returns ranked results with URLs, titles, snippets, and relevance scores. Use this BEFORE answering factual questions to ensure accuracy. IMPORTANT: always include the CURRENT year in your query (e.g. 'X latest updates " +
@@ -647,10 +648,10 @@ export function createWebSearchTool(): Tool {
     definition,
     async execute(_id, args, signal, _update, context) {
       const ctx = context as ToolContext
-      if (signal?.aborted) return textResult("aborted", true)
+      if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
       const query = String(args.query ?? "")
-      if (!query.trim()) return textResult("Missing 'query'.", true)
+      if (!query.trim()) return textResult("Missing 'query'.", /*isError*/ true)
       const maxResults =
         typeof args.max_results === "number"
           ? Math.max(1, Math.min(MAX_RESULTS_CAP, args.max_results))
@@ -676,7 +677,7 @@ export function createWebSearchTool(): Tool {
         searchQuery = `${query} ${nowYear}`
       }
 
-      if (signal?.aborted) return textResult("aborted", true)
+      if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
       try {
         const results = await multiSearch(searchQuery, maxResults, provider)
@@ -693,7 +694,7 @@ export function createWebSearchTool(): Tool {
         return textResult(finalText)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        return textResult(`web_search error: ${message}`, true)
+        return textResult(`web_search error: ${message}`, /*isError*/ true)
       }
     },
   }

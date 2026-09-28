@@ -77,6 +77,7 @@ export function sendToInbox(to: string, from: string, content: string): InboxMes
 }
 
 const def: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__SendMessage",
   description:
     "Send a message to a previously spawned trayambak__Agent. Running background jobs read it next turn and continue with context intact; messages to finished or unknown ids are stored but never read (the result says which). Use agent name or ID. Messages are persisted to a durable inbox file.",
@@ -112,7 +113,7 @@ export function createSendMessageTool(
     async execute(_id, args, _signal, _update, context) {
       const to = String(args.to ?? "")
       const content = String(args.content ?? "")
-      if (!to || !content) return textResult("Missing 'to' or 'content'.", true)
+      if (!to || !content) return textResult("Missing 'to' or 'content'.", /*isError*/ true)
       const from = String(args.from ?? context?.sessionId ?? "trayambak")
 
       // Persist to durable inbox file
@@ -143,12 +144,12 @@ export function createSendMessageTool(
       if (target && !target.running) {
         return textResult(
           `Message ${message.id} stored, but job "${target.name}" already finished — nobody will read it. Relaunch the task to continue.`,
-          true,
+          /*isError*/ true,
         )
       }
       return textResult(
         `Message ${message.id} stored, but no running agent matches "${to}" — nobody will read it. Use an active background job id or name.`,
-        true,
+        /*isError*/ true,
       )
     },
   }

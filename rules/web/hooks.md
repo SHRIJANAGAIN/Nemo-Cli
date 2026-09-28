@@ -10,6 +10,7 @@ paths:
   - "**/*.vue"
   - "**/*.svelte"
 ---
+
 > This file extends [common/hooks.md](../common/hooks.md) with web-specific hook recommendations.
 
 # Web Hooks
@@ -73,6 +74,7 @@ Use `--incremental` so re-runs reuse the previous `.tsbuildinfo` (1-3s on unchan
 ```
 
 **Why both flags matter:**
+
 - Without `--incremental`, every edit re-checks the entire program from scratch. On a real Next.js project this stacks fast: edits at 5-10s intervals + 30-60s tsc runs = N concurrent tsc processes.
 - Without `timeout`, a tsc that hangs (transitive dep change, type-checker stuck on a recursive type) never exits and orphans when the parent shell does.
 - `--tsBuildInfoFile` is required because `--noEmit` normally suppresses the buildinfo write; specifying the path explicitly keeps incremental working.
@@ -135,6 +137,7 @@ Block oversized writes from tool input content, not from a file that may not exi
 ## Ordering
 
 Recommended order:
+
 1. format
 2. lint
 3. type check
