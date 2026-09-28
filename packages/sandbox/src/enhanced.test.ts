@@ -235,11 +235,50 @@ describe("isFilesystemViolation", () => {
   it("detects writes outside writable roots", () => {
     expect(isFilesystemViolation("/etc/passwd", ["/home/user"], [], [])).toBe(true)
   })
+  it("does not treat a prefix-sharing sibling as inside the writable root", () => {
+    // Regression: bare startsWith made `/workspace-evil` writable whenever
+    // `/workspace` was, letting a write land outside the sandbox.
+    expect(isFilesystemViolation("/workspace-evil/x", ["/workspace"], [], [])).toBe(true)
+    expect(isFilesystemViolation("/workspace/x", ["/workspace"], [], [])).toBe(false)
+  })
+  it("does not let a prefix-sharing sibling trip the deny list", () => {
+    // `/workspace-evil` must not be denied just because `/workspace` is.
+    expect(isFilesystemViolation("/workspace-evil/x", ["/workspace-evil"], ["/workspace"], [])).toBe(false)
+    expect(isFilesystemViolation("/workspace/x", ["/workspace"], ["/workspace"], [])).toBe(true)
+  })
+  it("accepts the root itself", () => {
+    expect(isFilesystemViolation("/workspace", ["/workspace"], [], [])).toBe(false)
+  })
 })
 
 describe("isNetworkViolation", () => {
   it("blocks when network disabled", () => {
     expect(isNetworkViolation("evil.com", [], [], true)).toBe(true)
+  })
+  it("does not let a lookalike host satisfy an allow-list entry", () => {
+    // Regression: substring matching authorised `example.com.evil.net` and
+    // `notexample.com` from a single `example.com` entry.
+    expect(isNetworkViolation("example.com.evil.net", ["example.com"], [], false)).toBe(true)
+    expect(isNetworkViolation("notexample.com", ["example.com"], [], false)).toBe(true)
+    expect(isNetworkViolation("evilexample.com", ["example.com"], [], false)).toBe(true)
+  })
+  it("allows the exact host and its subdomains", () => {
+    expect(isNetworkViolation("example.com", ["example.com"], [], false)).toBe(false)
+    expect(isNetworkViolation("api.example.com", ["example.com"], [], false)).toBe(false)
+    expect(isNetworkViolation("a.b.example.com", ["example.com"], [], false)).toBe(false)
+  })
+  it("normalises case, ports, and trailing dots", () => {
+    expect(isNetworkViolation("API.Example.COM", ["example.com"], [], false)).toBe(false)
+    expect(isNetworkViolation("example.com:8443", ["example.com"], [], false)).toBe(false)
+    expect(isNetworkViolation("example.com.", ["example.com"], [], false)).toBe(false)
+  })
+  it("deny list wins over allow list and covers subdomains", () => {
+    expect(isNetworkViolation("evil.com", ["evil.com"], ["evil.com"], false)).toBe(true)
+    expect(isNetworkViolation("cdn.evil.com", [], ["evil.com"], false)).toBe(true)
+    expect(isNetworkViolation("evil.com:443", [], ["evil.com"], false)).toBe(true)
+  })
+  it("blocks when an allow list excludes the host", () => {
+    expect(isNetworkViolation("other.com", ["example.com"], [], false)).toBe(true)
   })
 })
 

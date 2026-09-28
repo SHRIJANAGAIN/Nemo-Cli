@@ -150,28 +150,65 @@ function expandHome(p: string): string {
   return p
 }
 
+/** True when `target` is `base` itself or a descendant of it. */
+function within(base: string, target: string): boolean {
+  const normBase = path.normalize(base).toLowerCase()
+  const normTarget = path.normalize(target).toLowerCase()
+  if (normTarget === normBase) return true
+  const baseWithSep = normBase.endsWith(path.sep) ? normBase : normBase + path.sep
+  return normTarget.startsWith(baseWithSep)
+}
+
+/**
+ * Credential stores under the home directory. `~` is reachable by design so
+ * tooling can touch `~/projects`, so without this list
+ * `read-file("~/.ssh/id_rsa")` would succeed. Matching is case-insensitive so
+ * `~/.SSH` cannot slip past on a case-sensitive host.
+ */
+const PROTECTED_HOME_DIRS = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure"]
+
+/** Single files under home that hold credentials. */
+const PROTECTED_HOME_FILES = [
+  ".netrc",
+  ".npmrc",
+  ".git-credentials",
+  path.join(".trayambak", "credentials.json"),
+]
+
+/**
+ * True for paths the file tools may never open. Deny wins over the `~`
+ * allowance: sandbox policy never lets a deny rule be outvoted by an allow.
+ */
+function isProtectedPath(resolved: string): boolean {
+  const home = os.homedir()
+  for (const dir of PROTECTED_HOME_DIRS) {
+    if (within(path.join(home, dir), resolved)) return true
+  }
+  const folded = resolved.toLowerCase()
+  for (const file of PROTECTED_HOME_FILES) {
+    if (folded === path.join(home, file).toLowerCase()) return true
+  }
+  return false
+}
+
 /**
  * Resolve a user-supplied path against the tool cwd and reject it if it
  * escapes the project directory (or the user home directory for `~` paths).
  * This blocks absolute paths and `..` escapes that would otherwise allow
  * reading/writing arbitrary files on disk.
+ *
+ * The workspace is not a blanket override: credential stores stay closed even
+ * when the project is opened at home, because deny lists win over allow lists.
  */
 export function resolveConstrainedPath(inputPath: string, cwd: string): string {
   const expanded = expandHome(inputPath)
   const resolved = path.resolve(cwd, expanded)
-  const within = (base: string, target: string): boolean => {
-    const normBase = path.normalize(base).toLowerCase()
-    const normTarget = path.normalize(target).toLowerCase()
-    if (normTarget === normBase) return true
-    const sep = path.sep
-    if (!normBase.endsWith(sep)) {
-      return normTarget === normBase || normTarget.startsWith(normBase + sep)
-    }
-    return normTarget.startsWith(normBase)
-  }
   const home = os.homedir()
   if (!within(cwd, resolved) && !within(home, resolved)) {
     throw new Error(`Access denied: path escapes project directory (${resolved})`)
+  }
+  if (isProtectedPath(resolved)) {
+    throw new Error(`Access denied: protected path (${resolved})`)
   }
   return resolved
 }

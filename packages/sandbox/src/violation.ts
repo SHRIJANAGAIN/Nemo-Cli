@@ -10,7 +10,7 @@
 
 import { appendFileSync, mkdirSync } from "fs"
 import { homedir } from "os"
-import { join, resolve } from "path"
+import { join, resolve, sep } from "path"
 
 import { SandboxViolation } from "./types.js"
 
@@ -56,6 +56,21 @@ export function recordNetworkViolation(
 }
 
 /**
+ * True when `target` is `root` itself or a descendant of it.
+ *
+ * A bare `startsWith` on resolved paths is not a containment test: it treats
+ * `/workspace-evil` as living inside `/workspace`. The separator must be part
+ * of the prefix so only whole path segments match.
+ */
+function isInside(root: string, target: string): boolean {
+    const resolvedRoot = resolve(root)
+    const resolvedTarget = resolve(target)
+    if (resolvedTarget === resolvedRoot) return true
+    const prefix = resolvedRoot.endsWith(sep) ? resolvedRoot : resolvedRoot + sep
+    return resolvedTarget.startsWith(prefix)
+}
+
+/**
  * Check if a filesystem access would violate the sandbox policy.
  */
 export function isFilesystemViolation(
@@ -68,23 +83,48 @@ export function isFilesystemViolation(
 
     // Check deny-read
     for (const denyPath of denyReadPaths) {
-        if (resolved.startsWith(resolve(denyPath))) {
+        if (isInside(denyPath, resolved)) {
             return true
         }
     }
     // Check deny-write
     for (const denyPath of denyWritePaths) {
-        if (resolved.startsWith(resolve(denyPath))) {
+        if (isInside(denyPath, resolved)) {
             return true
         }
     }
     // Check writable roots
-    const isWritable = writableRoots.some(root => resolved.startsWith(resolve(root)))
+    const isWritable = writableRoots.some(root => isInside(root, resolved))
     if (!isWritable) {
         return true
     }
 
     return false
+}
+
+/**
+ * Fold a hostname for comparison: lowercased, port dropped, leading wildcard
+ * and trailing dot stripped.
+ */
+function normalizeDomain(value: string): string {
+    let v = value.trim().toLowerCase()
+    const parts = v.split(":")
+    if (parts.length === 2 && /^\d+$/.test(parts[1])) v = parts[0]
+    return v.replace(/^\*\.+/, "").replace(/\.$/, "")
+}
+
+/**
+ * True when `host` is `entry` itself or a subdomain of it.
+ *
+ * Substring matching is not equivalent: an `example.com` entry would also
+ * admit `example.com.evil.net` and `notexample.com`, so an allow list built
+ * that way authorises far more than it looks like.
+ */
+function domainMatches(host: string, entry: string): boolean {
+    const normalizedHost = normalizeDomain(host)
+    const normalizedEntry = normalizeDomain(entry)
+    if (!normalizedEntry) return false
+    return normalizedHost === normalizedEntry || normalizedHost.endsWith("." + normalizedEntry)
 }
 
 /**
@@ -97,8 +137,9 @@ export function isNetworkViolation(
     disableNetwork: boolean,
 ): boolean {
     if (disableNetwork) return true
-    if (blockedDomains.some(d => domain.includes(d))) return true
-    if (allowedDomains.length > 0 && !allowedDomains.some(d => domain.includes(d))) return true
+    // Deny list wins over allow list.
+    if (blockedDomains.some(d => domainMatches(domain, d))) return true
+    if (allowedDomains.length > 0 && !allowedDomains.some(d => domainMatches(domain, d))) return true
     return false
 }
 

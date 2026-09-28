@@ -94,9 +94,20 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${esc}$`)
 }
 
+/**
+ * Canonical form used for rule matching: trimmed, whitespace runs collapsed,
+ * lowercased. This is a * deny list, so folding only ever makes a rule
+ * fire more often — `  rm -rf /` and `RM  -RF /` must not slip past an
+ * anchored pattern written as `rm -rf /*`.
+ */
+function canonicalizeForMatch(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase()
+}
+
 export function checkExecPolicy(command: string, rules: ExecRule[]): { allowed: boolean; rule?: ExecRule } {
+  const candidate = canonicalizeForMatch(command)
   for (const rule of rules) {
-    if (globToRegExp(rule.pattern).test(command)) return { allowed: rule.allow, rule }
+    if (globToRegExp(canonicalizeForMatch(rule.pattern)).test(candidate)) return { allowed: rule.allow, rule }
   }
   return { allowed: true }
 }

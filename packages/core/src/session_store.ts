@@ -9,7 +9,7 @@
 
 import { join, dirname } from "path";
 import { homedir } from "os";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync, renameSync, rmSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "fs";
 
 /** Thread status states. */
 export enum ThreadStatus {
