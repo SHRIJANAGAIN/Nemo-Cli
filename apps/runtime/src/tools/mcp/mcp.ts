@@ -129,6 +129,7 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
     properties[k] = toToolProperty(v)
   }
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name,
     description: `Call tool '${info.name}' on MCP server '${server}'. ${info.description ?? ""}`.trim(),
     parameters: {
@@ -141,7 +142,7 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
     definition,
     async execute(_id, args, signal, _update): Promise<ToolResult> {
       const entry = registry.get(server)
-      if (!entry) return textResult(`MCP server '${server}' is not registered.`, true)
+      if (!entry) return textResult(`MCP server '${server}' is not registered.`, /*isError*/ true)
       try {
         const result = await abortable(signal, entry.conn!.callTool(info.name, args as Record<string, unknown>))
         const text = (result.content ?? [])
@@ -152,9 +153,12 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
         return textResult(text || "(empty MCP result)", Boolean(result.isError))
       } catch (err) {
         if (err instanceof McpError) {
-          return textResult(`mcp ${server}.${info.name} [${err.code}]: ${err.message}`, true)
+          return textResult(`mcp ${server}.${info.name} [${err.code}]: ${err.message}`, /*isError*/ true)
         }
-        return textResult(`mcp ${server}.${info.name}: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(
+          `mcp ${server}.${info.name}: ${err instanceof Error ? err.message : String(err)}`,
+          /*isError*/ true,
+        )
       }
     },
   }
@@ -163,6 +167,7 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
 function makeMcpReadResourceTool(server: string, resource: McpResourceInfo): Tool {
   const name = `mcp__${server}__read_resource_${slugify(resource.uri)}`
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name,
     description:
       `Read resource '${resource.name}' (${resource.uri}) from MCP server '${server}'. ${resource.description ?? ""}`.trim(),
@@ -178,16 +183,19 @@ function makeMcpReadResourceTool(server: string, resource: McpResourceInfo): Too
     definition,
     async execute(_id, args, signal, _update): Promise<ToolResult> {
       const entry = registry.get(server)
-      if (!entry) return textResult(`MCP server '${server}' is not registered.`, true)
+      if (!entry) return textResult(`MCP server '${server}' is not registered.`, /*isError*/ true)
       const uri = typeof args.uri === "string" ? args.uri : resource.uri
       try {
         const content = await abortable(signal, entry.conn!.readResource(uri))
         return textResult(content || "(empty resource)")
       } catch (err) {
         if (err instanceof McpError) {
-          return textResult(`mcp ${server} resource read [${err.code}]: ${err.message}`, true)
+          return textResult(`mcp ${server} resource read [${err.code}]: ${err.message}`, /*isError*/ true)
         }
-        return textResult(`mcp ${server} resource read: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(
+          `mcp ${server} resource read: ${err instanceof Error ? err.message : String(err)}`,
+          /*isError*/ true,
+        )
       }
     },
   }
@@ -196,6 +204,7 @@ function makeMcpReadResourceTool(server: string, resource: McpResourceInfo): Too
 function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo): Tool {
   const name = `mcp__${server}__get_prompt_${slugify(prompt.name)}`
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name,
     description: `Get prompt '${prompt.name}' from MCP server '${server}'. ${prompt.description ?? ""}`.trim(),
     parameters: {
@@ -211,22 +220,25 @@ function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo): Tool {
     definition,
     async execute(_id, args, signal, _update): Promise<ToolResult> {
       const entry = registry.get(server)
-      if (!entry) return textResult(`MCP server '${server}' is not registered.`, true)
+      if (!entry) return textResult(`MCP server '${server}' is not registered.`, /*isError*/ true)
       const promptName = typeof args.name === "string" ? args.name : prompt.name
       const promptArgs =
         typeof args.args === "object" && args.args !== null ? (args.args as Record<string, string>) : undefined
       try {
         const prompt = await abortable(signal, entry.conn!.getPrompt(promptName, promptArgs))
-        if (!prompt) return textResult(`Prompt '${promptName}' not found on server '${server}'.`, true)
+        if (!prompt) return textResult(`Prompt '${promptName}' not found on server '${server}'.`, /*isError*/ true)
         const text = prompt.messages
           .map((m) => `[${m.role}] ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
           .join("\n")
         return textResult(text || "(empty prompt)")
       } catch (err) {
         if (err instanceof McpError) {
-          return textResult(`mcp ${server} prompt get [${err.code}]: ${err.message}`, true)
+          return textResult(`mcp ${server} prompt get [${err.code}]: ${err.message}`, /*isError*/ true)
         }
-        return textResult(`mcp ${server} prompt get: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(
+          `mcp ${server} prompt get: ${err instanceof Error ? err.message : String(err)}`,
+          /*isError*/ true,
+        )
       }
     },
   }
@@ -234,6 +246,7 @@ function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo): Tool {
 
 function makeMcpErrorTool(server: string, message: string): Tool {
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name: `mcp__${server}__error`,
     description: `MCP server '${server}' failed to initialize: ${message}.`,
     parameters: { type: "object", properties: {}, required: [] },
@@ -241,7 +254,7 @@ function makeMcpErrorTool(server: string, message: string): Tool {
   return {
     definition,
     async execute(): Promise<ToolResult> {
-      return textResult(`MCP server '${server}' is unavailable: ${message}`, true)
+      return textResult(`MCP server '${server}' is unavailable: ${message}`, /*isError*/ true)
     },
   }
 }

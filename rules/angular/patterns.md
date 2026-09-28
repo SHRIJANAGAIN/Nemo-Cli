@@ -6,6 +6,7 @@ paths:
   - "**/*.store.ts"
   - "**/*.routes.ts"
 ---
+
 # Angular Patterns
 
 > This file extends [common/patterns.md](../common/patterns.md) with Angular specific content.
@@ -18,8 +19,8 @@ Smart (container) components own data fetching and state. Dumb (presentational) 
 // Smart — owns data
 @Component({ standalone: true, changeDetection: ChangeDetectionStrategy.OnPush })
 export class UserPageComponent {
-  private userService = inject(UserService);
-  user = toSignal(this.userService.getUser(this.userId));
+  private userService = inject(UserService)
+  user = toSignal(this.userService.getUser(this.userId))
 }
 ```
 
@@ -33,12 +34,12 @@ export class UserPageComponent {
 Services own all data access and business logic. Components delegate — no `HttpClient` in components.
 
 ```typescript
-@Injectable({ providedIn: 'root' })
+@Injectable({ providedIn: "root" })
 export class UserService {
-  private http = inject(HttpClient);
+  private http = inject(HttpClient)
 
   getUsers(): Observable<User[]> {
-    return this.http.get<User[]>('/api/users');
+    return this.http.get<User[]>("/api/users")
   }
 }
 ```
@@ -49,13 +50,12 @@ Use `resource()` for reactive async fetching. Prefer over manual RxJS pipelines 
 
 ```typescript
 export class UserDetailComponent {
-  userId = input.required<string>();
+  userId = input.required<string>()
 
   userResource = resource({
     request: () => ({ id: this.userId() }),
-    loader: ({ request }) =>
-      firstValueFrom(inject(UserService).getUser(request.id)),
-  });
+    loader: ({ request }) => firstValueFrom(inject(UserService).getUser(request.id)),
+  })
 }
 ```
 
@@ -65,16 +65,16 @@ Access state: `userResource.value()`, `userResource.isLoading()`, `userResource.
 
 ```typescript
 // Local mutable state
-count = signal(0);
+count = signal(0)
 
 // Derived (never duplicated)
-doubled = computed(() => this.count() * 2);
+doubled = computed(() => this.count() * 2)
 
 // Writable derived state that resets with source
-selectedItem = linkedSignal(() => this.items()[0]);
+selectedItem = linkedSignal(() => this.items()[0])
 
 // Bridge Observable to signal
-users = toSignal(this.userService.getUsers(), { initialValue: [] });
+users = toSignal(this.userService.getUsers(), { initialValue: [] })
 ```
 
 Never store derived values in separate signals — use `computed`. Never use `effect` to sync signals — use `computed` or `linkedSignal`.
@@ -85,12 +85,10 @@ Use `takeUntilDestroyed()` for all manual subscriptions. Never use manual `ngOnD
 
 ```typescript
 export class UserComponent {
-  private destroyRef = inject(DestroyRef);
+  private destroyRef = inject(DestroyRef)
 
   ngOnInit() {
-    this.userService.updates$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(update => this.handleUpdate(update));
+    this.userService.updates$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((update) => this.handleUpdate(update))
   }
 }
 ```
@@ -102,18 +100,18 @@ export class UserComponent {
 ```typescript
 // app.routes.ts
 export const routes: Routes = [
-  { path: '', component: HomeComponent },
+  { path: "", component: HomeComponent },
   {
-    path: 'admin',
-    canMatch: [authGuard],           // CanMatch prevents loading the chunk at all
-    loadChildren: () => import('./admin/admin.routes').then(m => m.ADMIN_ROUTES),
+    path: "admin",
+    canMatch: [authGuard], // CanMatch prevents loading the chunk at all
+    loadChildren: () => import("./admin/admin.routes").then((m) => m.ADMIN_ROUTES),
   },
   {
-    path: 'users/:id',
+    path: "users/:id",
     resolve: { user: userResolver },
     component: UserDetailComponent,
   },
-];
+]
 ```
 
 - Use `canMatch` over `canActivate` when the route module should not load for unauthorized users
@@ -124,19 +122,17 @@ export const routes: Routes = [
 
 ```typescript
 export const authGuard: CanActivateFn = () => {
-  const auth = inject(AuthService);
-  return auth.isAuthenticated()
-    ? true
-    : inject(Router).createUrlTree(['/login']);
-};
+  const auth = inject(AuthService)
+  return auth.isAuthenticated() ? true : inject(Router).createUrlTree(["/login"])
+}
 ```
 
 ### Data Resolvers
 
 ```typescript
 export const userResolver: ResolveFn<User> = (route) => {
-  return inject(UserService).getUser(route.paramMap.get('id')!);
-};
+  return inject(UserService).getUser(route.paramMap.get("id")!)
+}
 ```
 
 ### View Transitions
@@ -156,7 +152,7 @@ Provide services at component or route level when they should not be singletons:
 
 ```typescript
 @Component({
-  providers: [UserEditService],   // scoped to this component subtree
+  providers: [UserEditService], // scoped to this component subtree
 })
 export class UserEditComponent {}
 ```
@@ -185,10 +181,10 @@ Use functional interceptors (v15+) for auth, error handling, and retries:
 
 ```typescript
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const token = inject(AuthService).token();
-  if (!token) return next(req);
-  return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
-};
+  const token = inject(AuthService).token()
+  if (!token) return next(req)
+  return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }))
+}
 ```
 
 Register in `app.config.ts`:
@@ -208,8 +204,8 @@ provideHttpClient(withInterceptors([authInterceptor, errorInterceptor]))
 search$ = this.query$.pipe(
   debounceTime(300),
   distinctUntilChanged(),
-  switchMap(q => this.service.search(q).pipe(catchError(() => of([])))),
-);
+  switchMap((q) => this.service.search(q).pipe(catchError(() => of([])))),
+)
 ```
 
 ## Forms
@@ -219,12 +215,12 @@ Match the project's existing form strategy. For new v21+ apps, prefer signal for
 ```typescript
 // Reactive Forms — standard for complex forms
 export class UserFormComponent {
-  private fb = inject(FormBuilder);
+  private fb = inject(FormBuilder)
 
   form = this.fb.group({
-    name: ['', Validators.required],
-    email: ['', [Validators.required, Validators.email]],
-  });
+    name: ["", Validators.required],
+    email: ["", [Validators.required, Validators.email]],
+  })
 }
 ```
 
@@ -241,7 +237,9 @@ When using SSR, avoid `window`, `document`, `localStorage` directly — use `isP
 Use Angular CDK for headless, accessible components (Accordion, Listbox, Combobox, Menu, Tabs, Toolbar, Tree, Grid). Style ARIA attributes rather than managing them manually:
 
 ```css
-[aria-selected="true"] { background: var(--color-selected); }
+[aria-selected="true"] {
+  background: var(--color-selected);
+}
 ```
 
 ## Skill Reference

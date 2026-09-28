@@ -16,6 +16,7 @@ function expandHome(p: string): string {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "list_dir",
   description:
     "List the entries of a directory. Defaults to the project root. Marks directories with a trailing slash.",
@@ -33,26 +34,29 @@ export function createListDirTool(): Tool {
     definition,
     async execute(_id, args, _signal, _update, context) {
       try {
-        if (_signal?.aborted) return textResult("aborted", true)
+        if (_signal?.aborted) return textResult("aborted", /*isError*/ true)
         const ctx = context as ToolContext
         const rel = typeof args.path === "string" ? args.path : "."
         let target: string
         try {
           target = resolveConstrainedPath(path.resolve(ctx.cwd, expandHome(rel)), ctx.cwd)
         } catch (error) {
-          return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
+          return textResult(
+            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            /*isError*/ true,
+          )
         }
 
-        if (!fs.existsSync(target)) return textResult(`Directory not found: ${rel}`, true)
+        if (!fs.existsSync(target)) return textResult(`Directory not found: ${rel}`, /*isError*/ true)
         assertExternalDirectory(target, ctx.cwd)
-        if (!fs.statSync(target).isDirectory()) return textResult(`Not a directory: ${rel}`, true)
+        if (!fs.statSync(target).isDirectory()) return textResult(`Not a directory: ${rel}`, /*isError*/ true)
         const entries = fs.readdirSync(target, { withFileTypes: true })
         const lines = entries
           .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
           .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
         return textResult(`${rel}\n${lines.join("\n")}`)
       } catch (error) {
-        return textResult(`List error: ${error instanceof Error ? error.message : String(error)}`, true)
+        return textResult(`List error: ${error instanceof Error ? error.message : String(error)}`, /*isError*/ true)
       }
     },
   }

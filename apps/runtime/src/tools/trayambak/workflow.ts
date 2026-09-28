@@ -84,6 +84,7 @@ export function executeWorkflow(
 }
 
 const runWorkflowDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__RunWorkflow",
   description:
     "Execute a defined multi-step workflow with validation, bounded steps, and per-step result reporting. " +
@@ -112,11 +113,14 @@ export function createRunWorkflowTool(): Tool {
         /* fall through to error message */
       }
       if (!workflow)
-        return textResult("Missing or invalid 'workflow' parameter. Provide a JSON WorkflowDefinition.", true)
+        return textResult(
+          "Missing or invalid 'workflow' parameter. Provide a JSON WorkflowDefinition.",
+          /*isError*/ true,
+        )
 
       const errors = validateWorkflow(workflow)
       if (errors.length > 0) {
-        return textResult(`Workflow validation failed:\n${errors.map((e) => `- ${e}`).join("\n")}`, true)
+        return textResult(`Workflow validation failed:\n${errors.map((e) => `- ${e}`).join("\n")}`, /*isError*/ true)
       }
 
       const cwd = context?.cwd ?? process.cwd()

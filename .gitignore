@@ -40,6 +40,9 @@ backend-handlers/
 # Private self-improvement journal (user state; never committed, never published)
 skt/1-errors/mistakes.json
 
+# Session conversation transcripts (machine-written runtime state)
+skt/8-conversations/
+
 # Backups & scratch (never commit)
 backups/
 *.bak

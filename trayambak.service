@@ -31,6 +31,12 @@ EnvironmentFile=/etc/trayambak/trayambak.env
 ExecStart=/usr/bin/node /opt/trayambak/dist/apps/cli/src/index.js web --port 8787 --host 127.0.0.1
 Restart=on-failure
 RestartSec=5
+# Resource caps: 230MB RAM hard limit, swap allowed up to 3GB.
+# (Swap extends breathing room for spikes; sustained swapping will be slow
+# — if systemd starts OOM-killing (journalctl shows "Killed"), raise
+# MemoryMax rather than swap. Requires cgroup v2, default on modern distros.)
+MemoryMax=230M
+MemorySwapMax=3G
 # Hardening that stays compatible with an agent (it must write state under
 # $HOME/.trayambak and work inside the task cwd, so no ProtectSystem=strict
 # or ProtectHome=read-only here — isolate at the user + firewall level).

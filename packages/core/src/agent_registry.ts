@@ -10,7 +10,7 @@
 
 import type { AgentCommunicationKind, InterAgentCommunication } from "./agent_communication.js"
 
-const uuid = () => crypto.randomUUID()
+const uuid = () => globalThis.crypto.randomUUID()
 
 /**
  * Agent metadata.

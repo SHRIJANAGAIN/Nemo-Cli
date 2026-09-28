@@ -3,6 +3,7 @@ paths:
   - "**/*.ets"
   - "**/*.ts"
 ---
+
 # HarmonyOS / ArkTS Patterns
 
 > This file extends [common/patterns.md](../common/patterns.md) with HarmonyOS and ArkTS-specific patterns.
@@ -13,18 +14,18 @@ paths:
 
 ### V2 Decorators
 
-| Decorator | Purpose |
-|-----------|---------|
-| `@ComponentV2` | Marks a struct as a V2 component |
-| `@Local` | Local state within a component |
-| `@Param` | Props received from parent (read-only) |
-| `@Event` | Callback events from child to parent |
-| `@Provider` | Provides state to descendant components |
-| `@Consumer` | Consumes state from ancestor `@Provider` |
-| `@Monitor` | Watches for state changes (replaces V1 `@Watch`) |
-| `@Computed` | Derived/computed values |
-| `@ObservedV2` | Makes a class observable for V2 state management |
-| `@Trace` | Marks observable properties in `@ObservedV2` classes |
+| Decorator      | Purpose                                              |
+| -------------- | ---------------------------------------------------- |
+| `@ComponentV2` | Marks a struct as a V2 component                     |
+| `@Local`       | Local state within a component                       |
+| `@Param`       | Props received from parent (read-only)               |
+| `@Event`       | Callback events from child to parent                 |
+| `@Provider`    | Provides state to descendant components              |
+| `@Consumer`    | Consumes state from ancestor `@Provider`             |
+| `@Monitor`     | Watches for state changes (replaces V1 `@Watch`)     |
+| `@Computed`    | Derived/computed values                              |
+| `@ObservedV2`  | Makes a class observable for V2 state management     |
+| `@Trace`       | Marks observable properties in `@ObservedV2` classes |
 
 ### Prohibited V1 Decorators
 
@@ -114,10 +115,10 @@ struct MainPage {
 
 ```typescript
 // Push a new page
-this.navPathStack.pushPath({ name: 'detail', param: { id: '123' } })
+this.navPathStack.pushPath({ name: "detail", param: { id: "123" } })
 
 // Replace current page
-this.navPathStack.replacePath({ name: 'settings' })
+this.navPathStack.replacePath({ name: "settings" })
 
 // Pop back
 this.navPathStack.pop()
@@ -225,12 +226,8 @@ Always define UI constants as resources and reference via `$r()`:
 
 ```typescript
 // BAD: hardcoded values
-Text('Hello')
-  .fontSize(16)
-  .fontColor('#333333')
+Text("Hello").fontSize(16).fontColor("#333333")
 
 // GOOD: resource references
-Text($r('app.string.greeting'))
-  .fontSize($r('app.float.font_size_body'))
-  .fontColor($r('app.color.text_primary'))
+Text($r("app.string.greeting")).fontSize($r("app.float.font_size_body")).fontColor($r("app.color.text_primary"))
 ```

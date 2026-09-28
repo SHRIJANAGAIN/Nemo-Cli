@@ -10,7 +10,6 @@
 
 import { existsSync, readFileSync } from "fs"
 import { join, dirname } from "path"
-import { homedir } from "os"
 
 /** Default filename scanned for AGENTS.md instructions. */
 export const DEFAULT_AGENTS_MD_FILENAME = "AGENTS.md"

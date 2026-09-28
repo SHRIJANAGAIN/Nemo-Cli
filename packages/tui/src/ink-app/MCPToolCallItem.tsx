@@ -12,6 +12,7 @@ import { toolBoxWidth } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { g } from "./glyphs.js"
 
 const TOOL_CALL_MAX_LINES = 5
 const MAX_ARG_LENGTH = 60
@@ -92,9 +93,9 @@ export const MCPToolCallItem = ({
     headerText = title
   } else {
     // Width-aware args budget (mirrors ToolCallItem): a fixed 60 chars let
-    // the truncate eat the ?/duration tail at ~100 cols. Reserve room for
+    // the truncate eat the ✓/duration tail at ~100 cols. Reserve room for
     // bullet + labels + server.name + parens + mark + duration.
-    const durationTail = durationMs !== undefined && isFinished ? ` — ${durationMs}ms`.length : 0
+    const durationTail = durationMs !== undefined && isFinished ? ` • ${durationMs}ms`.length : 0
     const argBudget = Math.max(20, Math.min(60, termWidth - (server?.length ?? 0) - name.length - 25 - durationTail))
     const argsStr = formatArgs(args, argBudget)
     headerText = `${server}.${name}(${argsStr})`
@@ -104,23 +105,23 @@ export const MCPToolCallItem = ({
   let bullet: ReactNode
   if (shouldShowDot) {
     if (isQueued) {
-      bullet = <Text dimColor>?</Text>
+      bullet = <Text dimColor>{g("ring")}</Text>
     } else if (isRunning) {
       bullet = <ToolUseLoader shouldAnimate={shouldAnimate} isUnresolved={true} isError={false} status={status} />
     } else if (success === false) {
       bullet = (
         <Text color={theme.error} bold>
-          ✗
+          {g("fail")}
         </Text>
       )
     } else if (success === true) {
       bullet = (
         <Text color={theme.success} bold>
-          ✓
+          {g("ok")}
         </Text>
       )
     } else {
-      bullet = <Text color={theme.textMuted}>●</Text>
+      bullet = <Text color={theme.textMuted}>•</Text>
     }
   }
 
@@ -179,7 +180,7 @@ export const MCPToolCallItem = ({
               {isError ? " ✗" : " ✓"}
             </Text>
           )}
-          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> — {durationMs}ms</Text>}
+          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
         </Text>
       </Box>
 

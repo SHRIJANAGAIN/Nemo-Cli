@@ -3,6 +3,7 @@ paths:
   - "**/*.ts"
   - "**/*.tsx"
 ---
+
 # React Native / Expo Accessibility
 
 > Extends the ECC quality bar to accessibility (a11y). Treat a11y as a release requirement, not an afterthought.
@@ -16,11 +17,7 @@ paths:
 - Group related elements with `accessible` on the container so they're announced as one unit when appropriate.
 
 ```tsx
-<Pressable
-  accessibilityRole="button"
-  accessibilityLabel="Delete item"
-  onPress={onDelete}
->
+<Pressable accessibilityRole="button" accessibilityLabel="Delete item" onPress={onDelete}>
   <TrashIcon />
 </Pressable>
 ```

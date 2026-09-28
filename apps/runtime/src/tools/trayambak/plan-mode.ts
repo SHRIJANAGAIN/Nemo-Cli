@@ -8,6 +8,7 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { textResult, type Tool } from "../types.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__EnterPlanMode",
   description: "Enter plan mode for designing implementation strategies. Returns a structured plan before executing.",
   parameters: {
@@ -24,7 +25,7 @@ export function createEnterPlanModeTool(onPlan?: (description: string) => Promis
     definition,
     async execute(_id, args, _signal, _update, _context) {
       const description = String(args.description ?? "")
-      if (!description) return textResult("Missing 'description'.", true)
+      if (!description) return textResult("Missing 'description'.", /*isError*/ true)
       if (onPlan) {
         const plan = await onPlan(description)
         return textResult(plan)

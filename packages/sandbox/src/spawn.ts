@@ -140,7 +140,7 @@ async function spawnUnderSeatbelt(
   const child = spawn(sandboxExec, args, hostSpawnOptions(cwd, env, signal))
   const pgid = getPgid(child.pid ?? 0)
 
-  return createSpawnedProcess(child, true, SandboxType.MacosSeatbelt, pgid, outputCap)
+  return createSpawnedProcess(child, /*isSandboxed*/ true, SandboxType.MacosSeatbelt, pgid, outputCap)
 }
 
 /**
@@ -175,7 +175,7 @@ async function spawnUnderLandlock(
   const child = spawn(bwrap, args, hostSpawnOptions(cwd, env, signal))
   const pgid = getPgid(child.pid ?? 0)
 
-  return createSpawnedProcess(child, true, SandboxType.LinuxSeccomp, pgid, outputCap)
+  return createSpawnedProcess(child, /*isSandboxed*/ true, SandboxType.LinuxSeccomp, pgid, outputCap)
 }
 
 /**
@@ -247,7 +247,7 @@ async function spawnUnsandboxed(
   const child = spawn(command[0], command.slice(1), hostSpawnOptions(cwd, env, signal))
   const pgid = getPgid(child.pid ?? 0)
 
-  return createSpawnedProcess(child, false, SandboxType.None, pgid, outputCap)
+  return createSpawnedProcess(child, /*isSandboxed*/ false, SandboxType.None, pgid, outputCap)
 }
 
 /**

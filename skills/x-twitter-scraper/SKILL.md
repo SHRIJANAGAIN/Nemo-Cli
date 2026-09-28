@@ -26,36 +26,43 @@ Visit [x-twitter-scraper on GitHub](https://github.com/Xquik-dev/x-twitter-scrap
 ## Core Capabilities
 
 ### Tweet Search
+
 ```
 Search tweets by keyword, hashtag, or advanced query with date filters and result limits.
 ```
 
 ### User Lookup
+
 ```
 Get user profile data: bio, follower/following counts, verification status, account age.
 ```
 
 ### Follower & Following Extraction
+
 ```
 Bulk extract follower and following lists for any public account.
 ```
 
 ### Reply, Retweet & Quote Extraction
+
 ```
 Extract all replies, retweets, or quote tweets from a specific tweet.
 ```
 
 ### Media Download
+
 ```
 Download images and videos from tweets.
 ```
 
 ### Account Monitoring
+
 ```
 Set up real-time monitoring for account activity changes.
 ```
 
 ### Trending Topics
+
 ```
 Get trending topics by location.
 ```
@@ -63,16 +70,19 @@ Get trending topics by location.
 ## Common Use Cases
 
 ### OSINT Research
+
 ```
 Look up a Twitter user, extract their followers, and analyze engagement patterns.
 ```
 
 ### Giveaway Management
+
 ```
 Search for giveaway tweets, extract participants (replies, retweets, quotes), and run draws.
 ```
 
 ### Competitive Analysis
+
 ```
 Monitor competitor accounts, track follower growth, and extract engagement data.
 ```

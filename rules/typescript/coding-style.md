@@ -5,6 +5,7 @@ paths:
   - "**/*.js"
   - "**/*.jsx"
 ---
+
 # TypeScript/JavaScript Coding Style
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with TypeScript/JavaScript specific content.
@@ -48,7 +49,7 @@ interface User {
   email: string
 }
 
-type UserRole = 'admin' | 'member'
+type UserRole = "admin" | "member"
 type UserWithRole = User & {
   role: UserRole
 }
@@ -72,7 +73,7 @@ function getErrorMessage(error: unknown): string {
     return error.message
   }
 
-  return 'Unexpected error'
+  return "Unexpected error"
 }
 ```
 
@@ -133,7 +134,7 @@ function updateUser(user: User, name: string): User {
 function updateUser(user: Readonly<User>, name: string): User {
   return {
     ...user,
-    name
+    name,
   }
 }
 ```
@@ -155,13 +156,13 @@ function getErrorMessage(error: unknown): string {
     return error.message
   }
 
-  return 'Unexpected error'
+  return "Unexpected error"
 }
 
 const logger = {
   error: (message: string, error: unknown) => {
     // Replace with your production logger (for example, pino or winston).
-  }
+  },
 }
 
 async function loadUser(userId: string): Promise<User> {
@@ -169,7 +170,7 @@ async function loadUser(userId: string): Promise<User> {
     const result = await riskyOperation(userId)
     return result
   } catch (error: unknown) {
-    logger.error('Operation failed', error)
+    logger.error("Operation failed", error)
     throw new Error(getErrorMessage(error))
   }
 }
@@ -180,11 +181,11 @@ async function loadUser(userId: string): Promise<User> {
 Use Zod for schema-based validation and infer types from the schema:
 
 ```typescript
-import { z } from 'zod'
+import { z } from "zod"
 
 const userSchema = z.object({
   email: z.string().email(),
-  age: z.number().int().min(0).max(150)
+  age: z.number().int().min(0).max(150),
 })
 
 type UserInput = z.infer<typeof userSchema>

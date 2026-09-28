@@ -180,7 +180,7 @@ export class ProcessManager {
     if (process.platform === "win32") {
       // Windows: use taskkill to kill process tree
       try {
-        execSync(`taskkill /T /F /PID ${pid}`, { windowsHide: true })
+        execSync(`taskkill /T /F /PID ${pid}`, { windowsHide: true, timeout: 5_000 })
       } catch {
         /* process already dead */
       }

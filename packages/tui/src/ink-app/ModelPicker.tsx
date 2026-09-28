@@ -9,6 +9,7 @@ import { Box, Text, useStdout } from "ink"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
 import { buildModelPickerRows } from "./model-picker.js"
+import { g } from "./glyphs.js"
 
 /** Rows shown at once — windowed like ThemePicker/CommandPalette. */
 const MAX_VISIBLE = 12
@@ -156,13 +157,13 @@ export function ModelPicker({
           return (
             <Box key={row.rowId}>
               <Text color={active ? "#6cb6f5" : undefined} bold={active}>
-                {active ? "❯ " : "  "}
+                {active ? `${g("picker")} ` : "  "}
               </Text>
               <Text dimColor>{`[${row.category}] `}</Text>
               <Text bold={active}>
-                {row.isCurrent ? "● " : ""}
+                {row.isCurrent ? `${g("dot")} ` : ""}
                 {row.id}
-                {row.isFavorite ? " ★" : ""}
+                {row.isFavorite ? ` ${g("star")}` : ""}
               </Text>
               {row.isCurrent ? <Text dimColor> (current)</Text> : null}
             </Box>
@@ -192,9 +193,9 @@ export function ModelPicker({
   const status = !selectedRow
     ? "—"
     : selectedRow.isCurrent
-      ? "● current"
+      ? `${g("dot")} current`
       : selectedRow.isFavorite
-        ? "★ favorite"
+        ? `${g("star")} favorite`
         : recents.includes(selectedRow.id)
           ? "recent"
           : "—"

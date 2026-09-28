@@ -192,10 +192,10 @@ export function isPortInUse(port: number = OAUTH_CALLBACK_PORT): Promise<boolean
     const socket = net.createConnection(port, "127.0.0.1")
     socket.on("connect", () => {
       socket.destroy()
-      resolve(true)
+      resolve(/*value*/ true)
     })
     socket.on("error", () => {
-      resolve(false)
+      resolve(/*value*/ false)
     })
   })
 }
@@ -208,7 +208,7 @@ function listen(port: number, callbackPath: string): Promise<boolean> {
       // Listen failed (e.g. EADDRINUSE) - the handle was never opened, so just
       // drop the listeners and report "not bound" for port-fallback attempts.
       instance.removeListener("listening", onListening)
-      resolve(false)
+      resolve(/*value*/ false)
     }
     const onListening = (): void => {
       instance.removeListener("error", onError)
@@ -218,7 +218,7 @@ function listen(port: number, callbackPath: string): Promise<boolean> {
       server = instance
       currentPort = port
       currentPath = callbackPath
-      resolve(true)
+      resolve(/*value*/ true)
     }
     instance.once("error", onError)
     instance.once("listening", onListening)

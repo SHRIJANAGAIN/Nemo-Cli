@@ -4,9 +4,9 @@ This file is the canonical store for **all standing instructions** the user has 
 
 ## Schema
 
-| timestamp | instruction | scope | active |
-|-----------|-------------|-------|--------|
-| 2026-09-03T10:00:00Z | "Always use Apache 2.0 headers" | global | true |
+| timestamp            | instruction                     | scope  | active |
+| -------------------- | ------------------------------- | ------ | ------ |
+| 2026-09-03T10:00:00Z | "Always use Apache 2.0 headers" | global | true   |
 
 - **scope**: `global` (all projects), `project` (this project only), `session` (this session only)
 - **active**: `true` while in force; set to `false` when the user revokes it

@@ -26,15 +26,15 @@ JSON-RPC frames, so it is safe to pipe.
 
 ## Methods
 
-| Method | Params | Result |
-| --- | --- | --- |
-| `initialize` | — | `{ protocolVersion: 1, agentCapabilities: { loadSession, prompt, mcp, sessions }, agentInfo }` |
-| `new_session` | `workDir?` | `{ sessionId }` — creates a transcript under the sessions root |
-| `load_session` / `resume_session` | `sessionId` | `{ sessionId, state }`, or error `-32601 session not found: <id>` |
-| `list_sessions` | — | array of `{ sessionId, title, updatedAt, workDir, … }` |
-| `set_model` | `model` | `{ ok: true, model }` |
-| `prompt` | `sessionId?`, `prompt`, `model?` | `{ sessionId, stopReason: "end_turn" \| "cancelled" }` |
-| `cancel` | `sessionId` | `{ ok: true }` — stops streaming for that session |
+| Method                            | Params                           | Result                                                                                         |
+| --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `initialize`                      | —                                | `{ protocolVersion: 1, agentCapabilities: { loadSession, prompt, mcp, sessions }, agentInfo }` |
+| `new_session`                     | `workDir?`                       | `{ sessionId }` — creates a transcript under the sessions root                                 |
+| `load_session` / `resume_session` | `sessionId`                      | `{ sessionId, state }`, or error `-32601 session not found: <id>`                              |
+| `list_sessions`                   | —                                | array of `{ sessionId, title, updatedAt, workDir, … }`                                         |
+| `set_model`                       | `model`                          | `{ ok: true, model }`                                                                          |
+| `prompt`                          | `sessionId?`, `prompt`, `model?` | `{ sessionId, stopReason: "end_turn" \| "cancelled" }`                                         |
+| `cancel`                          | `sessionId`                      | `{ ok: true }` — stops streaming for that session                                              |
 
 While a `prompt` runs, the server emits notifications:
 
@@ -76,13 +76,13 @@ Notes verified in code:
 
 ## When to use which surface
 
-| Surface | Use it for |
-| --- | --- |
-| `trayambak` (Ink REPL) | Humans in a terminal |
-| `trayambak acp` | ACP-capable editors/clients driving sessions over stdio |
-| `trayambak web` | HTTP/SSE integrations ([Web](web.md)) |
+| Surface                | Use it for                                               |
+| ---------------------- | -------------------------------------------------------- |
+| `trayambak` (Ink REPL) | Humans in a terminal                                     |
+| `trayambak acp`        | ACP-capable editors/clients driving sessions over stdio  |
+| `trayambak web`        | HTTP/SSE integrations ([Web](web.md))                    |
 | `trayambak mcp-server` | Exposing a small tool set to MCP clients ([MCP](mcp.md)) |
-| `trayambak exec` | Scripts: one prompt, JSONL events on stdout |
+| `trayambak exec`       | Scripts: one prompt, JSONL events on stdout              |
 
 ## Related
 

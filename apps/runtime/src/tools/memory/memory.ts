@@ -445,6 +445,7 @@ export function extractAndStoreMemories(text: string, sessionId?: string, max = 
 export function createMemoryTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "memory",
       description:
         "Persistent long-term memory across sessions. Save important facts, user preferences, " +

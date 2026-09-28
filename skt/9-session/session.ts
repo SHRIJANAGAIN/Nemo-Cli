@@ -235,6 +235,45 @@ export interface ToolResultPatch {
   toolStatus?: "running" | "completed" | "error"
 }
 
+/** Default name given to fresh sessions before the first exchange. */
+export const DEFAULT_SESSION_NAME = "New conversation"
+
+/**
+ * Derive a ≤5-word title from a restored transcript (first user message).
+ * Used on resume so sessions stuck at the default name get a real title
+ * without waiting for a provider round-trip.
+ */
+export function titleFromConversation(history: ConversationEntry[]): string {
+  const first = history.find((e) => e.role === "user" && (e.content ?? "").trim().length > 0)
+  const title = (first?.content ?? "").replace(/\s+/g, " ").trim().split(" ").slice(0, 5).join(" ")
+  return title
+}
+
+/**
+ * Rename every default-named session that already has transcript content,
+ * using its own first user message. Returns the fresh entry list.
+ * Runs when the resume picker opens so the list never shows stale
+ * "New conversation" rows. User-chosen names are never touched.
+ */
+export function backfillUntitledSessions(): SessionEntry[] {
+  try {
+    const all = loadSessions()
+    let changed = false
+    for (const s of all) {
+      if (s.sessionName !== DEFAULT_SESSION_NAME) continue
+      if ((s.messageCount ?? 0) <= 0) continue
+      const title = titleFromConversation(loadConversation(s.sessionId))
+      if (!title || title === DEFAULT_SESSION_NAME) continue
+      s.sessionName = title
+      changed = true
+    }
+    if (changed) saveSessions(all)
+    return changed ? loadSessions() : all
+  } catch {
+    return loadSessions()
+  }
+}
+
 export function appendConversation(
   sessionId: string,
   role: "user" | "assistant" | "system" | "tool",

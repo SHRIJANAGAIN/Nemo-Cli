@@ -74,6 +74,7 @@ function putTask(task: TaskItem): void {
 }
 
 const taskCreateDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__TaskCreate",
   description: "Create a new task in the trayambak task list.",
   parameters: {
@@ -97,7 +98,7 @@ export function createTaskCreateTool(): Tool {
     definition: taskCreateDef,
     async execute(_id, args) {
       const content = String(args.content ?? "")
-      if (!content) return textResult("Missing 'content'.", true)
+      if (!content) return textResult("Missing 'content'.", /*isError*/ true)
       const id = nextId()
       const task: TaskItem = {
         id,
@@ -116,6 +117,7 @@ export function createTaskCreateTool(): Tool {
 }
 
 const taskUpdateDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__TaskUpdate",
   description: "Update the status of an existing task.",
   parameters: {
@@ -137,9 +139,9 @@ export function createTaskUpdateTool(): Tool {
       const id = String(args.id ?? "")
       const status = String(args.status ?? "")
       const t = getTask(id)
-      if (!t) return textResult(`No such task: ${id}`, true)
+      if (!t) return textResult(`No such task: ${id}`, /*isError*/ true)
       if (!["pending", "in_progress", "completed"].includes(status)) {
-        return textResult(`Invalid status: ${status}`, true)
+        return textResult(`Invalid status: ${status}`, /*isError*/ true)
       }
       t.status = status as TaskItem["status"]
       t.updatedAt = Date.now()
@@ -152,6 +154,7 @@ export function createTaskUpdateTool(): Tool {
 }
 
 const taskGetDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__TaskGet",
   description: "Get details for a specific task.",
   parameters: {
@@ -166,7 +169,7 @@ export function createTaskGetTool(): Tool {
     definition: taskGetDef,
     async execute(_id, args) {
       const t = getTask(String(args.id ?? ""))
-      if (!t) return textResult("Not found", true)
+      if (!t) return textResult("Not found", /*isError*/ true)
       return textResult(
         `${t.id} | ${t.status}${t.priority ? ` [${t.priority}]` : ""} | ${t.content}${t.result ? `\nresult: ${t.result}` : ""}`,
       )
@@ -175,6 +178,7 @@ export function createTaskGetTool(): Tool {
 }
 
 const taskListDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__TaskList",
   description: "List all tasks in the trayambak task list.",
   parameters: { type: "object", required: [], properties: {} },
@@ -194,6 +198,7 @@ export function createTaskListTool(): Tool {
 }
 
 const taskOutputDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__TaskOutput",
   description: "Get the output/result for a completed task.",
   parameters: {
@@ -208,8 +213,8 @@ export function createTaskOutputTool(): Tool {
     definition: taskOutputDef,
     async execute(_id, args) {
       const t = getTask(String(args.id ?? ""))
-      if (!t) return textResult("Not found", true)
-      if (t.status !== "completed") return textResult(`Task not completed (status: ${t.status})`, true)
+      if (!t) return textResult("Not found", /*isError*/ true)
+      if (t.status !== "completed") return textResult(`Task not completed (status: ${t.status})`, /*isError*/ true)
       return textResult(t.result ?? "(no output)")
     },
   }

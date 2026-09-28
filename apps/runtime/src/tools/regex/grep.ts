@@ -9,8 +9,10 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
+import { searchRipgrep, type RgHit } from "../search/ripgrep.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "grep",
   description:
     "Search file contents for a regular expression. Returns matching file paths with line numbers and the matched line. Respects a glob filter.",
@@ -40,22 +42,57 @@ const MAX_MAX_RESULTS = 1000
  *  reported, never silently swallowed. */
 const MAX_TEST_LINE_LENGTH = 8192
 
+/**
+ * Render ripgrep hits in the exact shape the Node walker produces:
+ * `rel:line: text` for matches, indented `  rel:line: text` for context
+ * lines, capped at `maxResults` matches.
+ */
+export function formatGrepHits(
+  hits: RgHit[],
+  opts: { maxResults: number; contextLines: number },
+): { lines: string[]; matchCount: number; hasMore: boolean } {
+  const lines: string[] = []
+  let matchCount = 0
+  let hasMore = false
+  const trunc = (s: string): string =>
+    s.length > MAX_TEST_LINE_LENGTH ? `${s.slice(0, MAX_TEST_LINE_LENGTH)}… [line truncated]` : s
+  for (const h of hits) {
+    if (h.isMatch) {
+      if (matchCount >= opts.maxResults) {
+        hasMore = true
+        break
+      }
+      matchCount++
+      lines.push(`${h.path}:${h.line}: ${trunc(h.text.trim())}`)
+    } else if (opts.contextLines > 0 && matchCount < opts.maxResults) {
+      // rg emits context only adjacent to matches — both the lines before
+      // a match (they arrive first) and after it. Drop only once the
+      // match cap has been reached, mirroring the Node walker.
+      lines.push(`  ${h.path}:${h.line}: ${trunc(h.text.trim())}`)
+    }
+  }
+  return { lines, matchCount, hasMore }
+}
+
 export function createGrepTool(): Tool {
   return {
     definition,
     async execute(_id, args, signal, _update, context) {
       try {
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         const ctx = context as ToolContext
         const pattern = String(args.pattern ?? "")
-        if (!pattern) return textResult("Missing 'pattern'.", true)
+        if (!pattern) return textResult("Missing 'pattern'.", /*isError*/ true)
 
         const rawBase = typeof args.path === "string" ? args.path : "."
         let base: string
         try {
           base = resolveConstrainedPath(path.resolve(ctx.cwd, rawBase), ctx.cwd)
         } catch (error) {
-          return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
+          return textResult(
+            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            /*isError*/ true,
+          )
         }
 
         const glob = typeof args.glob === "string" ? args.glob : "*"
@@ -72,7 +109,31 @@ export function createGrepTool(): Tool {
           const effectivePattern = literal ? pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : pattern
           regex = new RegExp(effectivePattern, flags)
         } catch {
-          return textResult(`Invalid regular expression: ${pattern}`, true)
+          return textResult(`Invalid regular expression: ${pattern}`, /*isError*/ true)
+        }
+
+        // ── ripgrep fast path: gitignore-aware, 10-50x the Node walk.
+        //    Any failure (missing binary, rejected pattern, timeout) keeps
+        //    the pure-Node walk below as the fallback. ──
+        const rg = await searchRipgrep(
+          {
+            cwd: base,
+            pattern,
+            fixedStrings: literal,
+            ignoreCase: Boolean(args.ignore_case),
+            contextLines: contextLines > 0 ? contextLines : undefined,
+            glob,
+          },
+          { signal },
+        )
+        if (rg.kind === "ok") {
+          if (signal?.aborted) return textResult("aborted", /*isError*/ true)
+          const { lines, matchCount, hasMore } = formatGrepHits(rg.hits, { maxResults, contextLines })
+          if (matchCount === 0) {
+            return textResult(`No matches for /${pattern}/ in ${base}`)
+          }
+          const header = `Found ${matchCount} match(es)${hasMore ? " (more matches available)" : ""}`
+          return textResult(`${header}\n${lines.join("\n")}`)
         }
 
         const results: string[] = []
@@ -121,7 +182,7 @@ export function createGrepTool(): Tool {
           }
         })
 
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         if (results.length === 0) {
           const skipped =
             skippedLong > 0 ? ` (${skippedLong} over-long line(s) skipped — see MAX_TEST_LINE_LENGTH)` : ""
@@ -131,7 +192,7 @@ export function createGrepTool(): Tool {
         const header = `Found ${total} match(es)${hasMore ? " (more matches available)" : ""}`
         return textResult(`${header}\n${results.join("\n")}`)
       } catch (error) {
-        return textResult(`Grep error: ${error instanceof Error ? error.message : String(error)}`, true)
+        return textResult(`Grep error: ${error instanceof Error ? error.message : String(error)}`, /*isError*/ true)
       }
     },
   }

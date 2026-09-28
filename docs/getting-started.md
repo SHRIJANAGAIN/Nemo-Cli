@@ -62,12 +62,12 @@ Full details, including the per-provider defaults and key handling, are in
 
 ## Your first prompts
 
-| You type | What happens |
-| --- | --- |
-| `trayambak` | Interactive session (Ink REPL) |
-| `trayambak run "explain this repo"` | Interactive session that runs that prompt immediately on launch |
-| `trayambak exec "summarize ./src"` | Headless: one prompt, newline-delimited JSON events on stdout, then exit |
-| `trayambak review` | Headless review of current changes (`trayambak review <file>` for a target) |
+| You type                            | What happens                                                                |
+| ----------------------------------- | --------------------------------------------------------------------------- |
+| `trayambak`                         | Interactive session (Ink REPL)                                              |
+| `trayambak run "explain this repo"` | Interactive session that runs that prompt immediately on launch             |
+| `trayambak exec "summarize ./src"`  | Headless: one prompt, newline-delimited JSON events on stdout, then exit    |
+| `trayambak review`                  | Headless review of current changes (`trayambak review <file>` for a target) |
 
 Inside the session, `/help` lists the **52 built-in slash commands**
 (defined in `packages/tui/src/ink-app/types.ts`), `/keymap` lists every
@@ -78,59 +78,60 @@ keyboard shortcut, and `Ctrl+K` opens the leader/which-key overlay.
 `trayambak help` prints the authoritative list. The 31 visible subcommands
 (`chat` is hidden from help because `trayambak` alone starts it):
 
-| Command | Description |
-| --- | --- |
-| `trayambak` / `trayambak chat` | Start an interactive session |
-| `run "prompt"` | Interactive session that runs that prompt immediately |
-| `exec "prompt"` | Headless run, JSON events on stdout |
-| `review [target]` | Review code/changes for bugs, security issues, style |
-| `config get [key]` | Show configuration |
-| `config set <key> <value>` | Persist a configuration value |
-| `doctor` | Diagnose the local environment (exit 1 if any check fails) |
-| `info` | Runtime & config summary (version, node, platform, model, shell) |
-| `agent [list\|info\|run]` | Manage agent profiles |
-| `task [list\|create\|…]` | Manage trayambak tasks |
-| `todo [list\|add\|update\|…]` | Manage session todos |
-| `plan [create\|list\|show\|…]` | Manage multi-step plans |
-| `manager [status\|summary\|…]` | Show manager status |
-| `compact [config\|estimate\|run\|reset]` | Configure/run session compaction |
-| `mode [list\|current\|set]` | Operating modes (`default`, `plan`, `architect`, `code`, `debug`, `review`) |
-| `worktree [list\|create\|remove\|switch]` | List/switch git worktrees |
-| `mcp [list\|auth\|logout\|status]` | Manage MCP servers & OAuth |
-| `upgrade [version]` | Update trayambak (git pull or `npm install -g`) and rebuild |
-| `serve [--port 8080]` | Start a local llama.cpp server |
-| `download <org/model>` | Download a GGUF model (`[file.gguf] [--output <path>]`) |
-| `acp` | Run as an ACP agent server (stdio JSON-RPC) |
-| `web [--port 8787]` | HTTP agent API + `/api/sessions` + `/openapi.json` |
-| `login [--with-api-key K \| status]` | Store/report credentials |
-| `logout` | Delete stored credentials |
-| `archive <id>` / `unarchive <id>` / `delete <id>` | Manage saved sessions |
-| `mcp-server` | Expose a small tool set to MCP clients over stdio |
-| `sandbox check <file>` | Check the sandbox policy for a file operation |
-| `execpolicy check <cmd>` | Check the exec rule engine for a command |
-| `resume <id>` | Resume a stored session |
-| `export [id] [--format markdown\|json\|text]` | Export a session transcript (default `markdown`) |
-| `completion <bash\|zsh\|fish\|powershell>` | Print a shell completion script |
+| Command                                           | Description                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------------------------- |
+| `trayambak` / `trayambak chat`                    | Start an interactive session                                                |
+| `run "prompt"`                                    | Interactive session that runs that prompt immediately                       |
+| `exec "prompt"`                                   | Headless run, JSON events on stdout                                         |
+| `review [target]`                                 | Review code/changes for bugs, security issues, style                        |
+| `config get [key]`                                | Show configuration                                                          |
+| `config set <key> <value>`                        | Persist a configuration value                                               |
+| `doctor`                                          | Diagnose the local environment (exit 1 if any check fails)                  |
+| `info`                                            | Runtime & config summary (version, node, platform, model, shell)            |
+| `agent [list\|info\|run]`                         | Manage agent profiles                                                       |
+| `task [list\|create\|…]`                          | Manage trayambak tasks                                                      |
+| `todo [list\|add\|update\|…]`                     | Manage session todos                                                        |
+| `plan [create\|list\|show\|…]`                    | Manage multi-step plans                                                     |
+| `manager [status\|summary\|…]`                    | Show manager status                                                         |
+| `compact [config\|estimate\|run\|reset]`          | Configure/run session compaction                                            |
+| `mode [list\|current\|set]`                       | Operating modes (`default`, `plan`, `architect`, `code`, `debug`, `review`) |
+| `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                                   |
+| `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                                  |
+| `upgrade [version]`                               | Update trayambak (git pull or `npm install -g`) and rebuild                 |
+| `serve [--port 8080]`                             | Start a local llama.cpp server                                              |
+| `download <org/model>`                            | Download a GGUF model (`[file.gguf] [--output <path>]`)                     |
+| `acp`                                             | Run as an ACP agent server (stdio JSON-RPC)                                 |
+| `web [--port 8787]`                               | HTTP agent API + `/api/sessions` + `/openapi.json`                          |
+| `login [--with-api-key K \| status]`              | Store/report credentials                                                    |
+| `logout`                                          | Delete stored credentials                                                   |
+| `archive <id>` / `unarchive <id>` / `delete <id>` | Manage saved sessions                                                       |
+| `mcp-server`                                      | Expose a small tool set to MCP clients over stdio                           |
+| `sandbox check <file>`                            | Check the sandbox policy for a file operation                               |
+| `execpolicy check <cmd>`                          | Check the exec rule engine for a command                                    |
+| `resume <id>`                                     | Resume a stored session                                                     |
+| `export [id] [--format markdown\|json\|text]`     | Export a session transcript (default `markdown`)                            |
+| `completion <bash\|zsh\|fish\|powershell>`        | Print a shell completion script                                             |
 
 An unknown command prints help and exits `2` (the usage code).
 
 ## Global flags
 
-| Flag | Meaning |
-| --- | --- |
-| `--base-url <url>` | Provider base URL (per-provider default — see [Providers](providers.md)) |
-| `--model <name>` | Model id to request |
-| `--provider <name>` | One of `llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `xai`, `huggingface`, `anthropic`, `google`, `ollama`, `custom` |
-| `--cwd <dir>` | Working directory for tools |
-| `--session <file>` | Persist the session transcript to a JSON file |
-| `--config <file>` | Explicit config file (exported as `TRAYAMBAK_CONFIG`, honored by `configPath()`). Without it config resolves from `./.trayambak/config.json` or `~/.trayambak/config.json` (see [Configuration](#configuration)) |
-| `--port <n>` | Port for `serve` / `web` |
-| `--host <addr>` | Host for `web` (default `127.0.0.1`) |
-| `--token <t>` | Bearer token for `web` (else `TRAYAMBAK_WEB_TOKEN`) |
-| `--dev`, `--dev-mode` | Enable developer mode |
-| `--dump-system-prompt` | Print the built system prompt and exit (offline, no key needed) |
-| `--version`, `-v` | Print version (`trayambak 0.5.0`; `skt 0.5.0` under the `skt` shim) |
-| `--help`, `-h`, `help` | Show help |
+| Flag                   | Meaning                                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--base-url <url>`     | Provider base URL (per-provider default — see [Providers](providers.md))                                                                                                                                         |
+| `--model <name>`       | Model id to request                                                                                                                                                                                              |
+| `--provider <name>`    | One of `llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `xai`, `huggingface`, `anthropic`, `google`, `ollama`, `custom`                                                                                             |
+| `--cwd <dir>`          | Working directory for tools                                                                                                                                                                                      |
+| `--session <file>`     | Persist the session transcript to a JSON file                                                                                                                                                                    |
+| `--config <file>`      | Explicit config file (exported as `TRAYAMBAK_CONFIG`, honored by `configPath()`). Without it config resolves from `./.trayambak/config.json` or `~/.trayambak/config.json` (see [Configuration](#configuration)) |
+| `--budget <spec>`      | Session budget: token cap (`50k`, `1.5M`, `50000 tokens`) or turn cap (`40 turns`); `-1` disables. Also `TRAYAMBAK_BUDGET` or `budget` in config; the loop stops with a `budget_exhausted` event when exhausted  |
+| `--port <n>`           | Port for `serve` / `web`                                                                                                                                                                                         |
+| `--host <addr>`        | Host for `web` (default `127.0.0.1`)                                                                                                                                                                             |
+| `--token <t>`          | Bearer token for `web` (else `TRAYAMBAK_WEB_TOKEN`)                                                                                                                                                              |
+| `--dev`, `--dev-mode`  | Enable developer mode                                                                                                                                                                                            |
+| `--dump-system-prompt` | Print the built system prompt and exit (offline, no key needed)                                                                                                                                                  |
+| `--version`, `-v`      | Print version (`trayambak 0.5.0`; `skt 0.5.0` under the `skt` shim)                                                                                                                                              |
+| `--help`, `-h`, `help` | Show help                                                                                                                                                                                                        |
 
 Parsing notes (`apps/cli/src/flags.ts`):
 
@@ -178,43 +179,43 @@ The schema is documented in `config.schema.json` (root of the repo) — it cover
 
 The full set read by `loadConfig()`:
 
-| Variable | Sets |
-| --- | --- |
-| `TRAYAMBAK_BASE_URL` | Provider base URL |
-| `TRAYAMBAK_MODEL` | Model id |
-| `TRAYAMBAK_API_KEY` | API key (overrides the config file) |
-| `TRAYAMBAK_PROVIDER` | Provider id |
-| `TRAYAMBAK_CWD` | Tools working directory |
-| `TRAYAMBAK_TEMPERATURE`, `TRAYAMBAK_TOP_P`, `TRAYAMBAK_MAX_TOKENS`, `TRAYAMBAK_CONTEXT_WINDOW`, `TRAYAMBAK_TIMEOUT_MS` | Sampling / context limits |
-| `TRAYAMBAK_MAX_TURNS`, `TRAYAMBAK_MAX_TOOL_CALLS`, `TRAYAMBAK_MAX_DISTINCT_TOOL_CALLS`, `TRAYAMBAK_TOOL_CALL_RATE`, `TRAYAMBAK_MAX_PARALLEL_TOOL_CALLS` | Runaway-loop guards |
-| `TRAYAMBAK_MAX_RETRIES`, `TRAYAMBAK_RETRY_DELAY_MS` | Provider retry policy |
-| `TRAYAMBAK_MAX_OUTPUT_LINES`, `TRAYAMBAK_MAX_OUTPUT_BYTES` | Tool-output truncation |
-| `TRAYAMBAK_SHELL_COMMAND` | Shell used by the bash tool |
-| `TRAYAMBAK_NATIVE_TOOLS` | Native function calling (`true`/`false`) |
-| `TRAYAMBAK_MODEL_PATH`, `TRAYAMBAK_LLAMACPP_BIN` | Local GGUF + llama.cpp binary |
-| `TRAYAMBAK_SKILLS_DIR`, `TRAYAMBAK_AGENT_PROFILE_DIRS` | Skills / agent profile dirs |
-| `TRAYAMBAK_MCP_SERVERS` | MCP servers as JSON |
-| `TRAYAMBAK_REASONING_EFFORT` | `low` \| `medium` \| `high` \| `xhigh` \| `max` |
-| `TRAYAMBAK_SCRATCHPAD_DIR` | Scratchpad directory |
-| `TRAYAMBAK_THEME`, `TRAYAMBAK_CODE_FONT` | TUI appearance |
-| `TRAYAMBAK_QUESTION_DEFAULT_OPTION`, `TRAYAMBAK_QUESTION_ANSWER_MODE` | Ask-question defaults |
-| `TRAYAMBAK_BROWSER_AUTOMATION_*` | Browser automation (`ENABLED`, `HEADLESS`, `MAX_PAGES`, `TIMEOUT_MS`, `VIEWPORT_WIDTH`, `VIEWPORT_HEIGHT`, `CAPTURE_SCREENSHOT`) |
-| `TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED`, `TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS`, `TRAYAMBAK_MCP_TOOL_CACHE_ENABLED`, `TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS`, `TRAYAMBAK_MCP_RECONNECT_ON_FAILURE` | MCP health/cache/reconnect |
-| `TRAYAMBAK_AUTOUPDATE` | `true`/`1` = apply, `false`/`0` = never, `notify` = notify only |
+| Variable                                                                                                                                                                                    | Sets                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `TRAYAMBAK_BASE_URL`                                                                                                                                                                        | Provider base URL                                                                                                                |
+| `TRAYAMBAK_MODEL`                                                                                                                                                                           | Model id                                                                                                                         |
+| `TRAYAMBAK_API_KEY`                                                                                                                                                                         | API key (overrides the config file)                                                                                              |
+| `TRAYAMBAK_PROVIDER`                                                                                                                                                                        | Provider id                                                                                                                      |
+| `TRAYAMBAK_CWD`                                                                                                                                                                             | Tools working directory                                                                                                          |
+| `TRAYAMBAK_TEMPERATURE`, `TRAYAMBAK_TOP_P`, `TRAYAMBAK_MAX_TOKENS`, `TRAYAMBAK_CONTEXT_WINDOW`, `TRAYAMBAK_TIMEOUT_MS`                                                                      | Sampling / context limits                                                                                                        |
+| `TRAYAMBAK_MAX_TURNS`, `TRAYAMBAK_MAX_TOOL_CALLS`, `TRAYAMBAK_MAX_DISTINCT_TOOL_CALLS`, `TRAYAMBAK_TOOL_CALL_RATE`, `TRAYAMBAK_MAX_PARALLEL_TOOL_CALLS`                                     | Runaway-loop guards                                                                                                              |
+| `TRAYAMBAK_MAX_RETRIES`, `TRAYAMBAK_RETRY_DELAY_MS`                                                                                                                                         | Provider retry policy                                                                                                            |
+| `TRAYAMBAK_MAX_OUTPUT_LINES`, `TRAYAMBAK_MAX_OUTPUT_BYTES`                                                                                                                                  | Tool-output truncation                                                                                                           |
+| `TRAYAMBAK_SHELL_COMMAND`                                                                                                                                                                   | Shell used by the bash tool                                                                                                      |
+| `TRAYAMBAK_NATIVE_TOOLS`                                                                                                                                                                    | Native function calling (`true`/`false`)                                                                                         |
+| `TRAYAMBAK_MODEL_PATH`, `TRAYAMBAK_LLAMACPP_BIN`                                                                                                                                            | Local GGUF + llama.cpp binary                                                                                                    |
+| `TRAYAMBAK_SKILLS_DIR`, `TRAYAMBAK_AGENT_PROFILE_DIRS`                                                                                                                                      | Skills / agent profile dirs                                                                                                      |
+| `TRAYAMBAK_MCP_SERVERS`                                                                                                                                                                     | MCP servers as JSON                                                                                                              |
+| `TRAYAMBAK_REASONING_EFFORT`                                                                                                                                                                | `low` \| `medium` \| `high` \| `xhigh` \| `max`                                                                                  |
+| `TRAYAMBAK_SCRATCHPAD_DIR`                                                                                                                                                                  | Scratchpad directory                                                                                                             |
+| `TRAYAMBAK_THEME`, `TRAYAMBAK_CODE_FONT`                                                                                                                                                    | TUI appearance                                                                                                                   |
+| `TRAYAMBAK_QUESTION_DEFAULT_OPTION`, `TRAYAMBAK_QUESTION_ANSWER_MODE`                                                                                                                       | Ask-question defaults                                                                                                            |
+| `TRAYAMBAK_BROWSER_AUTOMATION_*`                                                                                                                                                            | Browser automation (`ENABLED`, `HEADLESS`, `MAX_PAGES`, `TIMEOUT_MS`, `VIEWPORT_WIDTH`, `VIEWPORT_HEIGHT`, `CAPTURE_SCREENSHOT`) |
+| `TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED`, `TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS`, `TRAYAMBAK_MCP_TOOL_CACHE_ENABLED`, `TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS`, `TRAYAMBAK_MCP_RECONNECT_ON_FAILURE` | MCP health/cache/reconnect                                                                                                       |
+| `TRAYAMBAK_AUTOUPDATE`                                                                                                                                                                      | `true`/`1` = apply, `false`/`0` = never, `notify` = notify only                                                                  |
 
 Read elsewhere in the CLI (not by `loadConfig()`):
 
-| Variable | Used by |
-| --- | --- |
-| `TRAYAMBAK_DISABLE_AUTOUPDATE` | Auto-update kill switch (any value except `0`/`false` skips updates) |
-| `TRAYAMBAK_WEB_TOKEN`, `TRAYAMBAK_SERVER_PORT` | `trayambak web` |
-| `TRAYAMBAK_CREDENTIALS_FILE` | `trayambak login` credentials path |
-| `TRAYAMBAK_SESSIONS_DIR`, `TRAYAMBAK_SESSIONS_FILE` | Session transcripts / index (see [Sessions](sessions.md)) |
-| `TRAYAMBAK_MCP_AUTH_FILE` | MCP OAuth token file |
-| `TRAYAMBAK_GPU_LAYERS`, `TRAYAMBAK_CTX_SIZE`, `TRAYAMBAK_BATCH_SIZE`, `TRAYAMBAK_UBATCH_SIZE` | `trayambak serve` (its model comes from `--model`, else `modelPath`/`TRAYAMBAK_MODEL_PATH`) |
-| `TRAYAMBAK_HOME` | Project-root override — the `bin/*.cmd` and `~/bin` shims resolve it first; auto-update, `upgrade`, and the memory tool honor it too |
-| `TRAYAMBAK_BIN_NAME` | Help-text binary name (`skt` vs `trayambak`) |
-| `TRAYAMBAK_DEBUG_INPUT=1` | Debug tracing: keystrokes/turn stages → `<os tmpdir>/trayambak-input.log`; config-corruption backups → `./trayambak-config.log` |
+| Variable                                                                                      | Used by                                                                                                                              |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `TRAYAMBAK_DISABLE_AUTOUPDATE`                                                                | Auto-update kill switch (any value except `0`/`false` skips updates)                                                                 |
+| `TRAYAMBAK_WEB_TOKEN`, `TRAYAMBAK_SERVER_PORT`                                                | `trayambak web`                                                                                                                      |
+| `TRAYAMBAK_CREDENTIALS_FILE`                                                                  | `trayambak login` credentials path                                                                                                   |
+| `TRAYAMBAK_SESSIONS_DIR`, `TRAYAMBAK_SESSIONS_FILE`                                           | Session transcripts / index (see [Sessions](sessions.md))                                                                            |
+| `TRAYAMBAK_MCP_AUTH_FILE`                                                                     | MCP OAuth token file                                                                                                                 |
+| `TRAYAMBAK_GPU_LAYERS`, `TRAYAMBAK_CTX_SIZE`, `TRAYAMBAK_BATCH_SIZE`, `TRAYAMBAK_UBATCH_SIZE` | `trayambak serve` (its model comes from `--model`, else `modelPath`/`TRAYAMBAK_MODEL_PATH`)                                          |
+| `TRAYAMBAK_HOME`                                                                              | Project-root override — the `bin/*.cmd` and `~/bin` shims resolve it first; auto-update, `upgrade`, and the memory tool honor it too |
+| `TRAYAMBAK_BIN_NAME`                                                                          | Help-text binary name (`skt` vs `trayambak`)                                                                                         |
+| `TRAYAMBAK_DEBUG_INPUT=1`                                                                     | Debug tracing: keystrokes/turn stages → `<os tmpdir>/trayambak-input.log`; config-corruption backups → `./trayambak-config.log`      |
 
 ## Credentials
 
@@ -230,15 +231,15 @@ trayambak logout                           # deletes the credentials file
 
 ## Where things live
 
-| Path | Contents |
-| --- | --- |
-| `~/.trayambak/config.json` | Configuration (0600) |
-| `~/.trayambak/credentials.json` | `trayambak login` API key (0600) |
-| `~/.trayambak/sessions/<id>/` | Session transcripts (0600) |
-| `~/.trayambak/sessions.json` | Session index (0600) |
-| `~/.trayambak/mcp-auth.json` | MCP OAuth tokens (0600) |
-| `~/.trayambak/logs/llama-server.log` | llama.cpp server log |
-| `./.scratchpad/` | Scratchpad for temp files (default) |
+| Path                                 | Contents                            |
+| ------------------------------------ | ----------------------------------- |
+| `~/.trayambak/config.json`           | Configuration (0600)                |
+| `~/.trayambak/credentials.json`      | `trayambak login` API key (0600)    |
+| `~/.trayambak/sessions/<id>/`        | Session transcripts (0600)          |
+| `~/.trayambak/sessions.json`         | Session index (0600)                |
+| `~/.trayambak/mcp-auth.json`         | MCP OAuth tokens (0600)             |
+| `~/.trayambak/logs/llama-server.log` | llama.cpp server log                |
+| `./.scratchpad/`                     | Scratchpad for temp files (default) |
 
 ## Diagnostics
 

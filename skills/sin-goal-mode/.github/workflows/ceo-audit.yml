@@ -20,13 +20,13 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Audit profile: QUICK | RELEASE | SECURITY | FULL'
+        description: "Audit profile: QUICK | RELEASE | SECURITY | FULL"
         required: false
-        default: 'QUICK'
+        default: "QUICK"
       grade:
-        description: 'Minimum grade to pass: A | B | C'
+        description: "Minimum grade to pass: A | B | C"
         required: false
-        default: 'B'
+        default: "B"
 
 permissions:
   contents: read
@@ -52,13 +52,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # full history for regression detection
+          fetch-depth: 0 # full history for regression detection
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
 
       - name: Install SIN-Code Bundle (with ceo-audit skill)
         # Try PyPI first, fall back to GitHub (bundle is not yet on PyPI).

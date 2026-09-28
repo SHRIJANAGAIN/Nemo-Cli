@@ -66,15 +66,19 @@ metadata:
 **Context:** [Brief description of when this applies]
 
 ## Problem
+
 [What problem this solves - be specific]
 
 ## Solution
+
 [The pattern/technique/workaround]
 
 ## Example
+
 [Code example if applicable]
 
 ## When to Use
+
 [Trigger conditions - what should activate this skill]
 ```
 

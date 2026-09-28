@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config"
 
 // Junk that must never be collected as tests (also mirrored in
 // coverage.exclude below so generated/vendored trees don't skew numbers).
@@ -16,12 +16,22 @@ const excludedTrees = [
   "**/legacy-reference-tui2/**",
   "**/trayambak-ink/**",
   "**/repl/**",
-];
+]
 
 export default defineConfig({
   test: {
-    include: ["packages/**/*.{test,spec}.?(c|m)[jt]s?(x)", "apps/**/*.{test,spec}.?(c|m)[jt]s?(x)", "hooks/**/*.{test,spec}.?(c|m)[jt]s?(x)", "servers/**/*.{test,spec}.?(c|m)[jt]s?(x)", "skt/**/*.{test,spec}.?(c|m)[jt]s?(x)", "packages/sandbox/**/*.test.ts", "packages/core/**/*.test.ts", "packages/execpolicy/**/*.test.ts"],
+    include: [
+      "packages/**/*.{test,spec}.?(c|m)[jt]s?(x)",
+      "apps/**/*.{test,spec}.?(c|m)[jt]s?(x)",
+      "hooks/**/*.{test,spec}.?(c|m)[jt]s?(x)",
+      "servers/**/*.{test,spec}.?(c|m)[jt]s?(x)",
+      "skt/**/*.{test,spec}.?(c|m)[jt]s?(x)",
+      "packages/sandbox/**/*.test.ts",
+      "packages/core/**/*.test.ts",
+      "packages/execpolicy/**/*.test.ts",
+    ],
     exclude: [...excludedTrees],
+    setupFiles: ["./vitest.setup.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "json-summary", "html"],
@@ -36,10 +46,16 @@ export default defineConfig({
         "node_modules/**",
         "coverage/**",
         "packages/trayambak-ink/**",
+        // apps/** and skt/** are PRODUCT code and must stay in scope — a
+        // blanket exclusion for them once shrank the measured set from 45k
+        // to 26k statements and inflated the gate by ~8 points. Only the
+        // non-product trees below this comment may be excluded.
         // Build/config plumbing, not product code.
         "**/*.d.ts",
         "**/vitest.config.ts",
         "**/tsconfig*.json",
+        "eslint.config.mjs",
+        "fix-esm-imports.js",
         ".github/**",
         "scripts/**",
         "publish/**",
@@ -55,7 +71,8 @@ export default defineConfig({
       //   core   57.42 stmt / 79.06 branch / 68.10 func / 57.42 lines
       // Each figure is rounded down to leave about a point of headroom. These
       // are a ratchet rather than a target: the number may only rise, so new
-      // code has to land with tests or CI goes red.
+      // code has to land with tests or CI goes red. Recalibrate after every
+      // merge or scope change by re-running `npm run test:coverage`.
       thresholds: {
         statements: 41,
         branches: 72,
@@ -78,4 +95,4 @@ export default defineConfig({
       reportOnFailure: true,
     },
   },
-});
+})

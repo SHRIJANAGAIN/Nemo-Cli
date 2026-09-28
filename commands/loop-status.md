@@ -74,4 +74,5 @@ timeout Trayambak Code runtime tool calls.
 ## Arguments
 
 $ARGUMENTS:
+
 - `--watch` optional

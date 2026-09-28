@@ -12,6 +12,7 @@ import type { PermissionRequest, PermissionMode } from "./types.js"
 import { PERMISSION_MODE_LABELS } from "./types.js"
 import { isEnter } from "./keys.js"
 import { Spinner } from "./Spinner.js"
+import { g, spinnerFrames } from "./glyphs.js"
 
 function formatArgsSimple(args: Record<string, unknown>, maxLen: number = 200): string {
   const entries = Object.entries(args)
@@ -96,7 +97,7 @@ export const PermissionOverlay = ({
       onDeny(current.id)
       return
     }
-    // The composer has a draft — y/n/Enter/arrows are typing, not
+    // The composer has a draft → y/n/Enter/arrows are typing, not
     // decisions (PromptInput reports the flag via onComposerHasTextChange
     // and keeps every other key for itself while the buffer is empty).
     if (composerHasText) return
@@ -160,7 +161,7 @@ export const PermissionOverlay = ({
                 is parked on the user) — a rotating half-circle in the
                 mode's own colour keeps it visibly alive instead of a frozen
                 dialog header. Label text unchanged (oracles key on it). */}
-            <Spinner frames={["◐", "◓", "◑", "◒"]} color={modeColor}>
+            <Spinner frames={spinnerFrames().slice(0, 4)} color={modeColor}>
               Permission Required
             </Spinner>
             <Text dimColor> (mode: {modeLabel})</Text>
@@ -180,7 +181,7 @@ export const PermissionOverlay = ({
                 {req.forceAsk && (
                   <Text bold color={theme.error}>
                     {" "}
-                    ? sensitive — always asks
+                    {g("warn")} sensitive — always asks
                   </Text>
                 )}
               </Box>

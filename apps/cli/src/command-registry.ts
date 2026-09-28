@@ -68,6 +68,12 @@ export const GLOBAL_FLAGS: CommandFlag[] = [
     description: "Use an alternate config file (TRAYAMBAK_CONFIG)",
     placeholder: "<file>",
   },
+  {
+    name: "budget",
+    type: "string",
+    description: "Session budget: token cap (50k, 1.5M, 50000 tokens) or turn cap (40 turns); -1 disables",
+    placeholder: "<spec>",
+  },
   { name: "dev", type: "boolean", description: "Enable developer mode with advanced controls", aliases: ["dev-mode"] },
   { name: "dump-system-prompt", type: "boolean", description: "Print the built system prompt and exit (diagnostics)" },
   { name: "help", type: "boolean", description: "Show help for this command", aliases: ["h"] },
@@ -208,6 +214,7 @@ export const COMMANDS: CommandSpec[] = [
     usage: "trayambak execpolicy check <command>",
     description: "Checks a shell command against the ordered allow/deny exec rule engine.",
   },
+  { name: "flags", summary: "List feature flags and overrides", usage: "trayambak flags", hidden: false },
   {
     name: "completion",
     summary: "Print shell completion script",
@@ -326,7 +333,7 @@ Environment:
   TRAYAMBAK_BASE_URL, TRAYAMBAK_MODEL, TRAYAMBAK_API_KEY,
   TRAYAMBAK_CWD, TRAYAMBAK_PROVIDER, TRAYAMBAK_AUTOUPDATE,
   TRAYAMBAK_DISABLE_AUTOUPDATE, TRAYAMBAK_CONFIG, TRAYAMBAK_WEB_TOKEN,
-  TRAYAMBAK_LOG (debug|info|warn|error), TRAYAMBAK_LOG_FILE
+  TRAYAMBAK_BUDGET, TRAYAMBAK_LOG (debug|info|warn|error), TRAYAMBAK_LOG_FILE
 
 Exit codes:
   0  success    1  runtime error    2  usage error

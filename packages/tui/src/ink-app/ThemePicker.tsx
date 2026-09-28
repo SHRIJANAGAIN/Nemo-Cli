@@ -8,6 +8,7 @@ import { Box, Text, useStdout } from "ink"
 import { TrayambakLogo } from "./TrayambakLogo.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
+import { g } from "./glyphs.js"
 
 export interface ThemeOption {
   name: string
@@ -63,7 +64,7 @@ const MAX_VISIBLE = 12
 function fitLayout(rows: number): { logoCompact: boolean; showPreview: boolean; visible: number } {
   const avail = Math.max(4, rows - 4)
   // per-child cost, margins included: logo+1, header+margin 3, list (worst
-  // case both ↑/↓ marker rows) + margin 3, help 1, preview (border 2 +
+  // case both ▲/▼ marker rows) + margin 3, help 1, preview (border 2 +
   // code pad 2 + 4 code lines + accent line) + margin 10.
   const room = (logoRows: number, preview: boolean): number => avail - (logoRows + 1) - 3 - 3 - 1 - (preview ? 10 : 0)
   const pick = (logoRows: number, showPreview: boolean, min: number) => {
@@ -74,10 +75,10 @@ function fitLayout(rows: number): { logoCompact: boolean; showPreview: boolean; 
   // Priority: full logo > a usable list > the preview box. The preview
   // only earns its 10 rows when >= 6 themes remain visible beside it.
   return (
-    pick(10, true, 6) ??
-    pick(10, false, 1) ??
-    pick(1, true, 6) ??
-    pick(1, false, 1) ?? { logoCompact: true, showPreview: false, visible: 1 }
+    pick(10, /*showPreview*/ true, 6) ??
+    pick(10, /*showPreview*/ false, 1) ??
+    pick(1, /*showPreview*/ true, 6) ??
+    pick(1, /*showPreview*/ false, 1) ?? { logoCompact: true, showPreview: false, visible: 1 }
   )
 }
 
@@ -139,13 +140,18 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
         <Text dimColor>Pick the text style that looks best with your terminal (one-time setup)</Text>
       </Box>
       <Box flexDirection="column" marginBottom={1} flexShrink={0}>
-        {scrollTop > 0 ? <Text dimColor> ▼ {scrollTop} more</Text> : null}
+        {scrollTop > 0 ? (
+          <Text dimColor>
+            {" "}
+            {g("caretUp")} {scrollTop} more
+          </Text>
+        ) : null}
         {themes.slice(scrollTop, scrollTop + visible).map((theme, i) => {
           const idx = scrollTop + i
           return (
             <Box key={theme.name}>
               <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>
-                {idx === selected ? "❯ " : "  "}
+                {idx === selected ? `${g("picker")} ` : "  "}
               </Text>
               <Text color={theme.swatch} bold={idx === selected}>
                 {theme.label}
@@ -155,7 +161,10 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
           )
         })}
         {scrollTop + visible < themes.length ? (
-          <Text dimColor> ▼ {themes.length - scrollTop - visible} more</Text>
+          <Text dimColor>
+            {" "}
+            {g("caretDown")} {themes.length - scrollTop - visible} more
+          </Text>
         ) : null}
       </Box>
       {current && showPreview ? (

@@ -18,6 +18,7 @@ import {
 import { syntaxNote } from "../diagnostics/tsc-diagnostics.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "write_file",
   description:
     "Create or overwrite a file with the given content. Creates parent directories as needed. Use for new files or full rewrites. .git and .trayambak directories are read-only metadata: writes to them are rejected.",
@@ -36,11 +37,11 @@ export function createWriteFileTool(): Tool {
     definition,
     async execute(_id, args, signal, _update, context) {
       try {
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         const ctx = context as ToolContext
         const rawPath = String(args.path ?? "")
         const content = String(args.content ?? "")
-        if (!rawPath) return textResult("Missing 'path'.", true)
+        if (!rawPath) return textResult("Missing 'path'.", /*isError*/ true)
 
         let target: string
         try {
@@ -48,17 +49,20 @@ export function createWriteFileTool(): Tool {
           assertExternalDirectory(target, ctx.cwd)
           assertMutablePath(target)
         } catch (error) {
-          return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
+          return textResult(
+            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            /*isError*/ true,
+          )
         }
 
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
         if (ctx.requestPermission) {
           const ok = await ctx.requestPermission("write_file", rawPath, "Trayambak approval required for write_file")
-          if (!ok) return textResult("Permission denied for write_file: " + rawPath, true)
+          if (!ok) return textResult("Permission denied for write_file: " + rawPath, /*isError*/ true)
         }
 
-        if (signal?.aborted) return textResult("aborted", true)
+        if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
         fs.mkdirSync(path.dirname(target), { recursive: true })
         fs.writeFileSync(target, content, "utf8")
@@ -67,7 +71,7 @@ export function createWriteFileTool(): Tool {
         const note = await syntaxNote(target, content)
         return textResult(`Wrote ${lines} lines to ${rawPath}${note}`)
       } catch (error) {
-        return textResult(`Write error: ${error instanceof Error ? error.message : String(error)}`, true)
+        return textResult(`Write error: ${error instanceof Error ? error.message : String(error)}`, /*isError*/ true)
       }
     },
   }

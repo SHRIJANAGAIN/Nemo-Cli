@@ -7,6 +7,7 @@ paths:
   - "**/use-*.ts"
   - "**/use-*.tsx"
 ---
+
 # React Hooks
 
 > This file covers **React hooks** (`useState`, `useEffect`, `useMemo`, `useCallback`, custom hooks) — NOT the Trayambak Code `hooks/` runtime system. Naming matches the per-language convention `rules/<lang>/hooks.md` used across this repo.
@@ -26,15 +27,15 @@ Enforce `eslint-plugin-react-hooks` with `react-hooks/rules-of-hooks` set to err
 // WRONG: conditional hook
 function Foo({ enabled }: { enabled: boolean }) {
   if (enabled) {
-    const [x, setX] = useState(0); // rule violation
+    const [x, setX] = useState(0) // rule violation
   }
 }
 
 // CORRECT: hook unconditional, condition inside
 function Foo({ enabled }: { enabled: boolean }) {
-  const [x, setX] = useState(0);
-  if (!enabled) return null;
-  return <span>{x}</span>;
+  const [x, setX] = useState(0)
+  if (!enabled) return null
+  return <span>{x}</span>
 }
 ```
 
@@ -50,13 +51,13 @@ function Foo({ enabled }: { enabled: boolean }) {
 
 ```tsx
 // WRONG: effect for derived state
-const [fullName, setFullName] = useState("");
+const [fullName, setFullName] = useState("")
 useEffect(() => {
-  setFullName(`${first} ${last}`);
-}, [first, last]);
+  setFullName(`${first} ${last}`)
+}, [first, last])
 
 // CORRECT: derive during render
-const fullName = `${first} ${last}`;
+const fullName = `${first} ${last}`
 ```
 
 ## Dependency Arrays
@@ -72,17 +73,17 @@ Every subscription, interval, listener, or in-flight request must clean up.
 
 ```tsx
 useEffect(() => {
-  const controller = new AbortController();
-  fetch(url, { signal: controller.signal }).then(handleResponse);
-  return () => controller.abort();
-}, [url]);
+  const controller = new AbortController()
+  fetch(url, { signal: controller.signal }).then(handleResponse)
+  return () => controller.abort()
+}, [url])
 ```
 
 ```tsx
 useEffect(() => {
-  const id = setInterval(tick, 1000);
-  return () => clearInterval(id);
-}, []);
+  const id = setInterval(tick, 1000)
+  return () => clearInterval(id)
+}, [])
 ```
 
 Missing cleanup = race conditions when deps change, memory leaks on unmount.
@@ -112,12 +113,12 @@ Do NOT extract when:
 
 ```tsx
 export function useDebounce<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
+  const [debounced, setDebounced] = useState(value)
   useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(id);
-  }, [value, delay]);
-  return debounced;
+    const id = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(id)
+  }, [value, delay])
+  return debounced
 }
 ```
 
@@ -142,16 +143,16 @@ Use this hook to subscribe to any external store (browser API, third-party state
 ```tsx
 const isOnline = useSyncExternalStore(
   (cb) => {
-    window.addEventListener("online", cb);
-    window.addEventListener("offline", cb);
+    window.addEventListener("online", cb)
+    window.addEventListener("offline", cb)
     return () => {
-      window.removeEventListener("online", cb);
-      window.removeEventListener("offline", cb);
-    };
+      window.removeEventListener("online", cb)
+      window.removeEventListener("offline", cb)
+    }
   },
   () => navigator.onLine,
   () => true,
-);
+)
 ```
 
 ## React 19 Additions

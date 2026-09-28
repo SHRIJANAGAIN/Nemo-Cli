@@ -16,30 +16,30 @@ Servers live under `mcpServers` in `config.json` (or as a JSON blob in
     "github": {
       "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
       "env": { "GITHUB_TOKEN": "ghp_..." },
-      "timeoutMs": 60000
+      "timeoutMs": 60000,
     },
     "acme-http": {
       "url": "https://mcp.acme.dev/sse",
       "headers": { "X-Api-Key": "..." },
-      "oauth": true
+      "oauth": true,
     },
     "local-no-oauth": {
       "url": "http://127.0.0.1:3000/mcp",
-      "oauth": false
-    }
-  }
+      "oauth": false,
+    },
+  },
 }
 ```
 
-| Field | Meaning |
-| --- | --- |
-| `command` | argv array for a stdio server (max 32 entries) |
-| `url` | `http://` or `https://` endpoint (HTTP transport with SSE responses) |
-| `env` | string map passed to the child process |
-| `headers` | string map sent with HTTP requests |
-| `cwd` | working directory for the child |
-| `timeoutMs` | per-call timeout, clamped to 1 000–600 000 ms (default **60 000 ms**) |
-| `oauth` | `false` disables OAuth for this server; an object tunes `clientId`, `clientSecret`, `scope`, `callbackPort`, `redirectUri` |
+| Field       | Meaning                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `command`   | argv array for a stdio server (max 32 entries)                                                                             |
+| `url`       | `http://` or `https://` endpoint (HTTP transport with SSE responses)                                                       |
+| `env`       | string map passed to the child process                                                                                     |
+| `headers`   | string map sent with HTTP requests                                                                                         |
+| `cwd`       | working directory for the child                                                                                            |
+| `timeoutMs` | per-call timeout, clamped to 1 000–600 000 ms (default **60 000 ms**)                                                      |
+| `oauth`     | `false` disables OAuth for this server; an object tunes `clientId`, `clientSecret`, `scope`, `callbackPort`, `redirectUri` |
 
 Validation happens at load (`cleanMcpServers()`): malformed entries, URLs that
 don't parse, and specs with both/neither transport are **dropped individually**
@@ -58,13 +58,13 @@ mcp__<server>__error             # surfaced error tool for that server
 
 Runtime knobs (config key → env var, from `loadConfig()`):
 
-| Key | Env var | Default | Meaning |
-| --- | --- | --- | --- |
-| `mcpToolCacheEnabled` | `TRAYAMBAK_MCP_TOOL_CACHE_ENABLED` | `true` | Cache `listTools` results |
-| `mcpToolCacheTtlMs` | `TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS` | `300000` (5 min) | Cache TTL |
-| `mcpReconnectOnFailure` | `TRAYAMBAK_MCP_RECONNECT_ON_FAILURE` | `true` | Reconnect after transport failure |
-| `mcpHealthCheckEnabled` | `TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED` | `false` | Periodic connection health monitoring |
-| `mcpHealthCheckIntervalMs` | `TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS` | `30000` (min 5 s) | Health-check interval |
+| Key                        | Env var                                  | Default           | Meaning                               |
+| -------------------------- | ---------------------------------------- | ----------------- | ------------------------------------- |
+| `mcpToolCacheEnabled`      | `TRAYAMBAK_MCP_TOOL_CACHE_ENABLED`       | `true`            | Cache `listTools` results             |
+| `mcpToolCacheTtlMs`        | `TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS`        | `300000` (5 min)  | Cache TTL                             |
+| `mcpReconnectOnFailure`    | `TRAYAMBAK_MCP_RECONNECT_ON_FAILURE`     | `true`            | Reconnect after transport failure     |
+| `mcpHealthCheckEnabled`    | `TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED`     | `false`           | Periodic connection health monitoring |
+| `mcpHealthCheckIntervalMs` | `TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS` | `30000` (min 5 s) | Health-check interval                 |
 
 Client implementation: `packages/mcp/src/index.ts` (stdio spawn + HTTP/SSE,
 60s default timeout, liveness-checked reconnects).

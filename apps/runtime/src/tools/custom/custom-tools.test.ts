@@ -283,7 +283,12 @@ describe("loadCustomTools", () => {
 
 describe("registerCustomToolset", () => {
   const customTool = (name: string): Tool => ({
-    definition: { name, description: "d", parameters: { type: "object", properties: {}, required: [] } },
+    definition: {
+      timeoutMs: 30_000,
+      name,
+      description: "d",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
     execute: async () => ({ content: [{ type: "text", text: "ok" }], isError: false }),
   })
 

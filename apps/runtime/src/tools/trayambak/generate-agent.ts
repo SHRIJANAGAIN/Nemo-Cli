@@ -41,6 +41,7 @@ Output ONLY valid JSON:
 Be specific rather than generic. Include concrete examples when helpful. Balance comprehensiveness with clarity.`
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__GenerateAgent",
   description:
     "Generate a specialized subagent profile from a natural-language description. The generated agent is saved as a markdown file with frontmatter and can be referenced by name in subsequent agent calls. Creates an agent that can be invoked with specific roles and toolkits.",
@@ -167,7 +168,7 @@ export function createGenerateAgentTool(): Tool {
       const model = String(args.model ?? "")
       const cwd = context?.cwd ?? process.cwd()
 
-      if (!description) return textResult("Missing 'description'.", true)
+      if (!description) return textResult("Missing 'description'.", /*isError*/ true)
 
       const baseUrl = process.env.TRAYAMBAK_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "http://localhost:8080"
       const apiKey = process.env.TRAYAMBAK_API_KEY ?? process.env.OPENAI_API_KEY ?? ""
@@ -185,7 +186,10 @@ export function createGenerateAgentTool(): Tool {
             parsed = JSON.parse(response)
           }
         } catch {
-          return textResult(`Failed to parse agent generation response. Raw:\n${response.slice(0, 500)}`, true)
+          return textResult(
+            `Failed to parse agent generation response. Raw:\n${response.slice(0, 500)}`,
+            /*isError*/ true,
+          )
         }
 
         const agent: GeneratedAgent = {
@@ -208,7 +212,7 @@ Reference as: agent=${agent.identifier}`
         return textResult(summary)
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        return textResult(`Failed to generate agent: ${msg}`, true)
+        return textResult(`Failed to generate agent: ${msg}`, /*isError*/ true)
       }
     },
   }

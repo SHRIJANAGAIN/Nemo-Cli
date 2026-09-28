@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest"
+import { resetGlyphCache } from "./glyphs.js"
 import React from "react"
 import { PassThrough } from "node:stream"
 import { render, type Instance } from "ink"
@@ -69,6 +70,11 @@ const openStdio = (columns = 80): { stdin: NodeJS.ReadStream; stdout: NodeJS.Wri
   return { stdin, stdout, sink: () => captured }
 }
 
+// Glyphs under test render through glyphs.ts, which auto-selects ASCII on
+// plain Windows consoles (this CI/dev box) — assertions below pin Unicode
+// shapes, so force unicode mode here. resetGlyphCache covers shared workers.
+process.env.TRAYAMBAK_GLYPHS = "unicode"
+resetGlyphCache()
 describe("MessageList history (bordered prefix → scrollback, tail → frame)", () => {
   it("renders the newest rows in-frame and the evicted prefix Bordered above", async () => {
     const { stdin, stdout, sink } = openStdio()

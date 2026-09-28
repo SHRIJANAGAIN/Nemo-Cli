@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { EventEmitter } from "events"
 import { TerminalUI, COLOR, scaleAscii, renderEvent } from "./index"
+import type { AgentEvent } from "../../protocol/src/index"
 import { ApprovalManager } from "./approval-notification"
 
 import {
@@ -27,10 +28,10 @@ function captureStdout(): { output: string[]; restore: () => void } {
   const originalWrite = process.stdout.write.bind(process.stdout)
   const originalIsTTY = process.stdout.isTTY
   Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true })
-  process.stdout.write = ((chunk: any) => {
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
     output.push(typeof chunk === "string" ? chunk : chunk.toString())
     return true
-  }) as any
+  }) as unknown as typeof process.stdout.write
   return {
     output,
     restore: () => {
@@ -199,11 +200,11 @@ describe("TerminalUI: cursor handling in prompt", () => {
     Object.defineProperty(process.stdin, "setRawMode", { value: () => true, configurable: true })
     Object.defineProperty(process.stdin, "setEncoding", { value: () => {}, configurable: true })
     Object.defineProperty(process.stdin, "on", {
-      value: (event: string, cb: (...args: any[]) => void) => stdinEmitter.on(event, cb),
+      value: (event: string, cb: (...args: unknown[]) => void) => stdinEmitter.on(event, cb),
       configurable: true,
     })
     Object.defineProperty(process.stdin, "removeListener", {
-      value: (event: string, cb: (...args: any[]) => void) => stdinEmitter.removeListener(event, cb),
+      value: (event: string, cb: (...args: unknown[]) => void) => stdinEmitter.removeListener(event, cb),
       configurable: true,
     })
     Object.defineProperty(process.stdin, "resume", { value: () => {}, configurable: true })
@@ -237,11 +238,11 @@ describe("TerminalUI: slash menu composer anchoring", () => {
     Object.defineProperty(process.stdin, "setRawMode", { value: () => true, configurable: true })
     Object.defineProperty(process.stdin, "setEncoding", { value: () => {}, configurable: true })
     Object.defineProperty(process.stdin, "on", {
-      value: (event: string, cb: (...args: any[]) => void) => stdinEmitter.on(event, cb),
+      value: (event: string, cb: (...args: unknown[]) => void) => stdinEmitter.on(event, cb),
       configurable: true,
     })
     Object.defineProperty(process.stdin, "removeListener", {
-      value: (event: string, cb: (...args: any[]) => void) => stdinEmitter.removeListener(event, cb),
+      value: (event: string, cb: (...args: unknown[]) => void) => stdinEmitter.removeListener(event, cb),
       configurable: true,
     })
     Object.defineProperty(process.stdin, "resume", { value: () => {}, configurable: true })
@@ -400,14 +401,14 @@ describe("renderEvent", () => {
 
   it("handles message_update with text delta", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "message_update", delta: { text: "Hello" } } as any, ui)
+    renderEvent({ type: "message_update", delta: { text: "Hello" } } as unknown as AgentEvent, ui)
     const output = cap.output.join("")
     expect(output).toContain("Hello")
   })
 
   it("renders thinking text in a stable activity row", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "message_update", delta: { thinking: "Let me think" } } as any, ui)
+    renderEvent({ type: "message_update", delta: { thinking: "Let me think" } } as unknown as AgentEvent, ui)
     const output = cap.output.join("")
     expect(output).toContain("Thinking")
     expect(output).toContain("Let me think")
@@ -415,9 +416,9 @@ describe("renderEvent", () => {
 
   it("blocks thinking after assistant text started", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "message_update", delta: { text: "Started" } } as any, ui)
+    renderEvent({ type: "message_update", delta: { text: "Started" } } as unknown as AgentEvent, ui)
     cap.output.length = 0
-    renderEvent({ type: "message_update", delta: { thinking: "More" } } as any, ui)
+    renderEvent({ type: "message_update", delta: { thinking: "More" } } as unknown as AgentEvent, ui)
     expect(cap.output.length).toBe(0)
   })
 
@@ -427,7 +428,7 @@ describe("renderEvent", () => {
       {
         type: "message_end",
         message: { role: "assistant", content: [{ type: "text", text: "Full response" }] },
-      } as any,
+      } as unknown as AgentEvent,
       ui,
     )
     const output = cap.output.join("")
@@ -436,13 +437,13 @@ describe("renderEvent", () => {
 
   it("flushes assistant on message_end without duplicate output", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "message_update", delta: { text: "Partial" } } as any, ui)
+    renderEvent({ type: "message_update", delta: { text: "Partial" } } as unknown as AgentEvent, ui)
     cap.output.length = 0
     renderEvent(
       {
         type: "message_end",
         message: { role: "assistant", content: [{ type: "text", text: "Full" }] },
-      } as any,
+      } as unknown as AgentEvent,
       ui,
     )
     expect(ui.hasStreamedText()).toBe(false)
@@ -451,14 +452,14 @@ describe("renderEvent", () => {
 
   it("handles verification_start", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "verification_start" } as any, ui)
+    renderEvent({ type: "verification_start" }, ui)
     const output = cap.output.join("")
     expect(output).toContain("Verification started")
   })
 
   it("renders verification_step with bullet", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "verification_step", name: "compile", status: "pass", detail: "OK" } as any, ui)
+    renderEvent({ type: "verification_step", name: "compile", status: "pass", detail: "OK" }, ui)
     const output = cap.output.join("")
     expect(output).toContain("compile")
     expect(output).toContain("pass")
@@ -466,14 +467,14 @@ describe("renderEvent", () => {
 
   it("handles verification_end passed", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "verification_end", passed: true } as any, ui)
+    renderEvent({ type: "verification_end", passed: true } as unknown as AgentEvent, ui)
     const output = cap.output.join("")
     expect(output).toContain("passed")
   })
 
   it("handles agent_end", () => {
     const ui = new TerminalUI({ useColor: false })
-    renderEvent({ type: "agent_end" } as any, ui)
+    renderEvent({ type: "agent_end" } as unknown as AgentEvent, ui)
     const output = cap.output.join("")
     expect(output).toContain("\n")
   })

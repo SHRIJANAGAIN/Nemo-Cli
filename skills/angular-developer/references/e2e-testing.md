@@ -23,29 +23,29 @@ When the app must be built or served first, use the existing project scripts ins
 ### Cypress Example
 
 ```typescript
-describe('Login flow', () => {
-  it('redirects to dashboard on valid credentials', () => {
-    cy.visit('/login');
-    cy.get('[data-cy=email]').type('user@example.com');
-    cy.get('[data-cy=password]').type('password123');
-    cy.get('[data-cy=submit]').click();
-    cy.url().should('include', '/dashboard');
-  });
-});
+describe("Login flow", () => {
+  it("redirects to dashboard on valid credentials", () => {
+    cy.visit("/login")
+    cy.get("[data-cy=email]").type("user@example.com")
+    cy.get("[data-cy=password]").type("password123")
+    cy.get("[data-cy=submit]").click()
+    cy.url().should("include", "/dashboard")
+  })
+})
 ```
 
 ### Playwright Example
 
 ```typescript
-import {expect, test} from '@playwright/test';
+import { expect, test } from "@playwright/test"
 
-test('redirects to dashboard on valid credentials', async ({page}) => {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill('user@example.com');
-  await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', {name: 'Sign in'}).click();
-  await expect(page).toHaveURL(/dashboard/);
-});
+test("redirects to dashboard on valid credentials", async ({ page }) => {
+  await page.goto("/login")
+  await page.getByLabel("Email").fill("user@example.com")
+  await page.getByLabel("Password").fill("password123")
+  await page.getByRole("button", { name: "Sign in" }).click()
+  await expect(page).toHaveURL(/dashboard/)
+})
 ```
 
 ## Best Practices

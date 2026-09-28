@@ -7,10 +7,14 @@
 import React, { type ReactNode, useState, useEffect } from "react"
 import { Box, Text } from "ink"
 import { useThemeColors } from "./themeColors.js"
+import { glyphSet, spinnerFrames } from "./glyphs.js"
 
-export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+export const SPINNER_FRAMES: string[] = spinnerFrames()
 
-export const CIRCULAR_FRAMES = ["○", "●", "◕", "◔", "◓", "◒", "◑", "◐", "〇", "◯"]
+export const CIRCULAR_FRAMES: string[] =
+  glyphSet() === "ascii"
+    ? ["o", "*", "-", "+", "x", "#", "=", "%", "@", "O"]
+    : ["○", "●", "◕", "◔", "◓", "◒", "◑", "◐", "〇", "◯"]
 
 const SPINNER_INTERVAL_MS = 80
 

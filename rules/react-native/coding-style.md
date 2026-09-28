@@ -3,6 +3,7 @@ paths:
   - "**/*.ts"
   - "**/*.tsx"
 ---
+
 # React Native / Expo Coding Style
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with React Native / Expo specific content.

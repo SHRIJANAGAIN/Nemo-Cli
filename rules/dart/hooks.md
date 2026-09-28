@@ -4,6 +4,7 @@ paths:
   - "**/pubspec.yaml"
   - "**/analysis_options.yaml"
 ---
+
 # Dart/Flutter Hooks
 
 > This file extends [common/hooks.md](../common/hooks.md) with Dart and Flutter-specific content.
@@ -24,9 +25,7 @@ Configure in `~/.trayambak/settings.json`:
     "PostToolUse": [
       {
         "matcher": { "tool_name": "Edit", "file_paths": ["**/*.dart"] },
-        "hooks": [
-          { "type": "command", "command": "dart format $TRAYAMBAK_FILE_PATHS" }
-        ]
+        "hooks": [{ "type": "command", "command": "dart format $TRAYAMBAK_FILE_PATHS" }]
       }
     ]
   }

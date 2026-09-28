@@ -7,6 +7,7 @@
  * Provides spawn, message, followup, result communication
  * between agents in a session tree.
  */
+import { getAnalyticsManager } from "./analytics.js"
 
 const uuid = () => crypto.randomUUID()
 
@@ -112,7 +113,6 @@ export class AgentCommunicationManager {
    */
   private emitTelemetry(communication: InterAgentCommunication): void {
     // Mirrors the emit_agent_communication_send in Rust
-    const target = "codex_otel.agent_communication"
     const kindStr = communication.kind as string
 
     // Telemetry event structure (mirrors Rust's tracing::info!)
@@ -125,9 +125,9 @@ export class AgentCommunicationManager {
       receiver_thread_id: communication.receiverThreadId,
     }
 
-    // In production, this would integrate with the telemetry system
-    // For now, store it for later retrieval
-    console.debug("[AgentComm]", event)
+    // Route through the analytics manager: the event is stored for later
+    // retrieval (getEventsByType) instead of being printed from core.
+    getAnalyticsManager().recordEvent("agent_communication", event)
   }
 
   /**

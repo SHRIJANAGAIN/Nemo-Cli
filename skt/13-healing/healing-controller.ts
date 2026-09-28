@@ -91,7 +91,7 @@ export class HealingController {
       }
 
       const patchedSource = this.applyPatch(ctx.originalSource, patch)
-      const validation = validatePatch(ctx.originalSource, patchedSource, ctx.language as any)
+      const validation = validatePatch(ctx.originalSource, patchedSource, ctx.language)
 
       if (!validation.valid) {
         errors.push(`Attempt ${attempt}: AST validation failed`)
@@ -213,7 +213,7 @@ export class HealingController {
     }
 
     if (preventionRules.some((r) => r.includes("lint"))) {
-      return await runLint(ctx.fileToFix, ctx.language as any)
+      return await runLint(ctx.fileToFix, ctx.language as "python" | "typescript")
     }
 
     if (ctx.language === "python") {

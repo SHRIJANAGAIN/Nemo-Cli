@@ -327,7 +327,7 @@ export class ThreadStore {
    * Close the store and persist all cached threads.
    */
   close(): void {
-    for (const [id, thread] of this.threadCache) {
+    for (const thread of this.threadCache.values()) {
       this.persistThread(thread)
     }
     this.threadCache.clear()

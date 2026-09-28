@@ -44,6 +44,7 @@ export function summarizeText(text: string, maxWords = 60): string {
 export function createSummarizeTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "summarize",
       description:
         "Generate an extractive summary of a text file, commit message, README, or long output. Use this when you need the essence of a long document without reading it fully.",
@@ -64,11 +65,11 @@ export function createSummarizeTool(): Tool {
         else if (typeof args.file === "string") {
           const p = resolveConstrainedPath(String(args.file), process.cwd())
           text = fs.readFileSync(p, "utf8")
-        } else return textResult("Provide either a file or inline text.", true)
+        } else return textResult("Provide either a file or inline text.", /*isError*/ true)
         const maxWords = typeof args.max_words === "number" ? Number(args.max_words) : 60
         return textResult(summarizeText(text, maxWords))
       } catch (e) {
-        return textResult(`summarize failed: ${e instanceof Error ? e.message : String(e)}`, true)
+        return textResult(`summarize failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }
     },
   }
@@ -77,6 +78,7 @@ export function createSummarizeTool(): Tool {
 export function createExtractTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "extract",
       description:
         "Extract a matching content block from a file — by heading, by a regex pattern, or by line range. Useful for pulling out one function, section, or config block.",
@@ -115,7 +117,7 @@ export function createExtractTool(): Tool {
               start = i
               break
             }
-          if (start < 0) return textResult("Heading not found.", true)
+          if (start < 0) return textResult("Heading not found.", /*isError*/ true)
           let end = lines.length
           for (let i = start + 1; i < lines.length; i++) {
             if (/^#{1,3}\s+/.test(lines[i])) {
@@ -134,9 +136,9 @@ export function createExtractTool(): Tool {
           }
           return textResult(hits.length ? hits.join("\n---\n") : "(no matches)")
         }
-        return textResult("Provide lines, heading, or pattern.", true)
+        return textResult("Provide lines, heading, or pattern.", /*isError*/ true)
       } catch (e) {
-        return textResult(`extract failed: ${e instanceof Error ? e.message : String(e)}`, true)
+        return textResult(`extract failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }
     },
   }

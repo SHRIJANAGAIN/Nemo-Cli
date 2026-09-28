@@ -6,6 +6,7 @@ paths:
   - "**/*.psgi"
   - "**/*.cgi"
 ---
+
 # Perl Hooks
 
 > This file extends [common/hooks.md](../common/hooks.md) with Perl-specific content.

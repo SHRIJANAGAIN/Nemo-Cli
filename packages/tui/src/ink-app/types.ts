@@ -140,7 +140,7 @@ export function formatSubagentTitle(agent: string, description: string, backgrou
  *
  *  Measured: yoga draws this codebase's borders OUTSIDE the width, so a
  *  width="100%" tool box landed its right edge exactly ON the fullscreen
- *  frame's right border column (repro: corner + at columns-1) — the box
+ *  frame's right border column (repro: corner ┐ at columns-1) — the box
  *  "escaped the conversation box". Geometry: tool origin is terminal col
  *  2 (static row margin 1 + message margin 1; col 3 when addMargin/grouped
  *  adds one more), frame inner ends at columns-2. termWidth-5 fits every
@@ -156,7 +156,7 @@ export function formatSubagentToolcalls(count: number): string {
 
 export function formatCompletedSubagentDetail(toolcalls: number, duration: string): string {
   if (toolcalls === 0) return duration
-  return `${formatSubagentToolcalls(toolcalls)} — ${duration}`
+  return `${formatSubagentToolcalls(toolcalls)} · ${duration}`
 }
 
 export const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
@@ -185,7 +185,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "models", description: "List provider models", category: "Model" },
   {
     name: "provider",
-    description: "Backend chooser: pick ? key ? live models ? model (direct switch with saved key)",
+    description: "Backend chooser: pick → key → live models → model (direct switch with saved key)",
     category: "Model",
   },
   { name: "theme", description: "Show or switch the color theme", category: "Display" },

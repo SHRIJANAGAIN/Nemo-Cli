@@ -11,6 +11,7 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { textResult, type Tool } from "../types.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "web_search",
   description:
     "Search the web using the enhanced hsearch service. Returns ranked results with URLs, titles, snippets, and relevance scores. Use this BEFORE answering factual questions to ensure accuracy.",
@@ -70,7 +71,7 @@ export function createWebSearchTool(): Tool {
     definition,
     async execute(_id, args, _signal) {
       const query = String(args.query ?? "")
-      if (!query) return textResult("Missing 'query'.", true)
+      if (!query) return textResult("Missing 'query'.", /*isError*/ true)
       const endpoint = String(args.endpoint ?? "search")
       const maxResults = typeof args.max_results === "number" ? args.max_results : 10
 
@@ -80,12 +81,12 @@ export function createWebSearchTool(): Tool {
         try {
           parsed = JSON.parse(raw)
         } catch {
-          return textResult(`Search service returned non-JSON:\n${raw.slice(0, 2000)}`, true)
+          return textResult(`Search service returned non-JSON:\n${raw.slice(0, 2000)}`, /*isError*/ true)
         }
         const out = formatResults(endpoint, parsed as Record<string, unknown>, query)
-        return textResult(out, false)
+        return textResult(out, /*isError*/ false)
       } catch (err) {
-        return textResult(`web_search error: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(`web_search error: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true)
       }
     },
   }

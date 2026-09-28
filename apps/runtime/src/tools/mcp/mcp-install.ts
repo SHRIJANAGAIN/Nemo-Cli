@@ -139,6 +139,7 @@ export function resolveInstalledEntry(installDir: string, npmPackage: string): C
 
 export function createMcpInstallTool(): Tool {
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name: "mcp__install",
     description:
       "Install and manage MCP (Model Context Protocol) servers. Use /mcp search to find servers, /mcp install <id> to install, /mcp list to see available.",
@@ -181,7 +182,8 @@ export function createMcpInstallTool(): Tool {
 
       if (action === "info") {
         const entry = getConnectorRegistry().get(query)
-        if (!entry) return textResult(`MCP server '${query}' not found. Use /mcp search to find servers.`, true)
+        if (!entry)
+          return textResult(`MCP server '${query}' not found. Use /mcp search to find servers.`, /*isError*/ true)
         const lines = [
           `ID: ${entry.id}`,
           `Name: ${entry.name}`,
@@ -196,11 +198,11 @@ export function createMcpInstallTool(): Tool {
 
       if (action === "install") {
         const result = await installMcpServer(query, context?.cwd, context?.config)
-        if (result.status === "failed") return textResult(result.message, true)
+        if (result.status === "failed") return textResult(result.message, /*isError*/ true)
         return textResult(result.message)
       }
 
-      return textResult(`Unknown action: ${action}. Use search, install, list, or info.`, true)
+      return textResult(`Unknown action: ${action}. Use search, install, list, or info.`, /*isError*/ true)
     },
   }
 }

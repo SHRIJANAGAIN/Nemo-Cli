@@ -13,20 +13,20 @@ ng generate service my-data
 Or you can manually create a TypeScript class and decorate it with `@Injectable()`.
 
 ```ts
-import {Injectable} from '@angular/core';
+import { Injectable } from "@angular/core"
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: "root",
 })
 export class BasicDataStore {
-  private data: string[] = [];
+  private data: string[] = []
 
   addData(item: string): void {
-    this.data.push(item);
+    this.data.push(item)
   }
 
   getData(): string[] {
-    return [...this.data];
+    return [...this.data]
   }
 }
 ```
@@ -46,11 +46,11 @@ Once a service is created, you can inject it into components, directives, or oth
 ### Injecting into a Component
 
 ```ts
-import {Component, inject} from '@angular/core';
-import {BasicDataStore} from './basic-data-store.service';
+import { Component, inject } from "@angular/core"
+import { BasicDataStore } from "./basic-data-store.service"
 
 @Component({
-  selector: 'app-example',
+  selector: "app-example",
   template: `
     <div>
       <p>Data items: {{ dataStore.getData().length }}</p>
@@ -60,7 +60,7 @@ import {BasicDataStore} from './basic-data-store.service';
 })
 export class Example {
   // Inject the service as a class field
-  dataStore = inject(BasicDataStore);
+  dataStore = inject(BasicDataStore)
 }
 ```
 
@@ -69,21 +69,21 @@ export class Example {
 Services can inject other services in the exact same way.
 
 ```ts
-import {Injectable, inject} from '@angular/core';
-import {AdvancedDataStore} from './advanced-data-store.service';
+import { Injectable, inject } from "@angular/core"
+import { AdvancedDataStore } from "./advanced-data-store.service"
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: "root",
 })
 export class BasicDataStore {
   // Injecting another service
-  private advancedDataStore = inject(AdvancedDataStore);
+  private advancedDataStore = inject(AdvancedDataStore)
 
-  private data: string[] = [];
+  private data: string[] = []
 
   getData(): string[] {
     // Combine data from this service and the injected service
-    return [...this.data, ...this.advancedDataStore.getData()];
+    return [...this.data, ...this.advancedDataStore.getData()]
   }
 }
 ```

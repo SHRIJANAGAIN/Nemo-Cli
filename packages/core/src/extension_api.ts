@@ -277,7 +277,7 @@ export function getPluginManager(): PluginManager {
 /**
  * Discover plugins from a directory.
  */
-export function discoverPlugins(pluginDir: string): string[] {
+export function discoverPlugins(_pluginDir: string): string[] {
   // This would scan a directory for plugin manifest files
   // For now, return an empty array as the base implementation
   return []

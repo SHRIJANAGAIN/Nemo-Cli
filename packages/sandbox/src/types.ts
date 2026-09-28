@@ -232,16 +232,16 @@ export function filterEnv(
       continue
     }
     // Only include allowed vars
-    if (ALLOWED_ENV_VARS.includes(key as any)) {
+    if ((ALLOWED_ENV_VARS as readonly string[]).includes(key)) {
       filtered[key] = value
     }
   }
 
   // Add sandbox metadata
-  const sandboxType = (permissions as any).__sandboxType ?? "none"
+  const sandboxType = (permissions.__sandboxType as string | undefined) ?? "none"
   filtered["CODEX_SANDBOX"] = sandboxType
 
-  const networkPolicy = (permissions as any).__networkPolicy as NetworkSandboxPolicy | undefined
+  const networkPolicy = permissions.__networkPolicy as NetworkSandboxPolicy | undefined
   if (networkPolicy?.disableNetwork) {
     filtered["CODEX_SANDBOX_NETWORK_DISABLED"] = "true"
   }
@@ -253,8 +253,8 @@ export function filterEnv(
  * Detect the appropriate sandbox type for the current platform and permissions.
  */
 export function detectSandboxType(permissions: Record<string, unknown>): SandboxType {
-  const mode = (permissions as any).mode as string
-  const uiMode = (permissions as any).uiMode as string
+  const mode = permissions.mode as string
+  const uiMode = permissions.uiMode as string
 
   // Yolo/full-access modes get no sandbox (for backward compat)
   if (mode === "yolo" || uiMode === "full-access") {

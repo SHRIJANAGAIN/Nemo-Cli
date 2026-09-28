@@ -32,7 +32,7 @@ export function autoRepair(): RepairResult {
   const distPath = path.join(REPO_ROOT, "dist")
   if (!fs.existsSync(distPath)) {
     try {
-      execSync("npm run build", { cwd: REPO_ROOT, stdio: "pipe" })
+      execSync("npm run build", { cwd: REPO_ROOT, stdio: "pipe", timeout: 600_000 })
       result.fixed.push("dist/ folder rebuilt")
     } catch {
       result.failed.push("dist/ folder rebuild failed")

@@ -21,51 +21,51 @@ Two separate stores under `~/.trayambak/`:
     └── <uuid>.jsonl                  # legacy single-file layout (auto-migrated)
 ```
 
-| Concern | Detail |
-| --- | --- |
-| Root override | `TRAYAMBAK_SESSIONS_DIR` changes `sessions/`; `TRAYAMBAK_SESSIONS_FILE` changes `sessions.json` |
-| Permissions | `state.json` is written atomically with `0600` (tmp + rename); `context.jsonl` / `wire.jsonl` are append-only |
-| Titles | The first user message becomes the title (first 50 chars) unless you set a custom one |
-| Empty sessions | Sessions with no content are skipped when listing (never shown as ghosts) |
-| Legacy migration | `<id>.jsonl` is renamed to `<id>/context.jsonl` on demand |
-| Index | `sessions.json` holds at most 500 loaded entries; a corrupt index is set aside as `sessions.json.corrupt-<timestamp>` and the CLI starts clean |
+| Concern          | Detail                                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root override    | `TRAYAMBAK_SESSIONS_DIR` changes `sessions/`; `TRAYAMBAK_SESSIONS_FILE` changes `sessions.json`                                                |
+| Permissions      | `state.json` is written atomically with `0600` (tmp + rename); `context.jsonl` / `wire.jsonl` are append-only                                  |
+| Titles           | The first user message becomes the title (first 50 chars) unless you set a custom one                                                          |
+| Empty sessions   | Sessions with no content are skipped when listing (never shown as ghosts)                                                                      |
+| Legacy migration | `<id>.jsonl` is renamed to `<id>/context.jsonl` on demand                                                                                      |
+| Index            | `sessions.json` holds at most 500 loaded entries; a corrupt index is set aside as `sessions.json.corrupt-<timestamp>` and the CLI starts clean |
 
 ## Inside the session (slash commands)
 
-| Command | What it does |
-| --- | --- |
-| `/sessions`, `/resume` | Open the session picker |
-| `/newchat` | Start a new conversation (detaches from the current session id) |
-| `/clear` | Reset the session |
-| `/history` | Session name, message count, start time |
-| `/search <text>` | Grep this session's transcript (results are shown, nothing is persisted) |
-| `/stats` | Message counts by role / token count |
-| `/copy`, `/copy last` | Copy the transcript (or just the last reply) to the clipboard |
-| `/compact` | Force context compaction — prune/truncate/fold old history |
-| `/undo`, `/redo` | Restore / re-apply the previous workspace checkpoint (`Ctrl+Z` / `Ctrl+Y`) |
-| `/checkpoint on\|off\|status` | Checkpoint master switch (default **on**: a capture happens before every turn) |
-| `/checkpoints` | List stored points (`/checkpoints prune confirm` deletes all) |
-| `/queue`, `/queue clear`, `/queue drop <n>` | Prompts queued while the agent runs |
-| `/forget`, `/forget confirm` | Mark session history for deletion |
-| `/memory` | List persistent memory entries (auto-extract is on by default, max 2 keeper facts per turn; disable with config key `memoryAutoExtract: false`) |
-| `/cron` | List scheduled cron jobs (the model creates them; a 60s scheduler fires them) |
-| `/status` | Model, session, tokens, uptime |
+| Command                                     | What it does                                                                                                                                    |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/sessions`, `/resume`                      | Open the session picker                                                                                                                         |
+| `/newchat`                                  | Start a new conversation (detaches from the current session id)                                                                                 |
+| `/clear`                                    | Reset the session                                                                                                                               |
+| `/history`                                  | Session name, message count, start time                                                                                                         |
+| `/search <text>`                            | Grep this session's transcript (results are shown, nothing is persisted)                                                                        |
+| `/stats`                                    | Message counts by role / token count                                                                                                            |
+| `/copy`, `/copy last`                       | Copy the transcript (or just the last reply) to the clipboard                                                                                   |
+| `/compact`                                  | Force context compaction — prune/truncate/fold old history                                                                                      |
+| `/undo`, `/redo`                            | Restore / re-apply the previous workspace checkpoint (`Ctrl+Z` / `Ctrl+Y`)                                                                      |
+| `/checkpoint on\|off\|status`               | Checkpoint master switch (default **on**: a capture happens before every turn)                                                                  |
+| `/checkpoints`                              | List stored points (`/checkpoints prune confirm` deletes all)                                                                                   |
+| `/queue`, `/queue clear`, `/queue drop <n>` | Prompts queued while the agent runs                                                                                                             |
+| `/forget`, `/forget confirm`                | Mark session history for deletion                                                                                                               |
+| `/memory`                                   | List persistent memory entries (auto-extract is on by default, max 2 keeper facts per turn; disable with config key `memoryAutoExtract: false`) |
+| `/cron`                                     | List scheduled cron jobs (the model creates them; a 60s scheduler fires them)                                                                   |
+| `/status`                                   | Model, session, tokens, uptime                                                                                                                  |
 
 ### The session picker
 
 `/sessions` (or `/resume`) opens the picker with these keys (from
 `SessionPicker.tsx`):
 
-| Key | Action |
-| --- | --- |
-| `Enter` | Resume the selected session |
-| `r` | Rename it |
-| `d` | Delete it |
-| `F` | Fork it — a new session derived from the selected one |
-| `Ctrl+A` | Archive it |
-| `Esc` | Close the picker |
+| Key      | Action                                                |
+| -------- | ----------------------------------------------------- |
+| `Enter`  | Resume the selected session                           |
+| `r`      | Rename it                                             |
+| `d`      | Delete it                                             |
+| `F`      | Fork it — a new session derived from the selected one |
+| `Ctrl+A` | Archive it                                            |
+| `Esc`    | Close the picker                                      |
 
-> **Note:** `/fork` in the REPL is *not* session forking — it spawns a
+> **Note:** `/fork` in the REPL is _not_ session forking — it spawns a
 > fire-and-forget **background subagent** with this turn's context (watch it
 > with `/background`, `Ctrl+B`). Session forking is the `F` key in the picker
 > above.
@@ -83,11 +83,11 @@ like `session not found: <id>`.
 
 Other session-related flags:
 
-| Flag | Effect |
-| --- | --- |
+| Flag                         | Effect                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
 | `trayambak --session <file>` | Persist the session transcript to a JSON file (also passed to the REPL as `TRAYAMBAK_SESSION`) |
-| `trayambak exec "…"` | Stateless single prompt — events stream to stdout, nothing is resumed next run |
-| `trayambak run "…"` | Interactive session that runs that prompt on launch |
+| `trayambak exec "…"`         | Stateless single prompt — events stream to stdout, nothing is resumed next run                 |
+| `trayambak run "…"`          | Interactive session that runs that prompt on launch                                            |
 
 ## Compaction
 
@@ -106,11 +106,11 @@ In the REPL, `/compact` does it for the live session.
 
 ## Other surfaces that see your sessions
 
-| Surface | What it exposes |
-| --- | --- |
-| `trayambak web` | `GET /api/sessions` returns the transcript list (see [Web](web.md)) |
-| `trayambak acp` | `new_session`, `load_session`/`resume_session`, `list_sessions` (see [ACP](acp.md)) |
-| `/api/sessions` over HTTP | Same transcript index — token-protected when a token is configured |
+| Surface                   | What it exposes                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| `trayambak web`           | `GET /api/sessions` returns the transcript list (see [Web](web.md))                 |
+| `trayambak acp`           | `new_session`, `load_session`/`resume_session`, `list_sessions` (see [ACP](acp.md)) |
+| `/api/sessions` over HTTP | Same transcript index — token-protected when a token is configured                  |
 
 ## Related
 

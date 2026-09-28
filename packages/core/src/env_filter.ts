@@ -4,17 +4,44 @@
  * Environment variable filtering for sandboxed processes.
  *
  * Ensures no secrets leak into child process environments.
+ * BLOCKED_ENV_PATTERNS and filterEnv are defined here rather than
+ * imported from sandbox/types to avoid circular dependencies and
+ * keep the env filtering logic self-contained.
  */
 
-import { BLOCKED_ENV_PATTERNS, filterEnv } from "../../sandbox/src/types.js"
+/** Patterns that match blocked environment variable names. */
+export const BLOCKED_ENV_PATTERNS: string[] = [
+  "SECRET",
+  "KEY",
+  "PASSWORD",
+  "TOKEN",
+  "CREDENTIAL",
+  "PRIVATE_KEY",
+  "AWS_",
+  "GITHUB_",
+  "GH_",
+]
 
 /**
- * Filter function that can be used by bash tool and other exec functions.
- *
- * @param processEnv The original process.env
- * @param sandboxType The active sandbox type
- * @param networkDisabled Whether network is disabled in sandbox
- * @returns Filtered environment safe for child process
+ * Filter an environment object to remove blocked variables.
+ * @param env The environment to filter
+ * @param _options Additional options (currently unused)
+ * @returns A new env object with blocked variables removed
+ */
+export function filterEnv(env: Record<string, string>, _options: Record<string, unknown> = {}): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [k, v] of Object.entries(env)) {
+    if (typeof v !== "string") continue
+    const upper = k.toUpperCase()
+    if (BLOCKED_ENV_PATTERNS.some((p) => upper.includes(p))) continue
+    result[k] = v
+  }
+  return result
+}
+
+/**
+ * Get a safe environment for a sandboxed process.
+ * Only includes the essentials needed for command execution.
  */
 export function getSafeEnv(
   processEnv: NodeJS.ProcessEnv,
@@ -25,7 +52,7 @@ export function getSafeEnv(
   for (const [k, v] of Object.entries(processEnv)) {
     if (typeof v === "string") clean[k] = v
   }
-  const filtered = filterEnv(clean, { __sandboxType: sandboxType })
+  const filtered = filterEnv(clean)
 
   if (networkDisabled) {
     filtered["CODEX_SANDBOX_NETWORK_DISABLED"] = "true"

@@ -10,7 +10,8 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 
 ## Families and members
 
-### Ethereal / divine — *weightless, holy, glowing, soft*
+### Ethereal / divine — _weightless, holy, glowing, soft_
+
 - **spiritualism** — religious iconography, halos, god-rays, devotional
 - **glacial folk** — cold blue + bone white, crystalline, minimal, calm
 - **beacons** — single light source in darkness, signal, hope
@@ -18,7 +19,8 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 - **fairy tale** — storybook, illustrated, soft enchantment
 - **cozy blanket** — warm, tactile, soft-focus comfort
 
-### Hyperpop / Y2K-cyber — *glossy, chrome, neon, kawaii-cyber*
+### Hyperpop / Y2K-cyber — _glossy, chrome, neon, kawaii-cyber_
+
 - **cyberdelia** — psychedelic cyber, saturated, melting digital
 - **acid house** — rave graphics, smileys, high-saturation acid color
 - **acid nora** — acid-toned painterly, warped
@@ -26,14 +28,16 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 - **new liquid** — wet chrome, liquid metal, glossy reflection
 - **8-bit / pixel** — retro game pixels, dithered, lo-fi digital
 
-### Dark / occult — *high-contrast, ominous, grain*
+### Dark / occult — _high-contrast, ominous, grain_
+
 - **dark academia** — moody scholarly, sepia, candlelit, gothic
 - **smoke nostalgia** — hazy, smoky, faded memory
 - **communist core** — red star, propaganda poster, bold red/black
 - **abstract tech** — schematic, cold, technical abstraction
 - **microzoathic** — strange organic-dark microscopic forms
 
-### Retro / print — *flat, graphic, halftone, nostalgic*
+### Retro / print — _flat, graphic, halftone, nostalgic_
+
 - **retro surfers** — 60s–70s surf, sun-faded, beachy
 - **art deco** — geometric gold, 1920s elegance, symmetry
 - **adventure pulp** — pulp comic covers, dramatic, vintage
@@ -45,7 +49,8 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 - **factory pomo** — postmodern industrial graphic
 - **2026 austurbano** — near-future urban editorial
 
-### Organic / textural — *tactile, macro, woven, wet*
+### Organic / textural — _tactile, macro, woven, wet_
+
 - **microbiology core** — cells, micro-organic, petri textures
 - **weaving patterns** — woven fiber, textile, interlace
 - **fruitage retro** — fruit/produce, saturated, glossy still-life
@@ -53,7 +58,8 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 - **shape design** — bold flat shapes, Bauhaus-ish forms
 - **colour fusion** — blended gradients, color-field
 
-### Systemic / data — *gridded, generative, schematic*
+### Systemic / data — _gridded, generative, schematic_
+
 - **numbers** — numeric typography, ledgers, counting
 - **mazes** — labyrinth, path, grid puzzle
 - **code web** — node graphs, network, connections
@@ -62,7 +68,8 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 - **multilayer** — stacked transparent layers, depth
 - **scrapbooking** — assembled keepsakes, layered ephemera
 
-### Cultural / kitsch — *loud, specific, referential*
+### Cultural / kitsch — _loud, specific, referential_
+
 - **catholic kitsch** — devotional kitsch, gilded saints
 - **mexendero / megadero / cubanista** — Latin-American vernacular graphic
 - **asian chic / asian store** — East-Asian retail/pop vernacular
@@ -81,7 +88,7 @@ Use this as a picker. Choose **one primary** genre and **at most one accent**. T
 ## How to use a genre as a preset
 
 1. Pick the genre that matches the section's emotional job (see the shot plan in `SKILL.md`).
-2. Translate it into a fal.ai prompt by combining: *its palette + its texture + its subject*,
+2. Translate it into a fal.ai prompt by combining: _its palette + its texture + its subject_,
    then append the project's global suffix (`9:16, cinematic, film grain, volumetric light, no text`).
 3. Keep one accent color; render 6–10; keep 2–3.
 4. Never mix more than primary + one accent across a single section, or the edit loses coherence.

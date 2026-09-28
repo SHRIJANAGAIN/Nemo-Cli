@@ -12,6 +12,7 @@ import { textResult, type Tool, type ToolContext } from "../types.js"
 export const AGENT_TYPES = ["general", "explore", "plan", "coder", "browser", "planner"] as const
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__Agent",
   description:
     "Launch a new agent to handle complex, multi-step tasks. Each agent type has specific capabilities and tools available to it. Useful for independent research, exploration, or sub-tasks that benefit from isolation.",
@@ -71,7 +72,7 @@ export function createAgentTool(
       const background = (args.background as boolean) ?? false
 
       if (!prompt) {
-        return textResult("Missing required parameter: prompt", true)
+        return textResult("Missing required parameter: prompt", /*isError*/ true)
       }
 
       if (onRunAgent) {

@@ -3,13 +3,14 @@ paths:
   - "**/*.ts"
   - "**/*.tsx"
 ---
+
 # React Native / Expo Hooks
 
 > This file extends [common/hooks.md](../common/hooks.md) with React Native / Expo-specific automation guidance.
 
 These are recommended PostToolUse automations to keep RN/Expo code healthy. Wire them in your hook runtime (or run manually); adapt commands to your package manager.
 
-## Suggested PostToolUse checks (on edit of *.ts/*.tsx)
+## Suggested PostToolUse checks (on edit of _.ts/_.tsx)
 
 - **Type check:** `tsc --noEmit` — catch type errors early.
 - **Lint:** `npx expo lint` (uses `eslint-config-expo`; flat config `eslint.config.js` is the default from SDK 53+).

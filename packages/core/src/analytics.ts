@@ -79,7 +79,7 @@ export interface HookRunFact {
 
 /** Agent telemetry event. */
 export interface AgentEvent {
-  type: "turn_start" | "turn_end" | "tool_execution" | "compaction" | "hook_run"
+  type: "turn_start" | "turn_end" | "tool_execution" | "compaction" | "hook_run" | "agent_communication"
   timestamp: number
   data: Record<string, unknown>
 }

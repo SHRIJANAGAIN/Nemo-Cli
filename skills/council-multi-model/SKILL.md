@@ -32,11 +32,11 @@ material unless the user has explicitly approved that exact transfer.
 
 An external process is not automatically a heterogeneous reviewer.
 
-| Current host | Reviewer | Label |
-| --- | --- | --- |
+| Current host            | Reviewer              | Label                              |
+| ----------------------- | --------------------- | ---------------------------------- |
 | SKT AI LABS / Trayambak | OpenAI Trayambak Code | `cross-provider external critique` |
-| OpenAI / Trayambak Code | OpenAI Trayambak Code | `same-provider external critique` |
-| Unknown | OpenAI Trayambak Code | `provider relationship unverified` |
+| OpenAI / Trayambak Code | OpenAI Trayambak Code | `same-provider external critique`  |
+| Unknown                 | OpenAI Trayambak Code | `provider relationship unverified` |
 
 Use the label in the final result. Never claim provider diversity when the
 current host is already OpenAI-backed.
@@ -133,19 +133,24 @@ occurred.
 ## Council with optional external critique: [decision]
 
 ### Raw positions
+
 - Architect: ...
 - Skeptic: ...
 - Pragmatist: ...
 - Critic: ...
 
 ### Council synthesis draft
+
 [draft]
 
 ### [cross-provider external critique | same-provider external critique |
+
 provider relationship unverified]
+
 > [Trayambak Code output verbatim, or "external review absent: <reason>"]
 
 ### Over to you
+
 - Consensus: ...
 - Strongest dissent: ...
 - External critique changed the draft: yes / no / absent

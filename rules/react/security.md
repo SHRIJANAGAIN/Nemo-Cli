@@ -6,6 +6,7 @@ paths:
   - "**/app/**/*.ts"
   - "**/pages/**/*.ts"
 ---
+
 # React Security
 
 > This file extends [typescript/security.md](../typescript/security.md) and [common/security.md](../common/security.md) with React specific content.
@@ -42,19 +43,19 @@ Audit checklist for every `dangerouslySetInnerHTML` call:
 
 ```tsx
 // CRITICAL: javascript: URL injection
-<a href={user.website}>Visit</a>   // if user.website = "javascript:alert(1)"
+;<a href={user.website}>Visit</a> // if user.website = "javascript:alert(1)"
 
 // CORRECT: validate scheme
 function safeUrl(url: string): string | undefined {
   try {
-    const parsed = new URL(url);
-    if (["http:", "https:", "mailto:"].includes(parsed.protocol)) return url;
+    const parsed = new URL(url)
+    if (["http:", "https:", "mailto:"].includes(parsed.protocol)) return url
   } catch {
-    return undefined;
+    return undefined
   }
-  return undefined;
+  return undefined
 }
-<a href={safeUrl(user.website)}>Visit</a>
+;<a href={safeUrl(user.website)}>Visit</a>
 ```
 
 React warns about `javascript:` URLs in `href` in development mode, but does not block them at runtime. `data:` URLs and other schemes also slip through. Always validate.
@@ -78,20 +79,20 @@ Modern browsers default to `noopener` when `target="_blank"`, but do not rely on
 Server Actions (`"use server"`) run with the same trust level as a public API endpoint. Validate every input.
 
 ```tsx
-"use server";
-import { z } from "zod";
+"use server"
+import { z } from "zod"
 
 const Input = z.object({
   email: z.string().email(),
   age: z.number().int().min(0).max(120),
-});
+})
 
 export async function updateUser(_state: unknown, formData: FormData) {
   const parsed = Input.safeParse({
     email: formData.get("email"),
     age: Number(formData.get("age")),
-  });
-  if (!parsed.success) return { error: parsed.error.flatten() };
+  })
+  if (!parsed.success) return { error: parsed.error.flatten() }
   // ...
 }
 ```
@@ -104,16 +105,16 @@ export async function updateUser(_state: unknown, formData: FormData) {
 
 Prefixed env vars are bundled into the client. Treat them as public.
 
-| Framework | Public prefix | Private |
-|---|---|---|
-| Next.js | `NEXT_PUBLIC_*` | All others |
-| Vite | `VITE_*` | `.env` server-side only |
+| Framework        | Public prefix                                   | Private                                                                   |
+| ---------------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| Next.js          | `NEXT_PUBLIC_*`                                 | All others                                                                |
+| Vite             | `VITE_*`                                        | `.env` server-side only                                                   |
 | Create React App | `REACT_APP_*`, plus `NODE_ENV` and `PUBLIC_URL` | All others (anything without the `REACT_APP_` prefix is server-side only) |
-| Remix | `process.env` access in `loader`/`action` only | Same |
+| Remix            | `process.env` access in `loader`/`action` only  | Same                                                                      |
 
 ```ts
 // CRITICAL: secret leaked to client bundle
-const apiKey = process.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;
+const apiKey = process.env.NEXT_PUBLIC_STRIPE_SECRET_KEY
 ```
 
 Audit on every PR that touches env vars: would this string in the public bundle be a problem?
@@ -146,13 +147,13 @@ frame-ancestors 'none';
 
 ```tsx
 // WRONG: untrusted JSON spread directly into state
-const update = await req.json();
-setState({ ...state, ...update });    // attacker controls __proto__
+const update = await req.json()
+setState({ ...state, ...update }) // attacker controls __proto__
 
 // CORRECT: parse with a schema, or guard keys
-const Allowed = z.object({ name: z.string(), email: z.string().email() });
-const parsed = Allowed.parse(await req.json());
-setState({ ...state, ...parsed });
+const Allowed = z.object({ name: z.string(), email: z.string().email() })
+const parsed = Allowed.parse(await req.json())
+setState({ ...state, ...parsed })
 ```
 
 ## SSR Template Injection

@@ -15,6 +15,7 @@ export interface ParallelExecuteOptions {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__ParallelExecute",
   description:
     "Multi-agent collaborative execution pipeline. Spawns specialized prototype and audit agents in parallel across frontend, backend, refactoring, and security boundaries.",
@@ -54,7 +55,7 @@ export function createParallelExecuteTool(
     async execute(_id, args, _signal, _update) {
       const plan = (args.plan as string) ?? ""
       if (!plan.trim()) {
-        return textResult("Missing required parameter: plan", true)
+        return textResult("Missing required parameter: plan", /*isError*/ true)
       }
 
       const taskType = (args.taskType as "frontend" | "backend" | "fullstack" | "refactor" | "audit") ?? "fullstack"

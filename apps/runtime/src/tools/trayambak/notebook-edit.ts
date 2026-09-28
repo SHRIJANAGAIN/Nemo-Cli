@@ -16,6 +16,7 @@ import {
 } from "../types.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__NotebookEdit",
   description: "Edit a single cell in a Jupyter notebook (.ipynb). Replaces the cell's source.",
   parameters: {
@@ -37,27 +38,30 @@ export function createNotebookEditTool(): Tool {
       const ctx = context as ToolContext
       const rawPath = String(args.notebook_path ?? "")
       const cellId = String(args.cell_id ?? "")
-      if (!rawPath) return textResult("Missing 'notebook_path'.", true)
-      if (!cellId) return textResult("Missing 'cell_id'.", true)
+      if (!rawPath) return textResult("Missing 'notebook_path'.", /*isError*/ true)
+      if (!cellId) return textResult("Missing 'cell_id'.", /*isError*/ true)
       let target: string
       try {
         target = resolveConstrainedPath(rawPath, ctx.cwd)
         assertExternalDirectory(target, ctx.cwd)
         assertMutablePath(target)
       } catch (err) {
-        return textResult(`Access denied: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(`Access denied: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true)
       }
-      if (!fs.existsSync(target)) return textResult(`Notebook not found: ${rawPath}`, true)
+      if (!fs.existsSync(target)) return textResult(`Notebook not found: ${rawPath}`, /*isError*/ true)
       let notebook: {
         cells: Array<{ cell_type?: string; id?: string; source?: unknown; metadata?: Record<string, unknown> }>
       }
       try {
         notebook = JSON.parse(fs.readFileSync(target, "utf8")) as typeof notebook
       } catch (err) {
-        return textResult(`Failed to parse notebook: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(
+          `Failed to parse notebook: ${err instanceof Error ? err.message : String(err)}`,
+          /*isError*/ true,
+        )
       }
       const cell = notebook.cells.find((c) => c.id === cellId)
-      if (!cell) return textResult(`Cell not found: ${cellId}`, true)
+      if (!cell) return textResult(`Cell not found: ${cellId}`, /*isError*/ true)
       const newSource = String(args.new_source ?? "")
       const cellType = args.cell_type ? String(args.cell_type) : (cell.cell_type ?? "code")
       cell.cell_type = cellType

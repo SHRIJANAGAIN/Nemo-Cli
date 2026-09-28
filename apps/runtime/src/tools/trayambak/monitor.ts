@@ -9,6 +9,7 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { textResult, type Tool } from "../types.js"
 
 const monitorDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__Monitor",
   description:
     "Watch a command and re-invoke the agent when the output matches a pattern. Useful for long-running processes or log tailing.",
@@ -32,7 +33,7 @@ export function createMonitorTool(onMatch?: (output: string, command: string) =>
       const pattern = args.pattern ? new RegExp(String(args.pattern)) : null
       const interval = typeof args.interval_ms === "number" ? args.interval_ms : 5000
       const maxRuns = typeof args.max_runs === "number" ? args.max_runs : 60
-      if (!command) return textResult("Missing 'command'.", true)
+      if (!command) return textResult("Missing 'command'.", /*isError*/ true)
       const outputs: string[] = []
       for (let i = 0; i < maxRuns; i++) {
         if (signal?.aborted) break

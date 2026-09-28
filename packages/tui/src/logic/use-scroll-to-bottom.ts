@@ -4,10 +4,10 @@ export function useScrollToBottom(scrollRef: RefObject<HTMLDivElement | null>) {
   // Track whether the user is currently near the bottom of the scroll area.
   // Used by consumers to decide whether to scroll when new UI elements appear.
   // NOT used for automatic content-following.
-  const [autoscroll, setAutoscroll] = useState(true)
+  const [autoscroll, setAutoscroll] = useState(/*initial*/ true)
 
   // Track whether the user is currently at the bottom of the scroll area
-  const [hitBottom, setHitBottom] = useState(true)
+  const [hitBottom, setHitBottom] = useState(/*initial*/ true)
 
   // Store previous scroll position to detect scroll direction
   const prevScrollTopRef = useRef<number>(0)
@@ -37,12 +37,12 @@ export function useScrollToBottom(scrollRef: RefObject<HTMLDivElement | null>) {
 
       // Turn off autoscroll only when scrolling up
       if (isScrollingUp) {
-        setAutoscroll(false)
+        setAutoscroll(/*autoscroll*/ false)
       }
 
       // Turn on autoscroll when scrolled to the bottom
       if (isCurrentlyAtBottom) {
-        setAutoscroll(true)
+        setAutoscroll(/*autoscroll*/ true)
       }
     },
     [isAtBottom],
@@ -53,8 +53,8 @@ export function useScrollToBottom(scrollRef: RefObject<HTMLDivElement | null>) {
     const dom = scrollRef.current
     if (dom) {
       requestAnimationFrame(() => {
-        setAutoscroll(true)
-        setHitBottom(true)
+        setAutoscroll(/*autoscroll*/ true)
+        setHitBottom(/*hitBottom*/ true)
 
         dom.scrollTop = dom.scrollHeight
       })

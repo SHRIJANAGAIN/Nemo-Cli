@@ -124,5 +124,3 @@ export class Composer {
     this.tui.flush()
   }
 }
-
-export { ComposerInputResult }

@@ -12,7 +12,7 @@ import { getContextBlock } from "./4-mem/memory.js"
 
 const SKT_DIR = (): string => path.join(process.cwd(), "skt")
 
-function readJsonSafe(file: string): any {
+function readJsonSafe(file: string): unknown {
   try {
     if (!fs.existsSync(file)) return null
     return JSON.parse(fs.readFileSync(file, "utf8"))
@@ -84,11 +84,14 @@ export function getSktContextBlock(): string {
 
   const sessions = readJsonSafe(path.join(skt, "8-conversations", "sessions.json"))
   if (sessions) {
-    const recent = Array.isArray(sessions) ? sessions.slice(-3) : []
+    const recent: unknown[] = Array.isArray(sessions) ? sessions.slice(-3) : []
     if (recent.length > 0) {
-      const lines = recent.map(
-        (s: any) => `  - ${s.id || s.sessionName || "session"}: ${(s.summary || s.title || "").slice(0, 100)}`,
-      )
+      const lines = recent.map((entry) => {
+        const s = entry as Record<string, unknown>
+        const id = String(s.id || s.sessionName || "session")
+        const summary = String(s.summary || s.title || "")
+        return `  - ${id}: ${summary.slice(0, 100)}`
+      })
       blocks.push(`## Recent sessions:\n${lines.join("\n")}`)
     }
   }

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest"
+import { resetGlyphCache } from "./glyphs.js"
 import {
   subagentCardId,
   createSubagentCard,
@@ -27,6 +28,11 @@ const baseStart = {
   background: false,
 }
 
+// Glyphs under test render through glyphs.ts, which auto-selects ASCII on
+// plain Windows consoles (this CI/dev box) — assertions below pin Unicode
+// shapes, so force unicode mode here. resetGlyphCache covers shared workers.
+process.env.TRAYAMBAK_GLYPHS = "unicode"
+resetGlyphCache()
 describe("subagentCardId", () => {
   it("prefixes foreground and background cards differently", () => {
     expect(subagentCardId("x", false)).toBe("subagent-x")

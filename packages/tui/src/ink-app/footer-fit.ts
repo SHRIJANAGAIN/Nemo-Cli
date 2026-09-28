@@ -5,6 +5,7 @@
  */
 
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
+import { g } from "./glyphs.js"
 
 /**
  * Pure width-fitting for the status-bar Footer ("cmd size ke hisab se
@@ -112,7 +113,7 @@ export const fitFooter = (input: FooterFitInput): FooterFit => {
 
   // Core: always rendered — the operational readout the user checks first.
   const segments: FooterSegment[] = [
-    { id: "status", text: `● ${input.statusText}` },
+    { id: "status", text: `${g("dot")} ${input.statusText}` },
     { id: "mode", text: input.modeText },
     { id: "tokens", text: input.tokenText },
   ]
@@ -126,7 +127,7 @@ export const fitFooter = (input: FooterFitInput): FooterFit => {
   if (input.bgText) optionals.push({ id: "bg", text: input.bgText })
   if (input.queueText) optionals.push({ id: "queue", text: input.queueText })
   if (input.ctxText) optionals.push({ id: "ctx", text: input.ctxText })
-  if (input.spinner) optionals.push({ id: "spinner", text: "◌" })
+  if (input.spinner) optionals.push({ id: "spinner", text: g("spinnerDot") })
   if (input.bgHint) optionals.push({ id: "bg-hint", text: input.bgHint })
   ;(input.subagentLabels ?? []).forEach((label, i) => optionals.push({ id: `chip:${i}`, text: label }))
   if (input.taskHint) optionals.push({ id: "task-hint", text: input.taskHint })

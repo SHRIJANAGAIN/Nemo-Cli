@@ -5,6 +5,7 @@ paths:
   - "**/*.js"
   - "**/*.jsx"
 ---
+
 # TypeScript/JavaScript Security
 
 > This file extends [common/security.md](../common/security.md) with TypeScript/JavaScript specific content.
@@ -19,7 +20,7 @@ const apiKey = "sk-proj-xxxxx"
 const apiKey = process.env.API_KEY
 
 if (!apiKey) {
-  throw new Error('API_KEY not configured')
+  throw new Error("API_KEY not configured")
 }
 ```
 

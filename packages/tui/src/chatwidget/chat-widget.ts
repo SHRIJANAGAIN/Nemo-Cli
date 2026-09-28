@@ -177,5 +177,3 @@ export class ChatWidget {
     return lines.length > 0 ? lines : [""]
   }
 }
-
-export { ToolCallEntry }

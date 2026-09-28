@@ -5,6 +5,7 @@
  */
 
 import type { Tool, ToolContext } from "../tools/index.js"
+import type { TrayambakConfig } from "../config.js"
 import type { Provider } from "../../../../packages/provider/src/index.js"
 import type { Session } from "../session/session.js"
 import type { DeveloperModeEngine } from "../developer-mode/index.js"
@@ -87,7 +88,10 @@ export class Executor {
     const first = this.config.session.messages[0]?.content[0]
     const context: ToolContext = {
       cwd: (typeof first === "string" ? first : first && "text" in first ? first.text : undefined) ?? ".",
-      config: {} as any,
+      // This controller has no provider config in scope; tools only read
+      // optional fields off it (maxOutputLines/maxOutputBytes), so an empty
+      // object is the deliberate "no overrides" value here.
+      config: {} as TrayambakConfig,
       permissions: DEFAULT_PERMISSIONS,
     }
 

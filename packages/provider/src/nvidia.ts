@@ -165,7 +165,10 @@ export class NvidiaProvider implements Provider {
               try {
                 const modifiedPayload = { ...(payload as Record<string, unknown>) }
                 delete modifiedPayload.reasoning_tokens
-                setTimeout(() => this.postJson(path, modifiedPayload, signal, callbacks, true).then(resolve, reject), 0)
+                setTimeout(
+                  () => this.postJson(path, modifiedPayload, signal, callbacks, /*retried*/ true).then(resolve, reject),
+                  0,
+                )
               } catch {
                 settle(() => reject(new Error(`${this.apiErrorPrefix} returned ${status}: ${errMsg}`)))
               }
@@ -254,7 +257,7 @@ export class NvidiaProvider implements Provider {
       req.on("error", (err) => {
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
           setTimeout(() => {
-            this.postJson(path, payload, signal, callbacks, true).then(resolve, reject)
+            this.postJson(path, payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)
           return
         }

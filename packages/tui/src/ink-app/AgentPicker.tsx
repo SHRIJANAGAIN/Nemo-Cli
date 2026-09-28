@@ -20,6 +20,7 @@ import { mergeAgentOptions } from "./subagent-view.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
 import { useThemeColors } from "./themeColors.js"
+import { g } from "./glyphs.js"
 
 export interface AgentPickerProps {
   profiles: Array<{ id: string; name: string; category: string; description: string }>
@@ -81,7 +82,7 @@ export const AgentPicker = ({ profiles, onSelect, onExit }: AgentPickerProps): R
           return (
             <Box key={option.value}>
               <Text bold={isSelected} color={isSelected ? theme.primary : undefined}>
-                {isSelected ? "❯ " : "  "}
+                {isSelected ? `${g("picker")} ` : "  "}
                 {realIdx + 1}.{" "}
               </Text>
               <Text bold={isSelected} color={option.builtin ? theme.info : theme.success}>

@@ -286,6 +286,7 @@ export function getMcpProcess(name: string, spec: McpServerSpec): McpProcess {
 
 export function createMcpRunnerTool(): Tool {
   const definition: ToolDefinition = {
+    timeoutMs: 30_000,
     name: "trayambak__run_mcp",
     description:
       "Run an installed MCP server, list its tools, resources, and prompts, and invoke them. Use this to run and think with MCP servers.",
@@ -339,13 +340,13 @@ export function createMcpRunnerTool(): Tool {
       const action = args.action as string
       const serverId = args.server as string | undefined
       if (action === "list_tools" || action === "connect" || action === "status") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const registry = getConnectorRegistry()
         const entry = registry.get(serverId)
         if (!entry)
           return textResult(
             `MCP server '${serverId}' not found in registry. Use trayambak__ToolSearch to find servers.`,
-            true,
+            /*isError*/ true,
           )
 
         const process = getMcpProcess(serverId, entry.spec)
@@ -375,19 +376,22 @@ export function createMcpRunnerTool(): Tool {
         } catch (err) {
           const stderr = process.getStderrLines().slice(-5).join("\n")
           const message = err instanceof Error ? err.message : String(err)
-          return textResult(`MCP ${serverId}: ${message}${stderr ? `\nServer stderr:\n${stderr}` : ""}`, true)
+          return textResult(
+            `MCP ${serverId}: ${message}${stderr ? `\nServer stderr:\n${stderr}` : ""}`,
+            /*isError*/ true,
+          )
         }
       }
 
       if (action === "call_tool") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const toolName = args.tool as string | undefined
         const toolArgs = (args.args ?? {}) as Record<string, unknown>
-        if (!toolName) return textResult("Missing 'tool' parameter.", true)
+        if (!toolName) return textResult("Missing 'tool' parameter.", /*isError*/ true)
 
         const registry = getConnectorRegistry()
         const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
 
         const process = getMcpProcess(serverId, entry.spec)
         try {
@@ -401,13 +405,13 @@ export function createMcpRunnerTool(): Tool {
           const message = err instanceof Error ? err.message : String(err)
           return textResult(
             `MCP ${serverId}.${toolName}: ${message}${stderr ? `\nServer stderr:\n${stderr}` : ""}`,
-            true,
+            /*isError*/ true,
           )
         }
       }
 
       if (action === "disconnect") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const process = mcpProcesses.get(serverId)
         if (!process) return textResult(`MCP server '${serverId}' is not running.`)
         process.close()
@@ -416,10 +420,10 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "list_resources") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const registry = getConnectorRegistry()
         const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
         const process = getMcpProcess(serverId, entry.spec)
         try {
           const resources = await process.listResources()
@@ -428,15 +432,15 @@ export function createMcpRunnerTool(): Tool {
           return textResult(`MCP server '${serverId}' resources:\n${lines.join("\n")}`)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          return textResult(`MCP ${serverId} resources: ${message}`, true)
+          return textResult(`MCP ${serverId} resources: ${message}`, /*isError*/ true)
         }
       }
 
       if (action === "list_prompts") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const registry = getConnectorRegistry()
         const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
         const process = getMcpProcess(serverId, entry.spec)
         try {
           const prompts = await process.listPrompts()
@@ -445,51 +449,51 @@ export function createMcpRunnerTool(): Tool {
           return textResult(`MCP server '${serverId}' prompts:\n${lines.join("\n")}`)
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          return textResult(`MCP ${serverId} prompts: ${message}`, true)
+          return textResult(`MCP ${serverId} prompts: ${message}`, /*isError*/ true)
         }
       }
 
       if (action === "get_prompt") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const promptName = args.name as string | undefined
-        if (!promptName) return textResult("Missing 'name' parameter.", true)
+        if (!promptName) return textResult("Missing 'name' parameter.", /*isError*/ true)
         const registry = getConnectorRegistry()
         const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
         const process = getMcpProcess(serverId, entry.spec)
         try {
           const promptArgs =
             typeof args.args === "object" && args.args !== null ? (args.args as Record<string, string>) : undefined
           const prompt = await process.getPrompt(promptName, promptArgs)
-          if (!prompt) return textResult(`Prompt '${promptName}' not found on server '${serverId}'.`, true)
+          if (!prompt) return textResult(`Prompt '${promptName}' not found on server '${serverId}'.`, /*isError*/ true)
           const text = prompt.messages
             .map((m) => `[${m.role}] ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
             .join("\n")
           return textResult(text || "(empty prompt)")
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          return textResult(`MCP ${serverId} prompt: ${message}`, true)
+          return textResult(`MCP ${serverId} prompt: ${message}`, /*isError*/ true)
         }
       }
 
       if (action === "read_resource") {
-        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
         const uri = args.uri as string | undefined
-        if (!uri) return textResult("Missing 'uri' parameter.", true)
+        if (!uri) return textResult("Missing 'uri' parameter.", /*isError*/ true)
         const registry = getConnectorRegistry()
         const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
         const process = getMcpProcess(serverId, entry.spec)
         try {
           const content = await process.readResource(uri)
           return textResult(content || "(empty resource)")
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
-          return textResult(`MCP ${serverId} resource read: ${message}`, true)
+          return textResult(`MCP ${serverId} resource read: ${message}`, /*isError*/ true)
         }
       }
 
-      return textResult(`Unknown action: ${action}.`, true)
+      return textResult(`Unknown action: ${action}.`, /*isError*/ true)
     },
   }
 }

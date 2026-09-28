@@ -17,6 +17,7 @@ export interface TeamTask {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__RunTeam",
   description:
     "Run independent specialist subagents in parallel with concurrency pooling, custom specialist roles, and unified aggregation.",
@@ -45,9 +46,10 @@ export function createTeamTool(
   return {
     definition,
     async execute(_id, args) {
-      if (!onRunTeam) return textResult("Team runner is unavailable.", true)
+      if (!onRunTeam) return textResult("Team runner is unavailable.", /*isError*/ true)
       const raw = args.tasks
-      if (!Array.isArray(raw) || raw.length === 0) return textResult("Missing non-empty 'tasks' array.", true)
+      if (!Array.isArray(raw) || raw.length === 0)
+        return textResult("Missing non-empty 'tasks' array.", /*isError*/ true)
       const tasks: TeamTask[] = raw
         .map((item) => {
           const value = item as Record<string, unknown>
@@ -62,7 +64,7 @@ export function createTeamTool(
         })
         .filter((task) => task.prompt.trim().length > 0)
 
-      if (tasks.length === 0) return textResult("Each team task needs a prompt.", true)
+      if (tasks.length === 0) return textResult("Each team task needs a prompt.", /*isError*/ true)
       const results = await onRunTeam(tasks)
       return textResult(
         results

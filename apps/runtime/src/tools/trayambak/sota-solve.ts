@@ -18,6 +18,7 @@ export interface SotaSolveOptions {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "sota_solve",
   description:
     "Run the CoT-4 parallel code-generation pipeline (User Input -> Parallel 4-Code Generation -> Sandbox Execution -> Test Cases Check -> Error(Penalty)/Pass(Reward) -> Pick Best Code). Generates up to 4 distinct candidates, executes each in a sandbox, checks tests, applies reward/penalty, picks the best, and records the run to skt/5-eval/COT-REPORT.md. Pass 'tests' to grade candidates; pass 'mode=sota' to add an extra inference-time re-solve + final verify pass.",
@@ -47,7 +48,7 @@ export function createSotaSolveTool(options: SotaSolveOptions = {}): Tool {
     definition,
     async execute(_id, args, _signal, _update, context: ToolContext | undefined) {
       const input = String(args.input ?? "").trim()
-      if (!input) return textResult("Missing required parameter: input", true)
+      if (!input) return textResult("Missing required parameter: input", /*isError*/ true)
       const tests = String(args.tests ?? "").trim()
       const mode = String(args.mode ?? "cot").toLowerCase()
       const cwd = context?.cwd ?? process.cwd()
@@ -72,7 +73,7 @@ export function createSotaSolveTool(options: SotaSolveOptions = {}): Tool {
         }
         return textResult(out)
       } catch (err) {
-        return textResult(`sota_solve failed: ${err instanceof Error ? err.message : String(err)}`, true)
+        return textResult(`sota_solve failed: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true)
       }
     },
   }

@@ -72,7 +72,7 @@ export function TrayambakLogo({ compact = false }: TrayambakLogoProps): ReactNod
   return (
     <Box flexDirection="column" alignItems="flex-start">
       {/* truncate, never wrap: ASCII/ANSI art has spaceless block runs
-          (█/████) that word-wrap tears into stairs at narrow widths, and a
+          (▀/░▒▓█) that word-wrap tears into stairs at narrow widths, and a
           centered wide logo overflows both sides. Clipping one side keeps
           the mark recognizable at any width. */}
       <Text wrap="truncate">{logo}</Text>

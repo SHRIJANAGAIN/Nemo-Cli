@@ -55,10 +55,10 @@ function legacyErrorDirs(): string[] {
 function readJournalFile(file: string): MistakeEntry[] | null {
   try {
     if (!fs.existsSync(file)) return null
-    const data = JSON.parse(fs.readFileSync(file, "utf8"))
+    const data: unknown = JSON.parse(fs.readFileSync(file, "utf8"))
     if (Array.isArray(data)) return data as MistakeEntry[]
-    if (data && typeof data === "object" && Array.isArray((data as any).mistakes)) {
-      return (data as any).mistakes as MistakeEntry[]
+    if (data && typeof data === "object" && "mistakes" in data && Array.isArray(data.mistakes)) {
+      return data.mistakes as MistakeEntry[]
     }
     return null
   } catch {

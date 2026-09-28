@@ -96,13 +96,13 @@ function globToRegExp(pattern: string, anchored: boolean): RegExp {
 
 function matchTool(tool: string, pattern: string): boolean {
   if (!pattern || pattern === "*") return true
-  if (pattern.includes("*")) return globToRegExp(pattern, true).test(tool)
+  if (pattern.includes("*")) return globToRegExp(pattern, /*anchored*/ true).test(tool)
   return pattern.toLowerCase() === tool.toLowerCase()
 }
 
 function matchSubject(subject: string, pattern?: string): boolean {
   if (!pattern || pattern === "*") return true
-  return globToRegExp(pattern, false).test(subject)
+  return globToRegExp(pattern, /*anchored*/ false).test(subject)
 }
 
 /**

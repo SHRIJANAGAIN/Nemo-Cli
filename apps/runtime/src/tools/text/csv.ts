@@ -71,6 +71,7 @@ function toMarkdownTable(rows: string[][]): string {
 export function createCsvTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "csv",
       description:
         "Read a CSV/TSV file and render it as a markdown table, or query rows by header. Useful for inspecting datasets, exports, and config dumps.",
@@ -93,7 +94,7 @@ export function createCsvTool(): Tool {
         const head = typeof args.head === "number" ? Math.max(1, args.head) : rows.length
         return textResult(toMarkdownTable(rows.slice(0, head)))
       } catch (e) {
-        return textResult(`csv failed: ${e instanceof Error ? e.message : String(e)}`, true)
+        return textResult(`csv failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }
     },
   }

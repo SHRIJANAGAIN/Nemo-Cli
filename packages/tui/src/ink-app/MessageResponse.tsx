@@ -12,7 +12,7 @@ interface Props {
   height?: number
 }
 
-const MessageResponseContext = React.createContext<boolean>(false)
+const MessageResponseContext = React.createContext<boolean>(/*defaultValue*/ false)
 
 function MessageResponseProvider({ children }: { children: ReactNode }): ReactNode {
   return <MessageResponseContext.Provider value={true}>{children}</MessageResponseContext.Provider>

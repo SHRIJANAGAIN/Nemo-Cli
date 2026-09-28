@@ -11,6 +11,7 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import { stringWidth, graphemes, sliceByWidth } from "./ink-app/utils/stringWidth.js"
+import { g } from "./ink-app/glyphs.js"
 
 export * from "./ui/index"
 
@@ -83,7 +84,7 @@ export function renderVerification(
   ui.line("")
 
   for (const step of report.steps) {
-    const icon = step.status === "pass" ? "✅" : step.status === "fail" ? "❌" : "⏭"
+    const icon = step.status === "pass" ? g("ok") : step.status === "fail" ? g("fail") : g("ring")
 
     const color = step.status === "pass" ? "green" : step.status === "fail" ? "red" : "dim"
 
@@ -102,14 +103,14 @@ export function renderVerification(
 
   const skipCount = report.steps.filter((s) => s.status === "skip").length
 
-  const summary = `✅ ${passCount}/${report.steps.length} pass, ${failCount} fail, ${skipCount} skip`
+  const summary = `${g("ok")} ${passCount}/${report.steps.length} pass, ${failCount} fail, ${skipCount} skip`
 
   ui.line(ui.c(report.passed ? "green" : "red", summary))
 
   ui.separator()
 }
 
-import type { AgentEvent } from "../../protocol/src/index"
+import type { AgentEvent, TextPart } from "../../protocol/src/index"
 
 import {
   renderSplitLogo,
@@ -1883,7 +1884,7 @@ export class TerminalUI {
 
       process.stdout.write("\x1b[?25l")
 
-      process.stdin.setRawMode?.(true)
+      process.stdin.setRawMode?.(/*mode*/ true)
       process.stdin.resume?.()
 
       let buffer = ""
@@ -2144,7 +2145,7 @@ export class TerminalUI {
 
         process.stdout.write("\r\x1b[K")
 
-        stdin.setRawMode?.(false)
+        stdin.setRawMode?.(/*mode*/ false)
 
         process.stdout.write("\x1b[?25h\x1b[?2004l")
 
@@ -2203,7 +2204,7 @@ export class TerminalUI {
 
             process.stdout.write("\r\x1b[2K")
 
-            stdin.setRawMode?.(false)
+            stdin.setRawMode?.(/*mode*/ false)
 
             process.stdout.write("\x1b[?25h")
 
@@ -2223,7 +2224,7 @@ export class TerminalUI {
 
             process.stdout.write("\r\x1b[2K")
 
-            stdin.setRawMode?.(false)
+            stdin.setRawMode?.(/*mode*/ false)
 
             process.stdout.write("\x1b[?25h")
 
@@ -2459,7 +2460,7 @@ export class TerminalUI {
 
       const stdin = process.stdin
 
-      stdin.setRawMode?.(true)
+      stdin.setRawMode?.(/*mode*/ true)
 
       stdin.resume()
 
@@ -2561,7 +2562,7 @@ export class TerminalUI {
       "auto-approve",
       "full-access",
     ]
-    const idx = order.indexOf(this.permissionMode as any)
+    const idx = order.indexOf(this.permissionMode)
     this.permissionMode = order[(idx + 1) % order.length]
 
     const isYolo = this.permissionMode === "full-access" || this.permissionMode === "auto-approve"
@@ -2570,7 +2571,7 @@ export class TerminalUI {
     try {
       const { globalApprovalManager } = await import("./approval-notification.js")
       globalApprovalManager.setAutoApprove(isYolo)
-      ;(globalApprovalManager as any).setReadOnly?.(isRO)
+      globalApprovalManager.setReadOnly(isRO)
     } catch {}
 
     const labels: Record<string, string> = {
@@ -2599,7 +2600,7 @@ export class TerminalUI {
     try {
       const cfgPath = path.join(os.homedir(), ".trayambak", "config.json")
 
-      let cfg: any = {}
+      let cfg: Record<string, unknown> = {}
 
       try {
         cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"))
@@ -2625,7 +2626,7 @@ export class TerminalUI {
     try {
       const { globalApprovalManager } = await import("./approval-notification.js")
       globalApprovalManager.setAutoApprove(mode === "auto-approve" || mode === "full-access")
-      ;(globalApprovalManager as any).setReadOnly?.(mode === "read-only")
+      globalApprovalManager.setReadOnly(mode === "read-only")
     } catch {}
   }
 
@@ -2790,7 +2791,7 @@ export class TerminalUI {
 
         clear()
 
-        stdin.setRawMode?.(false)
+        stdin.setRawMode?.(/*mode*/ false)
 
         process.stdout.write("\x1b[?25h\x1b[?2004h")
 
@@ -2922,7 +2923,7 @@ export class TerminalUI {
         }
       }
 
-      stdin.setRawMode?.(true)
+      stdin.setRawMode?.(/*mode*/ true)
 
       stdin.resume()
 
@@ -2942,16 +2943,16 @@ export function readClipboardText(): string {
     if (process.platform === "win32") {
       return child_process
 
-        .execSync("powershell -NoProfile -Command Get-Clipboard", { encoding: "utf8" })
+        .execSync("powershell -NoProfile -Command Get-Clipboard", { encoding: "utf8", timeout: 5_000 })
 
         .replace(/\r\n/g, "\n")
     }
 
     if (process.platform === "darwin") {
-      return child_process.execSync("pbpaste", { encoding: "utf8" })
+      return child_process.execSync("pbpaste", { encoding: "utf8", timeout: 5_000 })
     }
 
-    return child_process.execSync("xclip -selection clipboard -o", { encoding: "utf8" })
+    return child_process.execSync("xclip -selection clipboard -o", { encoding: "utf8", timeout: 5_000 })
   } catch {
     return ""
   }
@@ -3006,14 +3007,14 @@ export function renderEvent(event: AgentEvent, ui: TerminalUI): void {
       ui.finalizeAssistantText()
 
       if (!hadStreamed) {
-        const msg = (event as any).message
+        const content: unknown = event.message?.content
 
-        if (msg && Array.isArray(msg.content)) {
-          const full = msg.content
+        if (Array.isArray(content)) {
+          const full = content
 
-            .filter((c: any) => c && c.type === "text" && typeof c.text === "string")
+            .filter((part): part is TextPart => part.type === "text" && typeof part.text === "string")
 
-            .map((c: any) => c.text)
+            .map((part) => part.text)
 
             .join("\n")
 

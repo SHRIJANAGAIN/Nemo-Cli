@@ -44,6 +44,7 @@ export async function listWorktrees(cwd: string): Promise<WorktreeEntry[]> {
 }
 
 const enterDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__EnterWorktree",
   description:
     "Create an isolated git worktree for parallel work. Requires explicit user request or project memory instruction.",
@@ -74,13 +75,14 @@ export function createEnterWorktreeTool(): Tool {
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        return textResult(`Failed to create worktree: ${message}`, true)
+        return textResult(`Failed to create worktree: ${message}`, /*isError*/ true)
       }
     },
   }
 }
 
 const exitDef: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__ExitWorktree",
   description: "Exit a worktree session and return to the original directory.",
   parameters: {
@@ -115,7 +117,7 @@ export function createExitWorktreeTool(): Tool {
         return textResult(`Worktree kept. Current context: ${ctx.cwd}`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        return textResult(`Worktree action failed: ${message}`, true)
+        return textResult(`Worktree action failed: ${message}`, /*isError*/ true)
       }
     },
   }

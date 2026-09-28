@@ -92,14 +92,16 @@ export class VerificationPipeline {
         duration_ms: Date.now() - t0,
         output,
       }
-    } catch (err: any) {
-      const isTimeout = err.killed || err.code === "ETIMEDOUT"
+    } catch (err: unknown) {
+      const failure = err as
+        { killed?: boolean; code?: string; message?: string; stdout?: { toString(): string } } | undefined
+      const isTimeout = Boolean(failure?.killed) || failure?.code === "ETIMEDOUT"
       return {
         step,
         status: "error",
         duration_ms: Date.now() - t0,
-        output: err.stdout?.toString() || "",
-        error: isTimeout ? "Command timed out" : err.message,
+        output: failure?.stdout?.toString() || "",
+        error: isTimeout ? "Command timed out" : failure?.message,
       }
     }
   }

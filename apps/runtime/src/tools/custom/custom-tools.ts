@@ -185,6 +185,7 @@ export function createCustomTool(
 ): Tool | undefined {
   if (reserved.has(name)) return undefined
   const definition = {
+    timeoutMs: 30_000,
     name,
     description: def.description as string,
     parameters: normalizeParameters(def.args),
@@ -202,7 +203,7 @@ export function createCustomTool(
         return coerceResult(result)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        return textResult(`Custom tool "${name}" failed: ${message}`, true)
+        return textResult(`Custom tool "${name}" failed: ${message}`, /*isError*/ true)
       }
     },
   }

@@ -2,6 +2,7 @@
 paths:
   - "**/*.rs"
 ---
+
 # Rust Patterns
 
 > This file extends [common/patterns.md](../common/patterns.md) with Rust-specific content.

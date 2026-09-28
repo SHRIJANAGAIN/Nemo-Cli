@@ -5,6 +5,7 @@ paths:
   - "**/*.csproj"
   - "**/appsettings*.json"
 ---
+
 # C# Security
 
 > This file extends [common/security.md](../common/security.md) with C#-specific content.

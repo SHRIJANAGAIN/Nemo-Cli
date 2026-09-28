@@ -52,7 +52,7 @@ export class GoogleProvider implements Provider {
 
   async chat(input: ChatInput): Promise<AssistantMessage> {
     const body = this.buildBody(input)
-    return this.postGenerate(body, input.signal, input.callbacks, false)
+    return this.postGenerate(body, input.signal, input.callbacks, /*retried*/ false)
   }
 
   protected buildBody(input: ChatInput): Record<string, unknown> {
@@ -186,7 +186,7 @@ export class GoogleProvider implements Provider {
       req.on("error", (err) => {
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
           setTimeout(() => {
-            this.postGenerate(payload, signal, callbacks, true).then(resolve, reject)
+            this.postGenerate(payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)
           return
         }

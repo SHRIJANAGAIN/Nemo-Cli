@@ -8,6 +8,15 @@ import * as http from "http"
 import { Agent, loadConfig } from "../../../apps/runtime/src/index.js"
 import { createTelemetry } from "../../telemetry/src/index.js"
 import { listTranscripts } from "../../session-backends/src/transcript.js"
+import {
+  createAppJwt,
+  createInstallationToken,
+  postIssueComment,
+  routeGithubEvent,
+  splitRepo,
+  verifyWebhookSignature,
+  type GithubJob,
+} from "./github-app.js"
 
 export interface ServerOptions {
   port?: number
@@ -21,12 +30,13 @@ const MAX_BODY_BYTES = 1_048_576
 
 export const OPENAPI_SPEC = {
   openapi: "3.0.0",
-  info: { title: "Trayambak Agent API", version: "0.5.0" },
+  info: { title: "Trayambak Agent API", version: "0.6.0" }, // keep in sync with root package.json
   paths: {
     "/health": { get: { summary: "Health check" } },
     "/v1/models": { get: { summary: "List models" } },
     "/v1/agent": { post: { summary: "Run agent (SSE)" } },
     "/api/sessions": { get: { summary: "List transcripts" } },
+    "/webhooks/github": { post: { summary: "GitHub App webhook (HMAC verified)" } },
     "/openapi.json": { get: { summary: "OpenAPI spec" } },
   },
 } as const
@@ -41,7 +51,7 @@ export function startServer(options: ServerOptions = {}): http.Server {
   const host = options.host ?? "127.0.0.1"
   const token = options.token ?? process.env.TRAYAMBAK_WEB_TOKEN
   const config = loadConfig()
-  const telemetry = createTelemetry(false)
+  const telemetry = createTelemetry(/*enabled*/ false)
 
   const server = http.createServer((req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*")
@@ -84,6 +94,64 @@ export function startServer(options: ServerOptions = {}): http.Server {
     if (req.method === "GET" && req.url === "/v1/models") {
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(JSON.stringify({ data: [{ id: config.model }] }))
+      return
+    }
+
+    if (req.method === "POST" && req.url === "/webhooks/github") {
+      // Fail closed: no secret configured means no webhooks accepted.
+      const secret = process.env.GITHUB_WEBHOOK_SECRET ?? ""
+      if (!secret) {
+        res.writeHead(503, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "webhooks disabled (GITHUB_WEBHOOK_SECRET unset)" }))
+        return
+      }
+      const chunks: Buffer[] = []
+      let rawBytes = 0
+      let oversize = false
+      req.on("data", (c: Buffer) => {
+        if (oversize) return
+        const buf = typeof c === "string" ? Buffer.from(c, "utf8") : c
+        rawBytes += buf.length
+        if (rawBytes > MAX_BODY_BYTES) {
+          oversize = true
+          res.writeHead(413, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ error: "body too large (max 1MB)" }))
+          setImmediate(() => req.destroy())
+          return
+        }
+        chunks.push(buf)
+      })
+      req.on("end", () => {
+        if (oversize || req.destroyed) return
+        const raw = Buffer.concat(chunks)
+        const signature = req.headers["x-hub-signature-256"]
+        if (!verifyWebhookSignature(secret, raw, Array.isArray(signature) ? signature[0] : signature)) {
+          res.writeHead(401, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ error: "bad signature" }))
+          return
+        }
+        let payload: unknown = null
+        try {
+          payload = JSON.parse(raw.toString("utf8"))
+        } catch {
+          res.writeHead(400, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ error: "invalid JSON" }))
+          return
+        }
+        const event = req.headers["x-github-event"]
+        const outcome = routeGithubEvent(Array.isArray(event) ? (event[0] ?? "") : (event ?? ""), payload)
+        if (outcome.kind !== "job") {
+          // Always 2xx for non-jobs so GitHub never retry-storms us.
+          res.writeHead(200, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ ok: true, ...(outcome.kind === "ignored" ? { ignored: outcome.reason } : {}) }))
+          return
+        }
+        res.writeHead(202, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ ok: true, accepted: true }))
+        void runGithubJob(outcome.job, payload).catch((err) => {
+          process.stderr.write(`[github-app] job failed: ${err instanceof Error ? err.message : String(err)}\n`)
+        })
+      })
       return
     }
 
@@ -179,4 +247,67 @@ function safeJson(raw: string): Record<string, unknown> {
   } catch {
     return {}
   }
+}
+
+/**
+ * Execute an accepted GitHub job: run the agent in the job workspace, then
+ * report back on the thread. Replies need App credentials (GITHUB_APP_ID +
+ * GITHUB_PRIVATE_KEY, PEM text or a path to it); without them the run still
+ * executes but the result only lands in the server log — fail loud, never
+ * silent, so a misconfigured VPS is obvious, not mysterious.
+ */
+async function runGithubJob(job: GithubJob, payload: unknown): Promise<void> {
+  const apiBase = process.env.GITHUB_API_BASE ?? "https://api.github.com"
+  const started = new Date().toISOString()
+  process.stdout.write(`[github-app] job ${job.repoFullName}#${job.issueNumber} started at ${started}\n`)
+  const workspace = process.env.TRAYAMBAK_GITHUB_WORKSPACE ?? loadConfig().cwd
+  const jobConfig = { ...loadConfig(), cwd: workspace }
+  const agent = new Agent({ config: jobConfig })
+  const messages = await agent.run(
+    `GitHub request in ${job.repoFullName}${job.isPullRequest ? " (pull request" : " (issue"} #${job.issueNumber}):\n${job.task}`,
+    () => {},
+  )
+  const reply = extractFinalText(messages)
+  const appId = process.env.GITHUB_APP_ID ?? ""
+  let key = process.env.GITHUB_PRIVATE_KEY ?? ""
+  if (key && !key.includes("BEGIN")) {
+    const fs = await import("node:fs")
+    try {
+      key = fs.readFileSync(key, "utf8")
+    } catch {
+      key = ""
+    }
+  }
+  const installation = (payload as { installation?: { id?: unknown } } | null)?.installation
+  const installationId = typeof installation?.id === "number" ? installation.id : 0
+  if (!appId || !key || !installationId) {
+    process.stdout.write(
+      `[github-app] job done but no reply channel (need GITHUB_APP_ID + GITHUB_PRIVATE_KEY + installation id).\n--- result ---\n${reply}\n--- end ---\n`,
+    )
+    return
+  }
+  const jwt = createAppJwt(appId, key)
+  const token = await createInstallationToken(apiBase, jwt, installationId)
+  const { owner, repo } = splitRepo(job.repoFullName)
+  const capped = reply.length > 60000 ? `${reply.slice(0, 60000)}\n\n…(truncated, full log on the VPS)` : reply
+  await postIssueComment({ apiBase, token }, owner, repo, job.issueNumber, `## Trayambak result\n\n${capped}`)
+  process.stdout.write(`[github-app] job ${job.repoFullName}#${job.issueNumber} replied\n`)
+}
+
+function extractFinalText(messages: Array<{ role?: string; content?: unknown }>): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (!m || m.role !== "assistant") continue
+    const parts = Array.isArray(m.content) ? m.content : []
+    const text = parts
+      .filter(
+        (p): p is { type: "text"; text: string } =>
+          !!p && typeof p === "object" && (p as { type?: unknown }).type === "text",
+      )
+      .map((p) => p.text)
+      .join("\n")
+      .trim()
+    if (text) return text
+  }
+  return "(agent produced no text output)"
 }

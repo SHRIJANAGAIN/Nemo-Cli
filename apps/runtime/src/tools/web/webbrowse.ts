@@ -218,6 +218,7 @@ function extractTitle(html: string): string {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "web_browse",
   description:
     "Open and read a web page like a browser: returns readable page text plus a list of clickable links (absolute URLs) so you can navigate between pages. Follows a host-trust guard — loopback/localhost is always allowed, and remote plain-HTTP pages are refused. Supports session-based navigation (open_url, go_back, go_forward, follow_link) and cookie persistence across requests.",
@@ -248,7 +249,7 @@ export function createWebBrowseTool(): Tool {
 
       if (action === "go_back") {
         if (session.history.length <= 1) {
-          return textResult("No previous pages in history.", true)
+          return textResult("No previous pages in history.", /*isError*/ true)
         }
         session.history.pop()
         const prev = session.history[session.history.length - 1]
@@ -261,11 +262,14 @@ export function createWebBrowseTool(): Tool {
       }
 
       if (action === "go_forward") {
-        return textResult("Forward navigation requires re-requesting the URL. Use open_url with the desired URL.", true)
+        return textResult(
+          "Forward navigation requires re-requesting the URL. Use open_url with the desired URL.",
+          /*isError*/ true,
+        )
       }
 
       if (action === "refresh") {
-        if (!session.currentUrl) return textResult("No page to refresh.", true)
+        if (!session.currentUrl) return textResult("No page to refresh.", /*isError*/ true)
         return executeNavigate(
           session.currentUrl,
           typeof args.with_links === "boolean" ? args.with_links : true,
@@ -275,7 +279,7 @@ export function createWebBrowseTool(): Tool {
       }
 
       if (action === "follow_link") {
-        if (!session.currentUrl) return textResult("No current page to follow links from.", true)
+        if (!session.currentUrl) return textResult("No current page to follow links from.", /*isError*/ true)
         const idx = typeof args.link_index === "number" ? args.link_index : 0
         let base: URL
         try {
@@ -286,10 +290,10 @@ export function createWebBrowseTool(): Tool {
         const currentPage = session.pages[session.pages.length - 1]
         const links = currentPage ? extractLinks(currentPage.body, base) : []
         if (idx < 0 || idx >= links.length)
-          return textResult(`Link index ${idx} out of range (0-${links.length - 1}).`, true)
+          return textResult(`Link index ${idx} out of range (0-${links.length - 1}).`, /*isError*/ true)
         return executeNavigate(
           links[idx].href,
-          true,
+          /*withLinks*/ true,
           typeof args.max_bytes === "number" ? args.max_bytes : DEFAULT_MAX_BYTES,
           signal,
         )
@@ -297,7 +301,7 @@ export function createWebBrowseTool(): Tool {
 
       if (action === "open_url") {
         const targetUrl = typeof args.url === "string" ? args.url : ""
-        if (!targetUrl) return textResult("Missing 'url' parameter for open_url.", true)
+        if (!targetUrl) return textResult("Missing 'url' parameter for open_url.", /*isError*/ true)
         if (typeof args.headers === "string") {
           try {
             const extraHeaders = JSON.parse(args.headers) as Record<string, string>
@@ -308,14 +312,14 @@ export function createWebBrowseTool(): Tool {
         }
         return executeNavigate(
           targetUrl,
-          true,
+          /*withLinks*/ true,
           typeof args.max_bytes === "number" ? args.max_bytes : DEFAULT_MAX_BYTES,
           signal,
         )
       }
 
       const target = String(args.url ?? "")
-      if (!target) return textResult("Missing 'url'.", true)
+      if (!target) return textResult("Missing 'url'.", /*isError*/ true)
       const withLinks = args.with_links !== false
       const maxBytes = typeof args.max_bytes === "number" ? args.max_bytes : DEFAULT_MAX_BYTES
       if (typeof args.headers === "string") {
@@ -341,10 +345,12 @@ function executeNavigate(
   try {
     parsed = new URL(target)
   } catch {
-    return Promise.resolve(textResult(`Invalid URL: ${target}`, true))
+    return Promise.resolve(textResult(`Invalid URL: ${target}`, /*isError*/ true))
   }
   if (!/^https?:$/.test(parsed.protocol)) {
-    return Promise.resolve(textResult(`web_browse only supports http/https URLs (got "${parsed.protocol}").`, true))
+    return Promise.resolve(
+      textResult(`web_browse only supports http/https URLs (got "${parsed.protocol}").`, /*isError*/ true),
+    )
   }
 
   const trusted = TRUSTED_HOSTS.has(parsed.hostname.toLowerCase())
@@ -353,7 +359,7 @@ function executeNavigate(
     return Promise.resolve(
       textResult(
         `Refusing to load plain-HTTP URL to untrusted host "${parsed.hostname}". Use https:// for remote pages, or an explicit loopback address for local services (http://localhost/...).`,
-        true,
+        /*isError*/ true,
       ),
     )
   }

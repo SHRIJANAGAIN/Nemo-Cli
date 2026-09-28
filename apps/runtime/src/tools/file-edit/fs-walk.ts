@@ -7,7 +7,18 @@
 import * as fs from "fs"
 import * as path from "path"
 
-const IGNORED = new Set([".git", "node_modules", "dist", "build", ".trayambak", "target", ".venv", "vendor"])
+/** Directory names the Node walker always skips — exported so the
+ *  ripgrep backend can pass the same exclusions and both backends agree. */
+export const IGNORED_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".trayambak",
+  "target",
+  ".venv",
+  "vendor",
+])
 
 /** Recursively walk a directory, yielding absolute file paths. */
 export function walkFiles(root: string, onFile: (filePath: string, rel: string) => void, maxDepth = 20): void {
@@ -20,7 +31,7 @@ export function walkFiles(root: string, onFile: (filePath: string, rel: string) 
       return
     }
     for (const entry of entries) {
-      if (IGNORED.has(entry.name)) continue
+      if (IGNORED_DIRS.has(entry.name)) continue
       const abs = path.join(dir, entry.name)
       const rel = path.relative(root, abs)
       if (entry.isDirectory()) {

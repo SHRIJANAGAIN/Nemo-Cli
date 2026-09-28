@@ -8,6 +8,7 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { textResult, type Tool } from "../types.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__AskUserQuestion",
   description:
     "Ask the user a structured question with multiple-choice options. Use when you need clarification or a decision from the user.",
@@ -57,7 +58,7 @@ export function createAskUserQuestionTool(
         })
         return { question, options, multi_select: !!record.multi_select }
       })
-      if (normalized.length === 0) return textResult("Missing 'questions'.", true)
+      if (normalized.length === 0) return textResult("Missing 'questions'.", /*isError*/ true)
       if (onAsk) {
         const answers = await onAsk(normalized)
         const out = normalized.map((q, i) => `Q: ${q.question}\nA: ${answers[i] ?? "(skipped)"}`).join("\n\n")

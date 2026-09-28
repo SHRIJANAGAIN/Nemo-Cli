@@ -38,8 +38,30 @@ import { HarnessRuntime, type HarnessPlugin } from "../../../../packages/harness
 import { discoverAgentProfiles, getAgentProfile, type AgentProfile } from "./specialist-agents.js"
 import { DEFAULT_PERMISSIONS } from "../../../../packages/protocol/src/permissions.js"
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
+import { createReadFileTool } from "../tools/file-edit/read-file.js"
+import {
+  createSubagentTask,
+  SubagentEngine,
+  type BackgroundSubagentStatus,
+  type SubagentTask,
+  type WorkerContext,
+  type WorkerResult,
+  type WorkerUsage,
+} from "../../../../packages/core/src/subagents.js"
 
 const exec = promisify(execFile)
+
+/**
+ * Tools that spawn MORE agents. Withheld from subagent children so fan-out
+ * is bounded by the depth guard alone (SubagentEngine) instead of growing
+ * unbounded through nested Agent/Team calls.
+ */
+const SUBAGENT_FANOUT_TOOLS = new Set([
+  "trayambak__Agent",
+  "trayambak__RunTeam",
+  "trayambak__ParallelReview",
+  "trayambak__ParallelExecute",
+])
 
 /**
  * Wrap an event sink so every event emitted by a child (subagent) loop is
@@ -54,6 +76,23 @@ function tagSubagentEmit(emit: AgentEventSink, subagentId: string, subagentName:
     // subagent started by this one) — never re-attribute them to this id.
     if (event.subagentId !== undefined) return emit(event)
     return emit(Object.assign({}, event, { subagentId, subagentName }))
+  }
+}
+
+/** Map an engine background status to the public BackgroundSubagentInfo view. */
+function backgroundStatusToInfo(status: BackgroundSubagentStatus): BackgroundSubagentInfo {
+  return {
+    id: status.id,
+    name: status.task.description,
+    prompt: status.task.prompt,
+    subagentType: status.task.type,
+    model: status.task.model,
+    isolation: status.task.isolation,
+    status: status.status,
+    startedAt: status.startedAt,
+    completedAt: status.completedAt,
+    output: status.output,
+    error: status.error,
   }
 }
 
@@ -102,6 +141,10 @@ export interface BackgroundSubagentInfo {
 
 export interface AgentOptions {
   config: TrayambakConfig
+  /** Provider to reuse as-is. Subagent children share the parent's instance
+   *  (fresh Session, same provider/config/emit) unless a model override
+   *  requests a different one. Tests inject mock providers here. */
+  provider?: Provider | undefined
   tools?: Tool[]
   sessionFile?: string
   sessionId?: string
@@ -146,14 +189,13 @@ export class Agent {
   private readonly subagentRunner?: SubagentRunner
   private currentSignal?: AbortSignal
   private currentEmit?: AgentEventSink
-  private backgroundJobs: Map<string, BackgroundSubagentInfo> = new Map()
   private backgroundEmit?: AgentEventSink
   /** Durable-inbox id polled by this agent's loop (see RunConfig.inboxId). */
   private readonly inboxId?: string
-  /** Per-job abort controllers: background loops used to run with an
-   *  `undefined` signal, making them unabortable (Ctrl+D only aborted the
-   *  foreground controller). Cancel via cancelBackgroundJob(). */
-  private backgroundControllers: Map<string, AbortController> = new Map()
+  /** Subagent orchestration engine: depth guard, isolated workers, usage
+   *  summaries, subagent_* lifecycle events, and the background registry
+   *  (start / getStatus / await / cancel via AbortController). */
+  private readonly subagentEngine: SubagentEngine
 
   constructor(options: AgentOptions) {
     this.config = options.config
@@ -165,6 +207,9 @@ export class Agent {
     this.onAskUserQuestion = options.onAskUserQuestion
     this.onRequestPermission = options.onRequestPermission
     this.subagentRunner = options.subagentRunner
+    this.subagentEngine = new SubagentEngine({
+      runWorker: (task, ctx) => this.runSubagentWorker(task, ctx),
+    })
     this.sessionId = options.sessionId ?? ""
     this.inboxId = options.inboxId
     const devConfig = { ...(options.config.developerMode ?? {}), ...(options.developerMode ?? {}) }
@@ -192,16 +237,18 @@ export class Agent {
     const maxTokens = (
       devOverrides.maxTokens !== undefined ? Number(devOverrides.maxTokens) : this.config.maxTokens
     ) as number
-    this.provider = this.createProviderForConfig({
-      baseUrl: this.config.baseUrl,
-      apiKey: this.config.apiKey,
-      model: this.config.model,
-      temperature,
-      topP,
-      maxTokens,
-      timeoutMs: this.config.timeoutMs,
-      reasoningEffort: this.config.reasoningEffort,
-    })
+    this.provider =
+      options.provider ??
+      this.createProviderForConfig({
+        baseUrl: this.config.baseUrl,
+        apiKey: this.config.apiKey,
+        model: this.config.model,
+        temperature,
+        topP,
+        maxTokens,
+        timeoutMs: this.config.timeoutMs,
+        reasoningEffort: this.config.reasoningEffort,
+      })
     this.session = options.sessionFile ? (Session.load(options.sessionFile) ?? new Session()) : new Session()
     const reorderedTools = this.developerMode.isEnabled() ? this.developerMode.reorderTools(this.tools) : this.tools
     const specialistBlock = this.specialistPrompt
@@ -414,13 +461,13 @@ export class Agent {
         await emit({ type: "message_start", message: assistant })
         await emit({ type: "message_end", message: assistant })
         await emit({ type: "agent_end", messages: this.session.messages })
-        this.selfImprovement?.observe(prompt, result.solution, false)
+        this.selfImprovement?.observe(prompt, result.solution, /*hadError*/ false)
         this.selfImprovement?.refine()
         await this.harness.emit({ type: "turn_end", prompt, success: true })
         this.refreshSystemPrompt()
         return [assistant]
       } catch (error) {
-        this.selfImprovement?.observe(prompt, error instanceof Error ? error.message : String(error), true)
+        this.selfImprovement?.observe(prompt, error instanceof Error ? error.message : String(error), /*hadError*/ true)
         this.selfImprovement?.refine()
         this.refreshSystemPrompt()
         await this.harness.emit({
@@ -452,7 +499,7 @@ export class Agent {
         sessionId: this.sessionId,
       })
     } catch (error) {
-      this.selfImprovement?.observe(prompt, error instanceof Error ? error.message : String(error), true)
+      this.selfImprovement?.observe(prompt, error instanceof Error ? error.message : String(error), /*hadError*/ true)
       this.selfImprovement?.refine()
       this.refreshSystemPrompt()
       await this.harness.emit({ type: "error", prompt, error: error instanceof Error ? error.message : String(error) })
@@ -460,7 +507,7 @@ export class Agent {
     }
     const response = [...messages].reverse().find((message) => message.role === "assistant")
     const text = response?.content.find((part) => part.type === "text")
-    this.selfImprovement?.observe(prompt, text && "text" in text ? text.text : "", false)
+    this.selfImprovement?.observe(prompt, text && "text" in text ? text.text : "", /*hadError*/ false)
     this.selfImprovement?.refine()
     await this.harness.emit({ type: "turn_end", prompt, success: true })
     this.refreshSystemPrompt()
@@ -473,101 +520,44 @@ export class Agent {
 
   async runSubagents(
     tasks: Array<SubagentRunTask | { name: string; prompt: string }>,
-    emit: AgentEventSink = () => undefined,
-  ): Promise<Array<{ name: string; text: string; error?: string; background?: boolean; subagentId?: string }>> {
-    if (this.subagentDepth >= 3) throw new Error("Subagent recursion limit reached.")
+    emit?: AgentEventSink,
+  ): Promise<SubagentResult[]> {
+    // Foreground children stream into the spawning run's sink; background
+    // children complete later, so they prefer the dedicated background sink.
+    const foregroundEmit = emit ?? this.currentEmit
+    const backgroundEmit = this.backgroundEmit ?? foregroundEmit
     const limit = Math.max(1, Math.min(this.config.maxParallelToolCalls, this.developerMode.config.maxSubagents))
     const output: SubagentResult[] = []
     for (let i = 0; i < tasks.length; i += limit) {
       const batch = tasks.slice(i, i + limit)
       const results = await Promise.all(
-        batch.map(async (task) => {
+        batch.map(async (task): Promise<SubagentResult> => {
           const runTask = task as SubagentRunTask
-          const subagentId = `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-          const profile = runTask.subagentType
-            ? getAgentProfile(runTask.subagentType, this.config.cwd, this.config.agentProfileDirs)
-            : undefined
-          const isolation = runTask.isolation ?? "inherit"
-          const isBackground = runTask.background === true
-          let worktreeCleanup: (() => void) | undefined
-          const baseChildConfig = {
-            ...this.config,
-            permissions: { ...(this.config.permissions ?? DEFAULT_PERMISSIONS), askByDefault: false },
+          const subagentTask = createSubagentTask({
+            description: runTask.name,
+            prompt: runTask.prompt,
+            type: runTask.subagentType ?? "general",
+            model: runTask.model,
+            isolation: runTask.isolation,
+            background: runTask.background,
+          })
+          if (runTask.background === true) {
+            const outcome = this.subagentEngine.startBackground(subagentTask, {
+              depth: this.subagentDepth,
+              emit: backgroundEmit,
+            })
+            if (!outcome.ok) return { name: runTask.name, text: "", error: outcome.error?.message }
+            return { name: runTask.name, text: "", background: true, subagentId: outcome.id }
           }
-          let childConfig: TrayambakConfig = baseChildConfig
-          try {
-            if (isolation === "worktree") {
-              const wt = await createWorktreeIsolation(this.config.cwd)
-              worktreeCleanup = wt.cleanup
-              childConfig = { ...baseChildConfig, cwd: wt.cwd }
-            }
-            await emit({
-              type: isBackground ? "subagent_background_start" : "subagent_start",
-              subagentId,
-              name: task.name,
-              prompt: task.prompt,
-              subagentType: runTask.subagentType,
-              isolation: isolation === "worktree" ? "worktree" : undefined,
-            })
-            if (isBackground) {
-              const jobInfo: BackgroundSubagentInfo = {
-                id: subagentId,
-                name: task.name,
-                prompt: task.prompt,
-                subagentType: runTask.subagentType,
-                model: runTask.model,
-                isolation,
-                status: "running",
-                startedAt: Date.now(),
-              }
-              this.backgroundJobs.set(subagentId, jobInfo)
-              this.runBackgroundSubagent(
-                subagentId,
-                task.prompt,
-                childConfig,
-                profile,
-                isolation,
-                worktreeCleanup,
-              ).catch((err) => {
-                const message = err instanceof Error ? err.message : String(err)
-                this.updateBackgroundJob(subagentId, { status: "error", error: message, completedAt: Date.now() })
-                void emit({ type: "subagent_background_fail", subagentId, name: task.name, error: message })
-              })
-              return { name: task.name, text: "", background: true, subagentId }
-            }
-            const child = await Agent.create({
-              config: childConfig,
-              mode: profile?.category === "reviewer" ? "default" : "coder",
-              specialistPrompt: profile?.prompt,
-              subagentDepth: this.subagentDepth + 1,
-              inboxId: subagentId,
-              onAskUserQuestion: this.onAskUserQuestion,
-              onRequestPermission: this.onRequestPermission,
-              subagentRunner: this.subagentRunner,
-            })
-            const messages = await child.run(
-              task.prompt,
-              tagSubagentEmit(emit, subagentId, task.name),
-              this.currentSignal,
-            )
-            const assistant = [...messages].reverse().find((message) => message.role === "assistant")
-            const text = assistant?.content.find((part) => part.type === "text")
-            const resultText = text && "text" in text ? text.text : ""
-            await emit({ type: "subagent_end", subagentId, name: task.name, result: resultText })
-            return { name: task.name, text: resultText }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            await emit({
-              type: isBackground ? "subagent_background_fail" : "subagent_fail",
-              subagentId,
-              name: task.name,
-              error: message,
-            })
-            this.updateBackgroundJob(subagentId, { status: "error", error: message, completedAt: Date.now() })
-            return { name: task.name, text: "", error: message }
-          } finally {
-            if (!isBackground && worktreeCleanup) worktreeCleanup()
-          }
+          // Depth guard, subagent_start/end events, and usage accounting all
+          // live in the core engine — one code path for every spawn.
+          const outcome = await this.subagentEngine.run(subagentTask, {
+            depth: this.subagentDepth,
+            emit: foregroundEmit,
+            signal: this.currentSignal,
+          })
+          if (!outcome.ok) return { name: runTask.name, text: "", error: outcome.error?.message }
+          return { name: runTask.name, text: outcome.text }
         }),
       )
       output.push(...results)
@@ -575,55 +565,79 @@ export class Agent {
     return output
   }
 
-  private async runBackgroundSubagent(
-    subagentId: string,
-    prompt: string,
-    childConfig: TrayambakConfig,
-    profile: AgentProfile | undefined,
-    isolation: string,
-    worktreeCleanup: (() => void) | undefined,
-  ): Promise<void> {
-    const emit = this.backgroundEmit ?? this.currentEmit ?? (() => undefined)
-    // Display name for lifecycle events — the id was wrongly used before.
-    const jobName = this.backgroundJobs.get(subagentId)?.name ?? subagentId
-    const controller = new AbortController()
-    this.backgroundControllers.set(subagentId, controller)
+  /**
+   * Engine worker: one isolated subagent run. A fresh child Agent owns a
+   * fresh Session; the parent's provider, config, and event sink are reused
+   * (unless a model override requests a different provider); tools are this
+   * agent's resolved set minus the fan-out tools. Returns the worker's final
+   * text plus its usage summary (turns / tool calls / duration) for the
+   * engine's per-task and aggregate usage summaries.
+   */
+  private async runSubagentWorker(task: SubagentTask, ctx: WorkerContext): Promise<WorkerResult> {
+    const startedAt = Date.now()
+    const profile = getAgentProfile(task.type, this.config.cwd, this.config.agentProfileDirs)
+    const isolation = task.isolation ?? "inherit"
+    const modelOverride = task.model && task.model !== "" && task.model !== this.config.model ? task.model : undefined
+    const baseChildConfig: TrayambakConfig = {
+      ...this.config,
+      permissions: { ...(this.config.permissions ?? DEFAULT_PERMISSIONS), askByDefault: false },
+    }
+    let childConfig: TrayambakConfig = modelOverride ? { ...baseChildConfig, model: modelOverride } : baseChildConfig
+    let worktreeCleanup: (() => void) | undefined
     try {
-      const child = await Agent.create({
+      if (isolation === "worktree") {
+        const wt = await createWorktreeIsolation(this.config.cwd)
+        worktreeCleanup = wt.cleanup
+        childConfig = { ...childConfig, cwd: wt.cwd }
+      }
+      const child = new Agent({
         config: childConfig,
+        // Reuse the parent's provider instance; a model override makes the
+        // child build its own from (the overridden) config.
+        provider: modelOverride ? undefined : this.provider,
+        tools: this.subagentChildTools(),
         mode: profile?.category === "reviewer" ? "default" : "coder",
         specialistPrompt: profile?.prompt,
-        subagentDepth: this.subagentDepth + 1,
-        inboxId: subagentId,
+        subagentDepth: ctx.depth,
+        inboxId: task.id,
         onAskUserQuestion: this.onAskUserQuestion,
         onRequestPermission: this.onRequestPermission,
         subagentRunner: this.subagentRunner,
       })
-      const messages = await child.run(prompt, tagSubagentEmit(emit, subagentId, jobName), controller.signal)
+      const sink: AgentEventSink = ctx.emit ?? this.backgroundEmit ?? this.currentEmit ?? ((): void => undefined)
+      const messages = await child.run(task.prompt, tagSubagentEmit(sink, task.id, task.description), ctx.signal)
       const assistant = [...messages].reverse().find((message) => message.role === "assistant")
       const text = assistant?.content.find((part) => part.type === "text")
       const resultText = text && "text" in text ? text.text : ""
-      this.updateBackgroundJob(subagentId, { status: "completed", output: resultText, completedAt: Date.now() })
-      await emit({ type: "subagent_background_end", subagentId, name: jobName, result: resultText })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      this.updateBackgroundJob(subagentId, { status: "error", error: message, completedAt: Date.now() })
-      await emit({ type: "subagent_background_fail", subagentId, name: jobName, error: message })
+      let turns = 0
+      let toolCalls = 0
+      for (const message of messages) {
+        if (message.role !== "assistant") continue
+        turns++
+        toolCalls += message.content.filter((part) => part.type === "toolCall").length
+      }
+      return { text: resultText, usage: { turns, toolCalls, durationMs: Date.now() - startedAt } }
     } finally {
-      this.backgroundControllers.delete(subagentId)
-      if (worktreeCleanup) worktreeCleanup()
+      worktreeCleanup?.()
     }
+  }
+
+  /**
+   * Child tool set: the same resolved tools this agent runs with, minus the
+   * spawn tools (Agent/Team delegation) so nesting is bounded by the depth
+   * guard alone. Falls back to a read-only floor if a pathological toolset
+   * left nothing (the child constructor reverts to full defaults on empty).
+   */
+  private subagentChildTools(): Tool[] {
+    const tools = this.tools.filter((tool) => !SUBAGENT_FANOUT_TOOLS.has(tool.definition.name))
+    return tools.length > 0 ? tools : [createReadFileTool()]
   }
 
   /** Abort a running background job. The rejection surfaces through the
    *  normal background_fail path; callers (TUI) mark it cancelled first so
    *  the abort noise doesn't overwrite the user's verdict. */
   cancelBackgroundJob(id: string): boolean {
-    const controller = this.backgroundControllers.get(id)
-    const job = this.backgroundJobs.get(id)
-    if (!controller || !job || job.status !== "running") return false
-    controller.abort()
-    return true
+    return this.subagentEngine.cancelBackground(id)
   }
 
   /** Resolve a SendMessage target to a background job (by id, exact name,
@@ -631,51 +645,38 @@ export class Agent {
    *  to a running job (it polls its inbox next turn) vs stored-but-unread
    *  (finished/unknown — nobody will ever read it). */
   resolveSendMessageTarget(to: string): { id: string; name: string; running: boolean } | undefined {
-    for (const job of this.backgroundJobs.values()) {
-      if (job.id === to || job.name === to) {
-        return { id: job.id, name: job.name, running: job.status === "running" }
+    const jobs = this.subagentEngine.listBackground()
+    for (const job of jobs) {
+      if (job.id === to || job.task.description === to) {
+        return { id: job.id, name: job.task.description, running: job.status === "running" }
       }
     }
     const norm = to.trim().toLowerCase()
     if (!norm) return undefined
-    const hits = Array.from(this.backgroundJobs.values()).filter((j) => j.name.toLowerCase().includes(norm))
+    const hits = jobs.filter((job) => job.task.description.toLowerCase().includes(norm))
     if (hits.length === 1) {
       const job = hits[0]
-      return { id: job.id, name: job.name, running: job.status === "running" }
+      return { id: job.id, name: job.task.description, running: job.status === "running" }
     }
     return undefined
   }
 
-  private updateBackgroundJob(id: string, update: Partial<BackgroundSubagentInfo>): void {
-    const existing = this.backgroundJobs.get(id)
-    if (!existing) return
-    const updated: BackgroundSubagentInfo = { ...existing, ...update }
-    this.backgroundJobs.set(id, updated)
-    // Cap: finished jobs otherwise accumulate for the process lifetime.
-    // Running jobs are never dropped.
-    if (this.backgroundJobs.size > 50) {
-      const finished = Array.from(this.backgroundJobs.values())
-        .filter((j) => j.status !== "running")
-        .sort((a, b) => (a.completedAt ?? a.startedAt) - (b.completedAt ?? b.startedAt))
-      const excess = this.backgroundJobs.size - 50
-      for (let i = 0; i < excess && i < finished.length; i += 1) {
-        this.backgroundJobs.delete(finished[i]!.id)
-      }
-    }
-  }
-
   listBackgroundJobs(): BackgroundSubagentInfo[] {
-    return Array.from(this.backgroundJobs.values())
+    return this.subagentEngine.listBackground().map(backgroundStatusToInfo)
   }
 
   getBackgroundJob(id: string): BackgroundSubagentInfo | undefined {
-    return this.backgroundJobs.get(id)
+    const status = this.subagentEngine.getStatus(id)
+    return status ? backgroundStatusToInfo(status) : undefined
   }
 
   promoteBackgroundJob(id: string): boolean {
-    const job = this.backgroundJobs.get(id)
-    if (!job || job.status !== "running") return false
-    return true
+    return this.subagentEngine.getStatus(id)?.status === "running"
+  }
+
+  /** Aggregate usage summary across this agent's subagent runs. */
+  subagentUsage(): WorkerUsage {
+    return this.subagentEngine.aggregateUsage()
   }
 
   setBackgroundEmit(emit: AgentEventSink): void {

@@ -5,6 +5,7 @@ paths:
   - "**/*.service.ts"
   - "**/*.interceptor.ts"
 ---
+
 # Angular Security
 
 > This file extends [common/security.md](../common/security.md) with Angular specific content.
@@ -15,10 +16,10 @@ Angular auto-sanitizes bound values. Never bypass the sanitizer on user-controll
 
 ```typescript
 // WRONG: Bypasses sanitization — XSS risk
-this.safeHtml = this.sanitizer.bypassSecurityTrustHtml(userInput);
+this.safeHtml = this.sanitizer.bypassSecurityTrustHtml(userInput)
 
 // CORRECT: Sanitize explicitly before trusting
-this.safeHtml = this.sanitizer.sanitize(SecurityContext.HTML, userInput);
+this.safeHtml = this.sanitizer.sanitize(SecurityContext.HTML, userInput)
 ```
 
 - Never use `bypassSecurityTrust*` methods without a documented, reviewed reason
@@ -32,10 +33,10 @@ Use `HttpClient` exclusively — never raw `fetch()` or `XHR` unless no alternat
 
 ```typescript
 // WRONG: Bypasses interceptors (auth headers, error handling, logging)
-const res = await fetch('/api/users');
+const res = await fetch("/api/users")
 
 // CORRECT
-users$ = this.http.get<User[]>('/api/users');
+users$ = this.http.get<User[]>("/api/users")
 ```
 
 - Attach auth tokens via interceptors — never hardcode in individual service calls
@@ -46,11 +47,11 @@ users$ = this.http.get<User[]>('/api/users');
 
 ```typescript
 // WRONG: Hardcoded secret in source
-const apiKey = 'sk-live-xxxx';
+const apiKey = "sk-live-xxxx"
 
 // CORRECT: Injected via environment
-import { environment } from '../environments/environment';
-const apiKey = environment.apiKey;
+import { environment } from "../environments/environment"
+const apiKey = environment.apiKey
 ```
 
 - Treat `environment.ts` as a config shape — never store real secrets in source-controlled environment files

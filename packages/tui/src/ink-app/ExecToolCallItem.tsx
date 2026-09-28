@@ -12,6 +12,7 @@ import { toolBoxWidth } from "./types.js"
 import { highlightBashToLines, type BashPalette } from "./syntax-highlight.js"
 import { useThemeColors, type ThemeSnapshot } from "./themeColors.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { g } from "./glyphs.js"
 
 /** Bind the active Ink theme's syntax tokens onto bash roles (/theme now
  *  recolors code blocks — the old hardcoded night-owl hues ignored it). */
@@ -79,23 +80,23 @@ export const ExecToolCallItem = ({
   let bullet: ReactNode
   if (shouldShowDot) {
     if (isQueued) {
-      bullet = <Text dimColor>?</Text>
+      bullet = <Text dimColor>{g("ring")}</Text>
     } else if (isRunning) {
       bullet = <ToolUseLoader shouldAnimate={shouldAnimate} isUnresolved={true} isError={false} status={status} />
     } else if (success === false) {
       bullet = (
         <Text color={theme.error} bold>
-          ✗
+          {g("fail")}
         </Text>
       )
     } else if (success === true) {
       bullet = (
         <Text color={theme.success} bold>
-          ✓
+          {g("ok")}
         </Text>
       )
     } else {
-      bullet = <Text color={theme.textMuted}>●</Text>
+      bullet = <Text color={theme.textMuted}>{g("bullet")}</Text>
     }
   }
 
@@ -156,7 +157,7 @@ export const ExecToolCallItem = ({
             multi-line commands side-by-side on ONE visual line ("echo a"
             glued next to "+ echo b"), and the unbounded inner row meant
             truncate-end never fired — long commands stretched the border
-            past the terminal and pushed ?/duration off-screen. Each command
+            past the terminal and pushed ✓/duration off-screen. Each command
             line is now its own row; the status mark rides a row of its own
             so it can never be clipped by command text. */}
         <Box flexDirection="column" flexGrow={1} minWidth={0}>
@@ -185,16 +186,16 @@ export const ExecToolCallItem = ({
             </Box>
           ))}
           {highlightedLines.length > maxLines && (
-            <Text color={theme.textMuted}>{"  + … +" + (highlightedLines.length - maxLines) + " lines"}</Text>
+            <Text color={theme.textMuted}>{"  └ … +" + (highlightedLines.length - maxLines) + " lines"}</Text>
           )}
-          {/* Ported resultLine palette: ? green bold / ? red bold before
+          {/* Ported resultLine palette: ok green bold / fail red bold before
               the (dim) duration — on its own row, always visible. */}
           {isFinished && (
             <Text wrap="truncate-end">
               <Text bold color={isError ? theme.error : theme.success}>
-                {isError ? "✗" : "✓"}
+                {isError ? g("fail") : g("ok")}
               </Text>
-              {durationMs !== undefined && <Text color={theme.textMuted}> — {durationMs}ms</Text>}
+              {durationMs !== undefined && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
             </Text>
           )}
         </Box>

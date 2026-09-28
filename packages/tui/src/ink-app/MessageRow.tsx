@@ -12,6 +12,7 @@ import { SubagentRow } from "./SubagentRow.js"
 import type { TrayambakMessage, ToolCallStatus, MessagePart, AppStatus } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
 import { normalizeStairIndent } from "./text-format.js"
+import { g } from "./glyphs.js"
 
 export interface MessageRowProps {
   message: TrayambakMessage
@@ -21,7 +22,7 @@ export interface MessageRowProps {
   /** Turn phase: while "running" (text streaming) the reasoning spinner
    *  STANDS DOWN — reasoning finished, showing "Thinking…" above the
    *  growing answer was a lie ("AI GENERATE KR RHA HAI AUR THINKING
-   *  DIKHA RAHA"). Undefined/other — old behavior. */
+   *  DIKHA RAHA"). Undefined/other → old behavior. */
   phase?: AppStatus
   /** Ctrl+O: tool outputs + compaction markers render full instead of
    *  preview/collapsed. */
@@ -67,7 +68,7 @@ export const MessageRow = ({
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         <Text color={theme.primary} bold>
-          {"❯"} {shownContent}
+          {g("prompt")} {shownContent}
         </Text>
       </Box>
     )
@@ -166,7 +167,7 @@ export const MessageRow = ({
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         <Text color={message.isError ? theme.error : theme.textMuted}>
-          {message.isError ? "✗" : "●"} {message.content}
+          {message.isError ? g("fail") : g("ok")} {message.content}
         </Text>
       </Box>
     )
@@ -175,7 +176,7 @@ export const MessageRow = ({
   if (message.role === "tool") {
     const isError = message.isError ?? false
     const statusColor = isError ? theme.error : theme.success
-    const statusIcon = isError ? "✗" : "✓"
+    const statusIcon = isError ? g("fail") : g("ok")
     // SKT AI LABS port: tool results collapse to ONE line. A resumed session used
     // to dump every result's full JSON payload inline — walls of raw
     // interleave that buried the conversation under tool output.
@@ -186,7 +187,7 @@ export const MessageRow = ({
     // the one-line preview. Collapsed default is unchanged behavior.
     const shown = expandOutput ? raw.slice(0, 20000) : preview
     const overflowNote =
-      expandOutput && raw.length > shown.length ? ` — +${raw.length - shown.length} chars (truncated)` : ""
+      expandOutput && raw.length > shown.length ? ` … +${raw.length - shown.length} chars (truncated)` : ""
 
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>

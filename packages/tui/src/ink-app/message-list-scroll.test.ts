@@ -12,9 +12,9 @@ import { MessageList } from "./MessageList.js"
 import type { TrayambakMessage } from "./types.js"
 
 /**
- * Turn-scoped wheel scroll + the generation animation.
+ * Lifetime wheel scroll + the generation animation.
  *
- * Contract: while a turn runs App enables SGR mouse reporting, and the
+ * Contract: App enables SGR mouse reporting for the TUI's lifetime, and the
  * wheel bus slides MessageList's window back by `scrollBack` messages —
  * the frame then shows OLDER conversation ("AI generates kar raha hai aur
  * scroll ek jagah pe dubara aa jata hai" — native scroll was yanked by
@@ -62,7 +62,7 @@ const openStdio = (columns = 80): { stdin: NodeJS.ReadStream; stdout: NodeJS.Wri
 }
 
 describe("MessageList wheel scroll (scrolled window vs live tail)", () => {
-  it("scrollBack slides the window back: older tail in-frame, newest OFF-screen, hint row on", async () => {
+  it("scrollBack slides the window back: older tail in-frame, newest OFF-screen, frame all history", async () => {
     const { stdin, stdout, sink } = openStdio()
     const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
@@ -81,7 +81,10 @@ describe("MessageList wheel scroll (scrolled window vs live tail)", () => {
 
       // The window's last row is 5 messages before the live end…
       expect(await waitFor(sink, "MSG-34")).toBe(true)
-      expect(stripAnsi(sink())).toContain("↑ history · scrolled back")
+      // No ↑ history marker row: it stole a budget row from history and
+      // said nothing the window itself doesn't prove ("no need see ye —
+      // pura show hota rahe"):
+      expect(stripAnsi(sink())).not.toContain("↑ history")
       // …and the live newest rows are in NEITHER the frame (window slid
       // back) NOR the printed prefix (that's the LIVE split's eviction,
       // which stops at the current window start) — they simply aren't
@@ -160,8 +163,9 @@ describe("MessageList wheel scroll (scrolled window vs live tail)", () => {
       // And no bottom line either: the turn's spinner belongs over the LIVE
       // tail only (the footer keeps pulsing to show generation continues).
       expect(sink()).not.toContain("Generating")
-      // The scrolled state is announced by the hint row (one budget row):
-      expect(sink()).toContain("↑ history · scrolled back")
+      // NO marker row steals a budget row while scrolled — history fills
+      // the frame edge to edge:
+      expect(sink()).not.toContain("↑ history")
     } finally {
       instance?.unmount()
     }

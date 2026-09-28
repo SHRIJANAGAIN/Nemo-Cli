@@ -9,6 +9,7 @@ paths:
   - "**/*.resolver.ts"
   - "**/*.module.ts"
 ---
+
 # Angular Coding Style
 
 > This file extends [common/coding-style.md](../common/coding-style.md) with Angular specific content.
@@ -34,15 +35,15 @@ Prefer standalone components (v17+ default). Use `OnPush` change detection on al
 
 ```typescript
 @Component({
-  selector: 'app-user-card',
+  selector: "app-user-card",
   standalone: true,
   imports: [RouterModule],
-  templateUrl: './user-card.component.html',
+  templateUrl: "./user-card.component.html",
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UserCardComponent {
-  user = input.required<User>();
-  select = output<string>();
+  user = input.required<User>()
+  select = output<string>()
 }
 ```
 
@@ -92,7 +93,7 @@ increment() {
 Use `linkedSignal` when a signal must reset or adapt when a source changes, but also be independently writable:
 
 ```typescript
-selectedOption = linkedSignal(() => this.options()[0]);
+selectedOption = linkedSignal(() => this.options()[0])
 // Resets to first option when options changes, but user can override
 ```
 
@@ -103,8 +104,8 @@ Use `resource()` to fetch async data reactively without manual subscriptions:
 ```typescript
 userResource = resource({
   request: () => ({ id: this.userId() }),
-  loader: ({ request }) => fetch(`/api/users/${request.id}`).then(r => r.json()),
-});
+  loader: ({ request }) => fetch(`/api/users/${request.id}`).then((r) => r.json()),
+})
 
 // Access: userResource.value(), userResource.isLoading(), userResource.error()
 ```
@@ -115,10 +116,12 @@ Use `effect()` only for side effects that must react to signal changes (logging,
 
 ```typescript
 // CORRECT: Side effect
-effect(() => console.log('User changed:', this.user()));
+effect(() => console.log("User changed:", this.user()))
 
 // WRONG: Use computed instead
-effect(() => { this.fullName.set(`${this.first()} ${this.last()}`); });
+effect(() => {
+  this.fullName.set(`${this.first()} ${this.last()}`)
+})
 ```
 
 ## Templates
@@ -127,15 +130,13 @@ Use v17+ block syntax. Always provide `track` in `@for`:
 
 ```html
 @for (item of items(); track item.id) {
-  <app-item [item]="item" />
-}
-
-@if (isLoading()) {
-  <app-spinner />
+<app-item [item]="item" />
+} @if (isLoading()) {
+<app-spinner />
 } @else if (error()) {
-  <app-error [message]="error()" />
+<app-error [message]="error()" />
 } @else {
-  <app-content [data]="data()" />
+<app-content [data]="data()" />
 }
 ```
 
@@ -152,12 +153,12 @@ Choose the form strategy that matches the project's existing approach:
 ```typescript
 // Reactive Forms — standard approach for most apps
 export class LoginComponent {
-  private fb = inject(FormBuilder);
+  private fb = inject(FormBuilder)
 
   form = this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(8)]],
-  });
+    email: ["", [Validators.required, Validators.email]],
+    password: ["", [Validators.required, Validators.minLength(8)]],
+  })
 
   submit() {
     if (this.form.valid) {

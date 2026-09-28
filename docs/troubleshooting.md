@@ -1,5 +1,19 @@
 # Troubleshooting
 
+## Broken symbols (`?` instead of dots/marks)
+
+The TUI uses ●○◌✓✗★❯█⚠ by default, with user rows marked `❯` and a
+braille thinking spinner. If your console shows `?` tofu instead, force
+the ASCII set (`* o - v x ! > _` + pipe spinner):
+
+```
+set TRAYAMBAK_GLYPHS=ascii    # force ASCII
+set TRAYAMBAK_GLYPHS=unicode  # force Unicode (Windows Terminal, VS Code)
+```
+
+For a permanent fix on old conhost: switch the console font to Cascadia
+Mono / DejaVu Sans Mono, or use Windows Terminal.
+
 Start with the built-in diagnostics:
 
 ```sh
@@ -18,13 +32,13 @@ binary**, **server reachable** (`GET <baseUrl>/v1/models`, 3s timeout), and
 
 The built-in hints (`packages/provider/src/catalog.ts`):
 
-| Provider | Hint |
-| --- | --- |
+| Provider     | Hint                                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------- |
 | NVIDIA / NIM | 401 = key rejected: use a **bare** `nvapi-…` key (no `NVAPI_KEY ` prefix) from build.nvidia.com |
-| OpenAI | 401 = key rejected or no billing on the account |
-| Anthropic | 401 = key rejected: check console.anthropic.com API keys |
-| Google | 400/401 = bad key, or the Generative Language API is disabled for the project |
-| xAI | 401 = key rejected: check console.x.ai API keys |
+| OpenAI       | 401 = key rejected or no billing on the account                                                 |
+| Anthropic    | 401 = key rejected: check console.anthropic.com API keys                                        |
+| Google       | 400/401 = bad key, or the Generative Language API is disabled for the project                   |
+| xAI          | 401 = key rejected: check console.x.ai API keys                                                 |
 
 Usual causes, in order:
 
@@ -45,16 +59,14 @@ re-open `/models`; successful lists are cached in `config.modelCache`.
 
 ### Ollama: "connection failed"
 
-`ollama unreachable = is \`ollama serve\` running?` — default base URL is
-`http://localhost:11434`, no key needed. Confirm with
+`ollama unreachable = is \`ollama serve\` running?`— default base URL is`http://localhost:11434`, no key needed. Confirm with
 `trayambak config get baseUrl` and start Ollama.
 
 ## Local model (llama.cpp) problems
 
 - **Binary not found** — `doctor` says
   `not found - set TRAYAMBAK_LLAMACPP_BIN or run \`trayambak serve\` to auto-download`.
-  Either let `trayambak serve` download it, or point `TRAYAMBAK_LLAMACPP_BIN`
-  at a prebuilt `llama-server` / `server.exe`.
+Either let `trayambak serve`download it, or point`TRAYAMBAK_LLAMACPP_BIN`at a prebuilt`llama-server`/`server.exe`.
 - **No model** — `trayambak download <org/model> [file.gguf]` fetches a GGUF
   and stores it as `modelPath`; verify with `trayambak config get modelPath`.
 - **GPU offload seems ignored** — a CPU-only llama.cpp build silently ignores
@@ -179,13 +191,13 @@ check:links` for internal doc links + anchors), and codespell.
 
 ## Debugging aids
 
-| Aid | How |
-| --- | --- |
-| Exact system prompt | `trayambak --dump-system-prompt` (offline, no key needed) |
-| Input + config trace | `TRAYAMBAK_DEBUG_INPUT=1` → keystrokes/turn stages to `<os tmpdir>/trayambak-input.log`, config-corruption backups to `./trayambak-config.log` |
-| Headless event stream | `trayambak exec "…"` → one JSON event per line |
-| Crash log | unhandled errors are recorded via `skt/1-errors/mistake.ts` and printed as `trayambak error: <stack>` |
-| llama.cpp log | `~/.trayambak/logs/llama-server.log` |
+| Aid                   | How                                                                                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exact system prompt   | `trayambak --dump-system-prompt` (offline, no key needed)                                                                                      |
+| Input + config trace  | `TRAYAMBAK_DEBUG_INPUT=1` → keystrokes/turn stages to `<os tmpdir>/trayambak-input.log`, config-corruption backups to `./trayambak-config.log` |
+| Headless event stream | `trayambak exec "…"` → one JSON event per line                                                                                                 |
+| Crash log             | unhandled errors are recorded via `skt/1-errors/mistake.ts` and printed as `trayambak error: <stack>`                                          |
+| llama.cpp log         | `~/.trayambak/logs/llama-server.log`                                                                                                           |
 
 Still stuck? [Getting started](getting-started.md) explains the surfaces;
 [Security](security.md) covers permissions/sandbox denials (a `deny` there is

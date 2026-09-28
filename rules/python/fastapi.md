@@ -4,6 +4,7 @@ paths:
   - "**/fastapi/**/*.py"
   - "**/*_api.py"
 ---
+
 # FastAPI Rules
 
 Use these rules for FastAPI projects alongside the general Python rules.

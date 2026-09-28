@@ -131,6 +131,7 @@ function render(node: YamlNode, depth: number, out: string[]): void {
 export function createYamlTool(): Tool {
   return {
     definition: {
+      timeoutMs: 30_000,
       name: "yaml",
       description:
         "Read a YAML file and render it as an indented readable structure. Useful for inspecting configs, CI workflows, and deployment manifests.",
@@ -164,7 +165,7 @@ export function createYamlTool(): Tool {
         }
         return textResult(result.slice(0, 8000))
       } catch (e) {
-        return textResult(`yaml failed: ${e instanceof Error ? e.message : String(e)}`, true)
+        return textResult(`yaml failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }
     },
   }

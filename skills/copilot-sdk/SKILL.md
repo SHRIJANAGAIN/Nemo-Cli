@@ -21,6 +21,7 @@ Verify CLI: `copilot --version`
 ## Installation
 
 ### Node.js/TypeScript
+
 ```bash
 mkdir copilot-demo && cd copilot-demo
 npm init -y --init-type module
@@ -28,11 +29,13 @@ npm install @github/copilot-sdk tsx
 ```
 
 ### Python
+
 ```bash
 pip install github-copilot-sdk
 ```
 
 ### Go
+
 ```bash
 mkdir copilot-demo && cd copilot-demo
 go mod init copilot-demo
@@ -40,6 +43,7 @@ go get github.com/github/copilot-sdk/go
 ```
 
 ### .NET
+
 ```bash
 dotnet new console -n CopilotDemo && cd CopilotDemo
 dotnet add package GitHub.Copilot.SDK
@@ -48,22 +52,24 @@ dotnet add package GitHub.Copilot.SDK
 ## Quick Start
 
 ### TypeScript
+
 ```typescript
-import { CopilotClient } from "@github/copilot-sdk";
+import { CopilotClient } from "@github/copilot-sdk"
 
-const client = new CopilotClient();
-const session = await client.createSession({ model: "gpt-4.1" });
+const client = new CopilotClient()
+const session = await client.createSession({ model: "gpt-4.1" })
 
-const response = await session.sendAndWait({ prompt: "What is 2 + 2?" });
-console.log(response?.data.content);
+const response = await session.sendAndWait({ prompt: "What is 2 + 2?" })
+console.log(response?.data.content)
 
-await client.stop();
-process.exit(0);
+await client.stop()
+process.exit(0)
 ```
 
 Run: `npx tsx index.ts`
 
 ### Python
+
 ```python
 import asyncio
 from copilot import CopilotClient
@@ -82,6 +88,7 @@ asyncio.run(main())
 ```
 
 ### Go
+
 ```go
 package main
 
@@ -115,6 +122,7 @@ func main() {
 ```
 
 ### .NET (C#)
+
 ```csharp
 using GitHub.Copilot.SDK;
 
@@ -132,31 +140,33 @@ Run: `dotnet run`
 Enable real-time output for better UX:
 
 ### TypeScript
-```typescript
-import { CopilotClient, SessionEvent } from "@github/copilot-sdk";
 
-const client = new CopilotClient();
+```typescript
+import { CopilotClient, SessionEvent } from "@github/copilot-sdk"
+
+const client = new CopilotClient()
 const session = await client.createSession({
-    model: "gpt-4.1",
-    streaming: true,
-});
+  model: "gpt-4.1",
+  streaming: true,
+})
 
 session.on((event: SessionEvent) => {
-    if (event.type === "assistant.message_delta") {
-        process.stdout.write(event.data.deltaContent);
-    }
-    if (event.type === "session.idle") {
-        console.log(); // New line when done
-    }
-});
+  if (event.type === "assistant.message_delta") {
+    process.stdout.write(event.data.deltaContent)
+  }
+  if (event.type === "session.idle") {
+    console.log() // New line when done
+  }
+})
 
-await session.sendAndWait({ prompt: "Tell me a short joke" });
+await session.sendAndWait({ prompt: "Tell me a short joke" })
 
-await client.stop();
-process.exit(0);
+await client.stop()
+process.exit(0)
 ```
 
 ### Python
+
 ```python
 import asyncio
 import sys
@@ -187,6 +197,7 @@ asyncio.run(main())
 ```
 
 ### Go
+
 ```go
 session, err := client.CreateSession(&copilot.SessionConfig{
     Model:     "gpt-4.1",
@@ -206,6 +217,7 @@ _, err = session.SendAndWait(copilot.MessageOptions{Prompt: "Tell me a short jok
 ```
 
 ### .NET
+
 ```csharp
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
@@ -227,55 +239,58 @@ await session.SendAndWaitAsync(new MessageOptions { Prompt = "Tell me a short jo
 ## Custom Tools
 
 Define tools that Copilot can invoke during reasoning. When you define a tool, you tell Copilot:
+
 1. **What the tool does** (description)
 2. **What parameters it needs** (schema)
 3. **What code to run** (handler)
 
 ### TypeScript (JSON Schema)
+
 ```typescript
-import { CopilotClient, defineTool, SessionEvent } from "@github/copilot-sdk";
+import { CopilotClient, defineTool, SessionEvent } from "@github/copilot-sdk"
 
 const getWeather = defineTool("get_weather", {
-    description: "Get the current weather for a city",
-    parameters: {
-        type: "object",
-        properties: {
-            city: { type: "string", description: "The city name" },
-        },
-        required: ["city"],
+  description: "Get the current weather for a city",
+  parameters: {
+    type: "object",
+    properties: {
+      city: { type: "string", description: "The city name" },
     },
-    handler: async (args: { city: string }) => {
-        const { city } = args;
-        // In a real app, call a weather API here
-        const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"];
-        const temp = Math.floor(Math.random() * 30) + 50;
-        const condition = conditions[Math.floor(Math.random() * conditions.length)];
-        return { city, temperature: `${temp}°F`, condition };
-    },
-});
+    required: ["city"],
+  },
+  handler: async (args: { city: string }) => {
+    const { city } = args
+    // In a real app, call a weather API here
+    const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"]
+    const temp = Math.floor(Math.random() * 30) + 50
+    const condition = conditions[Math.floor(Math.random() * conditions.length)]
+    return { city, temperature: `${temp}°F`, condition }
+  },
+})
 
-const client = new CopilotClient();
+const client = new CopilotClient()
 const session = await client.createSession({
-    model: "gpt-4.1",
-    streaming: true,
-    tools: [getWeather],
-});
+  model: "gpt-4.1",
+  streaming: true,
+  tools: [getWeather],
+})
 
 session.on((event: SessionEvent) => {
-    if (event.type === "assistant.message_delta") {
-        process.stdout.write(event.data.deltaContent);
-    }
-});
+  if (event.type === "assistant.message_delta") {
+    process.stdout.write(event.data.deltaContent)
+  }
+})
 
 await session.sendAndWait({
-    prompt: "What's the weather like in Seattle and Tokyo?",
-});
+  prompt: "What's the weather like in Seattle and Tokyo?",
+})
 
-await client.stop();
-process.exit(0);
+await client.stop()
+process.exit(0)
 ```
 
 ### Python (Pydantic)
+
 ```python
 import asyncio
 import random
@@ -323,6 +338,7 @@ asyncio.run(main())
 ```
 
 ### Go
+
 ```go
 type WeatherParams struct {
     City string `json:"city" jsonschema:"The city name"`
@@ -357,6 +373,7 @@ session, _ := client.CreateSession(&copilot.SessionConfig{
 ```
 
 ### .NET (Microsoft.Extensions.AI)
+
 ```csharp
 using GitHub.Copilot.SDK;
 using Microsoft.Extensions.AI;
@@ -385,6 +402,7 @@ await using var session = await client.CreateSessionAsync(new SessionConfig
 ## How Tools Work
 
 When Copilot decides to call your tool:
+
 1. Copilot sends a tool call request with the parameters
 2. The SDK runs your handler function
 3. The result is sent back to Copilot
@@ -397,67 +415,69 @@ Copilot decides when to call your tool based on the user's question and your too
 Build a complete interactive assistant:
 
 ### TypeScript
+
 ```typescript
-import { CopilotClient, defineTool, SessionEvent } from "@github/copilot-sdk";
-import * as readline from "readline";
+import { CopilotClient, defineTool, SessionEvent } from "@github/copilot-sdk"
+import * as readline from "readline"
 
 const getWeather = defineTool("get_weather", {
-    description: "Get the current weather for a city",
-    parameters: {
-        type: "object",
-        properties: {
-            city: { type: "string", description: "The city name" },
-        },
-        required: ["city"],
+  description: "Get the current weather for a city",
+  parameters: {
+    type: "object",
+    properties: {
+      city: { type: "string", description: "The city name" },
     },
-    handler: async ({ city }) => {
-        const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"];
-        const temp = Math.floor(Math.random() * 30) + 50;
-        const condition = conditions[Math.floor(Math.random() * conditions.length)];
-        return { city, temperature: `${temp}°F`, condition };
-    },
-});
+    required: ["city"],
+  },
+  handler: async ({ city }) => {
+    const conditions = ["sunny", "cloudy", "rainy", "partly cloudy"]
+    const temp = Math.floor(Math.random() * 30) + 50
+    const condition = conditions[Math.floor(Math.random() * conditions.length)]
+    return { city, temperature: `${temp}°F`, condition }
+  },
+})
 
-const client = new CopilotClient();
+const client = new CopilotClient()
 const session = await client.createSession({
-    model: "gpt-4.1",
-    streaming: true,
-    tools: [getWeather],
-});
+  model: "gpt-4.1",
+  streaming: true,
+  tools: [getWeather],
+})
 
 session.on((event: SessionEvent) => {
-    if (event.type === "assistant.message_delta") {
-        process.stdout.write(event.data.deltaContent);
-    }
-});
+  if (event.type === "assistant.message_delta") {
+    process.stdout.write(event.data.deltaContent)
+  }
+})
 
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-});
+  input: process.stdin,
+  output: process.stdout,
+})
 
-console.log("Weather Assistant (type 'exit' to quit)");
-console.log("Try: 'What's the weather in Paris?'\n");
+console.log("Weather Assistant (type 'exit' to quit)")
+console.log("Try: 'What's the weather in Paris?'\n")
 
 const prompt = () => {
-    rl.question("You: ", async (input) => {
-        if (input.toLowerCase() === "exit") {
-            await client.stop();
-            rl.close();
-            return;
-        }
+  rl.question("You: ", async (input) => {
+    if (input.toLowerCase() === "exit") {
+      await client.stop()
+      rl.close()
+      return
+    }
 
-        process.stdout.write("Assistant: ");
-        await session.sendAndWait({ prompt: input });
-        console.log("\n");
-        prompt();
-    });
-};
+    process.stdout.write("Assistant: ")
+    await session.sendAndWait({ prompt: input })
+    console.log("\n")
+    prompt()
+  })
+}
 
-prompt();
+prompt()
 ```
 
 ### Python
+
 ```python
 import asyncio
 import random
@@ -520,19 +540,21 @@ asyncio.run(main())
 Connect to MCP (Model Context Protocol) servers for pre-built tools. Connect to GitHub's MCP server for repository, issue, and PR access:
 
 ### TypeScript
+
 ```typescript
 const session = await client.createSession({
-    model: "gpt-4.1",
-    mcpServers: {
-        github: {
-            type: "http",
-            url: "https://api.githubcopilot.com/mcp/",
-        },
+  model: "gpt-4.1",
+  mcpServers: {
+    github: {
+      type: "http",
+      url: "https://api.githubcopilot.com/mcp/",
     },
-});
+  },
+})
 ```
 
 ### Python
+
 ```python
 session = await client.create_session({
     "model": "gpt-4.1",
@@ -546,6 +568,7 @@ session = await client.create_session({
 ```
 
 ### Go
+
 ```go
 session, _ := client.CreateSession(&copilot.SessionConfig{
     Model: "gpt-4.1",
@@ -559,6 +582,7 @@ session, _ := client.CreateSession(&copilot.SessionConfig{
 ```
 
 ### .NET
+
 ```csharp
 await using var session = await client.CreateSessionAsync(new SessionConfig
 {
@@ -579,19 +603,23 @@ await using var session = await client.CreateSessionAsync(new SessionConfig
 Define specialized AI personas for specific tasks:
 
 ### TypeScript
+
 ```typescript
 const session = await client.createSession({
-    model: "gpt-4.1",
-    customAgents: [{
-        name: "pr-reviewer",
-        displayName: "PR Reviewer",
-        description: "Reviews pull requests for best practices",
-        prompt: "You are an expert code reviewer. Focus on security, performance, and maintainability.",
-    }],
-});
+  model: "gpt-4.1",
+  customAgents: [
+    {
+      name: "pr-reviewer",
+      displayName: "PR Reviewer",
+      description: "Reviews pull requests for best practices",
+      prompt: "You are an expert code reviewer. Focus on security, performance, and maintainability.",
+    },
+  ],
+})
 ```
 
 ### Python
+
 ```python
 session = await client.create_session({
     "model": "gpt-4.1",
@@ -609,16 +637,18 @@ session = await client.create_session({
 Customize the AI's behavior and personality:
 
 ### TypeScript
+
 ```typescript
 const session = await client.createSession({
-    model: "gpt-4.1",
-    systemMessage: {
-        content: "You are a helpful assistant for our engineering team. Always be concise.",
-    },
-});
+  model: "gpt-4.1",
+  systemMessage: {
+    content: "You are a helpful assistant for our engineering team. Always be concise.",
+  },
+})
 ```
 
 ### Python
+
 ```python
 session = await client.create_session({
     "model": "gpt-4.1",
@@ -633,6 +663,7 @@ session = await client.create_session({
 Run the CLI in server mode separately and connect the SDK to it. Useful for debugging, resource sharing, or custom environments.
 
 ### Start CLI in Server Mode
+
 ```bash
 copilot --server --port 4321
 ```
@@ -640,15 +671,17 @@ copilot --server --port 4321
 ### Connect SDK to External Server
 
 #### TypeScript
+
 ```typescript
 const client = new CopilotClient({
-    cliUrl: "localhost:4321"
-});
+  cliUrl: "localhost:4321",
+})
 
-const session = await client.createSession({ model: "gpt-4.1" });
+const session = await client.createSession({ model: "gpt-4.1" })
 ```
 
 #### Python
+
 ```python
 client = CopilotClient({
     "cli_url": "localhost:4321"
@@ -659,6 +692,7 @@ session = await client.create_session({"model": "gpt-4.1"})
 ```
 
 #### Go
+
 ```go
 client := copilot.NewClient(&copilot.ClientOptions{
     CLIUrl: "localhost:4321",
@@ -672,6 +706,7 @@ session, _ := client.CreateSession(&copilot.SessionConfig{Model: "gpt-4.1"})
 ```
 
 #### .NET
+
 ```csharp
 using var client = new CopilotClient(new CopilotClientOptions
 {
@@ -685,89 +720,92 @@ await using var session = await client.CreateSessionAsync(new SessionConfig { Mo
 
 ## Event Types
 
-| Event | Description |
-|-------|-------------|
-| `user.message` | User input added |
-| `assistant.message` | Complete model response |
-| `assistant.message_delta` | Streaming response chunk |
-| `assistant.reasoning` | Model reasoning (model-dependent) |
-| `assistant.reasoning_delta` | Streaming reasoning chunk |
-| `tool.execution_start` | Tool invocation started |
-| `tool.execution_complete` | Tool execution finished |
-| `session.idle` | No active processing |
-| `session.error` | Error occurred |
+| Event                       | Description                       |
+| --------------------------- | --------------------------------- |
+| `user.message`              | User input added                  |
+| `assistant.message`         | Complete model response           |
+| `assistant.message_delta`   | Streaming response chunk          |
+| `assistant.reasoning`       | Model reasoning (model-dependent) |
+| `assistant.reasoning_delta` | Streaming reasoning chunk         |
+| `tool.execution_start`      | Tool invocation started           |
+| `tool.execution_complete`   | Tool execution finished           |
+| `session.idle`              | No active processing              |
+| `session.error`             | Error occurred                    |
 
 ## Client Configuration
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `cliPath` | Path to Copilot CLI executable | System PATH |
-| `cliUrl` | Connect to existing server (e.g., "localhost:4321") | None |
-| `port` | Server communication port | Random |
-| `useStdio` | Use stdio transport instead of TCP | true |
-| `logLevel` | Logging verbosity | "info" |
-| `autoStart` | Launch server automatically | true |
-| `autoRestart` | Restart on crashes | true |
-| `cwd` | Working directory for CLI process | Inherited |
+| Option        | Description                                         | Default     |
+| ------------- | --------------------------------------------------- | ----------- |
+| `cliPath`     | Path to Copilot CLI executable                      | System PATH |
+| `cliUrl`      | Connect to existing server (e.g., "localhost:4321") | None        |
+| `port`        | Server communication port                           | Random      |
+| `useStdio`    | Use stdio transport instead of TCP                  | true        |
+| `logLevel`    | Logging verbosity                                   | "info"      |
+| `autoStart`   | Launch server automatically                         | true        |
+| `autoRestart` | Restart on crashes                                  | true        |
+| `cwd`         | Working directory for CLI process                   | Inherited   |
 
 ## Session Configuration
 
-| Option | Description |
-|--------|-------------|
-| `model` | LLM to use ("gpt-4.1", "trayambak-sonnet-4.5", etc.) |
-| `sessionId` | Custom session identifier |
-| `tools` | Custom tool definitions |
-| `mcpServers` | MCP server connections |
-| `customAgents` | Custom agent personas |
-| `systemMessage` | Override default system prompt |
-| `streaming` | Enable incremental response chunks |
-| `availableTools` | Whitelist of permitted tools |
-| `excludedTools` | Blacklist of disabled tools |
+| Option           | Description                                          |
+| ---------------- | ---------------------------------------------------- |
+| `model`          | LLM to use ("gpt-4.1", "trayambak-sonnet-4.5", etc.) |
+| `sessionId`      | Custom session identifier                            |
+| `tools`          | Custom tool definitions                              |
+| `mcpServers`     | MCP server connections                               |
+| `customAgents`   | Custom agent personas                                |
+| `systemMessage`  | Override default system prompt                       |
+| `streaming`      | Enable incremental response chunks                   |
+| `availableTools` | Whitelist of permitted tools                         |
+| `excludedTools`  | Blacklist of disabled tools                          |
 
 ## Session Persistence
 
 Save and resume conversations across restarts:
 
 ### Create with Custom ID
+
 ```typescript
 const session = await client.createSession({
-    sessionId: "user-123-conversation",
-    model: "gpt-4.1"
-});
+  sessionId: "user-123-conversation",
+  model: "gpt-4.1",
+})
 ```
 
 ### Resume Session
+
 ```typescript
-const session = await client.resumeSession("user-123-conversation");
-await session.send({ prompt: "What did we discuss earlier?" });
+const session = await client.resumeSession("user-123-conversation")
+await session.send({ prompt: "What did we discuss earlier?" })
 ```
 
 ### List and Delete Sessions
+
 ```typescript
-const sessions = await client.listSessions();
-await client.deleteSession("old-session-id");
+const sessions = await client.listSessions()
+await client.deleteSession("old-session-id")
 ```
 
 ## Error Handling
 
 ```typescript
 try {
-    const client = new CopilotClient();
-    const session = await client.createSession({ model: "gpt-4.1" });
-    const response = await session.sendAndWait(
-        { prompt: "Hello!" },
-        30000 // timeout in ms
-    );
+  const client = new CopilotClient()
+  const session = await client.createSession({ model: "gpt-4.1" })
+  const response = await session.sendAndWait(
+    { prompt: "Hello!" },
+    30000, // timeout in ms
+  )
 } catch (error) {
-    if (error.code === "ENOENT") {
-        console.error("Copilot CLI not installed");
-    } else if (error.code === "ECONNREFUSED") {
-        console.error("Cannot connect to Copilot server");
-    } else {
-        console.error("Error:", error.message);
-    }
+  if (error.code === "ENOENT") {
+    console.error("Copilot CLI not installed")
+  } else if (error.code === "ECONNREFUSED") {
+    console.error("Cannot connect to Copilot server")
+  } else {
+    console.error("Error:", error.message)
+  }
 } finally {
-    await client.stop();
+  await client.stop()
 }
 ```
 
@@ -775,46 +813,51 @@ try {
 
 ```typescript
 process.on("SIGINT", async () => {
-    console.log("Shutting down...");
-    await client.stop();
-    process.exit(0);
-});
+  console.log("Shutting down...")
+  await client.stop()
+  process.exit(0)
+})
 ```
 
 ## Common Patterns
 
 ### Multi-turn Conversation
-```typescript
-const session = await client.createSession({ model: "gpt-4.1" });
 
-await session.sendAndWait({ prompt: "My name is Alice" });
-await session.sendAndWait({ prompt: "What's my name?" });
+```typescript
+const session = await client.createSession({ model: "gpt-4.1" })
+
+await session.sendAndWait({ prompt: "My name is Alice" })
+await session.sendAndWait({ prompt: "What's my name?" })
 // Response: "Your name is Alice"
 ```
 
 ### File Attachments
+
 ```typescript
 await session.send({
-    prompt: "Analyze this file",
-    attachments: [{
-        type: "file",
-        path: "./data.csv",
-        displayName: "Sales Data"
-    }]
-});
+  prompt: "Analyze this file",
+  attachments: [
+    {
+      type: "file",
+      path: "./data.csv",
+      displayName: "Sales Data",
+    },
+  ],
+})
 ```
 
 ### Abort Long Operations
+
 ```typescript
 const timeoutId = setTimeout(() => {
-    session.abort();
-}, 60000);
+  session.abort()
+}, 60000)
 
 session.on((event) => {
-    if (event.type === "session.idle") {
-        clearTimeout(timeoutId);
-    }
-});
+  if (event.type === "session.idle") {
+    clearTimeout(timeoutId)
+  }
+})
 ```
 
 ## Available Models
@@ -822,7 +865,7 @@ session.on((event) => {
 Query available models at runtime:
 
 ```typescript
-const models = await client.getModels();
+const models = await client.getModels()
 // Returns: ["gpt-4.1", "gpt-4o", "trayambak-sonnet-4.5", ...]
 ```
 

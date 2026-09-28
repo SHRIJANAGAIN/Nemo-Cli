@@ -9,6 +9,7 @@ import { textResult, type Tool, type ToolContext } from "../types.js"
 import { loadTodoList } from "./todo.js"
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "todoread",
   description:
     "Read the current to-do list. Returns all items with their status, priority, and dependencies. Use this to see what tasks are planned, in progress, or completed before adding new items.",

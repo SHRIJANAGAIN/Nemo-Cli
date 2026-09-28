@@ -9,6 +9,7 @@ import { useAppInput } from "./useAppInput.js"
 import { isEnter } from "./keys.js"
 import { TrayambakLogo } from "./TrayambakLogo.js"
 import type { PermissionMode } from "./types.js"
+import { g } from "./glyphs.js"
 
 export interface SandboxOption {
   mode: PermissionMode
@@ -101,7 +102,7 @@ export function SandboxSetup({ cwd, onSelect }: SandboxSetupProps): ReactNode {
         {OPTIONS.map((opt, idx) => (
           <Box key={opt.mode}>
             <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>
-              {idx === selected ? "❯ " : "  "}
+              {idx === selected ? `${g("picker")} ` : "  "}
             </Text>
             <Text dimColor>{`${idx + 1}. `}</Text>
             <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>

@@ -317,8 +317,8 @@ export async function fetchModelsDetailed(
     // returns the full catalog keyless) — a rejected key must not hide the
     // models: retry keyless on 401/403. Chat still enforces the key itself
     // with the honest 401 hint.
-    const json = (await listOnce(true).catch((err): Promise<unknown> => {
-      if (apiKey && errorKind(err) === "auth") return listOnce(false)
+    const json = (await listOnce(/*withAuth*/ true).catch((err): Promise<unknown> => {
+      if (apiKey && errorKind(err) === "auth") return listOnce(/*withAuth*/ false)
       throw err
     })) as { data?: Array<{ id?: string }> }
     const ids = (json.data ?? []).map((m) => m.id).filter((v): v is string => typeof v === "string" && v.length > 0)

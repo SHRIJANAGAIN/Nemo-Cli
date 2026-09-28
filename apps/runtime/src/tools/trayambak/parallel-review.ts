@@ -40,6 +40,7 @@ export interface ParallelReviewResult {
 }
 
 const definition: ToolDefinition = {
+  timeoutMs: 30_000,
   name: "trayambak__ParallelReview",
   description:
     "Run multi-dimensional parallel code review across quality, security, and language-specific specialists with automatic finding deduplication and adversarial verification.",
@@ -152,7 +153,7 @@ export function createParallelReviewTool(
     async execute(_id, args, _signal, _update, context: ToolContext | undefined) {
       const diff = (args.diff as string) ?? ""
       if (!diff.trim()) {
-        return textResult("Missing or empty 'diff' parameter.", true)
+        return textResult("Missing or empty 'diff' parameter.", /*isError*/ true)
       }
 
       const files = Array.isArray(args.files) ? (args.files as string[]) : []

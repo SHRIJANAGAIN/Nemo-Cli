@@ -75,7 +75,14 @@ async function withStub(run: (stubUrl: string) => Promise<void>): Promise<Captur
 const toolInput: ChatInput = {
   system: "sys",
   messages: [{ role: "user", content: "hi" }],
-  tools: [{ name: "bash", description: "run", parameters: { type: "object", properties: {}, required: [] } }],
+  tools: [
+    {
+      timeoutMs: 30_000,
+      name: "bash",
+      description: "run",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  ],
 }
 
 describe("openai/xai/huggingface/custom providers", () => {
@@ -176,7 +183,14 @@ describe("anthropic/google providers", () => {
           },
           { role: "tool", content: "ok", tool_call_id: "toolu_1" },
         ],
-        tools: [{ name: "bash", description: "run", parameters: { type: "object", properties: {}, required: [] } }],
+        tools: [
+          {
+            timeoutMs: 30_000,
+            name: "bash",
+            description: "run",
+            parameters: { type: "object", properties: {}, required: [] },
+          },
+        ],
       },
       "claude-3-5-sonnet-latest",
     )
@@ -229,7 +243,14 @@ describe("anthropic/google providers", () => {
       {
         system: "sys",
         messages: [{ role: "user", content: "hi" }],
-        tools: [{ name: "bash", description: "run", parameters: { type: "object", properties: {}, required: [] } }],
+        tools: [
+          {
+            timeoutMs: 30_000,
+            name: "bash",
+            description: "run",
+            parameters: { type: "object", properties: {}, required: [] },
+          },
+        ],
       },
       "gemini-2.5-flash",
     ) as { contents: unknown[]; system_instruction: unknown; tools: unknown[] }
