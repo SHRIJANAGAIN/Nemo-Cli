@@ -223,6 +223,7 @@ export class Agent {
             options.onAskUserQuestion,
             this.config,
             (to) => this.resolveSendMessageTarget(to),
+            { onListFleet: () => this.listBackgroundJobs() },
           )
     this.tools = tools
     if (arsenal) {

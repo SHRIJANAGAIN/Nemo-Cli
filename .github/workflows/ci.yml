@@ -57,6 +57,9 @@ jobs:
           # Windows leg: the primary dev platform (bin/*.cmd shims, paths).
           - os: windows-latest
             node: 20
+          # macOS leg: install.sh + ~/.local/bin shims must work here too.
+          - os: macos-latest
+            node: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

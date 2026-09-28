@@ -6,6 +6,7 @@
 
 import * as fs from "fs"
 import * as path from "path"
+import { createHash, randomUUID } from "crypto"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext } from "../types.js"
 
@@ -83,6 +84,102 @@ export function executeWorkflow(
   return { success: results.every((r) => !r.error), results }
 }
 
+/** Stable hash of a step's identity: same hash means same work, safe to resume. */
+export function stepHash(step: WorkflowStep): string {
+  const canonical = JSON.stringify({
+    id: step.id,
+    action: step.action,
+    prompt: step.prompt ?? "",
+    tool: step.tool ?? "",
+    args: step.args ?? {},
+    condition: step.condition ?? "",
+  })
+  return createHash("sha256").update(canonical).digest("hex").slice(0, 16)
+}
+
+export interface WorkflowRunStep {
+  stepId: string
+  hash: string
+  output: string
+  error?: string
+}
+
+export interface WorkflowRunRecord {
+  runId: string
+  name: string
+  at: string
+  steps: WorkflowRunStep[]
+}
+
+export function workflowRunsDir(cwd: string): string {
+  return path.join(cwd, ".trayambak", "workflow-runs")
+}
+
+function validRunId(runId: string): boolean {
+  return /^[A-Za-z0-9_-]{1,64}$/.test(runId)
+}
+
+export function saveWorkflowRun(cwd: string, record: WorkflowRunRecord): void {
+  fs.mkdirSync(workflowRunsDir(cwd), { recursive: true })
+  if (!validRunId(record.runId)) throw new Error(`Invalid runId: ${record.runId}`)
+  fs.writeFileSync(path.join(workflowRunsDir(cwd), `${record.runId}.json`), JSON.stringify(record, null, 2), "utf8")
+}
+
+export function loadWorkflowRun(cwd: string, runId: string): WorkflowRunRecord | undefined {
+  try {
+    if (!validRunId(runId)) return undefined
+    const file = path.join(workflowRunsDir(cwd), `${runId}.json`)
+    if (!fs.existsSync(file)) return undefined
+    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as WorkflowRunRecord
+    if (!raw || !Array.isArray(raw.steps)) return undefined
+    return raw
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Execute with resume: steps whose id+hash match the cached run at the same
+ * index are reused (prefix walk — an edited step invalidates everything after
+ * it, since later steps may depend on its output). Only edited or new steps
+ * re-run, so a resumed run reproduces exactly.
+ */
+export function executeWorkflowResumed(
+  def: WorkflowDefinition,
+  ctx: { prompt: string; maxSteps?: number; onStep?: (step: WorkflowStep, output: string) => void; resumeFrom?: WorkflowRunRecord },
+): WorkflowExecutionResult & { reused: number } {
+  const boundedMax = Math.min(
+    def.maxSteps ?? MAX_WORKFLOW_STEPS,
+    ctx.maxSteps ?? MAX_WORKFLOW_STEPS,
+    MAX_WORKFLOW_STEPS,
+  )
+  const cached = ctx.resumeFrom?.steps ?? []
+  const results: Array<{ stepId: string; output: string; error?: string }> = []
+  let reused = 0
+  let prefixBroken = false
+
+  for (let i = 0; i < def.steps.length && i < boundedMax; i++) {
+    const step = def.steps[i] as WorkflowStep
+    const hit = prefixBroken ? undefined : cached[i]
+    if (hit && hit.stepId === step.id && hit.hash === stepHash(step) && !hit.error) {
+      results.push({ stepId: step.id, output: hit.output })
+      reused++
+      continue
+    }
+    prefixBroken = true
+    try {
+      const output = `[Step ${step.id}] Action: ${step.action}${step.prompt ? ` | Prompt: ${step.prompt.slice(0, 200)}` : ""}${step.tool ? ` | Tool: ${step.tool}` : ""}${step.args ? ` | Args: ${JSON.stringify(step.args).slice(0, 200)}` : ""}`
+      results.push({ stepId: step.id, output })
+      ctx.onStep?.(step, output)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      results.push({ stepId: step.id, output: "", error: message })
+    }
+  }
+
+  return { success: results.every((r) => !r.error), results, reused }
+}
+
 const runWorkflowDef: ToolDefinition = {
   timeoutMs: 30_000,
   name: "trayambak__RunWorkflow",
@@ -97,6 +194,10 @@ const runWorkflowDef: ToolDefinition = {
         type: "string",
         description:
           "JSON string of WorkflowDefinition: {name, description, steps[], maxSteps?}. Each step: {id, action, prompt?, tool?, args?, condition?, maxRetries?, timeoutMs?}.",
+      },
+      resumeFromRunId: {
+        type: "string",
+        description: "Optional run id to resume: completed steps with identical id+content are reused, only edited or new steps re-run.",
       },
     },
   },
@@ -124,7 +225,14 @@ export function createRunWorkflowTool(): Tool {
       }
 
       const cwd = context?.cwd ?? process.cwd()
-      const result = executeWorkflow(workflow, {
+      const resumeFrom =
+        typeof args.resumeFromRunId === "string" && args.resumeFromRunId.length > 0
+          ? loadWorkflowRun(cwd, String(args.resumeFromRunId))
+          : undefined
+      if (typeof args.resumeFromRunId === "string" && args.resumeFromRunId.length > 0 && !resumeFrom) {
+        return textResult(`No workflow run found for id: ${String(args.resumeFromRunId)}`, /*isError*/ true)
+      }
+      const result = executeWorkflowResumed(workflow, {
         prompt: "",
         maxSteps: workflow.maxSteps ?? MAX_WORKFLOW_STEPS,
         onStep: (step, output) => {
@@ -138,10 +246,27 @@ export function createRunWorkflowTool(): Tool {
             /* best-effort logging */
           }
         },
+        resumeFrom,
       })
 
+      try {
+        saveWorkflowRun(cwd, {
+          runId: randomUUID(),
+          name: workflow.name,
+          at: new Date().toISOString(),
+          steps: result.results.map((r, i) => ({
+            stepId: r.stepId,
+            hash: stepHash(workflow.steps[i] as WorkflowStep),
+            output: r.output,
+            ...(r.error ? { error: r.error } : {}),
+          })),
+        })
+      } catch {
+        /* run-record persistence is best-effort */
+      }
+
       const summary = result.success
-        ? `Workflow '${workflow.name}' completed successfully (${result.results.length}/${workflow.steps.length} steps).\n${result.results.map((r) => `${r.stepId}: ${r.output}`).join("\n")}`
+        ? `Workflow '${workflow.name}' completed successfully (${result.results.length}/${workflow.steps.length} steps, reused ${result.reused} from resume).\n${result.results.map((r) => `${r.stepId}: ${r.output}`).join("\n")}`
         : `Workflow '${workflow.name}' completed with errors (${result.results.filter((r) => r.error).length} failures):\n${result.results.map((r) => `${r.stepId}: ${r.error ?? r.output}`).join("\n")}`
       return textResult(summary)
     },

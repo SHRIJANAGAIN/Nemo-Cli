@@ -43,6 +43,8 @@ import {
 } from "./trayambak/tasks.js"
 import { createParallelReviewTool } from "./trayambak/parallel-review.js"
 import { createParallelExecuteTool } from "./trayambak/parallel-execute.js"
+import { createDebateTool } from "./trayambak/debate.js"
+import { createFleetTool, type FleetLister } from "./trayambak/fleet.js"
 import { createSotaSolveTool } from "./trayambak/sota-solve.js"
 import { createRulesTool } from "./trayambak/rules.js"
 import { createGenerateAgentTool } from "./trayambak/generate-agent.js"
@@ -56,6 +58,8 @@ import { createMcpRunnerTool } from "./mcp/mcp-runner-tool.js"
 import { createSkillTools, defaultSkillsDir } from "./skills/skills.js"
 import { loadCustomTools, registerCustomToolset } from "./custom/custom-tools.js"
 import { createDiagnosticsTool } from "./diagnostics/diagnostics-tool.js"
+import { createMemoryTool } from "./memory/memory.js"
+import { createDreamTool } from "./memory/dream.js"
 import type { Tool } from "./types.js"
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
 import type { ToolsetDefinition } from "../../../../packages/protocol/src/toolsets.js"
@@ -103,6 +107,7 @@ export { createMcpRunnerTool, getMcpProcess, type McpProcess, type McpToolDefini
 export { createRulesTool, getRulesContextBlock, loadRules } from "./trayambak/rules.js"
 export { createGenerateAgentTool } from "./trayambak/generate-agent.js"
 export { createDiagnosticsTool } from "./diagnostics/diagnostics-tool.js"
+export { createDreamTool, planDreamConsolidation, runDreamConsolidation } from "./memory/dream.js"
 export type { Diagnostic } from "./diagnostics/tsc-diagnostics.js"
 export {
   createSkillTools,
@@ -153,6 +158,9 @@ export {
 export { createArtifactTool } from "./artifacts/artifact.js"
 export { createGithubTool } from "./github/github.js"
 export { createParallelReviewTool } from "./trayambak/parallel-review.js"
+export { createDebateTool, buildDebateTasks, synthesizeDebate } from "./trayambak/debate.js"
+export { createFleetTool, fleetListText, fleetPeekText } from "./trayambak/fleet.js"
+export type { FleetJob, FleetLister } from "./trayambak/fleet.js"
 export type { ParallelReviewResult, ReviewFinding } from "./trayambak/parallel-review.js"
 export { createParallelExecuteTool } from "./trayambak/parallel-execute.js"
 export type { ParallelExecuteOptions } from "./trayambak/parallel-execute.js"
@@ -195,6 +203,7 @@ export function createDefaultTools(
   ) => Promise<string[]>,
   config?: TrayambakConfig,
   onResolveSendTarget?: (to: string) => { id: string; name: string; running: boolean } | undefined,
+  extra?: { onListFleet?: FleetLister },
 ): { tools: Tool[]; arsenal?: Arsenal<Tool> } {
   const allTools: Tool[] = [
     createBashTool(),
@@ -227,6 +236,8 @@ export function createDefaultTools(
     createTeamTool(onRunTeam),
     createParallelReviewTool(onRunTeam),
     createParallelExecuteTool(onRunTeam),
+    createDebateTool(onRunTeam),
+    createFleetTool(extra?.onListFleet),
     createSotaSolveTool(),
     createRulesTool(),
     createGenerateAgentTool(),
@@ -248,6 +259,8 @@ export function createDefaultTools(
     createMcpInstallTool(),
     createMcpRunnerTool(),
     createDiagnosticsTool(),
+    createMemoryTool(),
+    createDreamTool(),
   ]
 
   let arsenal: Arsenal<Tool> | undefined
@@ -372,6 +385,7 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
       "todoread",
       "diagnostics",
       "memory",
+      "dream",
       "artifact",
       "github",
       "trayambak__AskUserQuestion",
@@ -385,6 +399,7 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
     toolNames: [
       "trayambak__Agent",
       "trayambak__RunTeam",
+      "trayambak__Debate",
       "trayambak__ParallelReview",
       "trayambak__ParallelExecute",
       "sota_solve",
@@ -401,6 +416,7 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
       "trayambak__CronCreate",
       "trayambak__CronDelete",
       "trayambak__CronList",
+      "trayambak__Fleet",
       "trayambak__Monitor",
       "trayambak__EnterWorktree",
       "trayambak__ExitWorktree",

@@ -95,7 +95,7 @@ _For a first-time user, the following is all you need to know:_
 | `/provider` | Pick a backend, save its key, and switch models                                                |
 | `/compact`  | Manually compress the context to free up tokens                                                |
 | `/fork`     | Fire-and-forget background subagent with this turn's context (you stay in the current session) |
-| `/help`     | List all 52 built-in slash commands                                                            |
+| `/help`     | List all built-in slash commands                                                            |
 | `/keymap`   | Show every keyboard shortcut                                                                   |
 
 > Session forking (an independent copy with full history) is the **`F` key**
@@ -122,7 +122,7 @@ _For a first-time user, the following is all you need to know:_
 
 ## Command line reference
 
-Run `trayambak help` for the authoritative list — 31 subcommands:
+Run `trayambak help` for the authoritative list:
 
 | Command                                           | Description                                                 |
 | ------------------------------------------------- | ----------------------------------------------------------- |
@@ -283,10 +283,6 @@ denied by default with writes asking for approval
 
 ## License
 
-Trayambak CLI is **proprietary software** developed and maintained by
-**SKT AI LABS PRIVATE LIMITED**, licensed under the
-**Trayambak CLI Proprietary License** — see [LICENSE](LICENSE) for the full
-terms. You get a limited, non-exclusive, non-transferable licence to use the
-software for your own lawful purposes; copying, modification, redistribution,
-and reverse engineering (beyond where prohibited by law) require prior
-written permission. Not open source, and not Apache-licensed.
+Trayambak CLI is developed and maintained by **SKT AI LABS PRIVATE LIMITED**
+and licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) for the
+full terms.
