@@ -1,0 +1,212 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+
+import { configCommand } from "./config.js"
+
+/**
+ * `trayambak config get/set` round-trips through <cwd>/.trayambak/config.json
+ * (configDir() prefers a project-local .trayambak over ~/.trayambak), so every
+ * case here chdirs into a throwaway dir with its own .trayambak — the real
+ * home directory and the repo's own .trayambak/ are never touched.
+ *
+ * TRAYAMBAK_* env vars that loadConfig() folds over the file are cleared for
+ * the duration of each test so assertions are about FILE state.
+ */
+
+const ENV_KEYS = [
+  "TRAYAMBAK_MODEL",
+  "TRAYAMBAK_BASE_URL",
+  "TRAYAMBAK_API_KEY",
+  "TRAYAMBAK_PROVIDER",
+  "TRAYAMBAK_MAX_TURNS",
+  "TRAYAMBAK_TEMPERATURE",
+  "TRAYAMBAK_THEME",
+  "TRAYAMBAK_MCP_SERVERS",
+  "TRAYAMBAK_CWD",
+] as const
+
+let tmp = ""
+let originalCwd = ""
+const savedEnv: Record<string, string | undefined> = {}
+let out = ""
+// Structural type: only mockRestore() is ever called on this spy, and the
+// concrete overload set of process.stdout.write doesn't fit vitest's
+// default MockInstance<(this: unknown, ...args: unknown[]) => unknown>.
+let writeSpy: { mockRestore: () => void } | undefined
+
+const configFile = (): string => path.join(tmp, ".trayambak", "config.json")
+
+function seedConfig(value: unknown): void {
+  fs.mkdirSync(path.dirname(configFile()), { recursive: true })
+  fs.writeFileSync(configFile(), JSON.stringify(value, null, 2), "utf8")
+}
+
+function readConfig(): Record<string, unknown> {
+  return JSON.parse(fs.readFileSync(configFile(), "utf8")) as Record<string, unknown>
+}
+
+beforeEach(() => {
+  originalCwd = process.cwd()
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-config-"))
+  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  process.chdir(tmp)
+
+  for (const key of ENV_KEYS) {
+    savedEnv[key] = process.env[key]
+    delete process.env[key]
+  }
+
+  out = ""
+  writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array): boolean => {
+    out += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
+    return true
+  }) as unknown as typeof process.stdout.write)
+})
+
+afterEach(() => {
+  writeSpy?.mockRestore()
+  writeSpy = undefined
+  process.chdir(originalCwd)
+  for (const key of ENV_KEYS) {
+    const value = savedEnv[key]
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+  try {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  } catch {
+    /* best effort */
+  }
+})
+
+describe("configCommand set", () => {
+  it("persists a string value and reads it back with get", () => {
+    configCommand(["set", "model", "my-model"])
+    expect(out).toBe("Set model = my-model\n")
+    expect(readConfig().model).toBe("my-model")
+
+    out = ""
+    configCommand(["get", "model"])
+    expect(out).toBe("my-model\n")
+  })
+
+  it("coerces booleans and numbers instead of storing strings", () => {
+    configCommand(["set", "nativeTools", "false"])
+    expect(readConfig().nativeTools).toBe(false)
+    expect(typeof readConfig().nativeTools).toBe("boolean")
+
+    out = ""
+    configCommand(["set", "maxTurns", "42"])
+    expect(readConfig().maxTurns).toBe(42)
+    expect(typeof readConfig().maxTurns).toBe("number")
+
+    out = ""
+    configCommand(["get", "maxTurns"])
+    expect(out).toBe("42\n")
+  })
+
+  it("keeps non-literal text (and multi-word values) as a string", () => {
+    configCommand(["set", "model", "not-a-number-xyz"])
+    expect(readConfig().model).toBe("not-a-number-xyz")
+
+    out = ""
+    configCommand(["set", "shellCommand", "cmd", "/c"])
+    expect(readConfig().shellCommand).toBe("cmd /c")
+    expect(out).toBe("Set shellCommand = cmd /c\n")
+  })
+
+  it("normalizes flag-style keys to canonical camelCase", () => {
+    configCommand(["set", "--base-url", "http://example.test/v1"])
+    expect(out).toBe("Set baseUrl = http://example.test/v1\n")
+    const file = readConfig()
+    expect(file.baseUrl).toBe("http://example.test/v1")
+    expect(file["--base-url"]).toBeUndefined()
+
+    out = ""
+    configCommand(["set", "--api-key", "s3cr3t"])
+    expect(readConfig().apiKey).toBe("s3cr3t")
+  })
+
+  it("merges successive sets instead of replacing the file", () => {
+    configCommand(["set", "model", "alpha"])
+    configCommand(["set", "maxTurns", "9"])
+    const file = readConfig()
+    expect(file.model).toBe("alpha")
+    expect(file.maxTurns).toBe(9)
+    expect(Object.keys(file).length).toBe(2)
+  })
+
+  it("refuses to write when the value is missing", () => {
+    configCommand(["set", "model"])
+    expect(out).toBe("Usage: trayambak config set <key> <value>\n")
+    expect(fs.existsSync(configFile())).toBe(false)
+  })
+
+  it("refuses to write when the key is missing", () => {
+    configCommand(["set"])
+    expect(out).toBe("Usage: trayambak config set <key> <value>\n")
+    expect(fs.existsSync(configFile())).toBe(false)
+  })
+})
+
+describe("configCommand get", () => {
+  it("dumps every key as `key = value` when no key is given", () => {
+    seedConfig({ model: "seeded-model", maxTurns: 7 })
+    configCommand(["get"])
+    expect(out).toContain("model = seeded-model\n")
+    expect(out).toContain("maxTurns = 7\n")
+    expect(out).toContain("baseUrl = ")
+  })
+
+  it("prints an empty line for a key that does not exist", () => {
+    seedConfig({ model: "seeded-model" })
+    configCommand(["get", "doesNotExist"])
+    expect(out).toBe("\n")
+  })
+
+  it("persists an unknown key but does not surface it through the schema", () => {
+    // Unknown keys survive the raw file (merge-save) but sanitizeConfig()
+    // rebuilds a typed config, so get can never leak them back out.
+    configCommand(["set", "totallyUnknownKey", "1"])
+    expect(readConfig().totallyUnknownKey).toBe(1)
+
+    out = ""
+    configCommand(["get", "totallyUnknownKey"])
+    expect(out).toBe("\n")
+  })
+
+  it("lets TRAYAMBAK_MODEL win over the file value", () => {
+    seedConfig({ model: "file-model" })
+    process.env.TRAYAMBAK_MODEL = "env-model"
+    configCommand(["get", "model"])
+    expect(out).toBe("env-model\n")
+  })
+
+  it("reads legacy `--flag` keys from the file as their canonical key", () => {
+    // Older builds persisted flag names verbatim; loadConfig maps them back.
+    seedConfig({ "--model": "legacy-model" })
+    configCommand(["get", "model"])
+    expect(out).toBe("legacy-model\n")
+  })
+})
+
+describe("configCommand usage", () => {
+  it("prints the usage block for an unknown subcommand", () => {
+    configCommand(["frobnicate", "x"])
+    expect(out).toBe("Usage:\n  trayambak config get [key]\n  trayambak config set <key> <value>\n")
+  })
+
+  it("prints the usage block when called with no arguments", () => {
+    configCommand([])
+    expect(out).toContain("trayambak config get [key]")
+    expect(out).toContain("trayambak config set <key> <value>")
+  })
+})

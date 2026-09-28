@@ -1,0 +1,30 @@
+[
+  {
+    "id": "rw_mtnbgnpx",
+    "type": "achievement",
+    "reason": "First Task Complete",
+    "points": 5,
+    "timestamp": "2026-09-04T18:57:52.917Z"
+  },
+  {
+    "id": "rw_mtr2bqps",
+    "type": "achievement",
+    "reason": "5 Tasks No Errors",
+    "points": 10,
+    "timestamp": "2026-09-07T09:53:11.680Z"
+  },
+  {
+    "id": "rw_mtr2c02u",
+    "type": "achievement",
+    "reason": "10 Tasks Done",
+    "points": 15,
+    "timestamp": "2026-09-07T09:53:23.814Z"
+  },
+  {
+    "id": "rw_mttpwzae",
+    "type": "achievement",
+    "reason": "50 Tasks Done",
+    "points": 50,
+    "timestamp": "2026-09-09T06:29:06.086Z"
+  }
+]

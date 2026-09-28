@@ -1,0 +1,5 @@
+{
+  "name": "@trayambak/ink-app",
+  "type": "module",
+  "private": true
+}

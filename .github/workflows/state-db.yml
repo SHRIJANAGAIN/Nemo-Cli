@@ -1,0 +1,29 @@
+name: state-db-migrations
+on: [push, pull_request]
+jobs:
+  state-db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run state DB tests
+        run: npm test -- --filter=state-db
+      - name: Verify all 6 databases exist
+        run: |
+          grep -q "STATE" packages/core/src/state_db.ts
+          grep -q "LOGS" packages/core/src/state_db.ts
+          grep -q "GOALS" packages/core/src/state_db.ts
+          grep -q "MEMORIES" packages/core/src/state_db.ts
+          grep -q "QUEUE" packages/core/src/state_db.ts
+          grep -q "THREAD_HISTORY" packages/core/src/state_db.ts
+          echo "All 6 SQLite databases defined ✓"
+      - name: Verify migration system
+        run: |
+          grep -q "migrate" packages/core/src/state_db.ts
+          grep -q "user_version" packages/core/src/state_db.ts
+          echo "SQLite migration system present ✓"

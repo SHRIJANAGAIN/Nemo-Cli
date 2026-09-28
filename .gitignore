@@ -1,0 +1,69 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
+ */
+
+# Compiled output (rebuilt by `npm run build`; publish/ is regenerated)
+dist/
+publish/
+*.tsbuildinfo
+sbom.cyclonedx.json
+
+# State databases
+state/
+state/*.sqlite
+state/*.sqlite-wal
+state/*.sqlite-shm
+
+# Violation logs
+violations.jsonl
+state/violations.jsonl
+state/logs_2.sqlite
+state/goals_1.sqlite
+state/memories_1.sqlite
+state/queue_1.sqlite
+state/thread_history_1.sqlite
+
+# Test/coverage artifacts
+coverage/
+
+# Dependencies
+node_modules/
+
+# Local session / state (per-project + per-user)
+.trayambak/
+*.log
+.cline-*
+backend-handlers/
+
+# Private self-improvement journal (user state; never committed, never published)
+skt/1-errors/mistakes.json
+
+# Backups & scratch (never commit)
+backups/
+*.bak
+.smoke-tmp/
+.scratchpad/
+
+# Prebuilt llama.cpp Windows binaries in bin/ (large, third-party;
+# see bin/README.md for provenance & how to obtain)
+bin/*.exe
+bin/*.dll
+bin/*.exp
+bin/*.lib
+bin/*.pdb
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Secrets / local env (never commit)
+.env
+.env.*
+*.pem
+*.key
+
+# Corrupt-config forensics (kept locally, never committed)
+*.corrupt-*

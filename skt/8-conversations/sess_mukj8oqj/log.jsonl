@@ -1,0 +1,80 @@
+{"role":"user","content":"MARKER_ALPHA_ONE","ts":"2026-09-28T00:52:01.728Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:03.351Z"}
+{"role":"user","content":"MARKER_DELTA_LONG lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor","ts":"2026-09-28T00:52:03.388Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:04.359Z"}
+{"role":"user","content":"MARKER_BRAVO_TWO","ts":"2026-09-28T00:52:05.147Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:06.121Z"}
+{"role":"user","content":"MARKER_FILLER_N0 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:06.847Z"}
+{"role":"system","content":"⛓ Queued (#1): MARKER_FILLER_N1 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:07.387Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:07.749Z"}
+{"role":"system","content":"▶ Running queued prompt (0 still queued)","ts":"2026-09-28T00:52:07.757Z"}
+{"role":"user","content":"MARKER_FILLER_N1 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:07.759Z"}
+{"role":"system","content":"⛓ Queued (#1): MARKER_FILLER_N2 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:07.927Z"}
+{"role":"system","content":"⛓ Queued (#2): MARKER_FILLER_N3 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:08.468Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:08.698Z"}
+{"role":"system","content":"▶ Running queued prompt (1 still queued)","ts":"2026-09-28T00:52:08.702Z"}
+{"role":"user","content":"MARKER_FILLER_N2 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:08.703Z"}
+{"role":"system","content":"⛓ Queued (#2): MARKER_FILLER_N4 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:09.008Z"}
+{"role":"system","content":"⛓ Queued (#3): MARKER_FILLER_N5 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:09.549Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:09.574Z"}
+{"role":"system","content":"▶ Running queued prompt (2 still queued)","ts":"2026-09-28T00:52:09.578Z"}
+{"role":"user","content":"MARKER_FILLER_N3 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:09.580Z"}
+{"role":"system","content":"⛓ Queued (#3): MARKER_FILLER_N6 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:10.089Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:10.435Z"}
+{"role":"system","content":"▶ Running queued prompt (2 still queued)","ts":"2026-09-28T00:52:10.439Z"}
+{"role":"user","content":"MARKER_FILLER_N4 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:10.441Z"}
+{"role":"system","content":"⛓ Queued (#3): MARKER_FILLER_N7 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:10.628Z"}
+{"role":"system","content":"⛓ Queued (#4): MARKER_FILLER_N8 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:11.169Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:11.302Z"}
+{"role":"system","content":"▶ Running queued prompt (3 still queued)","ts":"2026-09-28T00:52:11.319Z"}
+{"role":"user","content":"MARKER_FILLER_N5 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:11.320Z"}
+{"role":"system","content":"⛓ Queued (#4): MARKER_FILLER_N9 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:11.709Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:12.144Z"}
+{"role":"system","content":"▶ Running queued prompt (3 still queued)","ts":"2026-09-28T00:52:12.150Z"}
+{"role":"user","content":"MARKER_FILLER_N6 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:12.152Z"}
+{"role":"system","content":"⛓ Queued (#4): MARKER_FILLER_N10 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:12.261Z"}
+{"role":"system","content":"⛓ Queued (#5): MARKER_FILLER_N11 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:12.800Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:13.037Z"}
+{"role":"system","content":"▶ Running queued prompt (4 still queued)","ts":"2026-09-28T00:52:13.040Z"}
+{"role":"user","content":"MARKER_FILLER_N7 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:13.041Z"}
+{"role":"system","content":"⛓ Queued (#5): MARKER_FILLER_N12 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:13.340Z"}
+{"role":"system","content":"⛓ Queued (#6): MARKER_FILLER_N13 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:13.882Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:13.908Z"}
+{"role":"system","content":"▶ Running queued prompt (5 still queued)","ts":"2026-09-28T00:52:13.913Z"}
+{"role":"user","content":"MARKER_FILLER_N8 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:13.914Z"}
+{"role":"system","content":"⛓ Queued (#6): MARKER_FILLER_N14 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:14.422Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:14.864Z"}
+{"role":"system","content":"▶ Running queued prompt (5 still queued)","ts":"2026-09-28T00:52:14.870Z"}
+{"role":"user","content":"MARKER_FILLER_N9 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:14.871Z"}
+{"role":"system","content":"⛓ Queued (#6): MARKER_FILLER_N15 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:14.980Z"}
+{"role":"system","content":"⛓ Queued (#7): MARKER_FILLER_N16 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:15.519Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:15.921Z"}
+{"role":"system","content":"▶ Running queued prompt (6 still queued)","ts":"2026-09-28T00:52:15.926Z"}
+{"role":"user","content":"MARKER_FILLER_N10 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:15.927Z"}
+{"role":"system","content":"⛓ Queued (#7): MARKER_FILLER_N17 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:16.061Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:17.026Z"}
+{"role":"system","content":"▶ Running queued prompt (6 still queued)","ts":"2026-09-28T00:52:17.037Z"}
+{"role":"user","content":"MARKER_FILLER_N11 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:17.039Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:18.173Z"}
+{"role":"system","content":"▶ Running queued prompt (5 still queued)","ts":"2026-09-28T00:52:18.179Z"}
+{"role":"user","content":"MARKER_FILLER_N12 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:18.180Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:19.100Z"}
+{"role":"system","content":"▶ Running queued prompt (4 still queued)","ts":"2026-09-28T00:52:19.104Z"}
+{"role":"user","content":"MARKER_FILLER_N13 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:19.105Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:20.008Z"}
+{"role":"system","content":"▶ Running queued prompt (3 still queued)","ts":"2026-09-28T00:52:20.012Z"}
+{"role":"user","content":"MARKER_FILLER_N14 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:20.014Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:20.881Z"}
+{"role":"system","content":"▶ Running queued prompt (2 still queued)","ts":"2026-09-28T00:52:20.885Z"}
+{"role":"user","content":"MARKER_FILLER_N15 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:20.886Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:21.729Z"}
+{"role":"system","content":"▶ Running queued prompt (1 still queued)","ts":"2026-09-28T00:52:21.737Z"}
+{"role":"user","content":"MARKER_FILLER_N16 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:21.739Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:23.249Z"}
+{"role":"system","content":"▶ Running queued prompt (0 still queued)","ts":"2026-09-28T00:52:23.254Z"}
+{"role":"user","content":"MARKER_FILLER_N17 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-28T00:52:23.255Z"}
+{"role":"system","content":"⛓ Queued (#1): MARKER_CHARLIE_THREE\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-28T00:52:23.275Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:24.148Z"}
+{"role":"system","content":"▶ Running queued prompt (0 still queued)","ts":"2026-09-28T00:52:24.151Z"}
+{"role":"user","content":"MARKER_CHARLIE_THREE","ts":"2026-09-28T00:52:24.157Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-28T00:52:24.987Z"}

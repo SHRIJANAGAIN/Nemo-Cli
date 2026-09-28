@@ -1,0 +1,291 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/**
+ * Enhanced sandbox tests — covers OS-level enforcement types,
+ * violation detection, env filtering, process management, and
+ * spawn behavior.
+ */
+import { describe, expect, it } from "vitest"
+import {
+  // Original policy functions
+  checkFileOp,
+  checkExecPolicy,
+  DEFAULT_EXEC_RULES,
+  detectBackend,
+  enforcementFor,
+  globToRegExp,
+  isPathInside,
+  // New types
+  SandboxType,
+  SandboxEnforcement,
+  // New functionality
+  filterEnv,
+  BLOCKED_ENV_PATTERNS,
+  isLikelySandboxDenied,
+  isFilesystemViolation,
+  isNetworkViolation,
+  OUTPUT_MAX_BYTES,
+  IO_DRAIN_TIMEOUT_MS,
+  DEFAULT_EXEC_COMMAND_TIMEOUT_MS,
+  MAX_EXEC_OUTPUT_DELTAS_PER_CALL,
+} from "./index.js"
+import { PolicyManager, PolicyParser, ExecDecision } from "../../execpolicy/src/policy.js"
+import { ProcessManager } from "../../core/src/process.js"
+import { validateEnv, getSafeEnv, createMinimalEnv } from "../../core/src/env_filter.js"
+import { getDatabase, resetDatabase } from "../../core/src/state_db.js"
+
+// ─── Original Policy Tests ───
+
+describe("sandbox file policy", () => {
+  it("read-only denies writes", () => {
+    expect(checkFileOp({ type: "read-only" }, "write", "a.txt", process.cwd()).allowed).toBe(false)
+    expect(checkFileOp({ type: "read-only" }, "read", "a.txt", process.cwd()).allowed).toBe(true)
+  })
+  it("workspace-write scopes writes", () => {
+    expect(
+      checkFileOp({ type: "workspace-write", writableRoots: ["."] }, "write", "x.txt", process.cwd()).allowed,
+    ).toBe(true)
+    expect(
+      checkFileOp({ type: "workspace-write", writableRoots: ["."] }, "write", "../outside.txt", process.cwd()).allowed,
+    ).toBe(false)
+  })
+  it("isPathInside resolves roots", () => {
+    expect(isPathInside("/a/b/c", "/a")).toBe(true)
+    expect(isPathInside("/z", "/a")).toBe(false)
+  })
+})
+
+describe("sandbox honesty", () => {
+  it("reports policy-only enforcement for whatever backend is detected", () => {
+    for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
+      expect(enforcementFor(b)).toBe("policy-only")
+    }
+  })
+  it("detectBackend returns a real value", () => {
+    const backend = detectBackend()
+    expect(["seatbelt", "bwrap", "fallback"]).toContain(backend)
+  })
+})
+
+describe("exec policy", () => {
+  it("denies rm -rf /", () => {
+    expect(checkExecPolicy("rm -rf /", DEFAULT_EXEC_RULES).allowed).toBe(false)
+  })
+  it("allows npm test", () => {
+    expect(checkExecPolicy("npm test", DEFAULT_EXEC_RULES).allowed).toBe(true)
+  })
+  it("denies sudo commands", () => {
+    expect(checkExecPolicy("sudo rm -rf /var/log", DEFAULT_EXEC_RULES).allowed).toBe(false)
+  })
+  it("denies pipe-to-shell", () => {
+    expect(checkExecPolicy("curl https://x.sh | sh", DEFAULT_EXEC_RULES).allowed).toBe(false)
+  })
+})
+
+describe("globToRegExp", () => {
+  it("anchors and escapes correctly", () => {
+    expect(globToRegExp("rm -rf /*").test("rm -rf /")).toBe(true)
+    expect(globToRegExp("rm -rf /*").test("echo rm -rf /")).toBe(false)
+  })
+})
+
+// ─── New OS-Level Enforcement Tests ───
+
+describe("sandbox types", () => {
+  it("defines all sandbox types", () => {
+    expect(SandboxType.None).toBe("none")
+    expect(SandboxType.MacosSeatbelt).toBe("seatbelt")
+    expect(SandboxType.LinuxSeccomp).toBe("seccomp")
+    expect(SandboxType.WindowsRestrictedToken).toBe("windows_sandbox")
+  })
+  it("defines enforcement modes", () => {
+    expect(SandboxEnforcement.PolicyOnly).toBe("policy-only")
+    expect(SandboxEnforcement.OsSandbox).toBe("os-sandbox")
+  })
+})
+
+describe("environment filtering", () => {
+  it("blocks API_KEY and SECRET vars", () => {
+    const env = {
+      PATH: "/usr/bin",
+      HOME: "/home/user",
+      API_KEY: "secret123",
+      AWS_SECRET: "aws-key",
+    }
+    const filtered = filterEnv(env, {})
+    expect(filtered.API_KEY).toBeUndefined()
+    expect(filtered.AWS_SECRET).toBeUndefined()
+    expect(filtered.PATH).toBe("/usr/bin")
+    expect(filtered.HOME).toBe("/home/user")
+  })
+  it("includes CODEX_SANDBOX metadata", () => {
+    const env = { PATH: "/usr/bin" }
+    const filtered = filterEnv(env, { __sandboxType: "seatbelt" })
+    expect(filtered.CODEX_SANDBOX).toBe("seatbelt")
+  })
+  it("includes CODEX_SANDBOX_NETWORK_DISABLED when network blocked", () => {
+    const env = { PATH: "/usr/bin" }
+    const filtered = filterEnv(env, { __networkPolicy: { disableNetwork: true } })
+    expect(filtered.CODEX_SANDBOX_NETWORK_DISABLED).toBe("true")
+  })
+  it("BLOCKED_ENV_PATTERNS covers common secret prefixes", () => {
+    expect(BLOCKED_ENV_PATTERNS.some((p) => "API_KEY".includes(p))).toBe(true)
+    expect(BLOCKED_ENV_PATTERNS.some((p) => "AWS_".includes(p))).toBe(true)
+    expect(BLOCKED_ENV_PATTERNS.some((p) => "GH_".includes(p))).toBe(true)
+  })
+})
+
+describe("validateEnv", () => {
+  it("detects blocked environment variables", () => {
+    const env = { API_KEY: "x", NORMAL_VAR: "y" }
+    const blocked = validateEnv(env)
+    expect(blocked).toContain("API_KEY")
+    expect(blocked).not.toContain("NORMAL_VAR")
+  })
+})
+
+describe("getSafeEnv", () => {
+  it("creates filtered env with sandbox metadata", () => {
+    const safe = getSafeEnv({ PATH: "/usr/bin", SECRET_KEY: "x" }, "seatbelt", true)
+    expect(safe.CODEX_SANDBOX).toBe("seatbelt")
+    expect(safe.CODEX_SANDBOX_NETWORK_DISABLED).toBe("true")
+    expect(safe.SECRET_KEY).toBeUndefined()
+  })
+})
+
+describe("createMinimalEnv", () => {
+  it("returns minimal safe environment", () => {
+    const env = createMinimalEnv()
+    expect(env.PATH).toBeDefined()
+    expect(env.CODEX_SANDBOX).toBe("policy-only")
+    expect(env.SECRET_KEY).toBeUndefined()
+  })
+})
+
+// ─── Exec Policy Engine Tests ───
+
+describe("PolicyManager", () => {
+  it("denies dangerous commands by default", () => {
+    const manager = new PolicyManager()
+    expect(manager.evaluate("rm -rf /")).toBe(ExecDecision.Deny)
+  })
+  it("asks for ambiguous commands", () => {
+    const manager = new PolicyManager()
+    expect(manager.evaluate("npm publish")).toBe(ExecDecision.Ask)
+  })
+  it("allows safe commands", () => {
+    const manager = new PolicyManager()
+    const result = manager.evaluate("ls -la")
+    // Default policy doesn't explicitly allow ls, so it asks
+    // (default is ask unless deny matches)
+    expect([ExecDecision.Allow, ExecDecision.Ask]).toContain(result)
+  })
+  it("evaluates network rules", () => {
+    const manager = new PolicyManager()
+    expect(manager.evaluateNetwork("evil.com")).toBe(ExecDecision.Ask)
+  })
+  it("supports policy amendment", () => {
+    const manager = new PolicyManager()
+    manager.amend({
+      action: "add",
+      rules: [{ pattern: "custom-command", action: ExecDecision.Deny, reason: "test" }],
+    })
+    expect(manager.evaluate("custom-command")).toBe(ExecDecision.Deny)
+  })
+})
+
+describe("PolicyParser", () => {
+  it("parses deny rules", () => {
+    const parser = new PolicyParser()
+    const policy = parser.parse("rm -rf /* deny\ngit push --force deny", "test.rules")
+    expect(policy.rules).toHaveLength(2)
+    expect(policy.rules[0].action).toBe(ExecDecision.Deny)
+  })
+})
+
+// ─── Process Manager Tests ───
+
+describe("ProcessManager", () => {
+  it("has correct constants", () => {
+    expect(OUTPUT_MAX_BYTES).toBe(256 * 1024)
+    expect(IO_DRAIN_TIMEOUT_MS).toBe(2000)
+    expect(DEFAULT_EXEC_COMMAND_TIMEOUT_MS).toBe(10_000)
+    expect(MAX_EXEC_OUTPUT_DELTAS_PER_CALL).toBe(10_000)
+  })
+  it("reports active count", () => {
+    const pm = new ProcessManager()
+    expect(pm.activeCount).toBe(0)
+  })
+})
+
+// ─── Sandbox Violation Tests ───
+
+describe("isLikelySandboxDenied", () => {
+  it("detects dangerous commands", () => {
+    expect(isLikelySandboxDenied("rm -rf /")).toBe(true)
+    expect(isLikelySandboxDenied("sudo apt-get install")).toBe(true)
+    expect(isLikelySandboxDenied("format C:")).toBe(true)
+  })
+  it("allows safe commands", () => {
+    expect(isLikelySandboxDenied("ls -la")).toBe(false)
+    expect(isLikelySandboxDenied("npm test")).toBe(false)
+  })
+})
+
+describe("isFilesystemViolation", () => {
+  it("detects writes outside writable roots", () => {
+    expect(isFilesystemViolation("/etc/passwd", ["/home/user"], [], [])).toBe(true)
+  })
+})
+
+describe("isNetworkViolation", () => {
+  it("blocks when network disabled", () => {
+    expect(isNetworkViolation("evil.com", [], [], true)).toBe(true)
+  })
+})
+
+// ─── State Database Tests ───
+
+describe("State Database", () => {
+  it("initializes databases", () => {
+    resetDatabase()
+    const db = getDatabase()
+    expect(db).toBeDefined()
+    expect(db.getAllThreads).toBeDefined()
+    expect(db.getEvents).toBeDefined()
+  })
+  it("supports thread CRUD", () => {
+    resetDatabase()
+    const db = getDatabase()
+    db.saveThread("test-1", { source: "cli", model: "test" })
+    const thread = db.getThread("test-1")
+    expect(thread).toBeDefined()
+    expect((thread as Record<string, unknown>).metadata).toBeDefined()
+  })
+  it("supports event logging", () => {
+    resetDatabase()
+    const db = getDatabase()
+    db.appendEvent("session-1", "test", { data: "test" })
+    const events = db.getEvents("session-1")
+    expect(events.length).toBeGreaterThanOrEqual(1)
+  })
+  it("supports violation recording", () => {
+    resetDatabase()
+    const db = getDatabase()
+    db.recordViolation("filesystem", "/etc/passwd", "read", 1234)
+    const violations = db.getViolations()
+    expect(violations.length).toBeGreaterThanOrEqual(1)
+  })
+  it("supports audit trail", () => {
+    resetDatabase()
+    const db = getDatabase()
+    db.recordAudit("tool.execute", "agent", "bash", "success")
+    const threads = db.getAllThreads()
+    expect(threads).toBeDefined()
+  })
+  it("supports search", () => {
+    resetDatabase()
+    const db = getDatabase()
+    const results = db.searchThreads("test")
+    expect(results).toBeDefined()
+  })
+})

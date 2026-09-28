@@ -1,0 +1,46 @@
+{"role":"user","content":"MARKER_ALPHA_ONE","ts":"2026-09-27T11:49:41.693Z"}
+{"role":"system","content":"⛓ Queued (#1): MARKER_DELTA_LONG lorem ipsum dolor sit amet consectetur adipiscing elit sed do …\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:43.338Z"}
+{"role":"system","content":"⛓ Queued (#2): MARKER_BRAVO_TWO\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:45.088Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:49:46.606Z"}
+{"role":"system","content":"▶ Running queued prompt (1 still queued)","ts":"2026-09-27T11:49:46.630Z"}
+{"role":"user","content":"MARKER_DELTA_LONG lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor","ts":"2026-09-27T11:49:46.632Z"}
+{"role":"system","content":"⛓ Queued (#2): MARKER_FILLER_N0 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:46.779Z"}
+{"role":"system","content":"⛓ Queued (#3): MARKER_FILLER_N1 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:47.319Z"}
+{"role":"system","content":"⛓ Queued (#4): MARKER_FILLER_N2 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:47.859Z"}
+{"role":"system","content":"⛓ Queued (#5): MARKER_FILLER_N3 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:48.399Z"}
+{"role":"system","content":"⛓ Queued (#6): MARKER_FILLER_N4 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:48.940Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:49:49.177Z"}
+{"role":"system","content":"▶ Running queued prompt (5 still queued)","ts":"2026-09-27T11:49:49.181Z"}
+{"role":"user","content":"MARKER_BRAVO_TWO","ts":"2026-09-27T11:49:49.183Z"}
+{"role":"system","content":"⛓ Queued (#6): MARKER_FILLER_N5 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:49.479Z"}
+{"role":"system","content":"⛓ Queued (#7): MARKER_FILLER_N6 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:50.019Z"}
+{"role":"system","content":"⛓ Queued (#8): MARKER_FILLER_N7 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:50.559Z"}
+{"role":"system","content":"⛓ Queued (#9): MARKER_FILLER_N8 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:51.099Z"}
+{"role":"system","content":"⛓ Queued (#10): MARKER_FILLER_N9 filler line to build transcript bulk before the frame budget ov…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:51.640Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:49:51.701Z"}
+{"role":"system","content":"▶ Running queued prompt (9 still queued)","ts":"2026-09-27T11:49:51.709Z"}
+{"role":"user","content":"MARKER_FILLER_N0 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-27T11:49:51.711Z"}
+{"role":"system","content":"⛓ Queued (#10): MARKER_FILLER_N10 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:52.179Z"}
+{"role":"system","content":"⛓ Queued (#11): MARKER_FILLER_N11 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:52.720Z"}
+{"role":"system","content":"⛓ Queued (#12): MARKER_FILLER_N12 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:53.260Z"}
+{"role":"system","content":"⛓ Queued (#13): MARKER_FILLER_N13 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:53.800Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:49:54.060Z"}
+{"role":"system","content":"▶ Running queued prompt (12 still queued)","ts":"2026-09-27T11:49:54.065Z"}
+{"role":"user","content":"MARKER_FILLER_N1 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-27T11:49:54.066Z"}
+{"role":"system","content":"⛓ Queued (#13): MARKER_FILLER_N14 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:54.339Z"}
+{"role":"system","content":"⛓ Queued (#14): MARKER_FILLER_N15 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:54.879Z"}
+{"role":"system","content":"⛓ Queued (#15): MARKER_FILLER_N16 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:55.419Z"}
+{"role":"system","content":"⛓ Queued (#16): MARKER_FILLER_N17 filler line to build transcript bulk before the frame budget o…\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:49:55.959Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:49:56.456Z"}
+{"role":"system","content":"▶ Running queued prompt (15 still queued)","ts":"2026-09-27T11:49:56.466Z"}
+{"role":"user","content":"MARKER_FILLER_N2 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-27T11:49:56.469Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:49:58.766Z"}
+{"role":"system","content":"▶ Running queued prompt (14 still queued)","ts":"2026-09-27T11:49:58.770Z"}
+{"role":"user","content":"MARKER_FILLER_N3 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-27T11:49:58.772Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:50:01.250Z"}
+{"role":"system","content":"▶ Running queued prompt (13 still queued)","ts":"2026-09-27T11:50:01.265Z"}
+{"role":"user","content":"MARKER_FILLER_N4 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-27T11:50:01.267Z"}
+{"role":"system","content":"⛓ Queued (#14): MARKER_CHARLIE_THREE\nRuns automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears","ts":"2026-09-27T11:50:03.174Z"}
+{"role":"assistant","content":"[model/connection error: connect ECONNREFUSED 127.0.0.1:9]","ts":"2026-09-27T11:50:04.115Z"}
+{"role":"system","content":"▶ Running queued prompt (13 still queued)","ts":"2026-09-27T11:50:04.122Z"}
+{"role":"user","content":"MARKER_FILLER_N5 filler line to build transcript bulk before the frame budget overflows","ts":"2026-09-27T11:50:04.124Z"}

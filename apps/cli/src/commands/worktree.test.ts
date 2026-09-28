@@ -1,0 +1,165 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { execSync } from "node:child_process"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+
+import { listWorktrees, worktreeCommand } from "./worktree.js"
+
+/**
+ * worktree.ts shells out to `git` with the process cwd as the repo, so each
+ * test chdirs into a throwaway directory under os.tmpdir() (never a real
+ * repository of the user). Argument validation and error paths are exercised
+ * in a directory that is not a git repo at all; the create/list/remove
+ * round-trip builds its own throwaway repository and is skipped when git is
+ * unavailable.
+ */
+
+let originalCwd = ""
+let tmp = ""
+const dirs: string[] = []
+
+function freshDir(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  dirs.push(dir)
+  return dir
+}
+
+function gitAvailable(): boolean {
+  try {
+    execSync("git --version", { stdio: "ignore" })
+    return true
+  } catch {
+    return false
+  }
+}
+
+beforeAll(() => {
+  originalCwd = process.cwd()
+})
+
+afterEach(() => {
+  process.chdir(originalCwd)
+})
+
+afterAll(() => {
+  process.chdir(originalCwd)
+  for (const dir of dirs) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true })
+    } catch {
+      /* best effort */
+    }
+  }
+})
+
+beforeEach(() => {
+  tmp = freshDir("trayambak-worktree-")
+  process.chdir(tmp)
+})
+
+describe("worktreeCommand validation", () => {
+  it("list reports an empty result outside a git repository", () => {
+    expect(worktreeCommand({ action: "list" })).toBe("No worktrees found")
+    expect(listWorktrees()).toEqual([])
+  })
+
+  it("create requires a path or name", () => {
+    expect(worktreeCommand({ action: "create" })).toBe("Missing path or name")
+  })
+
+  it("remove requires a path", () => {
+    expect(worktreeCommand({ action: "remove" })).toBe("Missing path")
+  })
+
+  it("switch requires a path", () => {
+    expect(worktreeCommand({ action: "switch" })).toBe("Missing path")
+  })
+
+  it("switch rejects a path that does not exist", () => {
+    const missing = path.join(tmp, "nope")
+
+    expect(worktreeCommand({ action: "switch", path: missing })).toBe(`Worktree path does not exist: ${missing}`)
+    expect(process.cwd()).toBe(tmp)
+  })
+
+  it("switch chdirs into an existing directory", () => {
+    const target = freshDir("trayambak-worktree-target-")
+
+    expect(worktreeCommand({ action: "switch", path: target })).toBe(`Switched to worktree at ${target}`)
+    expect(path.resolve(process.cwd())).toBe(path.resolve(target))
+  })
+
+  it("unknown action is reported", () => {
+    expect(worktreeCommand({ action: "bogus" as never })).toBe("Unknown worktree action: bogus")
+  })
+})
+
+describe("worktreeCommand error path", () => {
+  it("wraps git failures for create outside a repository", () => {
+    const out = worktreeCommand({ action: "create", path: path.join(tmp, "wt") })
+
+    expect(out.startsWith("Worktree error: ")).toBe(true)
+    expect(fs.existsSync(path.join(tmp, "wt"))).toBe(false)
+  })
+
+  it("wraps git failures for remove outside a repository", () => {
+    expect(worktreeCommand({ action: "remove", path: path.join(tmp, "wt") })).toMatch(/^Worktree error: /)
+  })
+})
+
+describe("worktreeCommand with a real repository", () => {
+  it("creates, lists and removes a worktree", ({ skip }) => {
+    if (!gitAvailable()) return skip()
+
+    const repo = freshDir("trayambak-worktree-repo-")
+    execSync("git init -q", { cwd: repo, stdio: "ignore" })
+    execSync(
+      "git -c commit.gpgsign=false -c user.email=test@example.com -c user.name=test commit -q --allow-empty -m init",
+      { cwd: repo, stdio: "ignore" },
+    )
+    process.chdir(repo)
+
+    const wtPath = path.join(freshDir("trayambak-worktree-sibling-"), "wt-clone")
+    const created = worktreeCommand({ action: "create", path: wtPath, branch: "wt-feature" })
+
+    expect(created).toBe(`Created worktree at ${wtPath} on branch wt-feature`)
+    expect(fs.existsSync(wtPath)).toBe(true)
+
+    const listed = worktreeCommand({ action: "list" })
+    expect(listed.split("\n").length).toBe(2)
+    // Git may print the worktree path with either separator; the leaf name
+    // and the branch marker are stable across both.
+    expect(listed).toContain("wt-clone")
+    expect(listed).toContain("[wt-feature]")
+    expect(listWorktrees().some((e) => e.branch === "wt-feature" && e.head)).toBe(true)
+
+    expect(worktreeCommand({ action: "remove", path: wtPath })).toBe(`Removed worktree at ${wtPath}`)
+    expect(fs.existsSync(wtPath)).toBe(false)
+    expect(worktreeCommand({ action: "list" })).not.toContain("[wt-feature]")
+  })
+
+  it("defaults the branch name when only a path is given", ({ skip }) => {
+    if (!gitAvailable()) return skip()
+
+    const repo = freshDir("trayambak-worktree-repo2-")
+    execSync("git init -q", { cwd: repo, stdio: "ignore" })
+    execSync(
+      "git -c commit.gpgsign=false -c user.email=test@example.com -c user.name=test commit -q --allow-empty -m init",
+      { cwd: repo, stdio: "ignore" },
+    )
+    process.chdir(repo)
+
+    const wtPath = path.join(freshDir("trayambak-worktree-sibling2-"), "wt-default")
+    const created = worktreeCommand({ action: "create", path: wtPath })
+
+    expect(created).toMatch(/^Created worktree at .+ on branch wt-[a-z0-9]+$/)
+    expect(worktreeCommand({ action: "remove", path: wtPath })).toBe(`Removed worktree at ${wtPath}`)
+  })
+})

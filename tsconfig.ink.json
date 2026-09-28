@@ -1,0 +1,29 @@
+﻿{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "outDir": "dist/packages/tui/src/ink-app-esm",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "jsx": "react-jsx",
+    "types": ["node"]
+    // NOTE: NO `incremental` here — this config EMITS to
+    // dist/.../ink-app-esm/packages/... and fix-esm-imports.js rm -rf's
+    // that deep tree after flattening it. Incremental skipped the re-emit
+    // (outputs "up to date" in buildinfo), so the flatten step found no
+    // source and the flat index.js never regenerated. --noCheck below (in
+    // build:ink) is the safe speedup: emit every run, typecheck separately
+    // via `npm run typecheck:ink`.
+  },
+  "include": ["packages/tui/src/ink-app/**/*.tsx", "packages/tui/src/ink-app/**/*.ts", "packages/tui/src/ui/theme.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

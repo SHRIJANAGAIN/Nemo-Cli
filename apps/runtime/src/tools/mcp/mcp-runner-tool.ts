@@ -1,0 +1,495 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { spawn, type ChildProcess } from "child_process"
+import * as readline from "readline"
+import { getConnectorRegistry } from "./registry.js"
+import type { McpServerSpec } from "../../../../../packages/mcp/src/index.js"
+import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
+import { textResult, type Tool, type ToolResult } from "../types.js"
+
+type JsonRpcRequest = { jsonrpc: "2.0"; id: number; method: string; params?: unknown }
+type JsonRpcResponse = { jsonrpc: "2.0"; id: number; result?: unknown; error?: { code: number; message: string } }
+
+export interface McpToolDefinition {
+  name: string
+  description?: string
+  inputSchema?: Record<string, unknown>
+}
+
+export class McpProcess {
+  readonly name: string
+  readonly spec: McpServerSpec
+  private child: ChildProcess | null = null
+  private rl: readline.Interface | null = null
+  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
+  private nextId = 1
+  private initialized = false
+  private stderrLines: string[] = []
+  private lastError: string = ""
+
+  constructor(name: string, spec: McpServerSpec) {
+    this.name = name
+    this.spec = spec
+  }
+
+  private get timeoutMs(): number {
+    return this.spec.timeoutMs ?? 60_000
+  }
+
+  async connect(): Promise<void> {
+    if (this.initialized) return
+    const init = {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "trayambak", version: "0.3.0" },
+    }
+    this.spawnStdio()
+    await this.request("initialize", init)
+    // Spec-required handshake (strict servers ignore calls until they see it).
+    if (this.child) {
+      try {
+        this.child.stdin!.write(
+          JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} }) + "\n",
+        )
+      } catch {
+        /* best effort */
+      }
+    }
+    this.initialized = true
+  }
+
+  async listTools(): Promise<McpToolDefinition[]> {
+    await this.connect()
+    const result = (await this.request("tools/list", {})) as { tools?: McpToolDefinition[] }
+    return result?.tools ?? []
+  }
+
+  async listResources(): Promise<Array<{ uri: string; name: string; mimeType?: string; description?: string }>> {
+    await this.connect()
+    try {
+      const result = (await this.request("resources/list", {})) as {
+        resources?: Array<{ uri: string; name: string; mimeType?: string; description?: string }>
+      }
+      return result?.resources ?? []
+    } catch {
+      return []
+    }
+  }
+
+  async listPrompts(): Promise<Array<{ name: string; description?: string }>> {
+    await this.connect()
+    try {
+      const result = (await this.request("prompts/list", {})) as {
+        prompts?: Array<{ name: string; description?: string }>
+      }
+      return result?.prompts ?? []
+    } catch {
+      return []
+    }
+  }
+
+  async status(): Promise<{
+    name: string
+    connected: boolean
+    transport: "stdio" | "http" | "disconnected"
+    initialized: boolean
+  }> {
+    const connected = this.child !== null && this.child.exitCode === null && !this.child.killed
+    let transport: "stdio" | "http" | "disconnected" = "disconnected"
+    if (connected) transport = "stdio"
+    return {
+      name: this.name,
+      connected,
+      transport,
+      initialized: this.initialized && connected,
+    }
+  }
+
+  async getPrompt(
+    name: string,
+    args?: Record<string, string>,
+  ): Promise<{ name: string; messages: Array<{ role: "user" | "assistant" | "system"; content: unknown }> } | null> {
+    await this.connect()
+    try {
+      const result = (await this.request("prompts/get", { name, arguments: args ?? {} })) as {
+        messages?: Array<{ role: "user" | "assistant" | "system"; content: unknown }>
+        prompt?: { messages?: Array<{ role: "user" | "assistant" | "system"; content: unknown }> }
+      }
+      const messages = result?.messages ?? result?.prompt?.messages
+      if (!messages) return null
+      return { name, messages }
+    } catch {
+      return null
+    }
+  }
+
+  async readResource(uri: string): Promise<string> {
+    await this.connect()
+    try {
+      const result = (await this.request("resources/read", { uri })) as {
+        contents?: Array<{ text?: string; blob?: string; mimeType?: string }>
+      }
+      if (result?.contents) {
+        return result.contents
+          .map((c) =>
+            typeof c.text === "string"
+              ? c.text
+              : typeof c.blob === "string"
+                ? `[binary ${c.mimeType ?? "blob"}]`
+                : JSON.stringify(c),
+          )
+          .join("\n")
+      }
+      return ""
+    } catch {
+      return ""
+    }
+  }
+
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    await this.connect()
+    return this.request("tools/call", { name, arguments: args })
+  }
+
+  close(): void {
+    const child = this.child
+    this.child = null
+    this.rl?.close()
+    this.rl = null
+    this.initialized = false
+    this.rejectAll(new Error(`MCP ${this.name} connection closed`))
+    if (child && child.exitCode === null && !child.killed) {
+      child.kill("SIGTERM")
+      const killer = setTimeout(() => {
+        try {
+          if (child.exitCode === null) child.kill("SIGKILL")
+        } catch {
+          /* already gone */
+        }
+      }, 2000)
+      if (typeof killer.unref === "function") killer.unref()
+    }
+  }
+
+  getStderrLines(): string[] {
+    return this.stderrLines
+  }
+
+  private spawnStdio(): void {
+    const spec = this.spec
+    const [cmd, ...args] = spec.command ?? []
+    if (!cmd) throw new Error(`MCP server '${this.name}' has no command`)
+
+    // No shell: argv passes straight through, so registry specs with
+    // spaces/metachars can't inject (the old shell:true mis-split them).
+    this.child = spawn(cmd, args, {
+      cwd: spec.cwd ?? process.cwd(),
+      env: { ...process.env, ...(spec.env ?? {}) },
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: false,
+      windowsHide: true,
+    })
+
+    this.rl = readline.createInterface({ input: this.child.stdout! })
+    this.rl.on("line", (line: string) => {
+      try {
+        const msg = JSON.parse(line) as { id?: number }
+        if (msg.id === undefined) return
+        const waiter = this.pending.get(msg.id)
+        if (!waiter) return
+        this.pending.delete(msg.id)
+        const resp = msg as JsonRpcResponse
+        if (resp.error) waiter.reject(new Error(`MCP ${this.name}: ${resp.error.message}`))
+        else waiter.resolve(resp.result)
+      } catch {
+        // ignore non-JSON lines
+      }
+    })
+
+    if (this.child.stderr) {
+      this.child.stderr.on("data", (data: Buffer) => {
+        const text = data.toString()
+        for (const line of text.split(/\r?\n/)) {
+          const trimmed = line.trim().slice(-500)
+          if (trimmed) this.stderrLines.push(trimmed)
+        }
+        // Bounded: a chatty server must not OOM a long session.
+        if (this.stderrLines.length > 50) {
+          this.stderrLines.splice(0, this.stderrLines.length - 50)
+        }
+      })
+    }
+
+    this.child.on("error", (err) => this.rejectAll(new Error(`MCP ${this.name} process error: ${err.message}`)))
+    this.child.on("exit", (code) => {
+      // Any exit invalidates the transport (stale handle reported
+      // connected:true and later calls hung on timeout).
+      const tail = this.stderrLines.slice(-5).join(" | ").slice(0, 500)
+      this.lastError = `exited with code ${code ?? "signal"}`
+      this.child = null
+      this.initialized = false
+      this.rejectAll(
+        new Error(`MCP ${this.name} exited with code ${code ?? "signal"}.${tail ? ` Server stderr: ${tail}` : ""}`),
+      )
+    })
+  }
+
+  private request(method: string, params: unknown): Promise<unknown> {
+    if (!this.child) throw new Error(`MCP '${this.name}' is not connected`)
+    const id = this.nextId++
+    return new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id)
+        reject(new Error(`MCP ${this.name}: timeout on '${method}'`))
+      }, this.timeoutMs)
+      this.pending.set(id, {
+        resolve: (v) => {
+          clearTimeout(timer)
+          resolve(v)
+        },
+        reject: (e) => {
+          clearTimeout(timer)
+          reject(e)
+        },
+      })
+      const payload: JsonRpcRequest = { jsonrpc: "2.0", id, method, params }
+      this.child!.stdin!.write(JSON.stringify(payload) + "\n")
+    })
+  }
+
+  private rejectAll(err: Error): void {
+    for (const [, waiter] of this.pending) waiter.reject(err)
+    this.pending.clear()
+  }
+}
+
+const mcpProcesses = new Map<string, McpProcess>()
+
+export function getMcpProcess(name: string, spec: McpServerSpec): McpProcess {
+  let process = mcpProcesses.get(name)
+  // Recreate on spec change (edited command/env used to stick silently).
+  if (process && JSON.stringify(process.spec) !== JSON.stringify(spec)) {
+    process.close()
+    mcpProcesses.delete(name)
+    process = undefined
+  }
+  if (!process) {
+    process = new McpProcess(name, spec)
+    mcpProcesses.set(name, process)
+  }
+  return process
+}
+
+export function createMcpRunnerTool(): Tool {
+  const definition: ToolDefinition = {
+    name: "trayambak__run_mcp",
+    description:
+      "Run an installed MCP server, list its tools, resources, and prompts, and invoke them. Use this to run and think with MCP servers.",
+    parameters: {
+      type: "object",
+      required: ["action"],
+      properties: {
+        action: {
+          type: "string",
+          enum: [
+            "list_tools",
+            "call_tool",
+            "connect",
+            "disconnect",
+            "status",
+            "list_resources",
+            "list_prompts",
+            "get_prompt",
+            "read_resource",
+          ],
+          description:
+            "Action: list_tools (list tools), call_tool (invoke), connect (start), disconnect (stop), status (health), list_resources (list resources), list_prompts (list prompts), get_prompt (get prompt), read_resource (read resource).",
+        },
+        server: {
+          type: "string",
+          description: "MCP server ID (e.g. sequential-thinking, github, filesystem).",
+        },
+        tool: {
+          type: "string",
+          description: "Tool name to invoke (for call_tool action).",
+        },
+        args: {
+          type: "object",
+          description: "Arguments to pass to the tool (for call_tool action).",
+        },
+        uri: {
+          type: "string",
+          description: "Resource URI (for read_resource action).",
+        },
+        name: {
+          type: "string",
+          description: "Prompt or resource name (for get_prompt / list_prompts actions).",
+        },
+      },
+    },
+  }
+
+  return {
+    definition,
+    async execute(_id, args, _signal, _update): Promise<ToolResult> {
+      const action = args.action as string
+      const serverId = args.server as string | undefined
+      if (action === "list_tools" || action === "connect" || action === "status") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const registry = getConnectorRegistry()
+        const entry = registry.get(serverId)
+        if (!entry)
+          return textResult(
+            `MCP server '${serverId}' not found in registry. Use trayambak__ToolSearch to find servers.`,
+            true,
+          )
+
+        const process = getMcpProcess(serverId, entry.spec)
+        try {
+          if (action === "connect") {
+            await process.connect()
+            return textResult(`Connected to MCP server '${serverId}'.`)
+          }
+
+          if (action === "status") {
+            const status = await process.status()
+            const lines = [
+              `MCP server '${serverId}' status:`,
+              `  connected: ${status.connected}`,
+              `  transport: ${status.transport}`,
+              `  initialized: ${status.initialized}`,
+            ]
+            return textResult(lines.join("\n"))
+          }
+
+          const tools = await process.listTools()
+          if (tools.length === 0) {
+            return textResult(`MCP server '${serverId}' is connected but exposes no tools.`)
+          }
+          const lines = tools.map((t) => `- ${t.name}: ${t.description ?? "(no description)"}`)
+          return textResult(`MCP server '${serverId}' tools:\n${lines.join("\n")}`)
+        } catch (err) {
+          const stderr = process.getStderrLines().slice(-5).join("\n")
+          const message = err instanceof Error ? err.message : String(err)
+          return textResult(`MCP ${serverId}: ${message}${stderr ? `\nServer stderr:\n${stderr}` : ""}`, true)
+        }
+      }
+
+      if (action === "call_tool") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const toolName = args.tool as string | undefined
+        const toolArgs = (args.args ?? {}) as Record<string, unknown>
+        if (!toolName) return textResult("Missing 'tool' parameter.", true)
+
+        const registry = getConnectorRegistry()
+        const entry = registry.get(serverId)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+
+        const process = getMcpProcess(serverId, entry.spec)
+        try {
+          const result = await process.callTool(toolName, toolArgs)
+          const text = ((result as { content?: Array<{ type?: string; text?: string }> }).content ?? [])
+            .map((c) => (c.type === "text" ? c.text : JSON.stringify(c)))
+            .join("\n")
+          return textResult(text || "(empty MCP result)")
+        } catch (err) {
+          const stderr = process.getStderrLines().slice(-5).join("\n")
+          const message = err instanceof Error ? err.message : String(err)
+          return textResult(
+            `MCP ${serverId}.${toolName}: ${message}${stderr ? `\nServer stderr:\n${stderr}` : ""}`,
+            true,
+          )
+        }
+      }
+
+      if (action === "disconnect") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const process = mcpProcesses.get(serverId)
+        if (!process) return textResult(`MCP server '${serverId}' is not running.`)
+        process.close()
+        mcpProcesses.delete(serverId)
+        return textResult(`Disconnected MCP server '${serverId}'.`)
+      }
+
+      if (action === "list_resources") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const registry = getConnectorRegistry()
+        const entry = registry.get(serverId)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        const process = getMcpProcess(serverId, entry.spec)
+        try {
+          const resources = await process.listResources()
+          if (resources.length === 0) return textResult(`MCP server '${serverId}' exposes no resources.`)
+          const lines = resources.map((r) => `- ${r.name}: ${r.uri}${r.mimeType ? ` (${r.mimeType})` : ""}`)
+          return textResult(`MCP server '${serverId}' resources:\n${lines.join("\n")}`)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return textResult(`MCP ${serverId} resources: ${message}`, true)
+        }
+      }
+
+      if (action === "list_prompts") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const registry = getConnectorRegistry()
+        const entry = registry.get(serverId)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        const process = getMcpProcess(serverId, entry.spec)
+        try {
+          const prompts = await process.listPrompts()
+          if (prompts.length === 0) return textResult(`MCP server '${serverId}' exposes no prompts.`)
+          const lines = prompts.map((p) => `- ${p.name}: ${p.description ?? "(no description)"}`)
+          return textResult(`MCP server '${serverId}' prompts:\n${lines.join("\n")}`)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return textResult(`MCP ${serverId} prompts: ${message}`, true)
+        }
+      }
+
+      if (action === "get_prompt") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const promptName = args.name as string | undefined
+        if (!promptName) return textResult("Missing 'name' parameter.", true)
+        const registry = getConnectorRegistry()
+        const entry = registry.get(serverId)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        const process = getMcpProcess(serverId, entry.spec)
+        try {
+          const promptArgs =
+            typeof args.args === "object" && args.args !== null ? (args.args as Record<string, string>) : undefined
+          const prompt = await process.getPrompt(promptName, promptArgs)
+          if (!prompt) return textResult(`Prompt '${promptName}' not found on server '${serverId}'.`, true)
+          const text = prompt.messages
+            .map((m) => `[${m.role}] ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
+            .join("\n")
+          return textResult(text || "(empty prompt)")
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return textResult(`MCP ${serverId} prompt: ${message}`, true)
+        }
+      }
+
+      if (action === "read_resource") {
+        if (!serverId) return textResult("Missing 'server' parameter.", true)
+        const uri = args.uri as string | undefined
+        if (!uri) return textResult("Missing 'uri' parameter.", true)
+        const registry = getConnectorRegistry()
+        const entry = registry.get(serverId)
+        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, true)
+        const process = getMcpProcess(serverId, entry.spec)
+        try {
+          const content = await process.readResource(uri)
+          return textResult(content || "(empty resource)")
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          return textResult(`MCP ${serverId} resource read: ${message}`, true)
+        }
+      }
+
+      return textResult(`Unknown action: ${action}.`, true)
+    },
+  }
+}

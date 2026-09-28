@@ -1,0 +1,110 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    // Fast compile: no .d.ts emit — nothing consumes it (package.json has
+    // no `types`/`main`, make-publish.mjs adds none, no tsconfig imports
+    // from dist/), and declaration emit was a real slice of every build.
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "jsx": "react"
+    // NOTE: NO `incremental` in this EMITTING config — incremental skips
+    // re-emitting "up-to-date" outputs, so any file deleted from dist/
+    // (fix-esm-imports rm -rf, manual clean) silently never came back.
+    // Fast typechecking lives in tsconfig.check.json (extends this,
+    // noEmit + incremental) used by `npm run typecheck`.
+  },
+  "include": [
+    "packages/cli/**/*.ts",
+    "packages/cli/**/*.tsx",
+    "packages/acp/**/*.ts",
+    "packages/sandbox/**/*.ts",
+    "packages/mcp-server/**/*.ts",
+    "packages/sdk/**/*.ts",
+    "packages/modes/**/*.ts",
+    "packages/approval/**/*.ts",
+    "packages/checkpoints/**/*.ts",
+    "packages/core/**/*.ts",
+    "packages/core/**/*.tsx",
+    "packages/coding-agent/**/*.ts",
+    "packages/coding-agent/**/*.tsx",
+    "packages/function/**/*.ts",
+    "packages/function/**/*.tsx",
+    "packages/mcp/**/*.ts",
+    "packages/mcp/**/*.tsx",
+    "packages/protocol/**/*.ts",
+    "packages/protocol/**/*.tsx",
+    "packages/provider/**/*.ts",
+    "packages/provider/**/*.tsx",
+    "packages/schema/**/*.ts",
+    "packages/schema/**/*.tsx",
+    "packages/server/**/*.ts",
+    "packages/server/**/*.tsx",
+    "packages/session-backends/**/*.ts",
+    "packages/session-backends/**/*.tsx",
+    "packages/telemetry/**/*.ts",
+    "packages/telemetry/**/*.tsx",
+    "packages/tui/src/index.ts",
+    "packages/tui/src/dialogs.ts",
+    "packages/tui/src/*.ts",
+    "packages/tui/src/tui.test.ts",
+    // This ink test is typechecked HERE (classic node resolution) rather
+    // than by tsconfig.ink-check.json: it imports ../../dialogs.js, which
+    // reaches the ESM ui barrel (packages/tui/src/ui/index.ts) whose
+    // extensionless relative imports are TS2835 errors under NodeNext.
+    // Every dep below is already part of this program, so this adds no
+    // new source surface — it only gets the test file itself checked.
+    "packages/tui/src/ink-app/utils/stringWidth.test.ts",
+    "packages/tui/src/notifications.ts",
+    "packages/tui/src/approval-notification.ts",
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "skt/**/*.ts",
+    "skt/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist/**/*",
+    "packages/tui/src/legacy-reference-tui/**/*",
+    "packages/tui/src/ui-legacy-main/**/*",
+    "packages/tui/src/components/**/*",
+    "packages/tui/src/logic/**/*",
+    "packages/tui/src/app/**/*",
+    "packages/tui/src/bottom_pane/**/*",
+    "packages/tui/src/chatwidget/**/*",
+    "packages/tui/src/tui/**/*",
+    "packages/tui.bak/**/*",
+    "packages/trayambak-ink/**/*",
+    "apps/vscode-extension/src/extension.ts",
+    "apps/runtime/src/tools/pentest/_smoketest.ts",
+    // NOTE: `**/*.test.ts` / `**/*.spec.ts` used to be excluded here.
+    // Tests are now typechecked (and emitted) with everything else —
+    // `npm run typecheck` must stay green over the test suite too.
+    "packages/tui/src/commands/**/*",
+    "packages/tui/src/slash-commands/**/*",
+    "packages/tui/src/notifications/**/*",
+    "packages/tui/src/streaming/**/*",
+    "packages/tui/src/exec_cell/**/*",
+    "packages/tui/src/history_cell/**/*",
+    "packages/tui/src/markdown_render/**/*",
+    "packages/tui/src/diff_render/**/*",
+    "packages/tui/src/render/**/*",
+    "packages/tui/src/repl/**/*",
+    "packages/tui/src/ink-app/**/*",
+    "packages/tui/src/ink-app-esm/**/*",
+    "**/*.spec.ts"
+  ]
+}

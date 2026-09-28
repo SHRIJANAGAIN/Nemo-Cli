@@ -1,0 +1,29 @@
+{
+  "name": "trayambak-vscode",
+  "displayName": "Trayambak",
+  "description": "Trayambak terminal agent in VS Code (sidebar webview + commands).",
+  "version": "0.7.0",
+  "publisher": "SKT-AI-LABS",
+  "license": "Apache-2.0",
+  "engines": { "vscode": "^1.84.0" },
+  "categories": ["AI", "Other"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": { "activitybar": [{ "id": "trayambak", "title": "Trayambak", "icon": "assets/icon.svg" }] },
+    "views": { "trayambak": [{ "id": "trayambak.sidebar", "name": "Trayambak" }] },
+    "commands": [
+      { "command": "trayambak.run", "title": "Trayambak: Run prompt" },
+      { "command": "trayambak.openWeb", "title": "Trayambak: Open web UI" }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.84.0",
+    "typescript": "^5.4.0",
+    "vitest": "2.1.9"
+  }
+}

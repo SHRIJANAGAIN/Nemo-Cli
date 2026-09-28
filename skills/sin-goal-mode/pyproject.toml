@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sin-goal-mode"
+version = "0.2.0"
+description = "OpenSIN-Code sin-goal-mode — Goal tracking with checkpoints, rollback, and progress reports (MCP + CLI)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "OpenSIN-Code" }]
+keywords = ["goal-tracking", "mcp", "sin-code", "checkpoint", "rollback"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "fastmcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[project.scripts]
+sin-goal-mode = "sin_goal_mode.server:main"
+# v0.2.0 — Standalone CLI shims for the 8 MCP tools. Sub-agents and shell
+# users can call these without spinning up the MCP server.
+goal-start = "sin_goal_mode.cli_shims.goal_start:main"
+goal-status = "sin_goal_mode.cli_shims.goal_status:main"
+goal-list = "sin_goal_mode.cli_shims.goal_list:main"
+goal-complete = "sin_goal_mode.cli_shims.goal_complete:main"
+goal-checkpoint = "sin_goal_mode.cli_shims.goal_checkpoint:main"
+goal-rollback = "sin_goal_mode.cli_shims.goal_rollback:main"
+goal-subtask = "sin_goal_mode.cli_shims.goal_subtask:main"
+goal-report = "sin_goal_mode.cli_shims.goal_report:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sin_goal_mode"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
