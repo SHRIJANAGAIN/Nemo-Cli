@@ -17,9 +17,10 @@
 # ignore-words-list = false positives ONLY: identifiers (afterAll, onText, amountIn),
 #   APIs/enums (AtMost, InstallIn), libraries (ratatui, iTerm), domain abbreviations
 #   (EHR, MAPE, BRIN, SOM, COO, OT), personal names (Skelton), non-English words
-#   (responde = Spanish, fulfilment = British English), and correct words codespell
+#   (responde = Spanish, fulfilment = British English, tha = Hindi
+#   transliteration in an App.tsx comment), and correct words codespell
 #   mis-flagged (trough, Tread, followings, statics).
 #   Genuine typos are fixed in the source, never added here.
 [codespell]
 skip = dist, node_modules, publish, coverage, package-lock.json, corpus.txt, power-prompt.ts, MEMORY.MD.archive, *.jsonl, ./.git
-ignore-words-list = afterall, amountin, atmost, awsome, bloc, blocs, brin, caf, coo, countin, currenty, datas, dne, donot, ehr, endcodes, followings, fulfilment, hel, homestate, installin, inout, isnt, iterm, loadin, mape, nd, oll, ontext, ot, pre-empt, ratatui, responde, rightt, shouldbe, skelton, som, statics, tread, trough, unparseable
+ignore-words-list = afterall, amountin, atmost, awsome, bloc, blocs, brin, caf, coo, countin, currenty, datas, dne, donot, ehr, endcodes, followings, fulfilment, hel, homestate, installin, inout, isnt, iterm, loadin, mape, nd, oll, ontext, ot, pre-empt, ratatui, responde, rightt, shouldbe, skelton, som, statics, tha, tread, trough, unparseable

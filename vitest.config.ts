@@ -66,28 +66,29 @@ export default defineConfig({
         "docs/**",
         "assets/**",
       ],
-      // Coverage floor, measured from `npm run test:coverage` on 2026-09-28:
-      //   repo   41.95 stmt / 73.16 branch / 50.54 func / 41.95 lines
-      //   core   57.42 stmt / 79.06 branch / 68.10 func / 57.42 lines
-      // Each figure is rounded down to leave about a point of headroom. These
-      // are a ratchet rather than a target: the number may only rise, so new
+      // Coverage floor, measured from `npm run test:coverage` on 2026-09-28
+      // after the live-side merge (both test suites in the tree):
+      //   repo   48.99 stmt / 74.61 branch / 60.77 func / 48.99 lines
+      //   core   79.09 stmt / 87.40 branch / 82.73 func / 79.09 lines
+      // Each figure sits ~2 points below the measured actual. These are a
+      // ratchet rather than a target: the number may only rise, so new
       // code has to land with tests or CI goes red. Recalibrate after every
       // merge or scope change by re-running `npm run test:coverage`.
       thresholds: {
-        statements: 41,
-        branches: 72,
-        functions: 50,
-        lines: 41,
+        statements: 47,
+        branches: 73,
+        functions: 59,
+        lines: 47,
         // packages/core holds the agent loop, approvals, hook runtime, budget
         // and sandbox — the security-critical spine, and the place a silent
         // regression would do the most damage. It is held to a higher bar than
         // the repository as a whole (AGENTS.md: "Coverage threshold: 42%
         // minimum across packages/core/src/**/*.ts").
         "packages/core/src/**": {
-          statements: 55,
-          branches: 77,
-          functions: 66,
-          lines: 55,
+          statements: 77,
+          branches: 85,
+          functions: 80,
+          lines: 77,
         },
       },
       // Still write the report when a test fails, so failures don't also
