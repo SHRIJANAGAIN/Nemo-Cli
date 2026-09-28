@@ -21,7 +21,7 @@ import { miniDiff } from "../text/diff-render.js"
 const definition: ToolDefinition = {
   name: "edit_file",
   description:
-    "Edit a file by replacing text. Provide old_string (unique in the file) and new_string. Set replace_all to change every occurrence. Exact matches win; when nothing matches exactly, a whitespace/unicode-tolerant unique match is accepted (indentation drift, trailing spaces, CRLF/LF, smart quotes). Fails if old_string is not found or is not unique (unless replace_all).",
+    "Edit a file by replacing text. Provide old_string (unique in the file) and new_string. Set replace_all to change every occurrence. Exact matches win; when nothing matches exactly, a whitespace/unicode-tolerant unique match is accepted (indentation drift, trailing spaces, CRLF/LF, smart quotes). Fails if old_string is not found or is not unique (unless replace_all). .git and .trayambak directories are read-only metadata: edits to them are rejected.",
   parameters: {
     type: "object",
     required: ["path", "old_string", "new_string"],
@@ -54,6 +54,8 @@ export function createEditFileTool(): Tool {
         let target: string
         try {
           target = resolveConstrainedPath(rawPath, ctx.cwd)
+          assertExternalDirectory(target, ctx.cwd)
+          assertMutablePath(target)
         } catch (error) {
           return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
         }
@@ -66,8 +68,6 @@ export function createEditFileTool(): Tool {
         }
 
         if (signal?.aborted) return textResult("aborted", true)
-        assertExternalDirectory(target, ctx.cwd)
-        assertMutablePath(target)
 
         if (!fs.existsSync(target)) return textResult(`File not found: ${rawPath}`, true)
 

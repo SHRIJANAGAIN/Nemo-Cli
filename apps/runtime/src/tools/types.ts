@@ -119,12 +119,35 @@ function cleanupOldTruncationFiles(): void {
 
 export { TRUNCATION_DIR }
 
+/**
+ * Workspace metadata that file tools may read but never write (create,
+ * modify, or delete). `.git` is the repository's trust anchor — `git/hooks`
+ * executes arbitrary code on commit — and `.trayambak` holds the agent's own
+ * state (sessions, commands, plans, credentials). Ported from Codex's
+ * protected metadata (`.git` / `.codex` / `.agents`), with one deliberate
+ * hardening: the segment must match *anywhere* in the path, not only as the
+ * top-level first component under a writable root, so nested repositories
+ * (`vendor/lib/.git`) are covered too. Matching is case-insensitive so
+ * `.GIT` cannot slip past on a case-sensitive host; `.github/`, `.gitkeep`
+ * and `sub/.gitignore` are segment-distinct and stay writable.
+ */
+const PROTECTED_METADATA_DIRS = [".git", ".trayambak"]
+
+/**
+ * Write-side gate: throws for paths the file tools may never mutate.
+ * Runs before the approval prompt — a doomed path must not consume a
+ * permission question (Codex checks patch safety the same way).
+ */
 export function assertMutablePath(filepath: string): void {
   const parts = filepath.split(/[\\/]/)
   const file = parts.at(-1)
   const dir = parts.at(-2)
   if (file === "agent-manager.json" && [".kilo", ".SKT AI LABS"].includes(dir ?? "")) {
     throw new Error("Do not edit Agent Manager state directly. Use the agent_manager tool.")
+  }
+  const folded = parts.map((seg) => seg.toLowerCase())
+  if (folded.some((seg) => PROTECTED_METADATA_DIRS.includes(seg))) {
+    throw new Error(`protected metadata: ${filepath} (.git and .trayambak are read-only to tools)`)
   }
 }
 

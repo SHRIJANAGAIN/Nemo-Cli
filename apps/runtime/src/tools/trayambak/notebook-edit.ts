@@ -6,7 +6,14 @@
 
 import * as fs from "fs"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext, resolveConstrainedPath } from "../types.js"
+import {
+  textResult,
+  type Tool,
+  type ToolContext,
+  resolveConstrainedPath,
+  assertExternalDirectory,
+  assertMutablePath,
+} from "../types.js"
 
 const definition: ToolDefinition = {
   name: "trayambak__NotebookEdit",
@@ -35,6 +42,8 @@ export function createNotebookEditTool(): Tool {
       let target: string
       try {
         target = resolveConstrainedPath(rawPath, ctx.cwd)
+        assertExternalDirectory(target, ctx.cwd)
+        assertMutablePath(target)
       } catch (err) {
         return textResult(`Access denied: ${err instanceof Error ? err.message : String(err)}`, true)
       }

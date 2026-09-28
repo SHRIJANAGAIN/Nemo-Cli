@@ -10,7 +10,7 @@
 import * as os from "os"
 import * as path from "path"
 import { describe, expect, it } from "vitest"
-import { resolveConstrainedPath } from "./types.js"
+import { assertMutablePath, resolveConstrainedPath } from "./types.js"
 
 const home = os.homedir()
 const outsideRoot = path.join(path.parse(home).root, "outside-root-xyz")
@@ -70,5 +70,37 @@ describe("resolveConstrainedPath credential protection", () => {
 
   it("leaves ordinary home files readable", () => {
     expect(resolveConstrainedPath(path.join(home, "README.md"), cwd)).toBe(path.join(home, "README.md"))
+  })
+
+  it("keeps protected metadata readable (the write gate lives on the write path)", () => {
+    expect(resolveConstrainedPath(path.join(cwd, ".git", "config"), cwd)).toBe(path.join(cwd, ".git", "config"))
+    expect(() => resolveConstrainedPath(path.join(cwd, ".trayambak", "config.json"), cwd)).not.toThrow()
+  })
+})
+
+describe("assertMutablePath protected metadata", () => {
+  it("denies .git and .trayambak segments anywhere in the path", () => {
+    expect(() => assertMutablePath("/w/.git/config")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("/w/src/.git/hooks/pre-commit")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("/w/.trayambak/session.json")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("C:\\w\\.trayambak\\plans\\p.json")).toThrow(/protected metadata/)
+  })
+
+  it("denies case-variant spellings of the metadata names", () => {
+    expect(() => assertMutablePath("/w/.GIT/config")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("/w/.Trayambak/x")).toThrow(/protected metadata/)
+  })
+
+  it("keeps segment look-alikes writable", () => {
+    // Segment-exact matching: prefix/extension cousins are ordinary files.
+    expect(() => assertMutablePath("/w/.github/workflows/ci.yml")).not.toThrow()
+    expect(() => assertMutablePath("/w/.gitkeep")).not.toThrow()
+    expect(() => assertMutablePath("/w/src/.gitignore")).not.toThrow()
+    expect(() => assertMutablePath("/w/.trayambakignore")).not.toThrow()
+    expect(() => assertMutablePath("/w/src/index.ts")).not.toThrow()
+  })
+
+  it("still blocks direct agent-manager.json state edits", () => {
+    expect(() => assertMutablePath("/w/.kilo/agent-manager.json")).toThrow(/agent_manager/)
   })
 })

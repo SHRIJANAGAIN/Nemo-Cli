@@ -20,7 +20,7 @@ import { syntaxNote } from "../diagnostics/tsc-diagnostics.js"
 const definition: ToolDefinition = {
   name: "write_file",
   description:
-    "Create or overwrite a file with the given content. Creates parent directories as needed. Use for new files or full rewrites.",
+    "Create or overwrite a file with the given content. Creates parent directories as needed. Use for new files or full rewrites. .git and .trayambak directories are read-only metadata: writes to them are rejected.",
   parameters: {
     type: "object",
     required: ["path", "content"],
@@ -45,6 +45,8 @@ export function createWriteFileTool(): Tool {
         let target: string
         try {
           target = resolveConstrainedPath(rawPath, ctx.cwd)
+          assertExternalDirectory(target, ctx.cwd)
+          assertMutablePath(target)
         } catch (error) {
           return textResult(`Access denied: ${error instanceof Error ? error.message : String(error)}`, true)
         }
@@ -57,8 +59,6 @@ export function createWriteFileTool(): Tool {
         }
 
         if (signal?.aborted) return textResult("aborted", true)
-        assertExternalDirectory(target, ctx.cwd)
-        assertMutablePath(target)
 
         fs.mkdirSync(path.dirname(target), { recursive: true })
         fs.writeFileSync(target, content, "utf8")
