@@ -27,6 +27,7 @@ state/thread_history_1.sqlite
 
 # Test/coverage artifacts
 coverage/
+.smoke-cov/
 
 # Dependencies
 node_modules/
@@ -49,6 +50,10 @@ backups/
 .smoke-tmp/
 .scratchpad/
 
+# One-off Windows batch helpers parked at the repo root (local convenience
+# only — never committed; the supported entry points are package.json scripts)
+*.bat
+
 # Prebuilt llama.cpp Windows binaries in bin/ (large, third-party;
 # see bin/README.md for provenance & how to obtain)
 bin/*.exe
@@ -67,6 +72,9 @@ bin/*.pdb
 .env.*
 *.pem
 *.key
+
+# Local license/key batches (live credentials — never commit, never push)
+data/
 
 # Corrupt-config forensics (kept locally, never committed)
 *.corrupt-*
