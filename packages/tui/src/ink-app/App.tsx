@@ -1806,15 +1806,31 @@ export const TrayambakApp = ({
             }
             addSystemMessage("Waiting up to ~60s for approval…", { persist: false })
             void pollGithubLogin({ serverUrl }).then((p) => {
-              addSystemMessage(
-                p.authorized
-                  ? `GitHub authorized as ${p.login ?? "you"} — /github issue <owner/repo#n> to read.`
-                  : `GitHub login failed — ${p.reason ?? "not approved"}.`,
-              )
+              if (p.authorized) {
+                // Persist the login so the system prompt names its operator
+                // (and /github status stays truthful across restarts).
+                const login = p.login ?? "github-user"
+                saveConfig({ githubLogin: login })
+                agentConfigRef.current = {
+                  ...(agentConfigRef.current ?? createAgentConfig(config ?? {})),
+                  githubLogin: login,
+                }
+                agentRef.current = null // rebuild next turn with the operator block
+                addSystemMessage(`GitHub authorized as ${p.login ?? "you"} — /github issue <owner/repo#n> to read.`)
+              } else {
+                addSystemMessage(`GitHub login failed — ${p.reason ?? "not approved"}.`)
+              }
             })
           })
         } else if (gsub === "logout") {
           void githubLogout({ serverUrl }).then((r) => {
+            if (r.ok) {
+              saveConfig({ githubLogin: undefined })
+              const next = { ...(agentConfigRef.current ?? createAgentConfig(config ?? {})) }
+              delete next.githubLogin
+              agentConfigRef.current = next
+              agentRef.current = null
+            }
             addSystemMessage(r.ok ? "GitHub logged out on this machine." : `Logout failed — ${r.reason ?? "unknown"}.`)
           })
         } else if (gsub === "status") {

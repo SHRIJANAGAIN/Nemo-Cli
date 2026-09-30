@@ -24,6 +24,7 @@ import {
 import { activationCheckKey, mintActivationKey } from "../../../apps/runtime/src/license.js"
 import { LicenseStore, defaultLicenseStorePaths } from "./license-store.js"
 import { GitHubOAuthStore, defaultOAuthPath } from "./github-oauth.js"
+import { recordJob } from "./github-jobs.js"
 import {
   AutofixLedger,
   autofixTick,
@@ -201,6 +202,7 @@ export const OPENAPI_SPEC = {
     "/admin/unbind": { post: { summary: "Free a license's machine binding (bearer-gated)" } },
     "/admin/licenses": { get: { summary: "List licenses, masked (bearer-gated)" } },
     "/admin/usage": { get: { summary: "Tail pentest usage telemetry (bearer-gated)" } },
+    "/admin/jobs": { get: { summary: "Tail GitHub job history (bearer-gated)" } },
     "/license/verify": { post: { summary: "Live license check (public, machine-bound)" } },
     "/license/activate": { post: { summary: "Bind a license to a machine (public)" } },
     "/license/mint-trial": { post: { summary: "Self-service 7-day trial, 1/machine (public, rate-limited)" } },
@@ -848,6 +850,14 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       return
     }
 
+    if (req.method === "GET" && pathname === "/admin/jobs") {
+      const tail = Number((req.url ?? "").split("tail=")[1] ?? 100)
+      const { readJobTail } = await import("./github-jobs.js")
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ jobs: readJobTail(Number.isFinite(tail) ? tail : 100) }))
+      return
+    }
+
     if (req.method === "POST" && req.url === "/webhooks/github") {
       // Fail closed: no secret configured means no webhooks accepted.
       const secret = process.env.GITHUB_WEBHOOK_SECRET ?? ""
@@ -1331,6 +1341,16 @@ async function runGithubJob(job: GithubJob, payload: unknown): Promise<string> {
     runError = err instanceof Error ? err.message : String(err)
   }
   const reply = selectJobReply(messages, runError, errorTexts)
+  // Durable job history: every run leaves a row (repo/issue/task-head/
+  // reply-head), independent of log rotation.
+  recordJob({
+    repo: job.repoFullName,
+    issue: job.issueNumber,
+    task: job.task,
+    messages: messages.length,
+    replyHead: reply,
+    ...(runError ? { error: runError } : {}),
+  })
   const shape = messages
     .map((m) => {
       const types = Array.isArray(m.content)

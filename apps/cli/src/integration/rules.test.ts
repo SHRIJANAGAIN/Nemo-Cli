@@ -127,8 +127,11 @@ describe("getRulesContextBlock", () => {
 
   it("returns an empty string when our tree has no rule files", () => {
     const block = getRulesContextBlock(project)
-    if (loadRules(project).every((rule) => !rule.path.startsWith(path.resolve(project)))) {
-      // Only meaningful when no ambient ancestor rules were found.
+    // Guard on finding NOTHING (ours or ambient): the block legitimately
+    // renders ancestor rules, and os.tmpdir() ancestors can gain an
+    // AGENTS.md at any time (a stray file above the temp dir would make an
+    // unconditional "empty" assertion fail for reasons outside this tree).
+    if (loadRules(project).length === 0) {
       expect(block.startsWith("## Project Rules")).toBe(false)
     }
   })

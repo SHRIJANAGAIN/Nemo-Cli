@@ -77,6 +77,15 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.0]
 
+### Fixed — test-suite order/load dependence (the audit's last open item)
+
+- `webbrowse.test.ts`: module-singleton browser session leaked across tests; added `resetWebBrowseSession()` and made every journey test seed its own state → passes under `--sequence.shuffle.tests`.
+- `hook-exec.test.ts`: programmatic hooks registered on the process-wide HookRuntime leaked into later tests (flipped config-hook denials to "Denied by a registered PreToolUse hook"); clear-before-each + order-safe `clear()` default test.
+- `healing.test.ts`: prevention-rule retrieval self-seeds and asserts membership, not journal position.
+- `rules.test.ts`: guard now skips when ANY ambient ancestor rule exists (a stray `AGENTS.md` above the temp dir broke it — environmental, not order).
+- `license.test.ts`: 13-bit mint rand made a 10-key batch flaky (~0.5% birthday collision); bounded-retry uniqueness assertion.
+- `evals`: `reportEvals` fixture no longer prints `FAIL b (missing)` into suite/CI logs (stdout captured, content asserted instead).
+
 ### Added — repo governance
 
 - `.github/CODEOWNERS` (protected areas + default review owner; placeholder handle to swap on push) and `.github/PULL_REQUEST_TEMPLATE.md` (AGENTS.md review checklist as PR gates).

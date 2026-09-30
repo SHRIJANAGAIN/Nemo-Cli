@@ -98,3 +98,10 @@ End users authorize from the TUI without ever handling tokens:
 3. CLI: `/github login` → browser opens the approve page → CLI polls and
    confirms. Then `/github issue <owner/repo#n>` reads through the server.
    `/github logout` forgets the token (also revocable in GitHub settings).
+   Login persists your username into the CLI config, so the agent's system
+   prompt always names its operator (GitHub login, license presence,
+   machine) — no anonymous runs.
+
+Every webhook job also appends one row to `data/github-jobs.jsonl`
+(repo/issue/task-head/reply-head/error) — inspect via
+`GET /admin/jobs?tail=100` (bearer). Server logs rotate; this doesn't.

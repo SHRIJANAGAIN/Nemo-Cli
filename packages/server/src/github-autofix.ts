@@ -274,7 +274,8 @@ export async function autofixTick(deps: AutofixTickDeps): Promise<AutofixTickRes
       `Workflow (in order): 1) read the issue with the github tool (read_issue). ` +
       `2) create branch ${branch} (create_branch). ` +
       `3) apply the smallest correct fix with write_file calls ON THAT BRANCH. ` +
-      `4) open a pull request (create_pr, head ${branch}) titled "Fix #${next.number}: <short>" describing the change. ` +
+      `4) attach any generated files/logs/artifacts to the same branch with write_file and link them in the PR body. ` +
+      `5) open a pull request (create_pr, head ${branch}) titled "Fix #${next.number}: <short>" describing the change + artifact links. ` +
       `Never commit to the default branch. If the issue is unclear or unactionable, say so plainly instead of guessing.`
     let reply = ""
     try {

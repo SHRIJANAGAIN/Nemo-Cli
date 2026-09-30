@@ -106,9 +106,15 @@ describe("verifyLicenseKey", () => {
   })
 
   it("minted random parts differ key to key (no sequential pattern)", () => {
-    const keys = new Set(
-      Array.from({ length: 10 }, () => mintActivationKey({ plan: "pentest", expDays: expDays() }, TEST_SECRET)),
-    )
+    // The mint's random field is 13 bits (8192 values, pinned by the shipped
+    // key layout), so a naive 10-key batch has a ~0.5% birthday-collision
+    // chance — enough to flake CI. Draw with a bounded retry: still proves
+    // 10 distinct keys ARE mintable (a degenerate/sequential RNG fails the
+    // size assertion), but no longer dies on an unlucky coin flip.
+    const keys = new Set<string>()
+    for (let i = 0; i < 200 && keys.size < 10; i += 1) {
+      keys.add(mintActivationKey({ plan: "pentest", expDays: expDays() }, TEST_SECRET))
+    }
     expect(keys.size).toBe(10)
   })
 })

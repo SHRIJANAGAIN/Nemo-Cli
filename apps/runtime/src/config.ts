@@ -203,6 +203,8 @@ export interface TrayambakConfig {
   autoupdate?: boolean | "notify"
   /** License key for gated toolsets (TRAYAMBAK_LICENSE_KEY). Absent = pentest stripped. Never logged. */
   licenseKey?: string
+  /** GitHub login from CLI OAuth (/github login). Display identity only — persisted so the system prompt can name the operator. Never a secret. */
+  githubLogin?: string
   /** License server base URL (TRAYAMBAK_LICENSE_SERVER). Default https://skt.sktailabs.in. Self-host to run your own registry. */
   licenseServerUrl?: string
 }
@@ -834,6 +836,12 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
     // logged/printed — same rule as apiKey). Dropped here, the gates go
     // blind, so this passthrough is load-bearing, not cosmetic.
     licenseKey: typeof cfg.licenseKey === "string" && cfg.licenseKey.length > 0 ? cfg.licenseKey : undefined,
+    // GitHub login: display identity (prompt + /github status), never a
+    // secret. Dropped here, the operator block goes blind.
+    githubLogin:
+      typeof cfg.githubLogin === "string" && cfg.githubLogin.trim().length > 0
+        ? cfg.githubLogin.trim().slice(0, 80)
+        : undefined,
     // License server URL: passthrough with the same care (never logged).
     licenseServerUrl:
       typeof cfg.licenseServerUrl === "string" && cfg.licenseServerUrl.trim().length > 0

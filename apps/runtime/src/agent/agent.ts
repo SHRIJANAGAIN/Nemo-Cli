@@ -24,7 +24,8 @@ import {
   type WireMessage,
 } from "../../../../packages/provider/src/index.js"
 import type { TrayambakConfig } from "../config.js"
-import { buildSystemPrompt } from "../prompt/power-prompt.js"
+import { buildSystemPrompt, buildOperatorBlock } from "../prompt/power-prompt.js"
+import { getMachineId } from "../license.js"
 import { Session } from "../session/session.js"
 import { createDefaultTools, buildOptionalTools, toolDefinitions, getContextBlock, type Tool } from "../tools/index.js"
 import { getSktContextBlock } from "../../../../skt/context.js"
@@ -283,6 +284,7 @@ export class Agent {
         nativeTools: this.config.nativeTools,
         tools: toolDefinitions(reorderedTools),
         memoryBlock: getContextBlock(),
+        operatorBlock: this.operatorBlock(),
         developerModeSuffix: this.developerMode.getSystemPromptSuffix(),
         modeSuffix: specialistBlock + modeSystemPromptSuffix(this.mode),
         sktBlock: getSktContextBlock(),
@@ -407,6 +409,23 @@ export class Agent {
     return this.sotaMode?.isEnabled() ?? false
   }
 
+  /** Operator identity for the system prompt (GitHub login, license
+   *  presence, machine prefix). Best-effort: identity must never break
+   *  construction — unknown fields simply read absent. */
+  private operatorBlock(): string {
+    let machineShortId: string | undefined
+    try {
+      machineShortId = getMachineId().slice(0, 8)
+    } catch {
+      machineShortId = undefined
+    }
+    return buildOperatorBlock({
+      githubLogin: this.config.githubLogin,
+      hasLicense: (this.config.licenseKey?.length ?? 0) > 0,
+      machineShortId,
+    })
+  }
+
   private refreshSystemPrompt(): void {
     const baseTools = this.developerMode.isEnabled() ? this.developerMode.reorderTools(this.tools) : this.tools
     const runTools = this.arsenal ? this.arsenal.resolveTools(baseTools) : baseTools
@@ -425,6 +444,7 @@ export class Agent {
         nativeTools: this.config.nativeTools,
         tools: toolDefinitions(runTools),
         memoryBlock: getContextBlock(),
+        operatorBlock: this.operatorBlock(),
         developerModeSuffix: this.developerMode.getSystemPromptSuffix(),
         modeSuffix: specialistBlock + modeSystemPromptSuffix(this.mode) + (this.goalStore?.context() ?? ""),
         selfImprovementBlock: this.selfImprovement?.context(),

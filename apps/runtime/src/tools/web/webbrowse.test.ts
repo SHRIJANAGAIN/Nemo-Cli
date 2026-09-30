@@ -24,7 +24,7 @@
 import { EventEmitter } from "node:events"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { ToolResult } from "../types.js"
-import { createWebBrowseTool } from "./webbrowse.js"
+import { createWebBrowseTool, resetWebBrowseSession } from "./webbrowse.js"
 
 type MockResponse = string | null | "res-error" | { status: number; headers?: Record<string, string>; body?: string }
 
@@ -181,10 +181,12 @@ function docsPage(): MockResponse {
 
 beforeEach(() => {
   net.reset()
+  resetWebBrowseSession()
 })
 
-// The browser session is a module-level singleton: guards that need an
-// empty session MUST run before any successful navigation below.
+// The browser session is a module-level singleton. Every test resets it
+// above, so guards get an empty session and journey tests seed exactly the
+// state they need — the file passes under any vitest test order.
 describe("web_browse guards (empty session)", () => {
   it("rejects refresh before any page is open", async () => {
     const tool = createWebBrowseTool()
@@ -275,16 +277,22 @@ describe("web_browse session journey", () => {
   })
 
   it("reports go_back as a no-op while only one history entry exists", async () => {
+    net.routes.set("/docs", docsPage())
     const tool = createWebBrowseTool()
+    await tool.execute("t1", { url: "https://docs.test/docs" }, undefined)
+    const requestsAfterSeed = net.requests.length
     const res = await tool.execute("t1", { url: "", action: "go_back" }, undefined)
     expect(res.isError).toBe(true)
     expect(firstText(res)).toBe("No previous pages in history.")
-    expect(net.requests).toEqual([])
+    expect(net.requests.length).toBe(requestsAfterSeed)
   })
 
   it("allows plain HTTP to loopback hosts and replays stored cookies", async () => {
+    // Seed: the docs page sets the sid cookie this test asserts on.
+    net.routes.set("/docs", docsPage())
     net.routes.set("/local", { status: 200, headers: { "content-type": "text/html" }, body: "<h1>Local</h1>" })
     const tool = createWebBrowseTool()
+    await tool.execute("t1", { url: "https://docs.test/docs" }, undefined)
     const res = await tool.execute("t1", { url: "http://127.0.0.1/local" }, undefined)
     expect(firstText(res)).toContain("HTTP 200 GET http://127.0.0.1/local")
     expect(firstText(res)).toContain("Local")
@@ -295,6 +303,8 @@ describe("web_browse session journey", () => {
     net.routes.set("/docs", docsPage())
     net.routes.set("/local", { status: 200, headers: { "content-type": "text/html" }, body: "<h1>Local</h1>" })
     const tool = createWebBrowseTool()
+    await tool.execute("t1", { url: "https://docs.test/docs" }, undefined)
+    await tool.execute("t1", { url: "http://127.0.0.1/local" }, undefined)
     const res = await tool.execute("t1", { url: "", action: "go_back" }, undefined)
     const text = firstText(res)
     expect(res.isError).toBe(false)
@@ -305,15 +315,22 @@ describe("web_browse session journey", () => {
   it("refresh re-requests the current url", async () => {
     net.routes.set("/docs", docsPage())
     const tool = createWebBrowseTool()
+    await tool.execute("t1", { url: "https://docs.test/docs" }, undefined)
+    const before = net.requests.length
     const res = await tool.execute("t1", { url: "", action: "refresh" }, undefined)
     expect(firstText(res)).toContain("HTTP 200 GET https://docs.test/docs")
+    expect(net.requests.length).toBe(before + 1)
   })
 
   it("follow_link navigates to an anchor captured from the raw html", async () => {
     // Explicit text/html: the string shorthand would default to text/plain,
-    // and links are only captured from html pages.
+    // and links are only captured from html pages. Set /guide first: the
+    // mock route table matches by substring, and the "/docs" needle would
+    // also hit "https://docs.test/guide" (the "//docs" fragment).
     net.routes.set("/guide", { status: 200, headers: { "content-type": "text/html" }, body: GUIDE_HTML })
+    net.routes.set("/docs", docsPage())
     const tool = createWebBrowseTool()
+    await tool.execute("t1", { url: "https://docs.test/docs" }, undefined)
     const res = await tool.execute("t1", { url: "", action: "follow_link", link_index: 0 }, undefined)
     const text = firstText(res)
     expect(res.isError).toBe(false)
@@ -323,11 +340,14 @@ describe("web_browse session journey", () => {
   })
 
   it("follow_link rejects out-of-range indices", async () => {
+    net.routes.set("/docs", docsPage())
     const tool = createWebBrowseTool()
+    await tool.execute("t1", { url: "https://docs.test/docs" }, undefined)
+    const requestsAfterSeed = net.requests.length
     const res = await tool.execute("t1", { url: "", action: "follow_link", link_index: -1 }, undefined)
     expect(res.isError).toBe(true)
     expect(firstText(res)).toBe("Link index -1 out of range (0-1).")
-    expect(net.requests).toEqual([])
+    expect(net.requests.length).toBe(requestsAfterSeed)
   })
 
   it("open_url merges extra session headers into later requests", async () => {

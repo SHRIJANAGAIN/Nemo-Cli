@@ -149,9 +149,22 @@ describe("Healing Framework: journal", () => {
   })
 
   it("retrieves prevention rules", () => {
+    // Self-seeding: the journal is a shared append-only file, so under a
+    // shuffled run another test's entry ("Manual review needed…") can sit at
+    // rules[0]. Log our own entry and assert membership, not position.
+    logHealingEntry({
+      bugId: "BUG-TEST-002",
+      targetType: "USER_CODE",
+      rootCause: "Retrieval test seed",
+      verifiedPatch: "const ok = true",
+      preventionRule: "Validate all patches before writing",
+      timestamp: new Date().toISOString(),
+      filePath: "test-file.ts",
+      lineNumber: 1,
+    })
     const rules = getPreventionRules()
     expect(rules.length).toBeGreaterThan(0)
-    expect(rules[0]).toContain("Validate all patches before writing")
+    expect(rules.some((rule) => rule.includes("Validate all patches before writing"))).toBe(true)
   })
 })
 

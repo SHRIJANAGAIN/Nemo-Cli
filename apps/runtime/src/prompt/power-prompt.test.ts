@@ -7,7 +7,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import { describe, expect, it } from "vitest"
-import { buildSystemPrompt } from "./power-prompt.js"
+import { buildOperatorBlock, buildSystemPrompt } from "./power-prompt.js"
 
 declare const __dirname: string
 
@@ -21,6 +21,20 @@ function ctx() {
 }
 
 describe("buildSystemPrompt senior upgrade", () => {
+  it("names its operator principal without leaking secrets", () => {
+    expect(buildOperatorBlock({})).toContain("## OPERATOR")
+    expect(buildOperatorBlock({})).toContain("not logged in")
+    const named = buildOperatorBlock({ githubLogin: "octocat", hasLicense: true, machineShortId: "abc12345" })
+    expect(named).toContain("@octocat")
+    expect(named).toContain("present")
+    expect(named).toContain("abc12345")
+    expect(named).not.toContain("1102-")
+    // Wired through: the section lands in the full prompt, bounded.
+    const full = buildSystemPrompt({ ...ctx(), operatorBlock: named })
+    expect(full).toContain("## OPERATOR")
+    expect(full.length).toBeLessThan(buildSystemPrompt(ctx()).length + 1000)
+  })
+
   it("carries the senior protocol and evidence-first conduct", () => {
     const prompt = buildSystemPrompt(ctx())
     expect(prompt).toContain("## Senior Protocol")

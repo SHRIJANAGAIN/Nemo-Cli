@@ -100,6 +100,13 @@ describe("license config", () => {
     expect(cfg.licenseKey ?? "").toBe("")
   })
 
+  it("passes githubLogin through overrides (display identity, never a secret)", () => {
+    const cfg = loadConfig({ provider: "nvidia", baseUrl: "", model: "", githubLogin: "octocat" })
+    expect(cfg.githubLogin).toBe("octocat")
+    const blank = loadConfig({ provider: "nvidia", baseUrl: "", model: "", githubLogin: "  " })
+    expect(blank.githubLogin).toBeUndefined()
+  })
+
   it("refuses pentest execution when the license server is unreachable (fail closed)", async () => {
     tmpMachineFile()
     const { createDefaultTools } = await import("./tools/index.js")

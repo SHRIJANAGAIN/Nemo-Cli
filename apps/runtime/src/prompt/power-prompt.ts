@@ -76,6 +76,10 @@ export interface SystemPromptContext {
   skillsBlock?: string
   /** Optional rules block from AGENTS.md, CLAUDE.md, or CONTEXT.md. */
   rulesBlock?: string
+  /** Optional operator identity block (who is driving: GitHub login,
+   *  license presence, machine). Rendered near the top so the model always
+   *  knows its principal. Values are display-only — never keys or tokens. */
+  operatorBlock?: string
 }
 
 /** Result of validating a [SystemPromptContext] before building the prompt. */
@@ -88,6 +92,24 @@ interface ValidationResult {
 
 /** Maximum character length for a tool description summary line. */
 const TOOL_BRIEF_MAX_LENGTH = 120
+
+/**
+ * Operator identity block: who is driving this run. Display-only values
+ * (login, license presence, machine prefix) — keys and tokens must NEVER
+ * flow here. Bounded (~300 chars) so the corpus lean-bounds test stays green.
+ */
+export function buildOperatorBlock(opts: {
+  githubLogin?: string
+  hasLicense?: boolean
+  machineShortId?: string
+}): string {
+  const lines = [
+    `- GitHub: ${opts.githubLogin ? `@${opts.githubLogin} (CLI OAuth login)` : "not logged in (/github login)"}`,
+    `- License: ${opts.hasLicense ? "present (verified live per use)" : "absent — devmode/pentest gated"}`,
+  ]
+  if (opts.machineShortId) lines.push(`- Machine: ${opts.machineShortId}`)
+  return `## OPERATOR (your principal — act in their interest)\n${lines.join("\n")}`
+}
 
 /**
  * Returns the current date in YYYY-MM-DD format for inclusion in the prompt header.
@@ -846,6 +868,9 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
 
   if (ctx.memoryBlock) {
     sections.push(ctx.memoryBlock, "")
+  }
+  if (ctx.operatorBlock) {
+    sections.push(ctx.operatorBlock, "")
   }
   if (ctx.skillsBlock) {
     sections.push(ctx.skillsBlock, "")

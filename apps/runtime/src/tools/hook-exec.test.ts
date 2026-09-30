@@ -48,6 +48,15 @@ function cfgWith(hooks: TrayambakConfig["hooks"]): TrayambakConfig {
   return { hooks, cwd: process.cwd() } as TrayambakConfig
 }
 
+// Order independence: the programmatic-layer tests below register handlers
+// on the process-wide HookRuntime singleton. Clearing it before every test
+// means a shuffled vitest run (sequence.shuffle) can never inherit a foreign
+// deny hook — previously a leaked `deny-bash` registration flipped whichever
+// config-hook test ran after it to "Denied by a registered PreToolUse hook."
+beforeEach(() => {
+  getHookRuntime().clear()
+})
+
 describe("runPreToolUseHooks", () => {
   it("passes through when no hooks match", async () => {
     const exec = stubExecutor(() => ({ stdout: "{}" }))
@@ -323,6 +332,14 @@ describe("programmatic HookRuntime layer", () => {
 
   it("clear() starts fresh — defaults are not re-seeded behind the caller", async () => {
     const runtime = getHookRuntime()
+    // Seed the once-per-process default hooks first (a shuffled run may put
+    // this test before every other runner): the assertion below is about
+    // re-seeding AFTER clear(), not about first-ever registration.
+    await runPreToolUseHooks(
+      cfgWith(undefined),
+      { toolName: "bash", args: {}, cwd: process.cwd() },
+      stubExecutor(() => ({ stdout: "{}" })),
+    )
     runtime.clear()
     const verdict = await runPreToolUseHooks(
       cfgWith(undefined),

@@ -247,7 +247,15 @@ const definition: ToolDefinition = {
   },
 }
 
-const session = createSession()
+let session = createSession()
+
+/** Drop cookies/history/pages and start a fresh browser session.
+ *  The session is a module singleton on purpose (cookies and navigation
+ *  history persist across tool rebuilds — documented tool behavior), so
+ *  tests use this to guarantee an empty session regardless of run order. */
+export function resetWebBrowseSession(): void {
+  session = createSession()
+}
 
 export function createWebBrowseTool(): Tool {
   return {
