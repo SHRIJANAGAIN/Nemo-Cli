@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
@@ -772,8 +772,15 @@ export function listThemes(): Theme[] {
   return themes
 }
 
+/** Pre-rebrand theme names that must keep RESOLVING — persisted configs and
+ *  TRAYAMBAK_THEME still name them, and an unknown name silently leaves the
+ *  default theme active (no error) — while never being displayed anywhere. */
+const LEGACY_THEME_ALIASES: Record<string, string> = {
+  kilo: "solar-stone",
+}
+
 export function setThemeByName(name: string): Theme | undefined {
-  const t = themes.find((x) => x.name === name)
+  const t = themes.find((x) => x.name === (LEGACY_THEME_ALIASES[name] ?? name))
   if (t && t !== active) {
     active = t
     version += 1

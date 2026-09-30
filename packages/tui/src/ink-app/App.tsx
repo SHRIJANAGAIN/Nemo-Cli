@@ -1,29 +1,26 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import React, { useEffect, useRef, useState, type ReactNode } from "react"
 import { Box, Text, render, useStdout } from "ink"
 import {
   loadSessions,
-  archiveSession,
-  loadConversation,
   createSession,
   appendConversation,
   updateConversationToolResult,
   endSession,
   deleteSession,
   renameSession,
-  titleFromConversation,
   DEFAULT_SESSION_NAME,
   type SessionEntry,
 } from "../../../../skt/9-session/session.js"
 import { Agent } from "../../../../apps/runtime/src/agent/agent.js"
 import type { Agent as AgentType } from "../../../../apps/runtime/src/agent/agent.js"
 import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
-import type { TaggedAgentEvent, AgentEventSink, AgentMessage } from "../../../protocol/src/index.js"
+import type { TaggedAgentEvent, AgentEventSink } from "../../../protocol/src/index.js"
 import {
   evaluatePermission,
   permissionSubject,
@@ -34,7 +31,6 @@ import {
 } from "../../../protocol/src/index.js"
 import { WelcomeScreen } from "./WelcomeScreen.js"
 import { MessageList } from "./MessageList.js"
-import { restoreMessages } from "./restore-messages.js"
 import { PromptInput } from "./PromptInput.js"
 import { Footer } from "./Footer.js"
 import { Spinner } from "./Spinner.js"
@@ -45,14 +41,22 @@ import { AgentPicker } from "./AgentPicker.js"
 import { WhichKey, type WhichKeyAction } from "./WhichKey.js"
 import { cycleMode, enterMode, exitMode, formatModeStack, isPermissionMode } from "./mode-stack.js"
 import { CTRL_C_EXIT_WINDOW_MS, resolveCtrlCPress } from "./keys.js"
-import { appendFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { formatKeymapMessage } from "../keybindings.js"
+import {
+  convertToAgentMessages,
+  createAgentConfig,
+  debugInputLog,
+  enableBracketedPaste,
+  useTerminalRows,
+  type TrayambakAppProps,
+} from "./app-bootstrap.js"
+import { createSessionPickerActions } from "./session-picker-actions.js"
+export { type TrayambakAppProps } from "./app-bootstrap.js"
 import { useAppInput } from "./useAppInput.js"
 import { onMouseScroll } from "./mouse-input.js"
 import { pageScrollOffset, scrollOffsetAfterGrowth, wheelScrollOffset } from "./scroll-math.js"
 import { useBorderPulse } from "./use-border-pulse.js"
-import { useThemeColors, rgbToHex } from "./themeColors.js"
+import { useThemeColors } from "./themeColors.js"
 import { ThemePicker } from "./ThemePicker.js"
 import { CommandPalette } from "./CommandPalette.js"
 import type { PaletteEntry } from "./command-palette.js"
@@ -64,6 +68,20 @@ import { pushRecent, toggleFavorite } from "./model-picker.js"
 import { Sidebar } from "./Sidebar.js"
 import type { SidebarTodo } from "./sidebar-data.js"
 import { saveConfig, loadConfig, cleanApiKey } from "../../../../apps/runtime/src/config.js"
+import {
+  serverActivateLicenseKey,
+  serverCanUsePentest,
+  serverMintTrial,
+  serverVerifyLicenseKey,
+} from "../../../../apps/runtime/src/license.js"
+import {
+  githubLoginStatus,
+  githubLogout,
+  openBrowser,
+  pollGithubLogin,
+  readGithubIssue,
+  startGithubLogin,
+} from "../../../../apps/runtime/src/github-auth.js"
 import { checkForUpdate } from "../../../../apps/runtime/src/update/auto-update.js"
 import { enhancePrompt } from "../../../../apps/runtime/src/prompt/enhance-prompt.js"
 import { generateChatTitle } from "../../../../apps/runtime/src/prompt/auto-title.js"
@@ -93,16 +111,6 @@ import type {
 import { SLASH_COMMANDS, formatSubagentTitle } from "./types.js"
 import { copyTextToClipboard, formatTranscript } from "./clipboard.js"
 
-/** Env-gated input tracer (TRAYAMBAK_DEBUG_INPUT=1): records exact stdin
- * bytes, key flags, and raw/tty state per keystroke to trayambak-input.log. */
-const debugInputLog = (line: string): void => {
-  if (process.env.TRAYAMBAK_DEBUG_INPUT !== "1") return
-  try {
-    appendFileSync(join(tmpdir(), "trayambak-input.log"), `${new Date().toISOString()} ${line}\n`)
-  } catch {
-    /* debug only */
-  }
-}
 import { createSubagentCard, finalizeSubagentCard, applyChildToolEvent, type SubagentRouting } from "./subagent-view.js"
 import { notifyTerminalActivity } from "./terminal-notify.js"
 import { slashCommandService } from "../../../../apps/cli/src/commands/slash-command.js"
@@ -121,157 +129,16 @@ import {
 } from "../../../provider/src/catalog.js"
 import { todoListForSession } from "../../../../apps/cli/src/commands/todo.js"
 import { g } from "./glyphs.js"
-
-function enableBracketedPaste(): () => void {
-  if (process.stdout.isTTY) {
-    process.stdout.write("\x1b[?2004h")
-    return () => {
-      if (process.stdout.isTTY) {
-        process.stdout.write("\x1b[?2004l")
-      }
-    }
-  }
-  return () => {}
-}
-
-export interface TrayambakAppProps {
-  config?: Partial<TrayambakConfig>
-  modelName?: string
-  permissionMode?: PermissionMode
-  onExit?: () => void
-  initialPrompt?: string
-}
-
-function createAgentConfig(partial: Partial<TrayambakConfig>): TrayambakConfig {
-  return {
-    baseUrl: partial.baseUrl ?? "http://localhost:8080",
-    model: partial.model ?? "trayambak",
-    apiKey: partial.apiKey ?? "",
-    // Provider must pass through: dropping it silently rebuilds every agent
-    // as NVIDIA (Agent defaults provider ?? "nvidia") — observed live as an
-    // HF login (router baseUrl + HF key + Llama model) failing with
-    // "NVIDIA API returned 401".
-    ...(partial.provider ? { provider: partial.provider } : {}),
-    ...(partial.reasoningEffort ? { reasoningEffort: partial.reasoningEffort } : {}),
-    cwd: partial.cwd ?? process.cwd(),
-    temperature: partial.temperature ?? 0.7,
-    topP: partial.topP ?? 0.9,
-    maxTokens: partial.maxTokens ?? 4096,
-    timeoutMs: partial.timeoutMs ?? 600_000,
-    shellCommand: partial.shellCommand ?? "bash -c",
-    maxOutputLines: partial.maxOutputLines ?? 2000,
-    maxOutputBytes: partial.maxOutputBytes ?? 256 * 1024,
-    maxTurns: partial.maxTurns ?? 64,
-    maxToolCalls: partial.maxToolCalls ?? 100,
-    maxDistinctToolCalls: partial.maxDistinctToolCalls ?? 1000,
-    toolCallRate: partial.toolCallRate ?? 2,
-    maxRetries: partial.maxRetries ?? 2,
-    retryDelayMs: partial.retryDelayMs ?? 750,
-    maxParallelToolCalls: partial.maxParallelToolCalls ?? 4,
-    nativeTools: partial.nativeTools ?? true,
-    toolsets: partial?.toolsets?.defaults?.length
-      ? partial.toolsets
-      : { defaults: ["core", "agentic", "ops", "tasks", "mcp", "skills"], disabled: [], platform: {} },
-    ...(partial.permissions ? { permissions: partial.permissions } : {}),
-  }
-}
-
-function convertToAgentMessages(msgs: TrayambakMessage[]): AgentMessage[] {
-  const result: AgentMessage[] = []
-  for (const msg of msgs) {
-    if (msg.role === "system") {
-      result.push({ role: "system", content: msg.content ?? "" })
-    } else if (msg.role === "user") {
-      result.push({ role: "user", content: msg.content ?? "" })
-    } else if (msg.role === "assistant") {
-      if (msg.toolCallId && msg.toolName) {
-        // UI tool-call row: rebuild the toolCall part + its result so the
-        // model keeps tool context across turns. Was: args JSON replayed as
-        // fake assistant prose, result dropped entirely — every turn the
-        // model lost all tool outputs.
-        let args: Record<string, unknown> = {}
-        try {
-          const parsed: unknown = JSON.parse(msg.content ?? "{}")
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            args = parsed as Record<string, unknown>
-          } else {
-            args = { value: parsed }
-          }
-        } catch {
-          args = { value: msg.content ?? "" }
-        }
-        result.push({
-          role: "assistant",
-          content: [{ type: "toolCall", id: msg.toolCallId, name: msg.toolName, arguments: args }],
-          stopReason: "tool_use",
-        })
-        if (msg.result !== undefined) {
-          result.push({
-            role: "tool",
-            toolCallId: msg.toolCallId,
-            toolName: msg.toolName,
-            content: [{ type: "text", text: msg.result }],
-            isError: msg.isError ?? false,
-          })
-        }
-      } else {
-        // Thinking rides along: dropping it (old code) lost reasoning
-        // context on every history rebuild (compact/retry/queue).
-        const parts: Array<{ type: "text"; text: string } | { type: "thinking"; text: string }> = []
-        if (msg.thinking) parts.push({ type: "thinking", text: msg.thinking })
-        parts.push({ type: "text", text: msg.content ?? "" })
-        result.push({
-          role: "assistant",
-          content: parts,
-          stopReason: "end_turn",
-        })
-      }
-    } else if (msg.role === "tool") {
-      if (msg.toolCallId && msg.toolName) {
-        result.push({
-          role: "tool",
-          toolCallId: msg.toolCallId,
-          toolName: msg.toolName,
-          content: [{ type: "text", text: msg.content ?? "" }],
-          isError: msg.isError ?? false,
-        })
-      }
-    }
-  }
-  return result
-}
-
-/**
- * Terminal ROWS for the root Box's fixed height (height={rows}) — the fix
- * for "width grows on resize but the frame never grows downward": Ink only
- * setWidth()s the root, so height="100%" resolved against nothing and the
- * frame hugged content instead of reaching the terminal bottom.
- *
- * Deliberately NOT ink's useWindowSize(): that hook also re-sets state on
- * COLUMN changes, re-rendering the whole tree after a width resize — a
- * second full-frame paint right behind resize-guard's blank+repaint and
- * Ink's own resized() write (smoke-resize-guard counts Welcome frames and
- * saw 2 instead of 1). Width re-flow is owned by the guard + Ink; React
- * only has to follow ROWS so the root Box grows/shrinks downward.
- */
-const useTerminalRows = (): number => {
-  const { stdout } = useStdout()
-  const [rows, setRows] = useState<number>(() => stdout?.rows || process.stdout?.rows || 24)
-  useEffect(() => {
-    if (!stdout) return undefined
-    const onResize = (): void => {
-      // 0/undefined rows (console reattach) → same fallback as ink's
-      // getWindowSize truthy check, never height={0}.
-      const next = stdout.rows || process.stdout?.rows || 24
-      setRows((prev) => (prev === next ? prev : next))
-    }
-    stdout.on("resize", onResize)
-    return () => {
-      stdout.removeListener("resize", onResize)
-    }
-  }, [stdout])
-  return rows
-}
+// Stateless provider/model helpers (extracted from this file for max-file-size).
+import {
+  fetchWarn,
+  providerHostFor,
+  providerLabelFor,
+  readStoredKey,
+  resolveModels,
+  themeToPickerOption,
+  writeStoredKey,
+} from "./provider-model-support.js"
 
 export const TrayambakApp = ({
   config,
@@ -428,15 +295,6 @@ export const TrayambakApp = ({
    *  the Ctrl+K q leader action — but nothing opens them by itself. */
   const [showPicker, setShowPicker] = useState(/*initial*/ false)
 
-  const themeToPickerOption = (theme: TrayambakTheme) => ({
-    name: theme.name,
-    label: theme.name
-      .split("-")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" "),
-    description: theme.dark ? "dark" : "light",
-    swatch: rgbToHex(theme.primary),
-  })
   const [showThemePicker, setShowThemePicker] = useState(() => !config?.themeName)
   const [showPalette, setShowPalette] = useState(/*initial*/ false)
   const [showModelPicker, setShowModelPicker] = useState(/*initial*/ false)
@@ -460,69 +318,6 @@ export const TrayambakApp = ({
   const [modelRecents, setModelRecents] = useState<string[]>(() => loadConfig().modelRecents ?? [])
   const [availableModels, setAvailableModels] = useState<string[] | null>(null)
   const [activeModel, setActiveModel] = useState<string>(() => config?.model ?? loadConfig().model ?? modelName)
-  /** Provider display info for the model picker (refreshes on /login + /provider use). */
-  const providerLabelFor = (id: string): string =>
-    getCatalogEntry(id)?.label ??
-    (
-      {
-        llamacpp: "llama.cpp",
-        nvidia: "NVIDIA",
-        "nvidia-nim": "NVIDIA NIM",
-        openai: "OpenAI",
-        xai: "xAI Grok",
-        huggingface: "Hugging Face",
-        anthropic: "Anthropic",
-        google: "Google",
-        ollama: "Ollama",
-        custom: "Custom endpoint",
-      } as Record<string, string>
-    )[id] ??
-    "NVIDIA NIM"
-  const providerHostFor = (baseUrl: string): string => {
-    try {
-      return new URL(baseUrl).host
-    } catch {
-      return baseUrl
-    }
-  }
-  /** Honest fetch suffix: silent fallbacks made stale lists look live. */
-  const fetchWarn = (error?: string): string => {
-    if (error === "auth") return ` — ${g("warn")} endpoint rejected the key (401); run /provider key with a fresh key`
-    if (error === "network") return ` — ${g("warn")} endpoint unreachable`
-    return ""
-  }
-
-  /** Cached live list for a backend (persisted on every successful fetch). */
-  const cachedModels = (providerId: string): string[] => {
-    const c = loadConfig().modelCache?.[providerId.toLowerCase()]
-    return Array.isArray(c) ? c.filter((m): m is string => typeof m === "string" && m.length > 0) : []
-  }
-  const rememberModels = (providerId: string, models: string[]): void => {
-    if (models.length === 0) return
-    try {
-      saveConfig({
-        modelCache: { ...(loadConfig().modelCache ?? {}), [providerId.toLowerCase()]: models.slice(0, 150) },
-      })
-    } catch {
-      /* cache must never break the flow */
-    }
-  }
-  /** live → cached-live → empty: never pad with the catalog's tiny static
-   *  list — a stale 5-row fallback masquerading as the full catalog was the
-   *  "why do I only see 5 models?" bug. Empty lets the picker say "No models
-   *  reported by this provider." honestly. Tag drives the one-line status. */
-  const resolveModels = (
-    providerId: string,
-    res: { models: string[]; source: "live" | "fallback"; error?: string },
-  ): { models: string[]; tag: string } => {
-    if (res.models.length > 0 && res.source === "live") {
-      rememberModels(providerId, res.models)
-      return { models: res.models, tag: "live" }
-    }
-    const cached = cachedModels(providerId)
-    if (cached.length > 0) return { models: cached, tag: `cached (${cached.length})${fetchWarn(res.error)}` }
-    return { models: [], tag: `no list${fetchWarn(res.error)}` }
-  }
   const [providerInfo, setProviderInfo] = useState(() => {
     const cfg = loadConfig()
     return { label: providerLabelFor(cfg.provider ?? "nvidia"), host: providerHostFor(cfg.baseUrl) }
@@ -539,30 +334,6 @@ export const TrayambakApp = ({
   const loginFlowRef = useRef<typeof loginFlow>(null)
   loginFlowRef.current = loginFlow
 
-  /** Per-backend key memory (config `providers[]`): switching backends must
-   *  not wipe saved keys — without this every switch reset the old backend
-   *  to keyless and the next turn 401d. Values are never printed. */
-  const readStoredKey = (providerId: string): { apiKey: string; baseUrl: string } => {
-    const found = loadConfig().providers?.find((p) => p.id === providerId || p.type === providerId)
-    return { apiKey: found?.apiKey ?? "", baseUrl: found?.baseUrl ?? "" }
-  }
-  const writeStoredKey = (providerId: string, apiKey: string, baseUrl: string): void => {
-    const cfg = loadConfig()
-    const entry = getCatalogEntry(providerId)
-    const arr = [...(cfg.providers ?? [])]
-    const norm = providerId.toLowerCase()
-    const idx = arr.findIndex((p) => (p.id ?? "").toLowerCase() === norm || (p.type ?? "").toLowerCase() === norm)
-    const row = {
-      id: providerId,
-      type: providerId,
-      label: entry?.label ?? providerId,
-      baseUrl,
-      apiKey: cleanApiKey(apiKey),
-    }
-    if (idx >= 0) arr[idx] = { ...arr[idx], ...row }
-    else arr.push(row)
-    saveConfig({ providers: arr.slice(0, 20) })
-  }
   /** Full persisted config snapshot — covers sidebar fields the boot prop may
    *  omit (contextWindow, mcpServers, cwd). */
   const [bootConfig] = useState(() => loadConfig())
@@ -662,10 +433,7 @@ export const TrayambakApp = ({
     }
   }
 
-  /** Slash-dispatch flag: while handleSlashCommand is on the stack, addSystemMessage defaults to a 10s TTL so command feedback clears itself — the same transientHidden mechanism as the mode notices (never spliced: message indices and the print-once frontier stay intact). Async continuations pass ttlMs explicitly; an explicit ttlMs always wins (0 opts out). */
-  const slashTtlRef = useRef(/*initialValue*/ false)
-
-  const addSystemMessage = (content: string, opts?: { persist?: boolean; ttlMs?: number }): void => {
+  const addSystemMessage = (content: string, opts?: { persist?: boolean; ttlMs?: number }): string => {
     const id = `sys-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     addMessage(
       {
@@ -682,16 +450,44 @@ export const TrayambakApp = ({
     // re-print scrollback. The flag makes the live frame skip the row while
     // array, indices, and the <Static> copy stay byte-identical (rows already
     // evicted keep their printed scrollback content — off-screen anyway).
-    // Slash default (flagged by runSlash): command feedback clears itself in
-    // 10s. Explicit ttlMs wins — 0 opts out (wizard prompts that say what to
-    // type next must stay on screen).
-    const ttlMs = opts?.ttlMs ?? (slashTtlRef.current ? 10_000 : undefined)
+    // DEFAULT 10s: EVERY system notice fades — slash feedback, switch and
+    // connect confirmations, queue/job notices, errors — so the transcript
+    // holds only the conversation itself. An explicit ttlMs always wins:
+    // 0 pins the prompts a user must read while input is pending (login
+    // wizard steps via addLoginRow, the question prompt, the custom-answer
+    // prompt).
+    const ttlMs = opts?.ttlMs ?? 10_000
     if (ttlMs && ttlMs > 0) {
       const timer = setTimeout(() => {
         setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, transientHidden: true } : m)))
       }, ttlMs)
       ;(timer as { unref?: () => void }).unref?.() // a pending notice never holds the process open
     }
+    return id
+  }
+
+  /** Login-wizard rows (/login + /provider guided connect) are step-scoped: a
+   *  prompt must stay on screen only while its step is live, then vanish —
+   *  "if cancelled hide, if completed hide". addLoginRow records each row id;
+   *  hideLoginRows flags them transientHidden (never spliced — same invariant
+   *  as the TTL path: message indices and the print-once frontier stay intact).
+   *  Every stage change and every flow terminal (cancel OR complete) calls
+   *  hideLoginRows(); the final notice rides its own 10s TTL so even the
+   *  outcome line fades away. */
+  const loginRowsRef = useRef<string[]>([])
+
+  const addLoginRow = (content: string, opts?: { persist?: boolean; ttlMs?: number }): void => {
+    // Step-scoped rows: pinned (ttlMs 0) so the global 10s default cannot
+    // drop a wizard question mid-flow — hideLoginRows() retires each row at
+    // stage changes and flow terminals. An explicit opts.ttlMs still wins.
+    loginRowsRef.current.push(addSystemMessage(content, { ttlMs: 0, ...opts }))
+  }
+
+  const hideLoginRows = (): void => {
+    const ids = new Set(loginRowsRef.current)
+    loginRowsRef.current = []
+    if (ids.size === 0) return
+    setMessages((prev) => prev.map((m) => (ids.has(m.id) ? { ...m, transientHidden: true } : m)))
   }
 
   /** AI auto-titles the chat: once the FIRST real reply lands (never on an
@@ -703,6 +499,11 @@ export const TrayambakApp = ({
    *  failures fall back to the prompt's own first words. Keyed per session
    *  id, so /newchat's fresh id re-arms it automatically. */
   const titledSessionIdRef = useRef<string | null>(null)
+  /** Re-render tick for the SILENT auto-title rename: the Sidebar's title
+   *  prop is read off currentSessionRef during render, and refs don't
+   *  trigger renders — a bump makes the new name appear without printing a
+   *  transcript row (titling is a background concern; no confirmation shown). */
+  const [, setTitleEpoch] = useState(0)
   const titleSessionFromChat = async (sid: string): Promise<void> => {
     const firstUser = (messages.find((m) => m.role === "user")?.content ?? "").trim()
     const firstReply = (
@@ -714,7 +515,9 @@ export const TrayambakApp = ({
         title = await generateChatTitle(`User: ${firstUser.slice(0, 600)}\nAssistant: ${firstReply.slice(0, 600)}`, {
           baseUrl: bootConfig.baseUrl,
           apiKey: bootConfig.apiKey,
-          model: bootConfig.model,
+          // Cheap-model parity (small_model): titles are background chores —
+          // use the cheap model when configured, else the run's own model.
+          model: bootConfig.small_model ?? bootConfig.model,
         })
       } catch {
         title = "" // provider down / odd shape → the prompt's own words below
@@ -727,10 +530,10 @@ export const TrayambakApp = ({
     if (currentSessionRef.current?.sessionId === sid) {
       currentSessionRef.current = { ...currentSessionRef.current, sessionName: title }
     }
-    // Transient confirmation that clears itself (same TTL as the mode
-    // notices); the setMessages it triggers also re-renders the Sidebar
-    // title, which reads sessionName off currentSessionRef.
-    addSystemMessage(`${g("star")} Session titled: ${title}`, { persist: false, ttlMs: 10_000 })
+    // Silent rename: no transcript row — titling runs in the background and
+    // shows nothing. The bump re-renders so the Sidebar title (read off
+    // currentSessionRef during render) picks the new name up immediately.
+    setTitleEpoch((n) => n + 1)
   }
   useEffect(() => {
     if (turnActive) return // wait for the exchange to settle before titling
@@ -1254,6 +1057,7 @@ export const TrayambakApp = ({
                 (request.multiSelect
                   ? "Type numbers separated by spaces (e.g. 1 3), or type 'other' for custom text."
                   : "Type a number (e.g. 1), or type 'other' for custom text."),
+              { ttlMs: 0 }, // input is pending — pinned until the question resolves
             )
           })
         },
@@ -1472,13 +1276,19 @@ export const TrayambakApp = ({
       void advanceLogin(raw)
       return
     }
+    // Question answers: capture-then-null the resolver BEFORE invoking it.
+    // A resolver may chain the NEXT question (devmode chooser → license
+    // paste) and re-set this ref; nulling after the call wiped the chained
+    // resolver — the next answer then resolved against a null ref (silent
+    // no-op: no unlock, no message, no menu). Same order as the Esc path.
     if (waitingCustom && pendingQuestion) {
       setWaitingCustom(/*waitingCustom*/ false)
       const q = pendingQuestion
       const answer = value.trim()
       setPendingQuestion(null)
-      questionResolverRef.current?.(answer.length > 0 ? (q.multiSelect ? [answer] : [answer]) : [])
+      const resolve = questionResolverRef.current
       questionResolverRef.current = null
+      resolve?.(answer.length > 0 ? (q.multiSelect ? [answer] : [answer]) : [])
       return
     }
     if (pendingQuestion) {
@@ -1488,25 +1298,27 @@ export const TrayambakApp = ({
       const defaultOpt = questionDefaultOptionRef.current
       if (input.length === 0) {
         setPendingQuestion(null)
+        const resolve = questionResolverRef.current
+        questionResolverRef.current = null
         if (mode === "choose" || mode === "both") {
           const idx = Math.min(defaultOpt - 1, q.options.length - 1)
-          questionResolverRef.current?.(q.multiSelect ? [] : [q.options[idx]?.label ?? ""])
+          resolve?.(q.multiSelect ? [] : [q.options[idx]?.label ?? ""])
         } else {
-          questionResolverRef.current?.([])
+          resolve?.([])
         }
-        questionResolverRef.current = null
         return
       }
       if (input === "other") {
         if (mode === "choose") return
         setWaitingCustom(/*waitingCustom*/ true)
-        addSystemMessage("Type your custom answer (press Enter to submit):")
+        addSystemMessage("Type your custom answer (press Enter to submit):", { ttlMs: 0 })
         return
       }
       if (mode === "type") {
         setPendingQuestion(null)
-        questionResolverRef.current?.(q.multiSelect ? [input] : [input])
+        const resolve = questionResolverRef.current
         questionResolverRef.current = null
+        resolve?.(q.multiSelect ? [input] : [input])
         return
       }
       const parts = input.split(/[\s,]+/).filter(Boolean)
@@ -1520,8 +1332,9 @@ export const TrayambakApp = ({
         }
       }
       setPendingQuestion(null)
-      questionResolverRef.current?.(q.multiSelect ? answers : [answers[0] ?? ""])
+      const resolve = questionResolverRef.current
       questionResolverRef.current = null
+      resolve?.(q.multiSelect ? answers : [answers[0] ?? ""])
       return
     }
     if (pendingAgentTypeRef.current && value.trim()) {
@@ -1696,9 +1509,7 @@ export const TrayambakApp = ({
         addSystemMessage(SLASH_COMMANDS.map((cmd) => `/${cmd.name} — ${cmd.description}`).join("\n"))
         break
       case "keymap":
-        addSystemMessage(
-          `Ctrl+D Abort turn  Ctrl+P Command palette (Ctrl+K P cycles permission mode)  Ctrl+C Interrupt (empty idle: again to exit)  Ctrl+K Which-Key menu  Ctrl+S Inject draft to front of queue  Ctrl+G Subagents panel  Ctrl+B Background panel  Ctrl+O Expand/collapse tool output  Shift+Tab Toggle plan mode  Ctrl+X Clear queued prompts  Ctrl+Z Undo Checkpoint  Ctrl+Y Redo Checkpoint  Ctrl+E Enhance prompt  Ctrl+R Edit last prompt`,
-        )
+        addSystemMessage(formatKeymapMessage())
         break
       case "enhance":
         // The composer intercepts /enhance to rewrite its buffer directly;
@@ -1902,8 +1713,11 @@ export const TrayambakApp = ({
           // Rule inspector: there was no way to SEE effective rules in-TUI,
           // so stale config denies (e.g. a legacy write_file/edit_file deny)
           // silently overruled every mode including full-access — "permission
-          // stays ASK". Precedence: session > config > default; within a
-          // layer deny beats allow; force-ask prompts unless full-access.
+          // stays ASK". Precedence: full-access bypasses all; auto-approve
+          // skips stock defaults (only deletes + your own session/config
+          // rules gate); other modes: session > config > default, deny
+          // beats allow within a layer; force-ask prompts unless
+          // full-access (auto-approve: deletes only).
           const fmt = (r: { tool: string; pattern?: string; action: string; reason?: string }): string =>
             `${r.action.toUpperCase()} ${r.tool} → ${r.pattern ?? "*"}${r.reason ? ` (${r.reason})` : ""}`
           const session = getSessionPermissionRules()
@@ -1918,7 +1732,7 @@ export const TrayambakApp = ({
             /* unreadable config shows as empty below */
           }
           const lines = [
-            `Mode: ${state.current.toUpperCase()} (force-ask rules still prompt unless full-access)`,
+            `Mode: ${state.current.toUpperCase()} (full-access: nothing blocks · auto-approve: only deletes + your own rules gate)`,
             `Session rules (${session.length}):${session.length > 0 ? "" : " none"}`,
             ...session.map((r) => `  • ${fmt(r)}`),
             `Config rulesV2 (${cfgRulesV2.length}):${cfgRulesV2.length > 0 ? "" : " none"}`,
@@ -1949,15 +1763,99 @@ export const TrayambakApp = ({
         }
         break
       }
-      case "gate":
-        addSystemMessage(
-          args === "on"
-            ? "Streaming gate enabled."
-            : args === "off"
-              ? "Streaming gate disabled."
-              : "Usage: /gate on|off|status",
-        )
+      case "gate": {
+        // Real state instead of the old echo: gateEnabled lives in
+        // developerMode (the engine reads it via isGateEnabled()), so
+        // "status" is truthful and the /devmode menu has something to
+        // actually mention. A bare /gate shows status, not usage.
+        const garg = args.trim().toLowerCase()
+        if (garg === "on" || garg === "off") {
+          const developerMode = { ...loadConfig().developerMode, gateEnabled: garg === "on" }
+          saveConfig({ developerMode })
+          agentConfigRef.current = { ...(agentConfigRef.current ?? createAgentConfig(config ?? {})), developerMode }
+          agentRef.current = null // rebuild next turn so the engine picks the flag up
+          addSystemMessage(`Streaming gate ${garg === "on" ? "enabled" : "disabled"} (saved).`)
+        } else if (garg === "status" || garg === "") {
+          const on = loadConfig().developerMode?.gateEnabled === true
+          addSystemMessage(`Streaming gate: ${on ? "ON" : "OFF"} (/gate on|off).`, { persist: false })
+        } else {
+          addSystemMessage("Usage: /gate on|off|status")
+        }
         break
+      }
+      case "github": {
+        // CLI ↔ VPS ↔ GitHub authorize loop: login hands the user a browser
+        // URL (server-bound to this machine), status/logout manage it, and
+        // issue reads an issue + comments through the stored user token.
+        const gparts = args.trim().split(/\s+/).filter(Boolean)
+        const gsub = (gparts[0] ?? "").toLowerCase()
+        const serverUrl = loadConfig().licenseServerUrl
+        if (gsub === "login") {
+          addSystemMessage("Asking the server for a GitHub authorize URL…")
+          void startGithubLogin({ serverUrl }).then((s) => {
+            if (!s.ok || !s.url) {
+              addSystemMessage(`GitHub login unavailable — ${s.reason ?? "unknown error"}.`)
+              return
+            }
+            // Browser first (seconds, no copy-paste): fall back to the
+            // printed URL only where no browser can open (SSH/headless).
+            if (openBrowser(s.url)) {
+              addSystemMessage("Browser me GitHub authorize page khol di — Approve dabao, CLI khud pakad lega…")
+            } else {
+              addSystemMessage(`Open this URL in your browser to authorize:\n${s.url}`)
+            }
+            addSystemMessage("Waiting up to ~60s for approval…", { persist: false })
+            void pollGithubLogin({ serverUrl }).then((p) => {
+              addSystemMessage(
+                p.authorized
+                  ? `GitHub authorized as ${p.login ?? "you"} — /github issue <owner/repo#n> to read.`
+                  : `GitHub login failed — ${p.reason ?? "not approved"}.`,
+              )
+            })
+          })
+        } else if (gsub === "logout") {
+          void githubLogout({ serverUrl }).then((r) => {
+            addSystemMessage(r.ok ? "GitHub logged out on this machine." : `Logout failed — ${r.reason ?? "unknown"}.`)
+          })
+        } else if (gsub === "status") {
+          void githubLoginStatus({ serverUrl }).then((st) => {
+            addSystemMessage(
+              st.authorized ? `GitHub: authorized as ${st.login ?? "you"}.` : "GitHub: not logged in (/github login).",
+              { persist: false },
+            )
+          })
+        } else if (gsub === "issue") {
+          // Forms: /github issue owner/repo#12 · /github issue owner/repo 12
+          const rest = gparts.slice(1).join(" ")
+          const m = rest.match(/^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([^/\s]+\/[^/\s#]+)(?:#(\d+)|\s+(\d+))?$/)
+          const repo = (m?.[1] ?? "").replace(/\.git$/, "")
+          const num = Number(m?.[2] ?? m?.[3] ?? "")
+          if (!repo || !Number.isFinite(num) || num < 1) {
+            addSystemMessage("Usage: /github issue <owner/repo#n> — e.g. /github issue SHRIJANAGAIN/SKT-AMD-FILES#1")
+            break
+          }
+          addSystemMessage(`Reading ${repo}#${num} via the server…`, { persist: false })
+          void readGithubIssue(repo, num, { serverUrl }).then((r) => {
+            if (!r.ok || !r.issue) {
+              addSystemMessage(`GitHub read failed — ${r.reason ?? "unknown"}.`)
+              return
+            }
+            const iss = r.issue
+            const comments = (r.comments ?? [])
+              .slice(-5)
+              .map((c) => `\n— ${c.author}:\n${c.body.slice(0, 500)}`)
+              .join("\n")
+            addSystemMessage(
+              `#${iss.number} [${iss.state}] ${iss.title}\n${iss.author} · ${iss.url}\n---\n${iss.body.slice(0, 3000) || "(empty)"}${
+                comments ? `\n--- recent comments ---${comments}` : ""
+              }`,
+            )
+          })
+        } else {
+          addSystemMessage("Usage: /github login|logout|status|issue <owner/repo#n>")
+        }
+        break
+      }
       case "status":
         // Transient like /mode: a status readout must not bloat the log or
         // feed the model its own status chatter every time it runs.
@@ -1975,14 +1873,15 @@ export const TrayambakApp = ({
         // No key on a key-gated backend: the fetch would 401 into the tiny
         // static list — ask for the key instead of opening a dead picker.
         if (entry?.needsApiKey && !cfg.apiKey) {
+          hideLoginRows()
           setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: cfg.baseUrl, apiKey: "", models: null })
-          addSystemMessage(
+          addLoginRow(
             `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
             { persist: false, ttlMs: 0 },
           )
           break
         }
-        addSystemMessage(`Fetching models for ${providerLabelFor(prov)}…`, { persist: false })
+        addSystemMessage(`Fetching models for ${providerLabelFor(prov)}…`, { persist: false, ttlMs: 10_000 })
         void fetchModelsDetailed(prov, cfg.baseUrl, cfg.apiKey).then((res) => {
           const { models, tag } = resolveModels(prov, res)
           setAvailableModels(models)
@@ -2051,8 +1950,9 @@ export const TrayambakApp = ({
           } else {
             const base = (cfg.provider ?? "").toLowerCase() === id ? cfg.baseUrl : entry.defaultBaseUrl
             if (entry.needsApiKey && !sameKey) {
+              hideLoginRows()
               setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: base, apiKey: "", models: null })
-              addSystemMessage(
+              addLoginRow(
                 `${g("prompt")} ${entry.label}: enter API key (models fetch + chooser follow). Esc to abort.`,
                 {
                   persist: false,
@@ -2073,14 +1973,15 @@ export const TrayambakApp = ({
             const key = (cfg.provider ?? "").toLowerCase() === id ? cfg.apiKey : ""
             const isActive = (cfg.provider ?? "").toLowerCase() === id
             if (isActive && entry.needsApiKey && !key) {
+              hideLoginRows()
               setLoginFlow({ stage: "apiKey", providerId: id, baseUrl: base, apiKey: "", models: null })
-              addSystemMessage(
+              addLoginRow(
                 `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
                 { persist: false, ttlMs: 0 },
               )
               break
             }
-            addSystemMessage(`Fetching models for ${entry.label}…`, { persist: false })
+            addSystemMessage(`Fetching models for ${entry.label}…`, { persist: false, ttlMs: 10_000 })
             void fetchModelsDetailed(id, base, key).then((res) => {
               if (isActive) {
                 // Active backend → straight into the chooser, no text dump.
@@ -2125,7 +2026,7 @@ export const TrayambakApp = ({
                 `/${entry.id} needs an API key: /provider add ${entry.id} <apikey>${entry.needsBaseUrl ? " [baseUrl]" : ""} — or /provider add for the guided flow.`,
               )
             } else {
-              addSystemMessage(`Fetching models for ${entry.label}…`, { persist: false })
+              addSystemMessage(`Fetching models for ${entry.label}…`, { persist: false, ttlMs: 10_000 })
               void fetchModelsDetailed(entry.id, base, key).then((res) => {
                 const { models, tag } = resolveModels(entry.id, res)
                 if (models.length === 0) {
@@ -2133,8 +2034,9 @@ export const TrayambakApp = ({
                   // without /v1/models): stay switched, ask for an explicit
                   // id like VS Code's custom provider config.
                   applyProviderSwitch(entry.id, "", base, key, [])
+                  hideLoginRows()
                   setLoginFlow({ stage: "model", providerId: entry.id, baseUrl: base, apiKey: key, models: [] })
-                  addSystemMessage(`${g("ok")} ${entry.label} connected at ${base} — type the exact model id to use.`, {
+                  addLoginRow(`${g("ok")} ${entry.label} connected at ${base} — type the exact model id to use.`, {
                     persist: false,
                     ttlMs: 0,
                   })
@@ -2479,21 +2381,290 @@ export const TrayambakApp = ({
           addSystemMessage("Type /forget confirm to clear the session history.")
         }
         break
-      case "goal":
-        addSystemMessage("Goal management: /goal <set|show|clear> <text>")
+      case "goal": {
+        // `args` is the raw tail string (runSlash passes a string, not
+        // tokens) — split it instead of casting it to an array.
+        const tokens = args.split(/\s+/).filter(Boolean)
+        const goal = tokens[0] ?? "show"
+        if (goal === "set") addSystemMessage(`Goal set: ${tokens.slice(1).join(" ")}`)
+        else if (goal === "clear") addSystemMessage("Goal cleared.")
+        else addSystemMessage("Goal management: /goal <set|show|clear> <text>")
         break
-      case "refine":
+      }
+      case "refine": {
         addSystemMessage("Refining last response with self-improvement lessons...")
         break
-      case "expand":
+      }
+      case "expand": {
         addSystemMessage("Expanding last tool result to full view...")
         break
-      case "mcp":
-        addSystemMessage("MCP servers: configured via .trayambak/config.json")
+      }
+      case "mcp": {
+        const mcpCmd = args[0] ?? "list"
+        if (mcpCmd === "list") addSystemMessage("MCP servers: configured via .trayambak/config.json")
+        else if (mcpCmd === "add") addSystemMessage("Add an MCP server: /mcp add <name> <url>")
+        else if (mcpCmd === "remove") addSystemMessage("Remove an MCP server: /mcp remove <name>")
+        else addSystemMessage("MCP servers: configured via .trayambak/config.json")
         break
-      case "devmode":
-        addSystemMessage(`Developer mode: ${config?.developerMode ? "ON" : "OFF"}`, { ttlMs: 10_000 })
+      }
+      case "devmode": {
+        // Bare /devmode toggles ON<->OFF; turning ON opens the pentest
+        // enable/disable menu (the "gate" line in it is the /gate state).
+        // Both writes persist to config AND patch agentConfigRef + null
+        // agentRef, so the next message rebuilds the agent with the new
+        // toolsets/engine flags — no restart needed.
+        const darg = args.trim().toLowerCase()
+        const devSnapshot = (): { enabled: boolean; gate: boolean; pentest: boolean } => {
+          const c = loadConfig()
+          return {
+            enabled: c.developerMode?.enabled === true,
+            gate: c.developerMode?.gateEnabled === true,
+            pentest: !(c.toolsets?.disabled ?? []).includes("pentest"),
+          }
+        }
+        const syncAgentConfig = (patch: Partial<TrayambakConfig>): void => {
+          agentConfigRef.current = { ...(agentConfigRef.current ?? createAgentConfig(config ?? {})), ...patch }
+          agentRef.current = null // rebuild on the next run (same pattern as a model switch)
+        }
+        const setDevEnabled = (enabled: boolean): void => {
+          const developerMode = { ...loadConfig().developerMode, enabled }
+          saveConfig({ developerMode })
+          syncAgentConfig({ developerMode })
+        }
+        const applyPentest = async (wantOn: boolean): Promise<void> => {
+          // License gate (server-side): enabling pentest needs a LIVE-valid
+          // license on this machine. Disabling always works. The tool
+          // assembly (createDefaultTools) enforces the same gate per
+          // execution, so this menu can never promise what the loop withholds.
+          if (wantOn) {
+            const cfg = loadConfig()
+            const v = await serverCanUsePentest(cfg.licenseKey, { serverUrl: cfg.licenseServerUrl })
+            if (v.valid !== true) {
+              addSystemMessage(
+                `Pentest tools stay DISABLED — ${v.reason ?? "no valid license"}. Bind a key: /devmode on 1102-XXXX-XXXX-XXXX.`,
+              )
+              return
+            }
+          }
+          const c = loadConfig()
+          const defaults = c.toolsets?.defaults?.length
+            ? c.toolsets.defaults
+            : ["core", "agentic", "ops", "tasks", "mcp", "skills"]
+          const cur = c.toolsets?.disabled ?? []
+          const disabled = wantOn
+            ? cur.filter((t) => t !== "pentest")
+            : cur.includes("pentest")
+              ? cur
+              : [...cur, "pentest"]
+          const toolsets = {
+            defaults,
+            disabled,
+            ...(c.toolsets?.platform ? { platform: c.toolsets.platform } : {}),
+          }
+          saveConfig({ toolsets })
+          syncAgentConfig({ toolsets })
+          addSystemMessage(
+            wantOn
+              ? `${g("ok")} Pentest tools ENABLED — the model gets trayambak__Pentest* + the 83-tool catalog from its next message (defensive guard for infrastructure, never exploitation).`
+              : `${g("ok")} Pentest tools DISABLED — the pentest toolset no longer reaches the model.`,
+            { ttlMs: 10_000 },
+          )
+        }
+        const openPentestMenu = (): void => {
+          const s = devSnapshot()
+          const qid =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `devmode-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+          const request: QuestionRequest = {
+            id: qid,
+            header: "Devmode · Pentest",
+            question:
+              `Pentest tools: ${s.pentest ? "ENABLED" : "DISABLED"} · Gate: ${s.gate ? "ON" : "OFF"} (/gate on|off). ` +
+              "Defensive guard for infrastructure only — never exploitation. Enable or disable the pentest suite?",
+            options: [
+              {
+                label: "Enable pentest tools",
+                description: "Model sees trayambak__Pentest* (83-tool security catalog)",
+              },
+              { label: "Disable pentest tools", description: "Hide the pentest toolset from the model" },
+              { label: "Cancel", description: "Keep the current setting" },
+            ],
+            multiSelect: false,
+          }
+          questionResolverRef.current = (answers: string[]): void => {
+            const choice = (answers[0] ?? "").trim().toLowerCase()
+            if (choice === "1" || choice.startsWith("enable")) {
+              void applyPentest(/*wantOn*/ true)
+            } else if (choice === "2" || choice.startsWith("disable")) {
+              void applyPentest(/*wantOn*/ false)
+            } else {
+              addSystemMessage(
+                `Pentest menu closed — pentest tools remain ${devSnapshot().pentest ? "ENABLED" : "DISABLED"}.`,
+                {
+                  ttlMs: 10_000,
+                },
+              )
+            }
+          }
+          setPendingQuestion(request)
+        }
+        const s = devSnapshot()
+        // License-key unlock: `/devmode on 1102-XXXX-XXXX-XXXX` ACTIVATES the
+        // code on this machine (server binds key→machine, 1-machine limit)
+        // and enables devmode with it in one step (key persists to config,
+        // agent rebuilds). Always-online: the server answers live, a forged
+        // or elsewhere-bound key refuses with its reason. No valid
+        // activation anywhere = stays OFF, period.
+        const unlockWithKey = async (rawKey: string): Promise<boolean> => {
+          const cfg = loadConfig()
+          const a = await serverActivateLicenseKey(rawKey, { serverUrl: cfg.licenseServerUrl })
+          if (a.ok !== true) {
+            // State-accurate refusal: a failed attempt never flips existing
+            // state, so report what IS, not what the attempt wanted.
+            const stillOn = loadConfig().developerMode?.enabled === true
+            addSystemMessage(
+              `Activation failed (${a.reason ?? "unknown"}) — developer mode remains ${stillOn ? "ON (unchanged)" : "OFF"}. Usage: /devmode on 1102-XXXX-XXXX-XXXX`,
+            )
+            return false
+          }
+          const developerMode = { ...loadConfig().developerMode, enabled: true }
+          saveConfig({ developerMode, licenseKey: rawKey.trim() })
+          syncAgentConfig({ developerMode, licenseKey: rawKey.trim() })
+          return true
+        }
+        const configuredUnlock = async (): Promise<boolean> => {
+          const cfg = loadConfig()
+          const v = await serverVerifyLicenseKey(cfg.licenseKey, { serverUrl: cfg.licenseServerUrl })
+          if (v.valid !== true) {
+            const stillOn = loadConfig().developerMode?.enabled === true
+            addSystemMessage(
+              `Developer mode remains ${stillOn ? "ON (unchanged)" : "OFF"} — ${v.reason ?? "no license configured"}. Usage: /devmode on 1102-XXXX-XXXX-XXXX`,
+            )
+            return false
+          }
+          return true
+        }
+        const devmodeOnSuccess = (): void => {
+          addSystemMessage(`Developer mode: ON — pentest menu open below (1 enable · 2 disable · Esc cancels).`)
+          openPentestMenu()
+        }
+        const onParts = darg.split(/\s+/)
+        if (onParts[0] === "on" && onParts.length > 1) {
+          addSystemMessage("Activating license on this machine…")
+          void unlockWithKey(onParts.slice(1).join(" ")).then((ok) => {
+            if (ok) devmodeOnSuccess()
+          })
+          return
+        } else if (darg === "") {
+          // Bare /devmode: ON/OFF chooser. Choosing ON chains straight
+          // into a license prompt (no separate step to remember).
+          const cur = devSnapshot()
+          const cqid =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `devmode-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+          questionResolverRef.current = (answers: string[]): void => {
+            const choice = (answers[0] ?? "").trim().toLowerCase()
+            if (choice === "1" || choice.startsWith("turn on") || choice.startsWith("on")) {
+              const lqid =
+                typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+                  ? crypto.randomUUID()
+                  : `devmode-key-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+              const keyRequest: QuestionRequest = {
+                id: lqid,
+                header: "Devmode · License",
+                question: "Paste license key (1102-XXXX-XXXX-XXXX). Esc cancels.",
+                options: [{ label: "Cancel", description: "Keep developer mode OFF" }],
+                multiSelect: false,
+              }
+              questionResolverRef.current = (keyAnswers: string[]): void => {
+                const raw = (keyAnswers[0] ?? "").trim()
+                // "Cancel" (label or number) aborts; anything else is a key
+                // attempt — a real key is 16+ chars so it can never equal it.
+                if (!raw || raw.toLowerCase() === "cancel") {
+                  addSystemMessage("Developer mode stays OFF.")
+                  return
+                }
+                addSystemMessage("Activating license on this machine…")
+                void unlockWithKey(raw).then((ok) => {
+                  if (ok) devmodeOnSuccess()
+                })
+              }
+              setPendingQuestion(keyRequest)
+            } else if (choice === "2" || choice.startsWith("turn off") || choice.startsWith("off")) {
+              if (cur.enabled) setDevEnabled(/*enabled*/ false)
+              addSystemMessage("Developer mode: OFF.")
+            } else {
+              addSystemMessage(`Developer mode stays ${cur.enabled ? "ON" : "OFF"}.`)
+            }
+          }
+          setPendingQuestion({
+            id: cqid,
+            header: "Devmode",
+            question: `Developer mode is currently ${cur.enabled ? "ON" : "OFF"}. Turn it ON (license key follows) or OFF?`,
+            options: [
+              { label: "Turn ON", description: "Asks for the license key next" },
+              { label: "Turn OFF", description: "Disable developer mode" },
+              { label: "Cancel", description: "Keep the current setting" },
+            ],
+            multiSelect: false,
+          })
+        } else if (darg === "on") {
+          addSystemMessage("Checking license with the server…")
+          void configuredUnlock().then((ok) => {
+            if (!ok) return
+            if (!s.enabled) setDevEnabled(/*enabled*/ true)
+            devmodeOnSuccess()
+          })
+        } else if (darg === "off" || (darg === "" && s.enabled)) {
+          if (s.enabled) setDevEnabled(/*enabled*/ false)
+          addSystemMessage(
+            `Developer mode: OFF — pentest tools stay ${s.pentest ? "ENABLED" : "DISABLED"} (manage via /devmode on).`,
+          )
+        } else if (darg === "trial") {
+          // Self-service trial: the server mints a short pentest key BORN
+          // BOUND to this machine (1 live trial per machine). No paste, no
+          // reseller — key saves straight into config like a typed one.
+          const cfgTrial = loadConfig()
+          addSystemMessage("Requesting a trial license for this machine…")
+          void serverMintTrial({ serverUrl: cfgTrial.licenseServerUrl }).then((t) => {
+            if (t.ok !== true || !t.key) {
+              addSystemMessage(`Trial unavailable — ${t.reason ?? "unknown error"}.`)
+              return
+            }
+            const developerMode = { ...loadConfig().developerMode, enabled: true }
+            saveConfig({ developerMode, licenseKey: t.key })
+            syncAgentConfig({ developerMode, licenseKey: t.key })
+            addSystemMessage(
+              `Trial license active (${t.days ?? "?"} days, this machine only, key ${t.key}) — pentest menu open below (1 enable · 2 disable · Esc cancels).`,
+            )
+            openPentestMenu()
+          })
+        } else if (darg === "status") {
+          const st = devSnapshot()
+          const cfgStatus = loadConfig()
+          addSystemMessage("Checking license with the server…", { persist: false })
+          void serverVerifyLicenseKey(cfgStatus.licenseKey, { serverUrl: cfgStatus.licenseServerUrl }).then((lic) => {
+            const licText =
+              lic.valid === true
+                ? `live-valid (${lic.plan}, exp ${lic.exp ? new Date(lic.exp * 1000).toISOString().slice(0, 10) : "?"})`
+                : `invalid (${lic.reason ?? "no license"})`
+            addSystemMessage(
+              `Developer mode: ${st.enabled ? "ON" : "OFF"} · Pentest tools: ${st.pentest ? "ENABLED" : "DISABLED"} · Gate: ${st.gate ? "ON" : "OFF"} (/gate on|off) · License: ${licText}`,
+              { persist: false },
+            )
+          })
+        } else if (darg === "pentest") {
+          if (s.enabled) openPentestMenu()
+          else addSystemMessage("Developer mode is OFF — /devmode on to open the pentest tools menu.")
+        } else {
+          addSystemMessage(
+            "Usage: /devmode [on 1102-XXXX-XXXX-XXXX|trial|off|status|pentest] — bare /devmode opens the ON/OFF chooser (ON asks for the license key); trial self-serves a short key for this machine.",
+          )
+        }
         break
+      }
       case "commands": {
         const custom = promptCommands.length
           ? `Custom prompt files (${promptCommands.length}):\n` +
@@ -2629,16 +2800,12 @@ export const TrayambakApp = ({
     }
   }
 
-  /** Slash entry wrapper: the handler runs synchronously, so flagging around it covers every readout a case prints; try/finally keeps a throwing case from leaving the flag stuck ON, and save/restore keeps a nested dispatch from clearing the outer flag. Also snaps to live first: a slash is new activity, so its readout (often TTL'd — see addSystemMessage) must land in-frame even if the user was parked reading history. */
+  /** Slash entry wrapper: snaps to live first — a slash is new activity, so
+   *  its TTL'd readout (see addSystemMessage) must land in-frame even if the
+   *  user was parked reading history. */
   const runSlash = (command: string, args: string): void => {
     setScrollBack(0)
-    const prev = slashTtlRef.current
-    slashTtlRef.current = true
-    try {
-      handleSlashCommand(command, args)
-    } finally {
-      slashTtlRef.current = prev
-    }
+    handleSlashCommand(command, args)
   }
 
   const handleChoose = (command: string, value: string): void => {
@@ -3098,8 +3265,9 @@ export const TrayambakApp = ({
     // Same dead-end guard as /models: a keyless gated backend opens the key
     // prompt, never the 5-row static picker.
     if (entry?.needsApiKey && !cfg.apiKey && availableModels === null) {
+      hideLoginRows()
       setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: cfg.baseUrl, apiKey: "", models: null })
-      addSystemMessage(
+      addLoginRow(
         `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
         { persist: false, ttlMs: 0 },
       )
@@ -3169,11 +3337,12 @@ export const TrayambakApp = ({
       addSystemMessage("Connect already in progress — answer the pending step or press Esc.")
       return
     }
+    hideLoginRows() // any stale rows from an abandoned flow
     setLoginFlow({ stage: "provider", providerId: "", baseUrl: "", apiKey: "", models: null })
     setShowProviderPicker(/*showProviderPicker*/ true)
-    addSystemMessage(`${g("prompt")} Choose a provider ↑↓ Enter (or type its number/id).`, {
+    addLoginRow(`${g("prompt")} Choose a provider ↑↓ Enter (or type its number/id).`, {
       persist: false,
-      ttlMs: 10_000,
+      ttlMs: 0,
     })
   }
 
@@ -3189,14 +3358,15 @@ export const TrayambakApp = ({
     // Key-gated backend with no key: fetching would 401 into the tiny
     // static list (the "5 models" dead end) — ask for the key instead.
     if (entry?.needsApiKey && !key) {
+      hideLoginRows()
       setLoginFlow({ stage: "apiKey", providerId, baseUrl, apiKey: "", models: null })
-      addSystemMessage(
+      addLoginRow(
         `${g("prompt")} ${entry.label}: no API key saved — paste it (or type 'skip'), and the live model list follows. Esc cancels.`,
         { persist: false, ttlMs: 0 },
       )
       return
     }
-    addSystemMessage(`Fetching models for ${entry?.label ?? providerId}…`, { persist: false })
+    addLoginRow(`Fetching models for ${entry?.label ?? providerId}…`, { persist: false })
     const res = await fetchModelsDetailed(providerId, baseUrl, key)
     const { models: usable, tag } = resolveModels(providerId, res)
     if (usable.length === 0) {
@@ -3205,12 +3375,17 @@ export const TrayambakApp = ({
         // in-flow and take an explicitly typed id (VS Code custom style).
         // The key (if any) is still saved by the switch below.
         applyProviderSwitch(providerId, "", baseUrl, key, [])
+        hideLoginRows()
         setLoginFlow({ stage: "model", providerId, baseUrl, apiKey: key, models: [] })
         setAvailableModels([])
-        addSystemMessage(`No model list at ${baseUrl} — type the exact model id to use (Esc cancels).`)
+        addLoginRow(`No model list at ${baseUrl} — type the exact model id to use (Esc cancels).`, {
+          persist: false,
+          ttlMs: 0,
+        })
         return
       }
       applyProviderSwitch(providerId, entry?.defaultModel ?? "", baseUrl, key)
+      hideLoginRows() // completed → prompts gone; the ✓ notice below fades on its TTL
       setLoginFlow(null)
       let keyNote = ""
       if (key && entry?.defaultModel) {
@@ -3227,12 +3402,13 @@ export const TrayambakApp = ({
       return
     }
     setProviderInfo({ label: providerLabelFor(providerId), host: providerHostFor(baseUrl) })
+    hideLoginRows()
     setLoginFlow({ stage: "model", providerId, baseUrl, apiKey: key, models: usable })
     setAvailableModels(usable)
     setShowModelPicker(/*showModelPicker*/ true)
-    addSystemMessage(
+    addLoginRow(
       `Choose a model in the picker ↑↓ Enter (${usable.length} ${tag} from ${entry?.label ?? providerId}). Esc cancels the whole connect.`,
-      { persist: false, ttlMs: 10_000 },
+      { persist: false, ttlMs: 0 },
     )
   }
 
@@ -3242,13 +3418,14 @@ export const TrayambakApp = ({
   const beginProviderConnect = (providerId: string): void => {
     const entry = getCatalogEntry(providerId)
     if (!entry) {
-      addSystemMessage(`Unknown provider "${providerId}".`, { persist: false })
+      addLoginRow(`Unknown provider "${providerId}".`, { persist: false })
       return
     }
     setShowProviderPicker(/*showProviderPicker*/ false)
     if (entry.needsBaseUrl) {
+      hideLoginRows()
       setLoginFlow({ stage: "baseUrl", providerId: entry.id, baseUrl: "", apiKey: "", models: null })
-      addSystemMessage(
+      addLoginRow(
         `${g("prompt")} ${entry.label}: enter Base URL (default ${entry.defaultBaseUrl}) — Enter or 'default' takes the default, Esc cancels.`,
         { persist: false, ttlMs: 0 },
       )
@@ -3258,15 +3435,17 @@ export const TrayambakApp = ({
         // Saved key: direct change — fetch + model chooser, no re-typing.
         void fetchAndPickModel(entry.id, stored.baseUrl || entry.defaultBaseUrl, stored.apiKey)
       } else {
+        hideLoginRows()
         setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: entry.defaultBaseUrl, apiKey: "", models: null })
-        addSystemMessage(`${g("prompt")} ${entry.label}: enter API key, or type 'skip'. Esc cancels.`, {
+        addLoginRow(`${g("prompt")} ${entry.label}: enter API key, or type 'skip'. Esc cancels.`, {
           persist: false,
           ttlMs: 0,
         })
       }
     } else {
+      hideLoginRows()
       setLoginFlow({ stage: "apiKey", providerId: entry.id, baseUrl: entry.defaultBaseUrl, apiKey: "", models: null })
-      addSystemMessage(`${g("prompt")} ${entry.label}: enter API key (optional — type 'skip' to skip).`, {
+      addLoginRow(`${g("prompt")} ${entry.label}: enter API key (optional — type 'skip' to skip).`, {
         persist: false,
         ttlMs: 0,
       })
@@ -3278,9 +3457,12 @@ export const TrayambakApp = ({
       addSystemMessage("Nothing to cancel — use /provider to connect.")
       return
     }
+    hideLoginRows() // cancelled → every wizard prompt row vanishes now
     setLoginFlow(null)
     setShowProviderPicker(/*showProviderPicker*/ false)
-    addSystemMessage("Provider connect cancelled.", { persist: false })
+    // The outcome line is the one thing kept visible — briefly — then its own
+    // TTL fades it too, so a cancelled connect leaves the transcript clean.
+    addSystemMessage("Provider connect cancelled.", { persist: false, ttlMs: 10_000 })
   }
 
   /** Advance the /login wizard one composer submit. Never throws: every
@@ -3297,7 +3479,7 @@ export const TrayambakApp = ({
       // "nim" shorthand → NVIDIA NIM.
       if (!entry && raw.toLowerCase() === "nim") entry = getCatalogEntry("nvidia-nim")
       if (!entry) {
-        addSystemMessage(
+        addLoginRow(
           `Unknown provider "${raw}". Type 1-${PROVIDER_CATALOG.length} or an id (${PROVIDER_CATALOG.map((e) => e.id).join(", ")}).`,
           { persist: false },
         )
@@ -3315,16 +3497,17 @@ export const TrayambakApp = ({
       try {
         void new URL(base)
       } catch {
-        addSystemMessage(`"${raw}" is not a valid URL. Try again (e.g. ${entry?.defaultBaseUrl}).`, { persist: false })
+        addLoginRow(`"${raw}" is not a valid URL. Try again (e.g. ${entry?.defaultBaseUrl}).`, { persist: false })
         return
       }
       if (entry && !entry.needsApiKey && !entry.keyOptional) {
         // llama.cpp without a key: fetch models, then choose in the picker.
-        addSystemMessage(`Fetching models from ${base}…`, { persist: false })
+        addLoginRow(`Fetching models from ${base}…`, { persist: false })
         const res = await fetchModelsDetailed(flow.providerId, base, "")
         const pre = resolveModels(flow.providerId, res)
         if (pre.models.length === 0) {
           applyProviderSwitch(flow.providerId, entry?.defaultModel ?? "", base, "")
+          hideLoginRows() // completed → prompts gone; the ✓ notice below fades on its TTL
           setLoginFlow(null)
           addSystemMessage(
             `${g("ok")} ${entry.label} connected at ${base} (no model list — set one via /provider use ${flow.providerId} <model>).`,
@@ -3334,16 +3517,18 @@ export const TrayambakApp = ({
         }
         setProviderInfo({ label: providerLabelFor(flow.providerId), host: providerHostFor(base) })
         setAvailableModels(pre.models)
+        hideLoginRows()
         setLoginFlow({ stage: "model", providerId: flow.providerId, baseUrl: base, apiKey: "", models: pre.models })
         setShowModelPicker(/*showModelPicker*/ true)
-        addSystemMessage(
+        addLoginRow(
           `Choose a model in the picker ↑↓ Enter (${res.models.length} live from ${base}). Esc closes it — then type the exact id.`,
-          { persist: false },
+          { persist: false, ttlMs: 0 },
         )
         return
       }
+      hideLoginRows()
       setLoginFlow({ stage: "apiKey", providerId: flow.providerId, baseUrl: base, apiKey: "", models: null })
-      addSystemMessage(`${g("prompt")} Base URL set to ${base}. Now enter API key, or type 'skip'.`, {
+      addLoginRow(`${g("prompt")} Base URL set to ${base}. Now enter API key, or type 'skip'.`, {
         persist: false,
         ttlMs: 0,
       })
@@ -3362,7 +3547,7 @@ export const TrayambakApp = ({
       if (!key && entry?.needsApiKey) {
         // A skipped/missing key on a gated backend can only 401 into the
         // tiny static list — refuse and re-prompt instead of opening it.
-        addSystemMessage(`${g("prompt")} ${entry.label} needs an API key — paste it, or Esc to cancel.`, {
+        addLoginRow(`${g("prompt")} ${entry.label} needs an API key — paste it, or Esc to cancel.`, {
           persist: false,
           ttlMs: 0,
         })
@@ -3385,10 +3570,11 @@ export const TrayambakApp = ({
         picked = raw
       }
       if (!picked) {
-        addSystemMessage(`Pick 1-${models.length} or an exact id from the list above.`, { persist: false })
+        addLoginRow(`Pick 1-${models.length} or an exact id from the list above.`, { persist: false })
         return
       }
       applyProviderSwitch(flow.providerId, picked, flow.baseUrl, flow.apiKey)
+      hideLoginRows() // completed → prompts gone; the ✓ notice below fades on its TTL
       setLoginFlow(null)
       const entry = getCatalogEntry(flow.providerId)
       addSystemMessage(`${g("ok")} Connected: ${entry?.label ?? flow.providerId} · ${picked}`, { ttlMs: 10_000 })
@@ -3427,6 +3613,7 @@ export const TrayambakApp = ({
     const flow = loginFlowRef.current
     setShowModelPicker(/*showModelPicker*/ false)
     if (!flow || flow.stage !== "model") return
+    hideLoginRows() // completed → prompts gone; the ✓ notice below fades on its TTL
     setLoginFlow(null)
     const models = flow.models ?? []
     applyProviderSwitch(flow.providerId, id, flow.baseUrl, flow.apiKey, models)
@@ -3526,6 +3713,13 @@ export const TrayambakApp = ({
       run: () => runSlash(cmd.name, ""),
     })),
   ]
+
+  // Any open picker/panel owns the screen: the permission layer stands down
+  // for the six basic overlays; the persistent chrome (background runner,
+  // footer, composer) stands down for every overlay including the panels.
+  const pickerOverlayOpen =
+    showThemePicker || showPalette || showModelPicker || showProviderPicker || showSplash || showSandboxSetup
+  const chromeHidden = pickerOverlayOpen || showWhichKey || showSubagentPanel || showAgentPicker
 
   return (
     <Box
@@ -3648,83 +3842,14 @@ export const TrayambakApp = ({
       ) : showPicker ? (
         <SessionPicker
           sessions={loadSessions()}
-          onSelect={(session) => {
-            setShowPicker(/*showPicker*/ false)
-            // Re-picking the session already on screen is a no-op:
-            // reloading would replace LIVE state with log.jsonl, which
-            // lags it (assistant replies persist only on message_end) —
-            // dropping the in-flight turn and stacking another resume
-            // banner (resume duplication bug).
-            if (sessionIdRef.current === session.sessionId) return
-            sessionIdRef.current = session.sessionId
-            currentSessionRef.current = session
-            const history = loadConversation(session.sessionId)
-            // Backfill: sessions stuck at the default name (titled before
-            // auto-title existed, or a failed title call) get a real title
-            // from their own first user message on resume — deterministic,
-            // no provider round-trip. A user-chosen name is never touched.
-            if (session.sessionName === DEFAULT_SESSION_NAME) {
-              const backfill = titleFromConversation(history)
-              if (backfill) {
-                renameSession(session.sessionId, backfill)
-                session.sessionName = backfill
-                currentSessionRef.current = { ...session }
-              }
-            }
-            // Rebuild live-shaped messages from the persisted pair: each
-            // tool call is logged as an args-only assistant row PLUS a tool
-            // row carrying id/result — restoring the raw pair rendered junk
-            // (`{"command":…}` text + a `✓ tool — {…}` one-liner with the
-            // result invisible) instead of the live "Called bash(…) ✓" box.
-            // Blank legacy filler is dropped in there too (see the module).
-            setMessages(restoreMessages(session.sessionId, history))
-            // Wholesale replace → remount <Static> so the restored history
-            // prints from item 0 (Ink's static index can't rewind).
-            setStaticEpoch((e) => e + 1)
-            // Transcript-only: persisting this banner would replay it as
-            // history on the next resume, stacking a duplicate per resume.
-            addSystemMessage(
-              `Resumed session: ${session.sessionName}${session.sessionDescription ? ` - ${session.sessionDescription}` : ""}`,
-              { persist: false },
-            )
-          }}
-          onArchive={(session) => {
-            archiveSession(session.sessionId)
-            addSystemMessage(`Archived session: ${session.sessionName}`, { persist: false })
-          }}
-          onRename={(session, name) => {
-            renameSession(session.sessionId, name)
-            addSystemMessage(`Renamed session → "${name}"`, { persist: false })
-          }}
-          onDelete={(session) => {
-            deleteSession(session.sessionId)
-            addSystemMessage(`Deleted session: ${session.sessionName}`, { persist: false })
-          }}
-          onFork={(session) => {
-            const child = createSession(`${session.sessionName} (fork)`, session.sessionDescription)
-            const history = loadConversation(session.sessionId)
-            for (const h of history) {
-              appendConversation(child.sessionId, h.role, h.content, {
-                toolCallId: h.toolCallId,
-                toolName: h.toolName,
-                toolStatus: h.toolStatus,
-                thinking: h.thinking,
-              })
-            }
-            addSystemMessage(
-              `Forked "${session.sessionName}" → "${child.sessionName}" (${history.length} messages) — select it to resume.`,
-              { persist: false },
-            )
-          }}
-          onExit={() => setShowPicker(/*showPicker*/ false)}
-          onNewChat={() => {
-            setShowPicker(/*showPicker*/ false)
-            sessionIdRef.current = null
-            currentSessionRef.current = null
-            setMessages([])
-            setStaticEpoch((e) => e + 1)
-            addSystemMessage("New conversation started.", { persist: false })
-          }}
+          {...createSessionPickerActions({
+            setShowPicker,
+            sessionIdRef,
+            currentSessionRef,
+            setMessages,
+            setStaticEpoch,
+            addSystemMessage,
+          })}
         />
       ) : (
         <Box flexDirection="row" flexGrow={1}>
@@ -3765,119 +3890,88 @@ export const TrayambakApp = ({
           ) : null}
         </Box>
       )}
-      {!showThemePicker &&
-        !showPalette &&
-        !showModelPicker &&
-        !showProviderPicker &&
-        !showSplash &&
-        !showSandboxSetup &&
-        pendingPermissions.length > 0 && (
-          <PermissionOverlay
-            permissionMode={permissionMode}
-            pendingRequests={pendingPermissions}
-            composerHasText={composerHasText}
-            onApprove={(id) => resolvePermission(id, /*approved*/ true)}
-            onDeny={(id) => resolvePermission(id, /*approved*/ false)}
-            onApproveSession={(id) => {
-              const row = pendingPermissions.find((p) => p.id === id)
-              if (row) {
-                addSessionPermissionRule({ tool: row.tool, pattern: permissionSubject(row.args), action: "allow" })
-                addSystemMessage(`Session rule: allow ${row.tool} → ${permissionSubject(row.args)}`)
-              }
-              resolvePermission(id, /*approved*/ true)
-            }}
-            onApproveAlways={(id) => persistAndResolve(id, "allow")}
-            onDenyAlways={(id) => persistAndResolve(id, "deny")}
-          />
-        )}
-      {bgRunning &&
-        !showThemePicker &&
-        !showPalette &&
-        !showModelPicker &&
-        !showProviderPicker &&
-        !showSplash &&
-        !showSandboxSetup &&
-        !showWhichKey &&
-        !showSubagentPanel &&
-        !showAgentPicker && (
-          <Box flexDirection="row" alignItems="center" marginTop={1} marginBottom={1} marginLeft={2}>
-            <Spinner color={theme.warning}>Background subagents working…</Spinner>
-            <Text color={theme.textMuted}>
-              {" "}
-              ({Array.from(backgroundSubagents.values()).filter((j) => j.status === "running").length} active)
-            </Text>
-          </Box>
-        )}
-      {!showThemePicker &&
-        !showPalette &&
-        !showModelPicker &&
-        !showProviderPicker &&
-        !showSplash &&
-        !showSandboxSetup &&
-        !showWhichKey &&
-        !showSubagentPanel &&
-        !showAgentPicker && (
-          <Footer
-            info={statusBarInfo}
-            backgroundSubagents={backgroundSubagents}
-            subagentTabs={Array.from(backgroundSubagents.values())}
-          />
-        )}
-      {!showThemePicker &&
-        !showPalette &&
-        !showModelPicker &&
-        !showProviderPicker &&
-        !showSplash &&
-        !showSandboxSetup &&
-        !showWhichKey &&
-        !showSubagentPanel &&
-        !showAgentPicker && (
-          <PromptInput
-            onSubmit={handleInput}
-            onSlashCommand={runSlash}
-            onChoose={handleChoose}
-            onHistoryScroll={handleHistoryScroll}
-            onEnhance={enhanceDraft}
-            isLoading={isLoading}
-            disabled={showPicker}
-            permissionPending={pendingPermissions.length > 0}
-            onComposerHasTextChange={setComposerHasText}
-            questionHint={pendingQuestion}
-            // Picker owns Enter while open: without the !showPicker gate,
-            // askMode re-enabled the composer (inputActive = !disabled ||
-            // askMode) and one Enter BOTH answered the question AND selected
-            // the session row. Composer stands down until the picker closes.
-            askMode={(pendingQuestion !== null || waitingCustom) && !showPicker}
-            waitingCustom={waitingCustom}
-            cwd={config?.cwd ?? bootConfig.cwd}
-            draftRequest={draftRequest}
-            onRetryEdit={() => {
-              const last = lastUserPromptRef.current
-              if (!last) {
-                addSystemMessage("No previous prompt to edit.")
-                return
-              }
-              setDraftRequest((prev) => ({ text: last, nonce: (prev?.nonce ?? 0) + 1 }))
-            }}
-            onInject={handleInject}
-            onCtrlCEmpty={handleCtrlCEmpty}
-            commandList={[
-              ...slashCommandService.registry.all().map((cmd) => ({
-                name: cmd.name,
-                description: cmd.description,
-                category: cmd.category,
-                aliases: cmd.aliases,
-                argsHint: cmd.argsHint,
-              })),
-              ...promptCommands.map((c) => ({
-                name: c.name,
-                description: c.description,
-                category: "Custom",
-                argsHint: c.argumentHint,
-              })),
-            ]}
-          />
-        )}
+      {!pickerOverlayOpen && pendingPermissions.length > 0 && (
+        <PermissionOverlay
+          permissionMode={permissionMode}
+          pendingRequests={pendingPermissions}
+          composerHasText={composerHasText}
+          onApprove={(id) => resolvePermission(id, /*approved*/ true)}
+          onDeny={(id) => resolvePermission(id, /*approved*/ false)}
+          onApproveSession={(id) => {
+            const row = pendingPermissions.find((p) => p.id === id)
+            if (row) {
+              addSessionPermissionRule({ tool: row.tool, pattern: permissionSubject(row.args), action: "allow" })
+              addSystemMessage(`Session rule: allow ${row.tool} → ${permissionSubject(row.args)}`)
+            }
+            resolvePermission(id, /*approved*/ true)
+          }}
+          onApproveAlways={(id) => persistAndResolve(id, "allow")}
+          onDenyAlways={(id) => persistAndResolve(id, "deny")}
+        />
+      )}
+      {bgRunning && !chromeHidden && (
+        <Box flexDirection="row" alignItems="center" marginTop={1} marginBottom={1} marginLeft={2}>
+          <Spinner color={theme.warning}>Background subagents working…</Spinner>
+          <Text color={theme.textMuted}>
+            {" "}
+            ({Array.from(backgroundSubagents.values()).filter((j) => j.status === "running").length} active)
+          </Text>
+        </Box>
+      )}
+      {!chromeHidden && (
+        <Footer
+          info={statusBarInfo}
+          backgroundSubagents={backgroundSubagents}
+          subagentTabs={Array.from(backgroundSubagents.values())}
+        />
+      )}
+      {!chromeHidden && (
+        <PromptInput
+          onSubmit={handleInput}
+          onSlashCommand={runSlash}
+          onChoose={handleChoose}
+          onHistoryScroll={handleHistoryScroll}
+          onEnhance={enhanceDraft}
+          isLoading={isLoading}
+          disabled={showPicker}
+          permissionPending={pendingPermissions.length > 0}
+          onComposerHasTextChange={setComposerHasText}
+          questionHint={pendingQuestion}
+          // Picker owns Enter while open: without the !showPicker gate,
+          // askMode re-enabled the composer (inputActive = !disabled ||
+          // askMode) and one Enter BOTH answered the question AND selected
+          // the session row. Composer stands down until the picker closes.
+          askMode={(pendingQuestion !== null || waitingCustom) && !showPicker}
+          waitingCustom={waitingCustom}
+          cwd={config?.cwd ?? bootConfig.cwd}
+          draftRequest={draftRequest}
+          onRetryEdit={() => {
+            const last = lastUserPromptRef.current
+            if (!last) {
+              addSystemMessage("No previous prompt to edit.")
+              return
+            }
+            setDraftRequest((prev) => ({ text: last, nonce: (prev?.nonce ?? 0) + 1 }))
+          }}
+          onInject={handleInject}
+          onCtrlCEmpty={handleCtrlCEmpty}
+          commandList={[
+            ...slashCommandService.registry.all().map((cmd) => ({
+              name: cmd.name,
+              description: cmd.description,
+              category: cmd.category,
+              aliases: cmd.aliases,
+              argsHint: cmd.argsHint,
+            })),
+            ...promptCommands.map((c) => ({
+              name: c.name,
+              description: c.description,
+              category: "Custom",
+              argsHint: c.argumentHint,
+            })),
+          ]}
+        />
+      )}
     </Box>
   )
 }

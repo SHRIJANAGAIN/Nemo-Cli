@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { describe, expect, it } from "vitest"
@@ -135,7 +135,7 @@ describe("openai/xai/huggingface/custom providers", () => {
     }
   }, 15000)
 
-  it("registry knows all ten types (case-insensitive)", () => {
+  it("registry knows all 22 types (case-insensitive)", () => {
     const registry = createProviderRegistry()
     for (const t of [
       "llamacpp",
@@ -148,6 +148,18 @@ describe("openai/xai/huggingface/custom providers", () => {
       "google",
       "ollama",
       "custom",
+      "groq",
+      "mistral",
+      "cerebras",
+      "together",
+      "deepinfra",
+      "cohere",
+      "perplexity",
+      "openrouter",
+      "fireworks",
+      "venice",
+      "azure",
+      "skt-gateway",
       "OpenAI",
     ]) {
       expect(registry.has(t)).toBe(true)
@@ -283,8 +295,8 @@ describe("anthropic/google providers", () => {
     }
   }, 15000)
 
-  it("catalog covers all 9 backends with fetch fallback", async () => {
-    expect(PROVIDER_CATALOG.length).toBe(9)
+  it("catalog covers all 21 backends with fetch fallback", async () => {
+    expect(PROVIDER_CATALOG.length).toBe(21)
     for (const id of [
       "huggingface",
       "nvidia-nim",
@@ -295,6 +307,18 @@ describe("anthropic/google providers", () => {
       "xai",
       "ollama",
       "custom",
+      "groq",
+      "mistral",
+      "cerebras",
+      "together",
+      "deepinfra",
+      "cohere",
+      "perplexity",
+      "openrouter",
+      "fireworks",
+      "venice",
+      "azure",
+      "skt-gateway",
     ]) {
       expect(getCatalogEntry(id)?.defaultBaseUrl.length).toBeGreaterThan(0)
     }
@@ -363,5 +387,25 @@ describe("anthropic/google providers", () => {
     } finally {
       server.close()
     }
+  }, 15000)
+
+  it("gateway providers keep truthful ids and chat OpenAI-compatible", async () => {
+    const { createOpenAICompatibleProvider } = await import("./openai.js")
+    const registry = createProviderRegistry()
+    for (const id of ["groq", "openrouter", "skt-gateway", "azure"]) {
+      expect(registry.has(id)).toBe(true)
+      const p = registry.create(id, { baseUrl: "http://x", model: "m" })
+      expect(p?.id).toBe(id)
+    }
+    const seen = await withStub(async (stubUrl) => {
+      const make = createOpenAICompatibleProvider("openrouter", "OpenRouter API", stubUrl, "m")
+      const p = make({ baseUrl: stubUrl, model: "m", reasoningEffort: "high" })
+      expect(p.id).toBe("openrouter")
+      await p.chat(toolInput)
+    })
+    // No gateway-specific reasoning params leak to proxied models.
+    expect(seen.body).not.toHaveProperty("reasoning_tokens")
+    expect(seen.body).not.toHaveProperty("reasoning_effort")
+    expect(seen.url).toBe("/v1/chat/completions")
   }, 15000)
 })

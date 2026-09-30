@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { NvidiaProvider } from "./nvidia.js"
@@ -35,4 +35,39 @@ export class OpenAIProvider extends NvidiaProvider {
 
 export function createOpenAIProvider(options: ProviderOptions): Provider {
   return new OpenAIProvider(options)
+}
+
+/**
+ * Generic OpenAI-compatible gateway provider (Groq/Mistral/Cerebras/
+ * Together/DeepInfra/Cohere/Perplexity/OpenRouter/Fireworks/Venice/Azure/
+ * SKT-Gateway). Reuses the full NvidiaProvider SSE/retry/abort pipeline
+ * with no reasoning params — unknown gateways must never get
+ * provider-specific fields (keeps gateways clear of 400s). The `id` is
+ * carried per-gateway so audit/telemetry/registry stay truthful.
+ */
+export class OpenAICompatibleProvider extends NvidiaProvider {
+  readonly id: string
+
+  constructor(id: string, label: string, options: ProviderOptions, defaultBaseUrl: string, defaultModel: string) {
+    super({
+      ...options,
+      baseUrl: options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : defaultBaseUrl,
+      model: options.model && options.model.length > 0 ? options.model : defaultModel,
+    })
+    this.id = id
+    this.apiErrorPrefix = `${label} API`
+  }
+
+  protected applyReasoning(_body: Record<string, unknown>): void {
+    // Gateways proxy to many models — never guess reasoning params.
+  }
+}
+
+export function createOpenAICompatibleProvider(
+  id: string,
+  label: string,
+  defaultBaseUrl: string,
+  defaultModel: string,
+): (options: ProviderOptions) => Provider {
+  return (options: ProviderOptions) => new OpenAICompatibleProvider(id, label, options, defaultBaseUrl, defaultModel)
 }

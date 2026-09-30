@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -195,7 +195,13 @@ export function loadMemory(): MemoryEntry[] {
 }
 
 export function saveMemory(entries: MemoryEntry[]): void {
+  // TWO separate trees: USEMEMORY.MD lives under the project root, but the
+  // legacy JSON lives under homedir/.trayambak/memory/. On a fresh profile
+  // neither exists — mkdir-ing only the first made the memory.json write
+  // below throw ENOENT (caught by the harness as a broken tool). Each writer
+  // creates its own directory.
   fs.mkdirSync(path.dirname(useMemoryFile()), { recursive: true })
+  fs.mkdirSync(path.dirname(memoryFile()), { recursive: true })
   const active = entries.filter((e) => !isExpiredEntry(e))
   const seen = new Set<string>()
   const deduped: MemoryEntry[] = []

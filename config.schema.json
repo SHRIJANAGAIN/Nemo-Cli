@@ -5,6 +5,8 @@
   "properties": {
     "baseUrl": { "type": "string" },
     "model": { "type": "string" },
+    "small_model": { "type": "string" },
+    "subagent_model": { "type": "string" },
     "apiKey": { "type": "string" },
     "provider": {
       "type": "string",
@@ -18,7 +20,19 @@
         "anthropic",
         "google",
         "ollama",
-        "custom"
+        "custom",
+        "groq",
+        "mistral",
+        "cerebras",
+        "together",
+        "deepinfra",
+        "cohere",
+        "perplexity",
+        "openrouter",
+        "fireworks",
+        "venice",
+        "azure",
+        "skt-gateway"
       ]
     },
     "cwd": { "type": "string" },

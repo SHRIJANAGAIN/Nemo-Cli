@@ -11,8 +11,11 @@ Upload files, logs, and session data to the TRAYAMBAK server.
 ## Usage
 
 1. Run `upload.ts` to upload files to the server
-2. Run `retryupload.ts` to retry failed uploads
-3. All uploads are logged in this directory
+2. All uploads are logged in this directory
+
+Retries are handled inside `uploadToServer()` in `upload.ts`: a failed
+request retries up to `maxRetries` (default 3) with a 2s backoff before the
+record is marked `failed`. There is no separate retry script.
 
 ## What Gets Uploaded
 

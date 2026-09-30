@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest"
 import { createHmac, createVerify, generateKeyPairSync } from "node:crypto"
 import {
   createAppJwt,
+  describeGithubThread,
+  extractFinalReply,
   parseTrayambakCommand,
   routeGithubEvent,
+  selectJobReply,
   splitRepo,
   verifyWebhookSignature,
 } from "./github-app.js"
@@ -35,6 +38,12 @@ describe("parseTrayambakCommand", () => {
   it("extracts tasks from /trayambak and @trayambak", () => {
     expect(parseTrayambakCommand("/trayambak fix the login bug")).toEqual({ task: "fix the login bug" })
     expect(parseTrayambakCommand("please @trayambak review this PR")).toEqual({ task: "review this PR" })
+  })
+
+  it("accepts the short /skt and @skt forms identically", () => {
+    expect(parseTrayambakCommand("/skt fix the login bug")).toEqual({ task: "fix the login bug" })
+    expect(parseTrayambakCommand("please @skt review this PR")).toEqual({ task: "review this PR" })
+    expect(parseTrayambakCommand("/skt")).toBeNull()
   })
 
   it("rejects bare mentions, empty tasks, and chatter", () => {
@@ -125,5 +134,57 @@ describe("splitRepo", () => {
     expect(splitRepo("acme/app")).toEqual({ owner: "acme", repo: "app" })
     expect(() => splitRepo("nope")).toThrow()
     expect(() => splitRepo("")).toThrow()
+  })
+})
+
+describe("extractFinalReply", () => {
+  it("prefers the last assistant text", () => {
+    const messages = [
+      { role: "user", content: [{ type: "text", text: "hi" }] },
+      { role: "assistant", content: [{ type: "text", text: "first" }] },
+      { role: "assistant", content: [{ type: "text", text: "second" }] },
+    ]
+    expect(extractFinalReply(messages)).toBe("second")
+  })
+
+  it("falls back to the last tool result when the model answers tool-only", () => {
+    const messages = [
+      { role: "assistant", content: [{ type: "toolCall", id: "c1", name: "bash", arguments: {} }] },
+      { role: "tool", content: [{ type: "text", text: "tool said this" }] },
+    ]
+    expect(extractFinalReply(messages)).toContain("tool said this")
+  })
+
+  it("never returns empty", () => {
+    expect(extractFinalReply([])).toBe("(agent produced no text output)")
+    expect(extractFinalReply([{ role: "assistant", content: [] }])).toBe("(agent produced no text output)")
+  })
+})
+
+describe("selectJobReply", () => {
+  it("prefers thrown errors, then real replies, then captured provider errors", () => {
+    expect(selectJobReply([], "boom", ["[model error: x]"])).toBe("Agent run failed: boom")
+    expect(
+      selectJobReply([{ role: "assistant", content: [{ type: "text", text: "hi" }] }], "", ["[model error: x]"]),
+    ).toBe("hi")
+    expect(selectJobReply([{ role: "user", content: "hi" }], "", ["[model/connection error: 401 nope]"])).toContain(
+      "401 nope",
+    )
+    expect(selectJobReply([], "", [])).toBe("(agent produced no text output)")
+  })
+})
+
+describe("describeGithubThread", () => {
+  it("hands issue + triggering comment to the prompt, truncated", () => {
+    const out = describeGithubThread({
+      issue: { number: 1, title: "HELLO", body: "hello body" },
+      comment: { body: "/trayambak hello", user: { login: "boss" } },
+    })
+    expect(out).toContain("Issue #1: HELLO")
+    expect(out).toContain("hello body")
+    expect(out).toContain("Triggering comment by boss")
+    expect(out).toContain("/trayambak hello")
+    expect(describeGithubThread(null)).toBe("")
+    expect(describeGithubThread({})).toBe("")
   })
 })

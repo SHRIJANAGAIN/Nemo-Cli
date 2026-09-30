@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 import {
   detectBackend,
-  enforcementFor,
+  describeEnforcement,
   checkFileOp,
   checkExecPolicy,
   DEFAULT_EXEC_RULES,
@@ -9,14 +9,16 @@ import {
 
 export function sandboxCommand(args: string[]): string {
   const backend = detectBackend()
-  const enforcement = enforcementFor(backend)
+  const enforcement = describeEnforcement(backend)
   if (args[0] === "check" && args[1]) {
     const r = checkFileOp({ type: "workspace-write", writableRoots: ["."] }, "write", args[1], process.cwd())
     return `${r.allowed ? "allow" : "deny"} (${r.backend}, ${r.enforcement})${r.reason ? `: ${r.reason}` : ""}`
   }
   return [
     `backend: ${backend}`,
-    `enforcement: ${enforcement} (in-process policy evaluation — no OS sandbox is spawned)`,
+    enforcement === "os-sandbox"
+      ? `enforcement: os-sandbox (bash runs spawn under ${backend} while the sandboxSpawn flag is on)`
+      : `enforcement: policy-only (in-process policy evaluation — no OS sandbox is spawned)`,
     "Usage: trayambak sandbox check <file>",
   ].join("\n")
 }

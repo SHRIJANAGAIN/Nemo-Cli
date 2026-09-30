@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type { AssistantMessage, StopReason, ToolDefinition } from "../../protocol/src/index.js"
@@ -57,6 +57,22 @@ export interface ChatInput {
 export interface Provider {
   readonly id: string
   chat(input: ChatInput): Promise<AssistantMessage>
+  /** Fill-in-the-middle completion (prefix/suffix). Absent when the backend has no FIM endpoint. */
+  fim?(input: FimInput): Promise<FimResult>
+}
+
+export interface FimInput {
+  /** Code before the cursor. */
+  prompt: string
+  /** Code after the cursor. */
+  suffix?: string
+  maxTokens?: number
+  temperature?: number
+  signal?: AbortSignal
+}
+
+export interface FimResult {
+  text: string
 }
 
 export type { AssistantMessage, StopReason, ToolDefinition }

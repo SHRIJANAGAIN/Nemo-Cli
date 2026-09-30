@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
@@ -106,6 +106,10 @@ export type AppEvent =
   | { type: "ThreadFailedEvent"; threadId: string; error: string }
   | { type: "AgentMessageDeltaEvent"; threadId: string; delta: string }
   | { type: "AgentMessageCompletedEvent"; threadId: string; message: unknown }
+  // Tool-call lifecycle (the state machine's chatWidget feed — fields match
+  // ChatWidget.toolCallStarted/toolCallCompleted exactly).
+  | { type: "ToolCallStarted"; toolName: string; args: Record<string, unknown> }
+  | { type: "ToolCallCompleted"; toolName: string; result: string; error?: boolean }
   | { type: "ItemStartedEvent"; threadId: string; itemId: string; itemType: string }
   | { type: "ItemCompletedEvent"; threadId: string; itemId: string }
   | { type: "ItemFailedEvent"; threadId: string; itemId: string; error: string }

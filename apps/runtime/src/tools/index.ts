@@ -1,10 +1,11 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { createBashTool } from "./command-exec/bash.js"
+import { createTerminalTool } from "./command-exec/terminal.js"
 import { createEditFileTool } from "./file-edit/edit-file.js"
 import { createCheckpointTool, createRewindTool } from "./checkpoint/index.js"
 import { createReadFileTool } from "./file-edit/read-file.js"
@@ -13,6 +14,11 @@ import { createListDirTool } from "./directory/list-dir.js"
 import { createGrepTool } from "./regex/grep.js"
 import { createGlobTool } from "./globber/glob.js"
 import { createCodeSearchTool } from "./code-search/code-search.js"
+import { createSemanticSearchTool } from "./code-search/semantic-search.js"
+import { createSymbolSearchTool } from "./code-search/symbols.js"
+import { createFimTool } from "./code/fim.js"
+import { createNextEditTool } from "./code/next-edit.js"
+import { createCodemodeTool } from "./code/codemode.js"
 import { createReadManifestTool } from "./manifest/read-manifest.js"
 import { createDiffTool, createPatchTool } from "./text/diff.js"
 import { createCsvTool } from "./text/csv.js"
@@ -25,10 +31,11 @@ import { createTodoTool } from "./planning/todo.js"
 import { createTodoReadTool } from "./planning/todoread.js"
 import { createArtifactTool } from "./artifacts/artifact.js"
 import { createGithubTool } from "./github/github.js"
-import { createGetModeTool } from "./mode/mode.js"
+import { createModeTool, createGetModeTool } from "./mode/mode.js"
 import { createAskUserQuestionTool } from "./trayambak/ask-question.js"
 import { createAgentTool } from "./trayambak/agent.js"
 import { createTeamTool } from "./trayambak/team.js"
+import { createSwarmTool } from "./trayambak/swarm.js"
 import { createAgentCatalogTool } from "./trayambak/agent-catalog.js"
 import { createCronCreateTool, createCronDeleteTool, createCronListTool } from "./trayambak/cron.js"
 import { createMonitorTool } from "./trayambak/monitor.js"
@@ -45,13 +52,18 @@ import { createParallelReviewTool } from "./trayambak/parallel-review.js"
 import { createParallelExecuteTool } from "./trayambak/parallel-execute.js"
 import { createDebateTool } from "./trayambak/debate.js"
 import { createFleetTool, type FleetLister } from "./trayambak/fleet.js"
+import { createAgentManagerTool } from "./trayambak/agent-manager.js"
 import { createSotaSolveTool } from "./trayambak/sota-solve.js"
+import { createRunWorkflowTool } from "./trayambak/workflow.js"
+import { createNotebookEditTool } from "./trayambak/notebook-edit.js"
 import { createRulesTool } from "./trayambak/rules.js"
 import { createGenerateAgentTool } from "./trayambak/generate-agent.js"
 import { createPentestTools } from "./pentest/pentest-tools.js"
 import * as fs from "fs"
 import type { TrayambakConfig } from "../config.js"
+import { reportToolUsage, serverCanUsePentest } from "../license.js"
 import { createMcpTools } from "./mcp/mcp.js"
+import { createMarketplaceTool } from "./marketplace/marketplace.js"
 import { createToolSearchTool } from "./mcp/tool-search.js"
 import { createMcpInstallTool } from "./mcp/mcp-install.js"
 import { createMcpRunnerTool } from "./mcp/mcp-runner-tool.js"
@@ -61,12 +73,26 @@ import { createDiagnosticsTool } from "./diagnostics/diagnostics-tool.js"
 import { createMemoryTool } from "./memory/memory.js"
 import { createDreamTool } from "./memory/dream.js"
 import type { Tool } from "./types.js"
+import { textResult } from "./types.js"
+import type { Provider } from "../../../../packages/provider/src/index.js"
+import { FunctionRegistry, createFunctionRegistry } from "../../../../packages/function/src/index.js"
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
 import type { ToolsetDefinition } from "../../../../packages/protocol/src/toolsets.js"
 import { DEFAULT_TOOLSETS } from "../../../../packages/protocol/src/toolsets.js"
 
+export { FunctionRegistry, createFunctionRegistry }
+
 export * from "./types.js"
 export { createBashTool } from "./command-exec/bash.js"
+export {
+  createTerminalTool,
+  createTerminalSession,
+  sendTerminalInput,
+  readTerminalOutput,
+  killTerminal,
+  listTerminals,
+  resetTerminalsForTests,
+} from "./command-exec/terminal.js"
 export { createReadFileTool } from "./file-edit/read-file.js"
 export { createWriteFileTool } from "./file-edit/write-file.js"
 export { createEditFileTool } from "./file-edit/edit-file.js"
@@ -76,6 +102,19 @@ export { createListDirTool } from "./directory/list-dir.js"
 export { createGrepTool } from "./regex/grep.js"
 export { createGlobTool } from "./globber/glob.js"
 export { createCodeSearchTool } from "./code-search/code-search.js"
+export { createSymbolSearchTool, extractSymbols, languageOf, searchSymbols } from "./code-search/symbols.js"
+export type { SymbolHit, SymbolKind } from "./code-search/symbols.js"
+export {
+  createSemanticSearchTool,
+  buildSemanticIndex,
+  searchSemanticIndex,
+  tokenize,
+  formatSemanticResults,
+} from "./code-search/semantic-search.js"
+export type { SemanticDoc, ScoredDoc, SemanticIndex } from "./code-search/semantic-search.js"
+export { createFimTool } from "./code/fim.js"
+export { createNextEditTool, buildNextEditPrompt } from "./code/next-edit.js"
+export { createCodemodeTool, runCodemode } from "./code/codemode.js"
 export { createReadManifestTool } from "./manifest/read-manifest.js"
 export { createDiffTool, createPatchTool, applyUnifiedPatch, unifiedDiff, diffLines } from "./text/diff.js"
 export { createCsvTool, parseCsv } from "./text/csv.js"
@@ -99,6 +138,15 @@ export {
 export type { MemoryEntry, MemoryFrontmatter } from "./memory/memory.js"
 
 export { createMcpTools, resetMcpRegistry } from "./mcp/mcp.js"
+export {
+  createMarketplaceTool,
+  scanMarketplace,
+  searchMarketplace,
+  installMarketplaceEntry,
+  removeMarketplaceEntry,
+  defaultMarketplaceSource,
+} from "./marketplace/marketplace.js"
+export type { MarketplaceEntry, MarketplaceKind } from "./marketplace/marketplace.js"
 export { createToolSearchTool } from "./mcp/tool-search.js"
 export { getConnectorRegistry, searchConnectors, ConnectorRegistry } from "./mcp/registry.js"
 export type { ConnectorEntry } from "./mcp/registry.js"
@@ -133,8 +181,9 @@ export { createModeTool, createGetModeTool } from "./mode/mode.js"
 export { createAskUserQuestionTool } from "./trayambak/ask-question.js"
 export { createAgentTool } from "./trayambak/agent.js"
 export { createTeamTool } from "./trayambak/team.js"
+export { createSwarmTool } from "./trayambak/swarm.js"
+export type { SwarmStrategy, SwarmTask, SwarmWorker } from "./trayambak/swarm.js"
 export { createAgentCatalogTool } from "./trayambak/agent-catalog.js"
-export { createEnterPlanModeTool } from "./trayambak/plan-mode.js"
 export { createNotebookEditTool } from "./trayambak/notebook-edit.js"
 export {
   createCronCreateTool,
@@ -161,6 +210,13 @@ export { createParallelReviewTool } from "./trayambak/parallel-review.js"
 export { createDebateTool, buildDebateTasks, synthesizeDebate } from "./trayambak/debate.js"
 export { createFleetTool, fleetListText, fleetPeekText } from "./trayambak/fleet.js"
 export type { FleetJob, FleetLister } from "./trayambak/fleet.js"
+export {
+  createAgentManagerTool,
+  formatAgentOverview,
+  summarizeAgents,
+  truncateAgentName,
+} from "./trayambak/agent-manager.js"
+export type { AgentSessionRow, AgentManagerDeps, AgentSummary } from "./trayambak/agent-manager.js"
 export type { ParallelReviewResult, ReviewFinding } from "./trayambak/parallel-review.js"
 export { createParallelExecuteTool } from "./trayambak/parallel-execute.js"
 export type { ParallelExecuteOptions } from "./trayambak/parallel-execute.js"
@@ -203,19 +259,46 @@ export function createDefaultTools(
   ) => Promise<string[]>,
   config?: TrayambakConfig,
   onResolveSendTarget?: (to: string) => { id: string; name: string; running: boolean } | undefined,
-  extra?: { onListFleet?: FleetLister },
+  extra?: {
+    onListFleet?: FleetLister
+    onListSessions?: () => Array<{ id: string; name: string; status: string }>
+    /** Live accessors for `get_mode` / `set_mode`. Without these the tools
+     *  fall back to a closure-local mode so the pair stays self-consistent,
+     *  but an Agent passes its own accessors so a mode switch actually takes
+     *  effect (Agent.setMode refreshes the system prompt). */
+    onGetMode?: () => string
+    onSetMode?: (mode: string) => void
+    /** Live provider accessor for the `fim` tool. Without it the tool
+     *  reports FIM unavailable instead of guessing endpoint details. */
+    onGetProvider?: () => Provider
+  },
 ): { tools: Tool[]; arsenal?: Arsenal<Tool> } {
+  // Closure-local fallback for callers that pass no mode accessors.
+  let fallbackMode = extra?.onGetMode?.() ?? "default"
+  const getMode = (): string => extra?.onGetMode?.() ?? fallbackMode
+  const setMode = (mode: string): void => {
+    if (extra?.onSetMode) extra.onSetMode(mode)
+    else fallbackMode = mode
+  }
+
   const allTools: Tool[] = [
     createBashTool(),
+    createTerminalTool(),
     createReadFileTool(),
     createWriteFileTool(),
     createEditFileTool(),
+    createNotebookEditTool(),
     createCheckpointTool(),
     createRewindTool(),
     createListDirTool(),
     createGrepTool(),
     createGlobTool(),
     createCodeSearchTool(),
+    createSemanticSearchTool(),
+    createSymbolSearchTool(),
+    createFimTool(extra?.onGetProvider),
+    createNextEditTool(extra?.onGetProvider),
+    createCodemodeTool(),
     createReadManifestTool(),
     ...(devMode?.webFetchEnabled !== false ? [createWebFetchTool()] : []),
     ...(devMode?.webSearchEnabled !== false ? [createWebSearchTool()] : []),
@@ -230,15 +313,19 @@ export function createDefaultTools(
     createTodoReadTool(),
     createArtifactTool(),
     createGithubTool(),
-    createGetModeTool(() => "default"),
+    createGetModeTool(getMode),
+    createModeTool(getMode, setMode),
     createAskUserQuestionTool(onAskUserQuestion),
     createAgentTool(onRunAgent),
     createTeamTool(onRunTeam),
+    createSwarmTool(onRunTeam),
     createParallelReviewTool(onRunTeam),
     createParallelExecuteTool(onRunTeam),
     createDebateTool(onRunTeam),
     createFleetTool(extra?.onListFleet),
+    createAgentManagerTool({ onListSessions: extra?.onListSessions, onListFleet: extra?.onListFleet }),
     createSotaSolveTool(),
+    createRunWorkflowTool(),
     createRulesTool(),
     createGenerateAgentTool(),
     ...createPentestTools(),
@@ -256,6 +343,7 @@ export function createDefaultTools(
     createTaskListTool(),
     createTaskOutputTool(),
     createToolSearchTool(),
+    createMarketplaceTool(),
     createMcpInstallTool(),
     createMcpRunnerTool(),
     createDiagnosticsTool(),
@@ -269,6 +357,40 @@ export function createDefaultTools(
     arsenal = buildArsenalFromConfig(config)
     tools = arsenal.resolveTools(allTools)
   }
+  // License choke (single point, server-side): pentest tools stay registered
+  // (prompt/toolset parity invariants forbid silent drops) but EVERY
+  // execution verifies the license LIVE against the license server and
+  // reports usage back for the audit trail. No local checksum is trusted
+  // for access — a forged code dies server-side as an unknown license.
+  // The TUI menu explains this up front; this wrapper enforces it for
+  // CLI/server/headless too.
+  const gateLicenseKey = config?.licenseKey
+  const gateServerUrl = config?.licenseServerUrl
+  const gatePentest = (t: Tool): Tool => ({
+    ...t,
+    execute: async (toolCallId, args, signal, onUpdate, context) => {
+      const v = await serverCanUsePentest(gateLicenseKey, { serverUrl: gateServerUrl })
+      if (v.valid !== true) {
+        return textResult(
+          `${t.definition.name} refused: ${v.reason ?? "no valid pentest license"} — bind a key with /devmode on 1102-XXXX-XXXX-XXXX (needs internet: the license is verified live).`,
+          /*isError*/ true,
+        )
+      }
+      const result = await t.execute(toolCallId, args, signal, onUpdate, context)
+      const rawTarget = args !== null && typeof args === "object" ? (args as Record<string, unknown>).target : undefined
+      void reportToolUsage(
+        gateLicenseKey,
+        {
+          tool: t.definition.name,
+          target: typeof rawTarget === "string" ? rawTarget : "",
+          ok: result.isError !== true,
+        },
+        { serverUrl: gateServerUrl },
+      )
+      return result
+    },
+  })
+  tools = tools.map((t) => (t.definition.name.startsWith("trayambak__Pentest") ? gatePentest(t) : t))
 
   return { tools, arsenal }
 }
@@ -356,12 +478,15 @@ export function findTool(tools: Tool[], name: string): Tool | undefined {
   return tools.find((t) => t.definition.name === name)
 }
 
-const TOOLSET_DEFS: ToolsetDefinition[] = [
+/** Exported for the prompt/toolset parity test — a toolset entry naming a tool
+ *  that is never registered silently drops it from the model's view. */
+export const TOOLSET_DEFS: ToolsetDefinition[] = [
   {
     name: "core",
     description: "Core file, web, search, planning, and system tools",
     toolNames: [
       "bash",
+      "terminal",
       "read_file",
       "write_file",
       "edit_file",
@@ -371,6 +496,11 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
       "grep",
       "glob",
       "code_search",
+      "symbol_search",
+      "semantic_search",
+      "fim",
+      "next_edit",
+      "codemode",
       "read_manifest",
       "web_fetch",
       "web_search",
@@ -399,13 +529,15 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
     toolNames: [
       "trayambak__Agent",
       "trayambak__RunTeam",
+      "skt__Swarm",
       "trayambak__Debate",
       "trayambak__ParallelReview",
       "trayambak__ParallelExecute",
       "sota_solve",
-      "trayambak__EnterPlanMode",
+      "trayambak__RunWorkflow",
       "trayambak__NotebookEdit",
       "trayambak__GenerateAgent",
+      "trayambak__AgentCatalog",
       "trayambak__Rules",
     ],
   },
@@ -417,6 +549,7 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
       "trayambak__CronDelete",
       "trayambak__CronList",
       "trayambak__Fleet",
+      "trayambak__AgentManager",
       "trayambak__Monitor",
       "trayambak__EnterWorktree",
       "trayambak__ExitWorktree",
@@ -449,7 +582,7 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
   {
     name: "mcp",
     description: "Model Context Protocol tools and installers",
-    toolNames: ["tool_search", "mcp__install", "trayambak__run_mcp"],
+    toolNames: ["tool_search", "marketplace", "mcp__install", "trayambak__run_mcp"],
   },
   {
     name: "skills",
@@ -461,9 +594,16 @@ const TOOLSET_DEFS: ToolsetDefinition[] = [
 
 export function buildArsenalFromConfig(config: TrayambakConfig): Arsenal<Tool> {
   const cfg = config.toolsets
+  // Pentest ships enabled: the config DEFAULTS predate the toolset, and a
+  // defaults list without "pentest" filters the 5 Pentest* meta-tools out
+  // before the model ever sees them (every security request then dies with
+  // "Unknown tool"). Force it into the defaults; toolsets.disabled still
+  // wins in resolveTools, so an explicit opt-out keeps working.
+  const defaults = cfg?.defaults?.length ? cfg.defaults : DEFAULT_TOOLSETS
+  const defaultToolsets = defaults.includes("pentest") ? defaults : [...defaults, "pentest"]
   const arsenal = new Arsenal<Tool>(
     {
-      defaultToolsets: cfg?.defaults?.length ? cfg.defaults : DEFAULT_TOOLSETS,
+      defaultToolsets,
       disabledToolsets: cfg?.disabled ?? [],
       platformToolsets: cfg?.platform,
     },
@@ -475,4 +615,10 @@ export function buildArsenalFromConfig(config: TrayambakConfig): Arsenal<Tool> {
   }
 
   return arsenal
+}
+
+/** Build a FunctionRegistry pre-populated with the default tool set. */
+export function buildFunctionRegistry(config?: TrayambakConfig): FunctionRegistry {
+  const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, config)
+  return createFunctionRegistry(tools)
 }

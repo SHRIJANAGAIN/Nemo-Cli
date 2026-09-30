@@ -5,7 +5,7 @@ import { SKT_SPECS } from "./skt-themes.js"
 
 const CHECK_KEYS = ["primary", "background", "text", "border", "syntaxKeyword", "diffAddedBg"] as const
 
-describe("kilo theme port", () => {
+describe("skt theme port", () => {
   it("ports all 36 SKT AI LABS Code palettes", () => {
     expect(SKT_SPECS).toHaveLength(36)
   })
@@ -40,6 +40,14 @@ describe("kilo theme port", () => {
     const prev = getTheme().name
     expect(setThemeByName("dracula")).toBeDefined()
     expect(getTheme().name).toBe("dracula")
+    expect(setThemeByName(prev)).toBeDefined()
+    expect(getTheme().name).toBe(prev)
+  })
+
+  it("keeps the pre-rebrand 'kilo' name resolvable as a legacy alias", () => {
+    const prev = getTheme().name
+    expect(setThemeByName("kilo")?.name).toBe("solar-stone")
+    expect(getTheme().name).toBe("solar-stone")
     expect(setThemeByName(prev)).toBeDefined()
     expect(getTheme().name).toBe(prev)
   })

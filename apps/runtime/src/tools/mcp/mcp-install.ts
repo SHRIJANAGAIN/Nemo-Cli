@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { spawn } from "child_process"
@@ -11,6 +11,11 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { textResult, type Tool, type ToolContext } from "../types.js"
 import { getConnectorRegistry, type ConnectorEntry } from "./registry.js"
 import { saveConfig, type TrayambakConfig } from "../../../src/config.js"
+import { canSpawnDirectly, resolveExecutable, resolveNpmCliJs } from "../../../../../packages/mcp/src/spawn-resolve.js"
+
+// Re-exported so existing importers (tests, CLI) keep working — the
+// implementation lives in packages/mcp (one copy, no drift).
+export { canSpawnDirectly, resolveExecutable, resolveNpmCliJs } from "../../../../../packages/mcp/src/spawn-resolve.js"
 
 /** Install root resolved per call (the old module-level constant froze
  *  process.cwd() at import, scattering installs across daemon/TUI cwds). */
@@ -68,10 +73,32 @@ export async function installMcpServer(
   }
 
   if (entry.npmPackage && command[0] === "npx") {
+    // Prefer node + npm-cli.js: spawning npm.cmd directly throws EINVAL
+    // (shell:false) or mangles quoted paths (shell:true, DEP0190).
+    const npmCliJs = resolveNpmCliJs()
+    // Fallback only when the entry point resolves AND the binary is
+    // directly spawnable — a bare *.cmd dies as `spawn EINVAL` under
+    // shell:false, so a shim-only npm counts as not runnable.
+    const npmBinRaw = npmCliJs ? undefined : resolveExecutable("npm")
+    const npmBin = npmBinRaw && canSpawnDirectly(npmBinRaw) ? npmBinRaw : undefined
+    if (!npmCliJs && !npmBin) {
+      const located = resolveExecutable("npm")
+      return {
+        server: serverId,
+        status: "failed",
+        message: located
+          ? `npm was found at ${located} but cannot be launched without a shell (only a Windows .cmd shim was resolved). Reinstall Node.js (https://nodejs.org) so node_modules/npm is present, then retry.`
+          : "npm was not found on PATH. Install Node.js (https://nodejs.org) or run from a terminal where `npm --version` works, then retry.",
+      }
+    }
     try {
       const installDir = installDirFor(serverId, cwd)
       fs.mkdirSync(installDir, { recursive: true })
-      await execAsync("npm", ["install", "--prefix", installDir, entry.npmPackage], cwd || installDir)
+      const bin = npmCliJs ? process.execPath : (npmBin as string)
+      const binArgs = npmCliJs
+        ? [npmCliJs, "install", "--prefix", installDir, entry.npmPackage]
+        : ["install", "--prefix", installDir, entry.npmPackage]
+      await execAsync(bin, binArgs, cwd || installDir)
       // Prefer the just-installed payload over a fresh npx download: resolve
       // <pkg>/dist/index.js when present, else keep the npx command.
       const runnable = resolveInstalledEntry(installDir, entry.npmPackage) ?? { command }
@@ -98,7 +125,24 @@ export async function installMcpServer(
         if (!fs.existsSync(scriptAbs)) {
           return { server: serverId, status: "failed", message: `Server script not found: ${scriptAbs}` }
         }
-        await execAsync("pip", ["install", "mcp"], cwd || installDir)
+        const pipBin =
+          resolveExecutable("pip") ??
+          resolveExecutable("pip3") ??
+          resolveExecutable("python") ??
+          resolveExecutable("python3")
+        if (!pipBin) {
+          return {
+            server: serverId,
+            status: "failed",
+            message:
+              "Neither pip nor python was found on PATH. Install Python (https://www.python.org) or run from a terminal where `pip --version` works, then retry.",
+          }
+        }
+        if (/pip3?$/.test(path.basename(pipBin, path.extname(pipBin)))) {
+          await execAsync(pipBin, ["install", "mcp"], cwd || installDir)
+        } else {
+          await execAsync(pipBin, ["-m", "pip", "install", "mcp"], cwd || installDir)
+        }
         return persist(
           { server: serverId, status: "installed", message: `Python MCP server ready at ${scriptAbs}` },
           { command: [prog, scriptAbs], cwd: path.dirname(scriptAbs) },
@@ -139,7 +183,11 @@ export function resolveInstalledEntry(installDir: string, npmPackage: string): C
 
 export function createMcpInstallTool(): Tool {
   const definition: ToolDefinition = {
-    timeoutMs: 30_000,
+    // Install is a real `npm install` of a package tree — 30s killed it
+    // mid-download (the "sometimes just exits" symptom). The internal
+    // execAsync deadline is 180s; the harness bound must outlast it, so a
+    // failure surfaces as npm's own exit code/stderr, never as a kill.
+    timeoutMs: 300_000,
     name: "mcp__install",
     description:
       "Install and manage MCP (Model Context Protocol) servers. Use /mcp search to find servers, /mcp install <id> to install, /mcp list to see available.",
@@ -207,7 +255,9 @@ export function createMcpInstallTool(): Tool {
   }
 }
 
-function execAsync(command: string, args: string[], cwd: string, timeoutMs = 180_000): Promise<void> {
+/** Exported for tests: exit codes and spawn failures must surface as
+ *  rejections carrying the real code/stderr (never a silent success). */
+export function execAsync(command: string, args: string[], cwd: string, timeoutMs = 180_000): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,

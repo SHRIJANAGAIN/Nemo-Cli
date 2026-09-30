@@ -1,18 +1,18 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 
 import { describe, it, expect, beforeEach } from "vitest"
-import { AgentRegistry, AgentStatus, getAgentRegistry, resetAgentRegistry } from "./agent_registry.js"
-import { AgentCommunicationManager, getAgentCommunicationManager } from "./agent_communication.js"
+import { AgentStatus, getAgentRegistry, resetAgentRegistry } from "./agent_registry.js"
+import { getAgentCommunicationManager } from "./agent_communication.js"
 import { AgentCommunicationKind } from "./agent_communication.js"
-import { ExtensionRegistry, getExtensionRegistry } from "./extension_api.js"
-import { PluginManager, getPluginManager } from "./extension_api.js"
-import { AnalyticsManager, getAnalyticsManager } from "./analytics.js"
+import { getExtensionRegistry } from "./extension_api.js"
+import { getPluginManager } from "./extension_api.js"
+import { getAnalyticsManager } from "./analytics.js"
 import { ThreadStore, resetThreadStore, ThreadStatus, ThreadSource } from "./session_store.js"
 import { tmpdir } from "os"
 import { join } from "path"
-import { loadProjectInstructions, discoverAgentsMdFiles, findProjectRoot } from "./agents_md.js"
-import { RolloutBudget, getRolloutBudget } from "./rollout_budget.js"
-import { HookRuntime, getHookRuntime, HookEventName, HookExecutionMode, HookSource } from "./hook_runtime.js"
+import { discoverAgentsMdFiles, findProjectRoot } from "./agents_md.js"
+import { getRolloutBudget } from "./rollout_budget.js"
+import { getHookRuntime, HookEventName, HookExecutionMode, HookSource } from "./hook_runtime.js"
 import {
   CompactionReason,
   CompactionStrategy,

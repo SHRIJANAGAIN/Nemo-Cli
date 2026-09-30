@@ -1,0 +1,47 @@
+name: pr-standards
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  title:
+    name: Conventional title + body
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check standards
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title || '';
+            const body = (pr.body || '').trim();
+            const problems = [];
+            if (!/^(feat|fix|docs|chore|refactor|test)(\([a-zA-Z0-9_-]+\))?\s*:/.test(title)) {
+              problems.push('Title must start with `feat:`, `fix:`, `docs:`, `chore:`, `refactor:` or `test:` (optional `(scope)`). Got: `' + title + '`');
+            }
+            if (body.replace(/<!--[\s\S]*?-->/g, '').trim().length < 20) {
+              problems.push('Description is empty — explain what changed and how it was verified (`npm run build`, `npx vitest run`, `npm run lint`).');
+            }
+            const LABEL = 'needs:standards';
+            if (problems.length) {
+              await github.rest.issues.addLabels({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, labels: [LABEL] }).catch(() => {});
+              const marker = '<!-- pr-standards -->';
+              const text = marker + '\n**PR standards:**\n' + problems.map(p => '- ' + p).join('\n');
+              const { data: comments } = await github.rest.issues.listComments({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number });
+              const existing = comments.find(c => c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body: text });
+              } else {
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, body: text });
+              }
+              core.setFailed(problems.join(' | '));
+            } else {
+              await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, name: LABEL }).catch(() => {});
+              core.info('PR standards ok');
+            }

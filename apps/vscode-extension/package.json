@@ -4,7 +4,7 @@
   "description": "Trayambak terminal agent in VS Code (sidebar webview + commands).",
   "version": "0.7.0",
   "publisher": "SKT-AI-LABS",
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "vscode": "^1.84.0"
   },
@@ -28,6 +28,14 @@
         {
           "id": "trayambak.sidebar",
           "name": "Trayambak"
+        },
+        {
+          "id": "trayambak.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "trayambak.models",
+          "name": "Models"
         }
       ]
     },
@@ -39,6 +47,76 @@
       {
         "command": "trayambak.openWeb",
         "title": "Trayambak: Open web UI"
+      },
+      {
+        "command": "trayambak.switchModel",
+        "title": "Trayambak: Switch model"
+      },
+      {
+        "command": "trayambak.switchProvider",
+        "title": "Trayambak: Switch provider"
+      },
+      {
+        "command": "trayambak.compact",
+        "title": "Trayambak: Compact session"
+      },
+      {
+        "command": "trayambak.review",
+        "title": "Trayambak: Review selection"
+      },
+      {
+        "command": "trayambak.newSession",
+        "title": "Trayambak: New session"
+      },
+      {
+        "command": "trayambak.openSessions",
+        "title": "Trayambak: Open sessions"
+      }
+    ],
+    "configuration": {
+      "title": "Trayambak",
+      "properties": {
+        "trayambak.provider": {
+          "type": "string",
+          "default": "nvidia",
+          "description": "Model provider backend (22 backends: llamacpp/nvidia/openai/anthropic/google/ollama/groq/mistral/openrouter/...)."
+        },
+        "trayambak.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model id for the active provider. Empty = provider default."
+        },
+        "trayambak.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Provider base URL override. Empty = provider default."
+        },
+        "trayambak.telemetry": {
+          "type": "string",
+          "enum": [
+            "off",
+            "on"
+          ],
+          "default": "off",
+          "description": "Telemetry is off by default; no prompts."
+        },
+        "trayambak.inlineCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ghost-text inline completion from local context (no network by default)."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "trayambak.run",
+        "key": "ctrl+shift+t",
+        "title": "Trayambak: Run prompt"
+      },
+      {
+        "command": "trayambak.switchModel",
+        "key": "ctrl+shift+m",
+        "title": "Trayambak: Switch model"
       }
     ]
   },

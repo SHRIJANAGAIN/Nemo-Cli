@@ -1,14 +1,14 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as http from "http"
 import * as https from "https"
 import * as url from "url"
 import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition } from "../../protocol/src/index.js"
-import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
+import type { ChatInput, FimInput, FimResult, Provider, ProviderOptions, WireMessage } from "./types.js"
 
 interface SktTool {
   type: "function"
@@ -57,6 +57,101 @@ export class NvidiaProvider implements Provider {
     const body = this.buildBody(input)
     const raw = await this.postJson("/v1/chat/completions", body, input.signal, input.callbacks)
     return raw
+  }
+
+  /**
+   * Fill-in-the-middle completion over the legacy `/v1/completions` API
+   * (prompt + suffix), served by vLLM/Ollama/local servers and most
+   * OpenAI-compatible gateways. Subclasses inherit it; backends without a
+   * completions endpoint surface an honest error instead of hanging.
+   */
+  async fim(input: FimInput): Promise<FimResult> {
+    if (!input.prompt) throw new Error("FIM prompt must not be empty")
+    const body: Record<string, unknown> = {
+      model: this.options.model,
+      prompt: input.prompt,
+      max_tokens: input.maxTokens ?? 256,
+      temperature: input.temperature ?? 0.2,
+      stream: false,
+    }
+    if (input.suffix !== undefined && input.suffix.length > 0) body.suffix = input.suffix
+    const text = await this.postCompletion("/v1/completions", body, input.signal)
+    return { text }
+  }
+
+  protected postCompletion(path: string, payload: unknown, signal: AbortSignal | undefined): Promise<string> {
+    const base = new url.URL(this.options.baseUrl.replace(/\/+$/, ""))
+    const isHttps = base.protocol === "https:"
+    const lib = isHttps ? https : http
+    const data = JSON.stringify(payload)
+
+    return new Promise<string>((resolve, reject) => {
+      let settled = false
+      const settle = (fn: () => void): void => {
+        if (!settled) {
+          settled = true
+          fn()
+        }
+      }
+      const req = lib.request(
+        {
+          method: "POST",
+          hostname: base.hostname,
+          port: base.port || (isHttps ? 443 : 80),
+          path: (base.pathname && base.pathname !== "/" ? base.pathname.replace(/\/$/, "") : "") + path,
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(data),
+            ...(this.options.apiKey ? { Authorization: `Bearer ${this.options.apiKey}` } : {}),
+          },
+          timeout: this.options.timeoutMs ?? 600_000,
+          agent: isHttps ? httpsAgent : httpAgent,
+        },
+        (res) => {
+          let buf = ""
+          res.setEncoding("utf8")
+          res.on("data", (c) => {
+            buf += c
+            if (buf.length > 512 * 1024) req.destroy()
+          })
+          res.on("end", () => {
+            const status = res.statusCode ?? 0
+            if (status >= 400) {
+              settle(() => reject(new Error(`${this.apiErrorPrefix} FIM returned ${status}: ${buf.slice(0, 200)}`)))
+              return
+            }
+            try {
+              const json = JSON.parse(buf) as { choices?: Array<{ text?: string }> }
+              settle(() => resolve(json.choices?.[0]?.text ?? ""))
+            } catch {
+              settle(() => reject(new Error(`${this.apiErrorPrefix} FIM unreadable response`)))
+            }
+          })
+          res.on("error", (err) => settle(() => reject(err)))
+        },
+      )
+      req.on("timeout", () => {
+        req.destroy()
+        settle(() => reject(new Error("Request timed out")))
+      })
+      req.on("error", (err) => settle(() => reject(err)))
+      if (signal) {
+        if (signal.aborted) {
+          req.destroy()
+          settle(() => reject(new Error("aborted")))
+          return
+        }
+        signal.addEventListener(
+          "abort",
+          () => {
+            req.destroy()
+            settle(() => reject(new Error("aborted")))
+          },
+          { once: true },
+        )
+      }
+      req.end(data)
+    })
   }
 
   protected applyReasoning(body: Record<string, unknown>): void {

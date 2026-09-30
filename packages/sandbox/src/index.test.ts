@@ -1,9 +1,10 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   checkFileOp,
   checkExecPolicy,
   DEFAULT_EXEC_RULES,
+  describeEnforcement,
   detectBackend,
   enforcementFor,
   globToRegExp,
@@ -44,9 +45,36 @@ describe("sandbox file policy", () => {
 })
 
 describe("sandbox honesty", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   it("reports policy-only enforcement for whatever backend is detected", () => {
     for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
       expect(enforcementFor(b)).toBe("policy-only")
+    }
+  })
+  it("stays policy-only for every backend while sandboxSpawn is off", () => {
+    vi.stubEnv("FEATURE_SANDBOXSPAWN", "0")
+    for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
+      expect(enforcementFor(b)).toBe("policy-only")
+    }
+  })
+  it("claims os-sandbox only for isolator backends when the flag is on", () => {
+    vi.stubEnv("FEATURE_SANDBOXSPAWN", "1")
+    expect(enforcementFor("seatbelt")).toBe("os-sandbox")
+    expect(enforcementFor("landlock")).toBe("os-sandbox")
+    expect(enforcementFor("bwrap")).toBe("os-sandbox")
+    // No OS isolator exists behind these, so claiming one would be a lie.
+    expect(enforcementFor("windows-restricted")).toBe("policy-only")
+    expect(enforcementFor("fallback")).toBe("policy-only")
+  })
+  it("agrees with describeEnforcement for every backend and flag state", () => {
+    for (const flag of ["0", "1"]) {
+      vi.stubEnv("FEATURE_SANDBOXSPAWN", flag)
+      for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
+        expect(enforcementFor(b)).toBe(describeEnforcement(b))
+      }
     }
   })
   it("detectBackend returns a real value and never claims unwired launchers", () => {

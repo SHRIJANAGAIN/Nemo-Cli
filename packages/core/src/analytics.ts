@@ -7,6 +7,8 @@
  * Provides telemetry and analytics infrastructure for the agent.
  */
 
+import { redactPayload } from "./secrets.js"
+
 /** Compaction event types. */
 export enum CompactionReason {
   Auto = "auto",
@@ -122,11 +124,19 @@ export class AnalyticsManager {
 
   // --- Compaction Events ---
 
-  /** Record a compaction event. */
+  /** Record a compaction event. Numeric fields (`tokensBefore`, …) stay raw on
+   *  purpose — `isSecretKey` substring-matches "token", so walking the whole
+   *  event would stringify them and corrupt `getCompactionStats`. */
   recordCompaction(event: Omit<CodexCompactionEvent, "timestamp">): void {
     const fullEvent: CodexCompactionEvent = {
       ...event,
       timestamp: Date.now(),
+    }
+    // `metadata` is this event's only free-text field: redact it in place so
+    // neither buffer (compactionEvents nor the generic events list) holds it
+    // verbatim, while every numeric/enum field keeps its type.
+    if (fullEvent.metadata !== undefined) {
+      fullEvent.metadata = redactPayload(fullEvent.metadata) as Record<string, unknown>
     }
     this.compactionEvents.push(fullEvent)
     this.events.push({
@@ -170,12 +180,10 @@ export class AnalyticsManager {
 
   // --- Hook Run Facts ---
 
-  /** Record a hook run fact. */
+  /** Record a hook run fact. Redacted on the way in: `output` is hook
+   *  stdout/stderr text — the classic "the hook echoed a credential" path. */
   recordHookRun(fact: Omit<HookRunFact, "timestamp">): void {
-    const fullFact: HookRunFact = {
-      ...fact,
-      timestamp: Date.now(),
-    }
+    const fullFact = redactPayload({ ...fact, timestamp: Date.now() }) as HookRunFact
     this.hookRunFacts.push(fullFact)
     this.events.push({
       type: "hook_run",
@@ -192,7 +200,9 @@ export class AnalyticsManager {
 
   // --- Rollout Items ---
 
-  /** Record a rollout item. */
+  /** Record a rollout item. Raw on purpose: every field is a number or an id
+   *  (no free text), and `inputTokens`/`outputTokens` would be stringified by
+   *  `isSecretKey`'s "token" substring match, corrupting `getRolloutStats`. */
   recordRollout(item: Omit<RolloutItem, "timestamp">): void {
     const fullItem: RolloutItem = {
       ...item,
@@ -236,12 +246,16 @@ export class AnalyticsManager {
 
   // --- Generic Events ---
 
-  /** Record an arbitrary agent event. */
+  /** Record an arbitrary agent event. Redacted on the way in: the 10k-entry
+   *  buffer is a long-lived sink, so secret-named keys and embedded
+   *  credentials must never land there verbatim (AGENTS.md: secrets are
+   *  redacted before analytics). Ordinary values — including long paths and
+   *  prose — are stored unchanged. */
   recordEvent(type: AgentEvent["type"], data: Record<string, unknown>): void {
     this.events.push({
       type,
       timestamp: Date.now(),
-      data,
+      data: redactPayload(data) as Record<string, unknown>,
     })
     this.trimEvents()
   }

@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -211,7 +211,11 @@ export function createGenerateAgentTool(): Tool {
 Reference as: agent=${agent.identifier}`
         return textResult(summary)
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
+        const raw = error instanceof Error ? error.message : String(error)
+        const msg =
+          raw.trim().length > 0
+            ? raw
+            : `${error instanceof Error ? error.name : typeof error} (no detail; provider ${baseUrl} unreachable or refused — check baseUrl/apiKey)`
         return textResult(`Failed to generate agent: ${msg}`, /*isError*/ true)
       }
     },

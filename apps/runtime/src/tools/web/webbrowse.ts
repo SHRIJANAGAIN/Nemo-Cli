@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as https from "https"
@@ -28,6 +28,11 @@ type PageState = {
   status: number
   title: string
   body: string
+  /** Anchors extracted from the RAW html. The stored body is sanitized
+   *  (tags stripped), so follow_link must use this — deriving links from
+   *  `body` never matched an `<a>` tag and made follow_link always fail
+   *  with "out of range". */
+  links: Array<{ text: string; href: string }>
   contentType: string
   timestamp: number
 }
@@ -188,7 +193,9 @@ function finishSession(
   }
   const isHtml = contentType.includes("text/html") || contentType.includes("application/xhtml+xml")
   const cleaned = isHtml ? sanitizeHtml(buf) : buf
-  const links = withLinks && isHtml ? extractLinks(buf, base) : []
+  // Links always come from the raw html (the stored body is tag-stripped);
+  // `withLinks` only gates whether they appear in the output below.
+  const links = isHtml ? extractLinks(buf, base) : []
   const final = cleaned.length > maxBytes ? cleaned.slice(0, maxBytes) + `\n[truncated to ${maxBytes} bytes]` : cleaned
 
   session.currentUrl = usedUrl
@@ -197,13 +204,14 @@ function finishSession(
     status,
     title: extractTitle(buf),
     body: final,
+    links,
     contentType,
     timestamp: Date.now(),
   })
   session.history.push({ url: usedUrl, status })
 
   const parts: string[] = [`HTTP ${status} GET ${usedUrl}\n\n${final}`]
-  if (links.length > 0) {
+  if (withLinks && links.length > 0) {
     parts.push(`\n\n[links]\n${links.map((l) => `- ${l.href}${l.text ? `  (${l.text})` : ""}`).join("\n")}`)
   } else if (withLinks && isHtml) {
     parts.push("\n\n[links] none found on this page")
@@ -281,14 +289,10 @@ export function createWebBrowseTool(): Tool {
       if (action === "follow_link") {
         if (!session.currentUrl) return textResult("No current page to follow links from.", /*isError*/ true)
         const idx = typeof args.link_index === "number" ? args.link_index : 0
-        let base: URL
-        try {
-          base = new URL(session.currentUrl)
-        } catch {
-          base = new URL("https://localhost/")
-        }
         const currentPage = session.pages[session.pages.length - 1]
-        const links = currentPage ? extractLinks(currentPage.body, base) : []
+        // Anchors were captured from the raw html when the page was stored;
+        // re-parsing the sanitized body would find no <a> tags at all.
+        const links = currentPage ? currentPage.links : []
         if (idx < 0 || idx >= links.length)
           return textResult(`Link index ${idx} out of range (0-${links.length - 1}).`, /*isError*/ true)
         return executeNavigate(
@@ -416,7 +420,18 @@ function navigateWithRedirect(
         } catch {
           redirectUrl = location
         }
-        const redirectParsed = new URL(redirectUrl)
+        // A malformed location must not throw inside the response callback
+        // (an uncaught throw here takes the whole process down).
+        let redirectParsed: URL
+        try {
+          redirectParsed = new URL(redirectUrl)
+        } catch {
+          resolve({
+            content: [{ type: "text", text: `Invalid redirect location: ${location}` }],
+            isError: true,
+          })
+          return
+        }
         navigateWithRedirect(redirectParsed, withLinks, maxBytes, signal, resolve, redirectCount + 1)
         return
       }

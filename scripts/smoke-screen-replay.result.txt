@@ -3,36 +3,28 @@ SCREEN_REPLAY_OK
 │                                                                          │
 │ ❯ MARKER_ALPHA_ONE                                                       │
 │                                                                          │
-│ ✓ ⛓ Queued (#1): MARKER_DELTA_LONG lorem ipsum dolor sit amet consectetur│
-│  adipiscing elit sed do …                                                │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
 │ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
-│                                                                          │
-│ ✓ ● Running queued prompt (0 still queued)                               │
 │                                                                          │
 │ ❯ MARKER_DELTA_LONG lorem ipsum dolor sit amet consectetur adipiscing    │
 │ elit sed do eiusmod tempor lorem ipsum dolor sit amet consectetur        │
 │ adipiscing elit sed do eiusmod tempor lorem ipsum dolor sit amet         │
 │ consectetur adipiscing elit sed do eiusmod tempor                        │
 │                                                                          │
-│ ✓ ⛓ Queued (#1): MARKER_BRAVO_TWO                                        │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
 │ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
-│                                                                          │
-│ ✓ ● Running queued prompt (0 still queued)                               │
 │                                                                          │
 │ ❯ MARKER_BRAVO_TWO                                                       │
 │                                                                          │
-│ ✓ ⛓ Queued (#1): MARKER_FILLER_N0 filler line to build transcript bulk   │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ❯ MARKER_FILLER_N0 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✓ ⛓ Queued (#1): MARKER_FILLER_N1 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
 │                                                                          │
-│ ✓ ⛓ Queued (#2): MARKER_FILLER_N1 filler line to build transcript bulk   │
+│ ✓ ⛓ Queued (#2): MARKER_FILLER_N2 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
@@ -41,20 +33,20 @@ SCREEN_REPLAY_OK
 │                                                                          │
 │ ✓ ● Running queued prompt (1 still queued)                               │
 │                                                                          │
-│ ❯ MARKER_FILLER_N0 filler line to build transcript bulk before the frame │
+│ ❯ MARKER_FILLER_N1 filler line to build transcript bulk before the frame │
 │ budget overflows                                                         │
 │                                                                          │
-│ ✓ ⛓ Queued (#2): MARKER_FILLER_N2 filler line to build transcript bulk   │
+│ ✓ ⛓ Queued (#2): MARKER_FILLER_N3 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
 │                                                                          │
-│ ✓ ⛓ Queued (#3): MARKER_FILLER_N3 filler line to build transcript bulk   │
+│ ✓ ⛓ Queued (#3): MARKER_FILLER_N4 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
 │                                                                          │
-│ ✓ ⛓ Queued (#4): MARKER_FILLER_N4 filler line to build transcript bulk   │
+│ ✓ ⛓ Queued (#4): MARKER_FILLER_N5 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
@@ -63,96 +55,153 @@ SCREEN_REPLAY_OK
 │                                                                          │
 │ ✓ ● Running queued prompt (3 still queued)                               │
 │                                                                          │
-│ ❯ MARKER_FILLER_N1 filler line to build transcript bulk before the frame │
+│ ❯ MARKER_FILLER_N2 filler line to build transcript bulk before the frame │
 │ budget overflows                                                         │
 │                                                                          │
-│ ✓ ⛓ Queued (#4): MARKER_FILLER_N5 filler line to build transcript bulk   │
+│ ✓ ⛓ Queued (#4): MARKER_FILLER_N6 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
 │                                                                          │
-│ ✓ ⛓ Queued (#5): MARKER_FILLER_N6 filler line to build transcript bulk   │
+│ ✓ ⛓ Queued (#5): MARKER_FILLER_N7 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
 │                                                                          │
-│ ✓ ⛓ Queued (#6): MARKER_FILLER_N7 filler line to build transcript bulk   │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (4 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N3 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✓ ⛓ Queued (#5): MARKER_FILLER_N8 filler line to build transcript bulk   │
 │ before the frame budget ov…                                              │
 │ Runs automatically when the current turn finishes — /queue list · /queue │
 │ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✓ ⛓ Queued (#6): MARKER_FILLER_N9 filler line to build transcript bulk   │
+│ before the frame budget ov…                                              │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✓ ⛓ Queued (#7): MARKER_FILLER_N10 filler line to build transcript bulk  │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (6 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N4 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✓ ⛓ Queued (#7): MARKER_FILLER_N11 filler line to build transcript bulk  │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✓ ⛓ Queued (#8): MARKER_FILLER_N12 filler line to build transcript bulk  │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✓ ⛓ Queued (#9): MARKER_FILLER_N13 filler line to build transcript bulk  │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (8 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N5 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✓ ⛓ Queued (#9): MARKER_FILLER_N14 filler line to build transcript bulk  │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✓ ⛓ Queued (#10): MARKER_FILLER_N15 filler line to build transcript bulk │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (9 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N6 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✓ ⛓ Queued (#10): MARKER_FILLER_N16 filler line to build transcript bulk │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✓ ⛓ Queued (#11): MARKER_FILLER_N17 filler line to build transcript bulk │
+│ before the frame budget o…                                               │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (10 still queued)                              │
+│                                                                          │
+│ ❯ MARKER_FILLER_N7 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (9 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N8 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (8 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N9 filler line to build transcript bulk before the frame │
+│ budget overflows                                                         │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (7 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N10 filler line to build transcript bulk before the frame│
+│  budget overflows                                                        │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (6 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N11 filler line to build transcript bulk before the frame│
+│  budget overflows                                                        │
+│                                                                          │
+│ ✓ ⛓ Queued (#7): MARKER_CHARLIE_THREE                                    │
+│ Runs automatically when the current turn finishes — /queue list · /queue │
+│ drop <n> · /queue clear · Ctrl+X clears                                  │
+│                                                                          │
+│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
+│                                                                          │
+│ ✓ ● Running queued prompt (6 still queued)                               │
+│                                                                          │
+│ ❯ MARKER_FILLER_N12 filler line to build transcript bulk before the frame│
+│  budget overflows                                                        │
 │                                                                          │
 │ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
 │                                                                          │
 │ ✓ ● Running queued prompt (5 still queued)                               │
 │                                                                          │
-│ ❯ MARKER_FILLER_N2 filler line to build transcript bulk before the frame │
-│ budget overflows                                                         │
+│ ❯ MARKER_FILLER_N13 filler line to build transcript bulk before the frame│
+│  budget overflows                                                        │
 │                                                                          │
-│ ✓ ⛓ Queued (#6): MARKER_FILLER_N8 filler line to build transcript bulk   │
-│ before the frame budget ov…                                              │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#7): MARKER_FILLER_N9 filler line to build transcript bulk   │
-│ before the frame budget ov…                                              │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#8): MARKER_FILLER_N10 filler line to build transcript bulk  │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#9): MARKER_FILLER_N11 filler line to build transcript bulk  │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#10): MARKER_FILLER_N12 filler line to build transcript bulk │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#11): MARKER_FILLER_N13 filler line to build transcript bulk │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#12): MARKER_FILLER_N14 filler line to build transcript bulk │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#13): MARKER_FILLER_N15 filler line to build transcript bulk │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#14): MARKER_FILLER_N16 filler line to build transcript bulk │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✓ ⛓ Queued (#15): MARKER_FILLER_N17 filler line to build transcript bulk │
-│ before the frame budget o…                                               │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ✗ [model/connection error: connect ECONNREFUSED 127.0.0.1:9]             │
-│                                                                          │
-│ ✓ ● Running queued prompt (14 still queued)                              │
-│                                                                          │
-│ ❯ MARKER_FILLER_N3 filler line to build transcript bulk before the frame │
-│ budget overflows                                                         │
-│                                                                          │
-│ ✓ ⛓ Queued (#15): MARKER_CHARLIE_THREE                                   │
-│ Runs automatically when the current turn finishes — /queue list · /queue │
-│ drop <n> · /queue clear · Ctrl+X clears                                  │
-│                                                                          │
-│ ⠸ Thinking…                                                              │
-│                                                                          │
+│ ⠦ Thinking…                                                              │
 │╭────────────────────────────────────────────────────────────────────────╮│
-││ test/m        ● thinking  Mode: ASK  Tokens: 1390  ⛓ Queue: 15  ctx 1% ││
+││ test/m         ● thinking  Mode: ASK  Tokens: 1687  ⛓ Queue: 5  ctx 1% ││
 │╰────────────────────────────────────────────────────────────────────────╯│
 │                                                                          │
 │❯ █Type a message...                                                      │

@@ -1,14 +1,14 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { createBashTool, resetBackgroundJobsForTests } from "./bash.js"
+import { buildBashEnv, createBashTool, resetBackgroundJobsForTests } from "./bash.js"
 import { DEFAULT_PERMISSIONS } from "../../../../../packages/protocol/src/permissions.js"
 import type { TrayambakConfig } from "../../config.js"
 import type { ToolContext, ToolResult } from "../types.js"
@@ -37,6 +37,7 @@ describe("bash tool", () => {
 
   afterEach(() => {
     resetBackgroundJobsForTests()
+    vi.unstubAllEnvs()
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -129,4 +130,62 @@ describe("bash tool", () => {
     expect(ninth.isError).toBe(true)
     expect(textOf(ninth)).toContain("Too many background jobs")
   }, 30_000)
+
+  it("builds a child env that keeps PATH, HOME, TEMP and USERPROFILE", () => {
+    const out = buildBashEnv(
+      {
+        PATH: "/usr/bin",
+        Path: "C:\\Windows\\System32", // Windows spells it "Path"; keep both spellings
+        HOME: "/home/dev",
+        TEMP: "C:\\Temp",
+        USERPROFILE: "C:\\Users\\dev",
+        LANG: "en_US.UTF-8",
+      },
+      "policy-only",
+      false,
+    )
+    expect(out.PATH).toBe("/usr/bin")
+    expect(out.Path).toBe("C:\\Windows\\System32")
+    expect(out.HOME).toBe("/home/dev")
+    expect(out.TEMP).toBe("C:\\Temp")
+    expect(out.USERPROFILE).toBe("C:\\Users\\dev")
+    expect(out.LANG).toBe("en_US.UTF-8")
+    expect(out.CODEX_SANDBOX).toBe("policy-only")
+  })
+
+  it("drops the secrets the deny-list-only filter misses", () => {
+    // Audit 4.1: core's getSafeEnv lets every one of these through; only
+    // the sandbox allowlist catches them.
+    const out = buildBashEnv(
+      {
+        PATH: "/usr/bin",
+        DATABASE_URL: "postgres://prod",
+        SENTRY_DSN: "https://o@ingest.example",
+        SLACK_WEBHOOK: "https://hooks.slack.example",
+        NPM_AUTH: "_npm_token_value",
+        DOCKER_CONFIG: "/home/dev/.docker",
+        SECRET_TOKEN: "blocked",
+      },
+      "policy-only",
+      false,
+    )
+    expect(out.PATH).toBe("/usr/bin")
+    expect(out.DATABASE_URL).toBeUndefined()
+    expect(out.SENTRY_DSN).toBeUndefined()
+    expect(out.SLACK_WEBHOOK).toBeUndefined()
+    expect(out.NPM_AUTH).toBeUndefined()
+    expect(out.DOCKER_CONFIG).toBeUndefined()
+    expect(out.SECRET_TOKEN).toBeUndefined()
+  })
+
+  it("proves it end to end: the child sees PATH/HOME but never DATABASE_URL", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://must-not-leak")
+    vi.stubEnv("HOME", path.join(dir, "stub-home"))
+    const res = await run({ command: process.platform === "win32" ? "set" : "env" })
+    expect(res.isError).toBeFalsy()
+    const seen = textOf(res).toLowerCase()
+    expect(seen).not.toContain("database_url")
+    expect(seen).toContain("path=")
+    expect(seen).toContain("home=")
+  })
 })

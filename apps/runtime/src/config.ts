@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -13,6 +13,10 @@ import { parseTokenBudget } from "../../../packages/core/src/token_budget.js"
 export interface TrayambakConfig {
   baseUrl: string
   model: string
+  /** Cheap model for background chores (auto-titles). Falls back to `model` when unset. */
+  small_model?: string
+  /** Default model for subagent children. Falls back to the parent run's model when unset. */
+  subagent_model?: string
   apiKey: string
   cwd: string
   temperature: number
@@ -63,7 +67,10 @@ export interface TrayambakConfig {
   /** Scratchpad directory for temporary files (defaults to cwd/.scratchpad). */
   scratchpadDir?: string
   /** Model provider backend: "llamacpp", "nvidia", "nvidia-nim", "openai",
-   *  "xai", "huggingface", "anthropic", "google", "ollama", or "custom"
+   *  "xai", "huggingface", "anthropic", "google", "ollama", "custom",
+   *  plus OpenAI-compatible gateways: "groq", "mistral", "cerebras",
+   *  "together", "deepinfra", "cohere", "perplexity", "openrouter",
+   *  "fireworks", "venice", "azure", "skt-gateway"
    *  (bring-your-own OpenAI-compatible endpoint). */
   provider?:
     | "llamacpp"
@@ -76,6 +83,18 @@ export interface TrayambakConfig {
     | "google"
     | "ollama"
     | "custom"
+    | "groq"
+    | "mistral"
+    | "cerebras"
+    | "together"
+    | "deepinfra"
+    | "cohere"
+    | "perplexity"
+    | "openrouter"
+    | "fireworks"
+    | "venice"
+    | "azure"
+    | "skt-gateway"
   /** MCP (Model Context Protocol) servers. Each maps a server name to a stdio
    *  (`command` + `args`) or HTTP (`url`) transport spec. Exposed as mcp__ tools.
    *  HTTP servers support `headers`, and OAuth 2.0 + PKCE via `oauth`
@@ -182,11 +201,17 @@ export interface TrayambakConfig {
   mcpReconnectOnFailure?: boolean
   /** Auto-update policy (SKT AI LABS parity): true = apply patch updates, false = never check, "notify" = only notify about updates. Default true. */
   autoupdate?: boolean | "notify"
+  /** License key for gated toolsets (TRAYAMBAK_LICENSE_KEY). Absent = pentest stripped. Never logged. */
+  licenseKey?: string
+  /** License server base URL (TRAYAMBAK_LICENSE_SERVER). Default https://skt.sktailabs.in. Self-host to run your own registry. */
+  licenseServerUrl?: string
 }
 
 const DEFAULTS: TrayambakConfig = {
   baseUrl: "https://integrate.api.nvidia.com",
   model: "nvidia/nemotron-3-super-120b-a12b",
+  small_model: undefined,
+  subagent_model: undefined,
   apiKey: "",
   cwd: process.cwd(),
   temperature: 0,
@@ -306,6 +331,8 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   const envConfig: Partial<TrayambakConfig> = {}
   if (process.env.TRAYAMBAK_BASE_URL) envConfig.baseUrl = process.env.TRAYAMBAK_BASE_URL
   if (process.env.TRAYAMBAK_MODEL) envConfig.model = process.env.TRAYAMBAK_MODEL
+  if (process.env.TRAYAMBAK_SMALL_MODEL) envConfig.small_model = process.env.TRAYAMBAK_SMALL_MODEL
+  if (process.env.TRAYAMBAK_SUBAGENT_MODEL) envConfig.subagent_model = process.env.TRAYAMBAK_SUBAGENT_MODEL
   if (process.env.TRAYAMBAK_API_KEY) envConfig.apiKey = process.env.TRAYAMBAK_API_KEY
   if (process.env.TRAYAMBAK_CWD) envConfig.cwd = process.env.TRAYAMBAK_CWD
   if (process.env.TRAYAMBAK_TEMPERATURE) envConfig.temperature = Number(process.env.TRAYAMBAK_TEMPERATURE)
@@ -393,6 +420,8 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   else if (process.env.TRAYAMBAK_AUTOUPDATE === "notify") envConfig.autoupdate = "notify"
   else if (process.env.TRAYAMBAK_AUTOUPDATE === "true" || process.env.TRAYAMBAK_AUTOUPDATE === "1")
     envConfig.autoupdate = true
+  if (process.env.TRAYAMBAK_LICENSE_KEY) envConfig.licenseKey = process.env.TRAYAMBAK_LICENSE_KEY
+  if (process.env.TRAYAMBAK_LICENSE_SERVER) envConfig.licenseServerUrl = process.env.TRAYAMBAK_LICENSE_SERVER
 
   const merged: TrayambakConfig = {
     ...DEFAULTS,
@@ -605,6 +634,18 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
         google: "https://generativelanguage.googleapis.com/v1beta",
         ollama: "http://localhost:11434",
         custom: "http://localhost:8080",
+        groq: "https://api.groq.com/openai/v1",
+        mistral: "https://api.mistral.ai/v1",
+        cerebras: "https://api.cerebras.ai/v1",
+        together: "https://api.together.xyz/v1",
+        deepinfra: "https://api.deepinfra.com/v1/openai",
+        cohere: "https://api.cohere.com/compatibility/v1",
+        perplexity: "https://api.perplexity.ai",
+        openrouter: "https://openrouter.ai/api/v1",
+        fireworks: "https://api.fireworks.ai/inference/v1",
+        venice: "https://api.venice.ai/api/v1",
+        azure: "https://YOUR-RESOURCE.openai.azure.com/openai/deployments",
+        "skt-gateway": "https://gateway.skt-ai-labs.example/v1",
       }
       const raw =
         provider !== "llamacpp" && defaults[provider] !== undefined
@@ -627,6 +668,18 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
         google: "gemini-2.5-flash",
         ollama: "llama3.1",
         custom: "",
+        groq: "llama-3.3-70b-versatile",
+        mistral: "mistral-large-latest",
+        cerebras: "llama3.1-70b",
+        together: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        deepinfra: "meta-llama/Llama-3.3-70B-Instruct",
+        cohere: "command-r-plus",
+        perplexity: "sonar-pro",
+        openrouter: "anthropic/claude-sonnet-4",
+        fireworks: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+        venice: "llama-3.3-70b",
+        azure: "gpt-4o",
+        "skt-gateway": "auto",
       }
       if (provider !== "llamacpp" && defaults[provider] !== undefined) {
         const fallback = defaults[provider]
@@ -636,6 +689,12 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       }
       return typeof cfg.model === "string" && cfg.model.length > 0 ? cfg.model : DEFAULTS.model
     })(),
+    small_model:
+      typeof cfg.small_model === "string" && cfg.small_model.trim().length > 0 ? cfg.small_model.trim() : undefined,
+    subagent_model:
+      typeof cfg.subagent_model === "string" && cfg.subagent_model.trim().length > 0
+        ? cfg.subagent_model.trim()
+        : undefined,
     apiKey: cleanApiKey(typeof cfg.apiKey === "string" ? cfg.apiKey : DEFAULTS.apiKey),
     cwd: typeof cfg.cwd === "string" && cfg.cwd.length > 0 ? path.resolve(cfg.cwd) : path.resolve(DEFAULTS.cwd),
     temperature: Math.max(0, Math.min(2, numDefault(cfg.temperature, DEFAULTS.temperature))),
@@ -692,6 +751,18 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       "google",
       "ollama",
       "custom",
+      "groq",
+      "mistral",
+      "cerebras",
+      "together",
+      "deepinfra",
+      "cohere",
+      "perplexity",
+      "openrouter",
+      "fireworks",
+      "venice",
+      "azure",
+      "skt-gateway",
     ].includes(cfg.provider as string)
       ? (cfg.provider as TrayambakConfig["provider"])
       : DEFAULTS.provider,
@@ -759,6 +830,15 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
         : undefined,
     checkpointsEnabled: cfg.checkpointsEnabled === false ? false : true,
     memoryAutoExtract: cfg.memoryAutoExtract === false ? false : true,
+    // License key: string passes through untouched (never
+    // logged/printed — same rule as apiKey). Dropped here, the gates go
+    // blind, so this passthrough is load-bearing, not cosmetic.
+    licenseKey: typeof cfg.licenseKey === "string" && cfg.licenseKey.length > 0 ? cfg.licenseKey : undefined,
+    // License server URL: passthrough with the same care (never logged).
+    licenseServerUrl:
+      typeof cfg.licenseServerUrl === "string" && cfg.licenseServerUrl.trim().length > 0
+        ? cfg.licenseServerUrl.trim()
+        : undefined,
     // Per-backend key store (`/provider key`): without this passthrough the
     // entries were silently dropped on every load, so switching backends
     // wiped saved keys. Keys are cleaned but never logged/printed.

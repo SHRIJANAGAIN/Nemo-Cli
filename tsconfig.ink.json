@@ -24,6 +24,12 @@
     // build:ink) is the safe speedup: emit every run, typecheck separately
     // via `npm run typecheck:ink`.
   },
-  "include": ["packages/tui/src/ink-app/**/*.tsx", "packages/tui/src/ink-app/**/*.ts", "packages/tui/src/ui/theme.ts"],
+  "include": [
+    "packages/tui/src/ink-app/**/*.tsx",
+    "packages/tui/src/ink-app/**/*.ts",
+    "packages/tui/src/repl/**/*.tsx",
+    "packages/tui/src/repl/**/*.ts",
+    "packages/tui/src/ui/theme.ts"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

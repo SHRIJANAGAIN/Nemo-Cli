@@ -8,6 +8,8 @@
  */
 
 import { readFileSync, watch, existsSync } from "fs"
+import * as os from "os"
+import * as path from "path"
 
 /** Network protocol types for rules. */
 export enum NetworkRuleProtocol {
@@ -92,23 +94,51 @@ export class PolicyParser {
   }
 
   private parseLine(line: string): ExecPolicyRule | null {
-    // Format: "pattern action [reason] [protocol]"
+    // Format: "<pattern…> <action> [reason…] [protocol]"
+    // The pattern itself may contain spaces ("rm -rf /* deny"), so the
+    // action is the FIRST token naming one (allow/deny/ask) — everything
+    // before it is the pattern. The old first-two-tokens split turned
+    // "rm -rf /* deny" into pattern "rm", silently changing matches.
     // Examples: "rm -rf /* deny" "*.example.com deny https"
     const parts = line.split(/\s+/)
     if (parts.length < 2) return null
-
-    const pattern = parts[0]
-    const action = parts[1] as ExecDecision
-    const reason = parts.slice(2).find((p) => !p.startsWith("http://") && !p.startsWith("https://")) || undefined
-    const protocol = parts.find((p) => ["http", "https", "all"].includes(p)) as NetworkRuleProtocol | undefined
-
+    const isAction = (t: string): boolean =>
+      [ExecDecision.Allow, ExecDecision.Deny, ExecDecision.Ask].includes(t as ExecDecision)
+    const actionIdx = parts.findIndex((p) => isAction(p))
+    // No action keyword at all: whole line is the pattern, fail-closed deny
+    // ("foo bogus" denies "foo bogus" rather than allowing by confusion).
+    const patternParts = actionIdx === -1 ? parts : parts.slice(0, actionIdx)
+    const action: ExecDecision = actionIdx === -1 ? ExecDecision.Deny : (parts[actionIdx] as ExecDecision)
+    const after = actionIdx === -1 ? [] : parts.slice(actionIdx + 1)
+    const protocol = after.find((p) => ["http", "https", "all"].includes(p)) as NetworkRuleProtocol | undefined
+    const pattern = patternParts.join(" ")
+    if (!pattern) return null
+    const reason = after.find((p) => p !== protocol && !p.startsWith("http://") && !p.startsWith("https://"))
     return {
       pattern,
-      action: [ExecDecision.Allow, ExecDecision.Deny, ExecDecision.Ask].includes(action) ? action : ExecDecision.Deny,
+      action,
       reason,
       networkProtocol: protocol,
     }
   }
+}
+
+/**
+ * Separator-aware domain match: exact host or a real subdomain.
+ * Substring matching would let `example.com` also match
+ * `notexample.com` and `example.com.evil.net`.
+ */
+export function domainMatches(host: string, entry: string): boolean {
+  const norm = (v: string): string => {
+    let s = v.trim().toLowerCase()
+    const parts = s.split(":")
+    if (parts.length === 2 && /^\d+$/.test(parts[1])) s = parts[0]
+    return s.replace(/^\*\.+/, "").replace(/\.$/, "")
+  }
+  const h = norm(host)
+  const e = norm(entry)
+  if (!e) return false
+  return h === e || h.endsWith(`.${e}`)
 }
 
 /**
@@ -118,9 +148,18 @@ export class PolicyManager {
   private policy: ExecPolicy | null = null
   private watchers: Map<string, ReturnType<typeof watch>> = new Map()
   private readonly parser = new PolicyParser()
+  /**
+   * How the current policy was loaded. `replace` = the file IS the policy
+   * (`load`); `merge` = the file sits ON TOP of the defaults
+   * (`loadUserPolicy`). A hot reload must replay the same shape it was
+   * loaded with, or a user file would silently drop the default denies on
+   * the next write.
+   */
+  private mode: "replace" | "merge" = "replace"
 
   /**
-   * Load policy from a .rules file.
+   * Load policy from a .rules file (the file REPLACES the policy; this is
+   * the original semantics, kept for existing callers and tests).
    */
   load(file: string): ExecPolicy {
     if (!existsSync(file)) {
@@ -128,8 +167,47 @@ export class PolicyManager {
     }
     const raw = readFileSync(file, "utf8")
     this.policy = this.parser.parse(raw, file)
+    this.mode = "replace"
     this.watch(file)
     return this.policy
+  }
+
+  /**
+   * Load a user `.rules` file MERGED OVER the built-in defaults.
+   *
+   * The file can only ADD rules: `rules = [...defaultPolicy.rules,
+   * ...fileRules]` (networkRules too). `evaluate` runs its deny pass over
+   * every rule before its allow pass, so a file line `sudo * allow` still
+   * loses to the default `sudo *` deny - a user file can widen what is
+   * allowed but can never silently delete a default deny.
+   *
+   * Missing or unreadable file (deleted between stat and read, EISDIR,
+   * EPERM): fall back to the defaults, which carry the denies, rather
+   * than keeping anything a half-written file produced. Fail closed.
+   */
+  loadUserPolicy(file: string): ExecPolicy {
+    const defaults = this.getDefaultPolicy()
+    let raw: string | null = null
+    try {
+      if (existsSync(file)) raw = readFileSync(file, "utf8")
+    } catch {
+      raw = null
+    }
+    if (raw === null) {
+      this.policy = defaults
+      return defaults
+    }
+    const filePolicy = this.parser.parse(raw, file)
+    const merged: ExecPolicy = {
+      rules: [...defaults.rules, ...filePolicy.rules],
+      networkRules: [...defaults.networkRules, ...filePolicy.networkRules],
+      file: filePolicy.file,
+      lastModified: filePolicy.lastModified,
+    }
+    this.policy = merged
+    this.mode = "merge"
+    this.watch(file)
+    return merged
   }
 
   /**
@@ -173,7 +251,7 @@ export class PolicyManager {
     const policy = this.getPolicy()
 
     for (const rule of policy.networkRules) {
-      if (domain.includes(rule.domain)) {
+      if (domainMatches(domain, rule.domain)) {
         return rule.action
       }
     }
@@ -208,10 +286,16 @@ export class PolicyManager {
   }
 
   /**
-   * Hot-reload a policy file.
+   * Hot-reload a policy file. Replays the load shape it was loaded with:
+   * `merge` policies re-merge over the defaults (so a hot reload can never
+   * drop a default deny), `replace` policies re-read the file as before.
    */
   reload(file: string): void {
-    this.load(file)
+    if (this.mode === "merge") {
+      this.loadUserPolicy(file)
+    } else {
+      this.load(file)
+    }
   }
 
   /**
@@ -220,7 +304,17 @@ export class PolicyManager {
   private watch(file: string): void {
     try {
       const watcher = watch(file, () => {
-        this.load(file)
+        this.reload(file)
+      })
+      // Async watcher failures (EPERM on locked/Windows temp files) emit
+      // 'error' — without a listener they crash the process.
+      watcher.on("error", () => {
+        try {
+          watcher.close()
+        } catch {
+          /* already dead */
+        }
+        this.watchers.delete(file)
       })
       this.watchers.set(file, watcher)
     } catch {
@@ -267,13 +361,72 @@ export class PolicyManager {
 let defaultManager: PolicyManager | null = null
 
 /**
- * Get the default PolicyManager singleton.
+ * Get the default PolicyManager singleton. On FIRST construction it
+ * discovers a user-authored rules file (`<cwd>/.trayambak/policy.rules`,
+ * then `~/.trayambak/policy.rules`) and loads it MERGED over the
+ * defaults - previously nothing ever called `load()`, so the whole DSL
+ * was dead config. No file (or an unreadable one) keeps the hardcoded
+ * default policy, default denies included.
  */
 export function getPolicyManager(): PolicyManager {
   if (!defaultManager) {
-    defaultManager = new PolicyManager()
+    defaultManager = createPolicyManagerForRoots(
+      resolveRoot(() => process.cwd()),
+      resolveRoot(() => os.homedir()),
+    )
   }
   return defaultManager
+}
+
+/**
+ * The two places a user rules file may live, most specific first: the
+ * project copy, then the user's home copy. Empty roots are skipped (no
+ * cwd, or no home directory available).
+ */
+export function userPolicyCandidates(cwd: string, home: string): string[] {
+  const files: string[] = []
+  if (cwd) files.push(path.join(cwd, ".trayambak", "policy.rules"))
+  if (home) files.push(path.join(home, ".trayambak", "policy.rules"))
+  return files
+}
+
+/**
+ * First existing candidate in project-then-home order, or null when
+ * neither location has a file. Exported so tests can prove the discovery
+ * order without touching the real home directory.
+ */
+export function discoverUserPolicyFile(cwd: string, home: string): string | null {
+  for (const file of userPolicyCandidates(cwd, home)) {
+    try {
+      if (existsSync(file)) return file
+    } catch {
+      /* unreadable candidate: keep looking, fall back to defaults */
+    }
+  }
+  return null
+}
+
+/**
+ * The manager `getPolicyManager()` builds for explicit roots: discover a
+ * user rules file, and when one exists load it MERGED over the defaults
+ * (so a user file can add rules but can never drop a default deny).
+ * Exposed so tests can exercise discovery without mutating the process
+ * cwd or the user's real home directory.
+ */
+export function createPolicyManagerForRoots(cwd: string, home: string): PolicyManager {
+  const manager = new PolicyManager()
+  const file = discoverUserPolicyFile(cwd, home)
+  if (file) manager.loadUserPolicy(file)
+  return manager
+}
+
+/** Resolve a filesystem root, or "" when the OS refuses (deleted cwd, no home). */
+function resolveRoot(f: () => string): string {
+  try {
+    return f()
+  } catch {
+    return ""
+  }
 }
 
 /**

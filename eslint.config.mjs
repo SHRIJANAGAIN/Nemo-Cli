@@ -31,13 +31,13 @@ export default tseslint.config(
     rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
   {
-    // AGENTS.md "Lint Rules (15)" — severities are part of the spec and must
+    // AGENTS.md "Lint Rules (16)" — severities are part of the spec and must
     // never be weakened here. Rule implementations live in
     // packages/eslint-plugin-trayambak/src/index.mjs.
     files: ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "packages/**/*.tsx", "skt/**/*.ts"],
     plugins: { trayambak: plugin },
     rules: {
-      // 10 errors
+      // 11 errors
       "trayambak/no-ambiguous-boolean": "error",
       "trayambak/no-cross-package-import": "error",
       "trayambak/hook-timeout-required": "error",
@@ -48,6 +48,7 @@ export default tseslint.config(
       "trayambak/no-unbounded-exec": "error",
       "trayambak/no-duplicate-exports": "error",
       "trayambak/approval-mode-exhaustive": "error",
+      "trayambak/max-file-size": "error",
       // 4 warnings
       "trayambak/no-console-in-core": "warn",
       "trayambak/no-direct-process-env": "warn",

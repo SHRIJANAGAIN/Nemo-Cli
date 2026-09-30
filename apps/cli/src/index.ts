@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { Agent, loadConfig, type TrayambakConfig } from "../../runtime/src/index.js"
@@ -34,6 +34,12 @@ import { runMcpCli } from "./commands/mcp.js"
 import { upgradeCommand } from "./commands/upgrade.js"
 import { loginCommand, logoutCommand } from "./commands/login.js"
 import { execCommand, reviewCommand } from "./commands/exec.js"
+import { statsCommand } from "./commands/stats.js"
+import { commitCommand } from "./commands/commit.js"
+import { dbCommand } from "./commands/db.js"
+import { prCommand } from "./commands/pr.js"
+import { marketplaceCommand } from "./commands/marketplace.js"
+import { uninstallCommand } from "./commands/uninstall.js"
 import { archiveSession, unarchiveSession, deleteSession } from "./commands/archive.js"
 import { sessionResumeCommand } from "./commands/session-resume.js"
 import { sessionExportCommand } from "./commands/session-export.js"
@@ -314,6 +320,12 @@ async function main(): Promise<void> {
       await runMcpCli(rest)
       return
     }
+    case "marketplace": {
+      const { flags, positional } = parseFor("marketplace", rest)
+      const [action, kind, nameOrQuery] = positional
+      process.stdout.write(marketplaceCommand({ action, kind, nameOrQuery, source: flags.source }) + "\n")
+      return
+    }
     case "serve": {
       const { flags } = parseFor("serve", rest)
       await serveCommand({
@@ -357,6 +369,32 @@ async function main(): Promise<void> {
     case "review": {
       const { positional } = parseFor("review", rest)
       await reviewCommand(positional.join(" "))
+      return
+    }
+    case "commit": {
+      const { flags } = parseFor("commit", rest)
+      const mode = flags.all === "true" ? "all" : "staged"
+      process.stdout.write((await commitCommand({ mode })) + "\n")
+      return
+    }
+    case "stats": {
+      parseFor("stats", rest)
+      process.stdout.write(statsCommand() + "\n")
+      return
+    }
+    case "pr": {
+      const action = rest[0] ?? "status"
+      process.stdout.write((await prCommand(action, rest[1], process.cwd())) + "\n")
+      return
+    }
+    case "db": {
+      const action = rest[0] ?? "summary"
+      process.stdout.write(dbCommand(action) + "\n")
+      return
+    }
+    case "uninstall": {
+      parseFor("uninstall", rest)
+      process.stdout.write(uninstallCommand() + "\n")
       return
     }
     case "archive":

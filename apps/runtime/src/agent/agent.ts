@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -38,6 +38,7 @@ import { HarnessRuntime, type HarnessPlugin } from "../../../../packages/harness
 import { discoverAgentProfiles, getAgentProfile, type AgentProfile } from "./specialist-agents.js"
 import { DEFAULT_PERMISSIONS } from "../../../../packages/protocol/src/permissions.js"
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
+import { getDatabase } from "../../../../packages/core/src/state_db.js"
 import { createReadFileTool } from "../tools/file-edit/read-file.js"
 import {
   createSubagentTask,
@@ -59,6 +60,7 @@ const exec = promisify(execFile)
 const SUBAGENT_FANOUT_TOOLS = new Set([
   "trayambak__Agent",
   "trayambak__RunTeam",
+  "skt__Swarm",
   "trayambak__ParallelReview",
   "trayambak__ParallelExecute",
 ])
@@ -167,6 +169,20 @@ export interface AgentOptions {
   onRequestPermission?: (tool: string, args: unknown, reason: string) => Promise<boolean>
 }
 
+/**
+ * Durable-audit handle for the agent loop's tool gate. Resolves the state
+ * store lazily and degrades to "no audit" (never throws): a broken audit
+ * store must not take down an agent run — the gate treats audit as
+ * evidence, not control flow.
+ */
+function auditSink(): { recordAudit(action: string, actor: string, target: string, result: string): void } | undefined {
+  try {
+    return getDatabase()
+  } catch {
+    return undefined
+  }
+}
+
 export class Agent {
   readonly config: TrayambakConfig
   readonly provider: Provider
@@ -223,7 +239,12 @@ export class Agent {
             options.onAskUserQuestion,
             this.config,
             (to) => this.resolveSendMessageTarget(to),
-            { onListFleet: () => this.listBackgroundJobs() },
+            {
+              onListFleet: () => this.listBackgroundJobs(),
+              onGetMode: () => this.mode,
+              onSetMode: (mode) => this.setMode(mode),
+              onGetProvider: () => this.provider,
+            },
           )
     this.tools = tools
     if (arsenal) {
@@ -494,6 +515,7 @@ export class Agent {
         signal,
         inboxId: this.inboxId,
         developerMode: this.developerMode,
+        audit: auditSink(),
         maxToolCalls:
           devOverrides.maxToolCalls !== undefined ? Number(devOverrides.maxToolCalls) : this.config.maxToolCalls,
         maxParallelToolCalls: this.config.maxParallelToolCalls,
@@ -578,7 +600,17 @@ export class Agent {
     const startedAt = Date.now()
     const profile = getAgentProfile(task.type, this.config.cwd, this.config.agentProfileDirs)
     const isolation = task.isolation ?? "inherit"
-    const modelOverride = task.model && task.model !== "" && task.model !== this.config.model ? task.model : undefined
+    const explicitModel = task.model && task.model !== "" && task.model !== this.config.model ? task.model : undefined
+    // Legacy parity (subagent_model): an explicit per-task model wins; else the
+    // configured cheap default applies when it differs from this run's model;
+    // otherwise the child shares the parent's provider instance (no rebuild).
+    const configuredModel =
+      this.config.subagent_model &&
+      this.config.subagent_model !== "" &&
+      this.config.subagent_model !== this.config.model
+        ? this.config.subagent_model
+        : undefined
+    const modelOverride = explicitModel ?? configuredModel
     const baseChildConfig: TrayambakConfig = {
       ...this.config,
       permissions: { ...(this.config.permissions ?? DEFAULT_PERMISSIONS), askByDefault: false },

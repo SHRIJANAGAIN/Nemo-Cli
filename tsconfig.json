@@ -70,6 +70,13 @@
     "packages/tui/src/ink-app/utils/stringWidth.test.ts",
     "packages/tui/src/notifications.ts",
     "packages/tui/src/approval-notification.ts",
+    // Legacy (pre-ink) TUI trees — revived: first-class members of this
+    // program (barrel-wired in packages/tui/src/index.ts), so their tests
+    // typecheck with everything else too.
+    "packages/tui/src/app/**/*.ts",
+    "packages/tui/src/bottom_pane/**/*.ts",
+    "packages/tui/src/chatwidget/**/*.ts",
+    "packages/tui/src/tui/**/*.ts",
     "apps/**/*.ts",
     "apps/**/*.tsx",
     "skt/**/*.ts",
@@ -82,11 +89,12 @@
     "packages/tui/src/legacy-reference-tui/**/*",
     "packages/tui/src/ui-legacy-main/**/*",
     "packages/tui/src/components/**/*",
+    // logic/ has its OWN DOM-aware program (tsconfig.logic.json →
+    // `npm run typecheck:logic`): import.meta.env/window/HTMLElement must
+    // never enter this Node program (lib is ES2022, no DOM, on purpose).
     "packages/tui/src/logic/**/*",
-    "packages/tui/src/app/**/*",
-    "packages/tui/src/bottom_pane/**/*",
-    "packages/tui/src/chatwidget/**/*",
-    "packages/tui/src/tui/**/*",
+    // NOTE: app/ bottom_pane/ chatwidget/ tui/ used to be excluded here —
+    // they are now INCLUDED above and barrel-exported from index.ts.
     "packages/tui.bak/**/*",
     "packages/trayambak-ink/**/*",
     "apps/vscode-extension/src/extension.ts",

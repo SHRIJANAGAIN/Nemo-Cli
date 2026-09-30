@@ -2,8 +2,9 @@
  * Smoke tests for the TUI renderer and the llama.cpp provider transport.
  * Run: node scripts/smoke-render.js
  * - TUI: thinking/assistant deltas must render each fragment exactly once
- *   (no stacked duplicate lines), tool frames must close with blue </> and
- *   green <^> markers, separator must be a light-cyan rule.
+ *   (no stacked duplicate lines), tool frames must close with a bold "Ran"
+ *   title + green success bullet (red bullet + ✗ Error badge for failures),
+ *   separator must be a light-cyan rule.
  * - Provider: a real HTTP server that destroys the first connection
  *   (simulating llama.cpp's idle keep-alive close) must be transparently
  *   retried by the transport.
@@ -61,9 +62,15 @@ async function testTui() {
   check("thinking flattened to one in-place line", !/\r/.test(screen) || raw.split("\r").length <= 3)
   check("thinking shows tail, no stacked duplicates", count("Line two. more thought") === 1, JSON.stringify(screen))
   check("assistant fragments appear exactly once", count("Hello world.") === 1 && count("Second line") === 1)
-  check("tool line closed with blue bold </>", ansi.includes("\x1b[34m\x1b[1m</>"))
-  check("tool result has green <^>", ansi.includes("\x1b[32m") && screen.includes("<^>"))
-  check("error tool result flagged ERR", screen.includes("ERR") && screen.includes("bash: not found"))
+  // Tool frames close with the bold "Ran" title (title() helper), and the
+  // success close line carries the green bold • bullet from bullet("success").
+  check("tool line closed with bold Ran title", ansi.includes("\x1b[1mRan\x1b[0m"), ansi.slice(-400))
+  check("tool result has green success bullet", ansi.includes("\x1b[32m\x1b[1m•"), ansi.slice(-400))
+  check(
+    "error tool result flagged with ✗ Error badge",
+    screen.includes("✗ Error") && screen.includes("bash") && screen.includes("not found"),
+    JSON.stringify(screen),
+  )
   check("separator is cyan italic rule", ansi.includes("\x1b[3m\x1b[36m") && screen.includes("==="))
 }
 

@@ -1,0 +1,117 @@
+/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
+ */
+
+import { createServer } from "node:http"
+import type { AddressInfo } from "node:net"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import {
+  githubLoginStatus,
+  githubLogout,
+  openBrowser,
+  pollGithubLogin,
+  readGithubIssue,
+  startGithubLogin,
+} from "./github-auth.js"
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
+function tmpMachine(): void {
+  vi.stubEnv("TRAYAMBAK_MACHINE_ID_FILE", join(mkdtempSync(join(tmpdir(), "gh-auth-")), "machine-id"))
+}
+
+/** In-test auth server: canned OAuth + read endpoints on loopback. */
+async function stubAuthServer(routes: Record<string, (body: string) => { status: number; json: unknown }>) {
+  const seen: string[] = []
+  const server = createServer((req, res) => {
+    let data = ""
+    req.on("data", (c) => {
+      data += c.toString()
+    })
+    req.on("end", () => {
+      const url = (req.url ?? "").split("?")[0]
+      const handler = routes[`${req.method} ${url}`]
+      seen.push(`${req.method} ${req.url}`)
+      if (!handler) {
+        res.writeHead(404, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "not found" }))
+        return
+      }
+      const { status, json } = handler(data)
+      res.writeHead(status, { "Content-Type": "application/json" })
+      res.end(JSON.stringify(json))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  return {
+    url,
+    seen,
+    close: () => new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve()))),
+  }
+}
+
+describe("github-auth client", () => {
+  it("runs start -> status -> read -> logout against a live stub", async () => {
+    tmpMachine()
+    const s = await stubAuthServer({
+      "POST /auth/github/start": () => ({
+        status: 200,
+        json: { ok: true, url: "https://github.com/login/oauth/authorize?x=1" },
+      }),
+      "GET /auth/github/status": () => ({ status: 200, json: { authorized: true, login: "octocat" } }),
+      "POST /github/read": () => ({
+        status: 200,
+        json: { ok: true, issue: { number: 1, title: "Hi" }, comments: [] },
+      }),
+      "POST /auth/github/logout": () => ({ status: 200, json: { ok: true } }),
+    })
+    try {
+      const start = await startGithubLogin({ serverUrl: s.url })
+      expect(start).toMatchObject({ ok: true })
+      expect(start.url).toContain("github.com/login/oauth/authorize")
+      const poll = await pollGithubLogin({ serverUrl: s.url, tries: 2, intervalMs: 500 })
+      expect(poll).toMatchObject({ authorized: true, login: "octocat" })
+      const read = await readGithubIssue("o/r", 1, { serverUrl: s.url })
+      expect(read.ok).toBe(true)
+      expect(read.issue).toMatchObject({ number: 1 })
+      expect((await githubLogout({ serverUrl: s.url })).ok).toBe(true)
+      expect(s.seen.some((u) => u.startsWith("POST /auth/github/start"))).toBe(true)
+    } finally {
+      await s.close()
+    }
+  })
+
+  it("surfaces refusals and unreachable servers as values", async () => {
+    tmpMachine()
+    const s = await stubAuthServer({
+      "POST /auth/github/start": () => ({ status: 429, json: { ok: false, reason: "too many" } }),
+      "GET /auth/github/status": () => ({ status: 200, json: { authorized: false } }),
+      "POST /github/read": () => ({ status: 401, json: { error: "login required" } }),
+    })
+    try {
+      expect((await startGithubLogin({ serverUrl: s.url })).reason).toContain("too many")
+      const poll = await pollGithubLogin({ serverUrl: s.url, tries: 1, intervalMs: 500 })
+      expect(poll.authorized).toBe(false)
+      const read = await readGithubIssue("o/r", 1, { serverUrl: s.url })
+      expect(read.ok).toBe(false)
+      expect(read.reason).toContain("/github login")
+      const dead = await githubLoginStatus({ serverUrl: "http://127.0.0.1:1", timeoutMs: 1000 })
+      expect(dead.authorized).toBe(false)
+    } finally {
+      await s.close()
+    }
+  })
+
+  it("openBrowser respects the headless opt-out", () => {
+    vi.stubEnv("TRAYAMBAK_NO_BROWSER", "1")
+    expect(openBrowser("https://example.com")).toBe(false)
+  })
+})

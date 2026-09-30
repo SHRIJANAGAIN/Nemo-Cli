@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as http from "http"
@@ -9,7 +9,28 @@ import * as https from "https"
 import * as url from "url"
 
 export type ProviderId =
-  "llamacpp" | "nvidia" | "nvidia-nim" | "openai" | "xai" | "huggingface" | "anthropic" | "google" | "ollama" | "custom"
+  | "llamacpp"
+  | "nvidia"
+  | "nvidia-nim"
+  | "openai"
+  | "xai"
+  | "huggingface"
+  | "anthropic"
+  | "google"
+  | "ollama"
+  | "custom"
+  | "groq"
+  | "mistral"
+  | "cerebras"
+  | "together"
+  | "deepinfra"
+  | "cohere"
+  | "perplexity"
+  | "openrouter"
+  | "fireworks"
+  | "venice"
+  | "azure"
+  | "skt-gateway"
 
 export interface ProviderCatalogEntry {
   id: ProviderId
@@ -135,6 +156,131 @@ export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [
     needsApiKey: false,
     keyOptional: true,
     staticModels: ["llama3.1", "qwen2.5-coder", "mistral", "gemma2", "deepseek-r1", "codellama"],
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    defaultModel: "llama-3.3-70b-versatile",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen-qwq-32b", "deepseek-r1-distill-llama-70b"],
+  },
+  {
+    id: "mistral",
+    label: "Mistral",
+    defaultBaseUrl: "https://api.mistral.ai/v1",
+    defaultModel: "mistral-large-latest",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest"],
+  },
+  {
+    id: "cerebras",
+    label: "Cerebras",
+    defaultBaseUrl: "https://api.cerebras.ai/v1",
+    defaultModel: "llama3.1-70b",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["llama3.1-70b", "llama3.1-8b", "qwen-3-coder-480b"],
+  },
+  {
+    id: "together",
+    label: "Together AI",
+    defaultBaseUrl: "https://api.together.xyz/v1",
+    defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: [
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      "deepseek-ai/DeepSeek-V3",
+      "Qwen/Qwen2.5-Coder-32B-Instruct",
+    ],
+  },
+  {
+    id: "deepinfra",
+    label: "DeepInfra",
+    defaultBaseUrl: "https://api.deepinfra.com/v1/openai",
+    defaultModel: "meta-llama/Llama-3.3-70B-Instruct",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["meta-llama/Llama-3.3-70B-Instruct", "deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-Coder-32B-Instruct"],
+  },
+  {
+    id: "cohere",
+    label: "Cohere",
+    defaultBaseUrl: "https://api.cohere.com/compatibility/v1",
+    defaultModel: "command-r-plus",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["command-r-plus", "command-r", "command-a-03-2025"],
+  },
+  {
+    id: "perplexity",
+    label: "Perplexity",
+    defaultBaseUrl: "https://api.perplexity.ai",
+    defaultModel: "sonar-pro",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["sonar-pro", "sonar", "sonar-reasoning-pro"],
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    defaultBaseUrl: "https://openrouter.ai/api/v1",
+    defaultModel: "anthropic/claude-sonnet-4",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    // Live /v1/models returns 500+ ids; these are fallback only.
+    staticModels: [
+      "anthropic/claude-sonnet-4",
+      "openai/gpt-4o",
+      "google/gemini-2.5-pro",
+      "meta-llama/llama-3.3-70b-instruct",
+      "deepseek/deepseek-chat",
+    ],
+  },
+  {
+    id: "fireworks",
+    label: "Fireworks AI",
+    defaultBaseUrl: "https://api.fireworks.ai/inference/v1",
+    defaultModel: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: [
+      "accounts/fireworks/models/llama-v3p3-70b-instruct",
+      "accounts/fireworks/models/qwen2p5-coder-32b-instruct",
+      "accounts/fireworks/models/deepseek-v3",
+    ],
+  },
+  {
+    id: "venice",
+    label: "Venice AI",
+    defaultBaseUrl: "https://api.venice.ai/api/v1",
+    defaultModel: "llama-3.3-70b",
+    needsBaseUrl: false,
+    needsApiKey: true,
+    staticModels: ["llama-3.3-70b", "qwen-2.5-coder-32b", "dolphin-2.9.2-qwen2-72b"],
+  },
+  {
+    id: "azure",
+    label: "Azure OpenAI",
+    defaultBaseUrl: "https://YOUR-RESOURCE.openai.azure.com/openai/deployments",
+    defaultModel: "gpt-4o",
+    needsBaseUrl: true,
+    needsApiKey: true,
+    staticModels: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "o3-mini"],
+  },
+  {
+    id: "skt-gateway",
+    label: "SKT Gateway",
+    defaultBaseUrl: "https://gateway.skt-ai-labs.example/v1",
+    defaultModel: "auto",
+    needsBaseUrl: true,
+    needsApiKey: true,
+    // Unified gateway: live /v1/models is the source of truth (500+ ids
+    // when backed by OpenRouter-compatible aggregation); statics below.
+    staticModels: ["auto", "openai/gpt-4o", "anthropic/claude-sonnet-4", "google/gemini-2.5-pro"],
   },
 ]
 
@@ -360,6 +506,18 @@ const KEY_401_HINTS: Record<string, string> = {
   anthropic: "Anthropic 401 = key rejected: check console.anthropic.com API keys.",
   google: "Google 400/401 = bad key or the Generative Language API is disabled for the project.",
   xai: "xAI 401 = key rejected: check console.x.ai API keys.",
+  groq: "Groq 401 = key rejected: check console.groq.com API keys.",
+  mistral: "Mistral 401 = key rejected: check console.mistral.ai API keys.",
+  cerebras: "Cerebras 401 = key rejected: check cloud.cerebras.ai API keys.",
+  together: "Together 401 = key rejected: check api.together.xyz API keys.",
+  deepinfra: "DeepInfra 401 = key rejected: check deepinfra.com API keys.",
+  cohere: "Cohere 401 = key rejected: check dashboard.cohere.com API keys.",
+  perplexity: "Perplexity 401 = key rejected: check perplexity.ai API keys.",
+  openrouter: "OpenRouter 401 = key rejected: check openrouter.ai API keys.",
+  fireworks: "Fireworks 401 = key rejected: check fireworks.ai API keys.",
+  venice: "Venice 401 = key rejected: check venice.ai API keys.",
+  azure: "Azure 401 = key rejected or wrong deployment URL: check {resource}.openai.azure.com deployments.",
+  "skt-gateway": "SKT Gateway 401 = key rejected: check the gateway API key.",
   ollama: "Ollama unreachable = is `ollama serve` running? Default http://localhost:11434, no key needed.",
 }
 

@@ -2,13 +2,14 @@
 
 /**
  * Unit tests for every rule in eslint-plugin-trayambak (AGENTS.md
- * "Lint Rules (15)"). Each rule gets at least one violation case and one
+ * "Lint Rules (16)"). Each rule gets at least one violation case and one
  * clean case; tricky semantics (param comments, placeholders, deferred
  * boundaries, allowlists) are covered explicitly. Cases run through
  * ESLint's Linter with the TypeScript parser so TS-only nodes (any
  * keywords, private fields, annotations) are exercised for real.
  */
 import { Linter } from "eslint"
+import fs from "node:fs"
 import path from "node:path"
 import tseslint from "typescript-eslint"
 import { describe, expect, it } from "vitest"
@@ -44,11 +45,12 @@ function lint(code: string, ruleId: string, filename = "packages/example/src/sam
 
 /** Every rule must be exported under its AGENTS.md name. */
 describe("plugin surface", () => {
-  it("exports all fifteen rules", () => {
+  it("exports all sixteen rules", () => {
     expect(Object.keys(rules).sort()).toEqual(
       [
         "approval-mode-exhaustive",
         "hook-timeout-required",
+        "max-file-size",
         "no-ambiguous-boolean",
         "no-any-type",
         "no-console-in-core",
@@ -64,6 +66,45 @@ describe("plugin surface", () => {
         "test-requires-timeout-assert",
       ].sort(),
     )
+  })
+
+  /**
+   * The severity table IS the AGENTS.md spec — pin it against the wiring in
+   * eslint.config.mjs, read as text (importing the config would let the test
+   * pass on a config object the CLI never sees). First match wins: the later
+   * `no-direct-process-env: "off"` entry is the deliberate test-files
+   * override, not the rule's baseline severity.
+   */
+  it("wires all sixteen rules in eslint.config.mjs at their AGENTS.md severities", () => {
+    // Resolved against cwd (repo root), exactly like lint()'s path.resolve above.
+    const configText = fs.readFileSync(path.resolve("eslint.config.mjs"), "utf8")
+    const wired = new Map<string, string>()
+    for (const match of configText.matchAll(/"trayambak\/([a-z-]+)":\s*"(error|warn|off)"/g)) {
+      const name = match[1]
+      const severity = match[2]
+      if (name && severity && !wired.has(name)) wired.set(name, severity)
+    }
+    expect(Object.fromEntries(wired)).toEqual({
+      // 11 errors
+      "no-ambiguous-boolean": "error",
+      "no-cross-package-import": "error",
+      "hook-timeout-required": "error",
+      "no-sandbox-env-touch": "error",
+      "no-any-type": "error",
+      "require-tool-timeout": "error",
+      "no-hardcoded-secrets": "error",
+      "no-unbounded-exec": "error",
+      "no-duplicate-exports": "error",
+      "approval-mode-exhaustive": "error",
+      "max-file-size": "error",
+      // 4 warnings
+      "no-console-in-core": "warn",
+      "no-direct-process-env": "warn",
+      "require-singleton-accessor": "warn",
+      "no-todo-without-issue": "warn",
+      // documented placeholder, wired off
+      "test-requires-timeout-assert": "off",
+    })
   })
 
   it("declares meta.docs, schema and messages on every rule", () => {
@@ -131,12 +172,21 @@ describe("no-cross-package-import", () => {
     expect(messages[0].messageId).toBe("inkDeepImport")
   })
 
-  it("allows sibling imports and the deferred apps/cli boundary", () => {
+  it("allows sibling imports, the legal core/execpolicy targets, and grandfathered legacy apps/cli sites", () => {
     expect(
       lint('import { x } from "./sibling.js"', "no-cross-package-import", "packages/core/src/mod.ts"),
     ).toHaveLength(0)
-    // Deferred boundary (ENFORCE_APPS_CLI_SCOPE = false): apps/cli importing
-    // packages/server is reported by the rule implementation once enabled.
+    // Core and execpolicy remain the two packages apps/cli may always import.
+    expect(
+      lint(
+        'import { runLoop } from "../../../../packages/core/src/agent_loop.js"',
+        "no-cross-package-import",
+        "apps/cli/src/commands/run.ts",
+      ),
+    ).toHaveLength(0)
+    // Grandfathered: apps/cli/src/index.ts → packages/server is one of the 9
+    // documented legacy sites (APPS_CLI_SCOPE_GRANDFATHER), so under the
+    // ratchet it keeps passing.
     expect(
       lint(
         'import { s } from "../../../packages/server/src/index.js"',
@@ -144,6 +194,29 @@ describe("no-cross-package-import", () => {
         "apps/cli/src/index.ts",
       ),
     ).toHaveLength(0)
+  })
+
+  it("flags a NEW apps/cli package import even for a grandfathered package (ratchet)", () => {
+    // Same package as the grandfathered index.ts row, different file: the map
+    // is keyed by file, so this site is debt that does not exist yet → error.
+    const messages = lint(
+      'import { s } from "../../../../packages/server/src/index.js"',
+      "no-cross-package-import",
+      "apps/cli/src/commands/brand-new.ts",
+    )
+    expect(messages).toHaveLength(1)
+    expect(messages[0].messageId).toBe("appsCliScope")
+  })
+
+  it("grandfather entries are per-package: a grandfathered file importing a DIFFERENT package errors", () => {
+    // src/commands/mcp.ts may import packages/mcp — but not packages/sandbox.
+    const messages = lint(
+      'import { run } from "../../../../packages/sandbox/src/index.js"',
+      "no-cross-package-import",
+      "apps/cli/src/commands/mcp.ts",
+    )
+    expect(messages).toHaveLength(1)
+    expect(messages[0].messageId).toBe("appsCliScope")
   })
 })
 
@@ -182,7 +255,7 @@ describe("hook-timeout-required", () => {
 describe("no-sandbox-env-touch", () => {
   // Assembled from parts so this spec file itself never contains the protected
   // marker as a literal — rule 4 would (correctly) flag its own test cases.
-  const marker = "TRAYAMBAK" + "_SANDBOX_"
+  const marker = "CODEX" + "_SANDBOX"
 
   it("flags an env identifier using the protected marker", () => {
     const messages = lint(`const mode = process.env.${marker}MODE`, "no-sandbox-env-touch")
@@ -194,9 +267,15 @@ describe("no-sandbox-env-touch", () => {
     expect(lint(`const note = "mentions ${marker} markers"`, "no-sandbox-env-touch")).toHaveLength(1)
   })
 
-  it("exempts sandbox.ts and unrelated names", () => {
+  it("exempts the sandbox package, the env filter, test files, and unrelated names", () => {
     expect(
-      lint(`const mode = process.env.${marker}MODE`, "no-sandbox-env-touch", "packages/core/src/sandbox.ts"),
+      lint(`const mode = process.env.${marker}MODE`, "no-sandbox-env-touch", "packages/sandbox/src/spawn.ts"),
+    ).toHaveLength(0)
+    expect(
+      lint(`filtered["${marker}"] = sandboxType`, "no-sandbox-env-touch", "packages/core/src/env_filter.ts"),
+    ).toHaveLength(0)
+    expect(
+      lint(`expect(env["${marker}"]).toBe("none")`, "no-sandbox-env-touch", "packages/core/src/env_filter.test.ts"),
     ).toHaveLength(0)
     expect(lint("const x = process.env.TRAYAMBAK_FEATURE", "no-sandbox-env-touch")).toHaveLength(0)
   })
@@ -443,5 +522,28 @@ describe("approval-mode-exhaustive", () => {
     expect(
       lint('function k(kind: string) { switch (kind) { case "a": break } }', "approval-mode-exhaustive"),
     ).toHaveLength(0)
+  })
+})
+
+describe("max-file-size", () => {
+  /** Unique declarations so 4000 identical `const x = 1` lines never parse as redeclarations. */
+  const fill = (count: number): string => Array.from({ length: count }, (_, i) => `const v${i} = 1`).join("\n")
+
+  it("flags a file one line over the 4000-line cap", () => {
+    const messages = lint(fill(4001), "max-file-size")
+    expect(messages).toHaveLength(1)
+    expect(messages[0].messageId).toBe("fileTooLarge")
+    expect(messages[0].message).toContain("4001")
+  })
+
+  it("counts lines wc -l style: a trailing final newline adds no phantom line", () => {
+    expect(lint(fill(4000), "max-file-size")).toHaveLength(0)
+    expect(lint(`${fill(4000)}\n`, "max-file-size")).toHaveLength(0)
+    // …and one real line over still flags with the newline present.
+    expect(lint(`${fill(4001)}\n`, "max-file-size")).toHaveLength(1)
+  })
+
+  it("accepts ordinary sized files", () => {
+    expect(lint("export const x = 1\n", "max-file-size")).toHaveLength(0)
   })
 })

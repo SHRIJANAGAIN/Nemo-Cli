@@ -1,0 +1,11 @@
+{
+  "name": "@claude-code/local-observability",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vendored no-op stand-in for the unpublished @claude-code/local-observability package (registry E404). The trayambak-ink fork's jediTermScrollFix imports logEvent; tests observe nothing here.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  }
+}

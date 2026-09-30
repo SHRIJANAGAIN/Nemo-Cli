@@ -1,36 +1,33 @@
 MODEL_TURN_OK
-
-  ❯ RUN_MODEL_TURNS_PLEASE
-
-  ● ⚠ workspace too large for checkpoints (5,001 files, 0MB scanned; cap
-  5,000 files / 50MB) — skipped (undo keeps the previous point).
-┌──────────────────────────────────────────────────────────────────────────┐
+╭──────────────────────────────────────────────────────────────────────────╮
+│                                                                          │
+│ ❯ RUN_MODEL_TURNS_PLEASE                                                 │
 │                                                                          │
 │  MODEL_STREAM_MARKER_ONE streaming the first answer body while the screen│
 │   keeps up with every delta.                                             │
 │                                                                          │
-│ ┌───────────────────────────────────────────────────────────────────────┐│
-│ │•  Called glob({"pattern":"*.md","path":".","max_results":5}) ✓        ││
-│ │                                                                       ││
-│ │    └ 5 file(s):                                                       ││
-│ │      .disabled-src\trayambak-ink\README.md                            ││
-│ │      agent-prompts\plan.md                                            ││
-│ │      AGENTS.md                                                        ││
-│ │      ai-mcp-runtime-librechat-analysis.md                             ││
-│ │  …                                                                    ││
-│ └───────────────────────────────────────────────────────────────────────┘│
+│ ╭─────────────────────────────────────────────────────────────────────╮  │
+│ │✓  Called glob({"pattern":"*.md","path":".","max_results":5}) ✓      │  │
+│ │                                                                     │  │
+│ │    + 5 file(s):                                                     │  │
+│ │      skt\9-session\import-memory.md                                 │  │
+│ │      skt\5-eval\evalr-mistake-2026-09-07-001.md                     │  │
+│ │      CHANGELOG.md                                                   │  │
+│ │      skt\5-eval\evalr-err_mtt4phqo.md                               │  │
+│ │  …                                                                  │  │
+│ ╰─────────────────────────────────────────────────────────────────────╯  │
 │                                                                          │
-│ ┌───────────────────────────────────────────────────────────────────────┐│
-│ │•  Called grep({"pattern":"createScreen","path":"scripts","glob":…) ✓  ││
-│ │                                                                       ││
-│ │    └ Found 3 match(es)                                                ││
-│ │      diag-first-screen.mjs:23: const { createScreen } = await         ││
-│ │  import("./vt-screen.mjs");                                           ││
-│ │      diag-first-screen.mjs:38: const screen = createScreen(COLS,      ││
-│ │  ROWS);                                                               ││
-│ │      diag-lines-replay.mjs:73: const { createScreen } = await         ││
-│ │  import("./vt-screen.mjs");                                           ││
-│ └───────────────────────────────────────────────────────────────────────┘│
+│ ╭─────────────────────────────────────────────────────────────────────╮  │
+│ │✓  Called grep({"pattern":"createScreen","path":"scripts","glob":…) ✓│  │
+│ │                                                                     │  │
+│ │    + Found 3 match(es) (more matches available)                     │  │
+│ │      diag-first-screen.mjs:23: const { createScreen } = await       │  │
+│ │  import("./vt-screen.mjs")                                          │  │
+│ │      diag-first-screen.mjs:38: const screen = createScreen(COLS,    │  │
+│ │  ROWS)                                                              │  │
+│ │      diag-lines-replay.mjs:79: const { createScreen } = await       │  │
+│ │  import("./vt-screen.mjs")                                          │  │
+│ ╰─────────────────────────────────────────────────────────────────────╯  │
 │                                                                          │
 │  MODEL_FINAL_MARKER_NINE both tool calls returned, the turn is complete. │
 │                                                                          │
@@ -38,9 +35,10 @@ MODEL_TURN_OK
 │                                                                          │
 │                                                                          │
 │                                                                          │
-│┌────────────────────────────────────────────────────────────────────────┐│
-││ test/m           ● idle  Mode: ASK  Tokens: 117  ctx 0%  ctrl+k/ctrl+p ││
-│└────────────────────────────────────────────────────────────────────────┘│
 │                                                                          │
-│❯ ▌Type a message...                                                      │
-└──────────────────────────────────────────────────────────────────────────┘
+│╭────────────────────────────────────────────────────────────────────────╮│
+││ test/m            ● idle  Mode: ASK  Tokens: 84  ctx 0%  ctrl+k/ctrl+p ││
+│╰────────────────────────────────────────────────────────────────────────╯│
+│                                                                          │
+│❯ █Type a message...                                                      │
+╰──────────────────────────────────────────────────────────────────────────╯

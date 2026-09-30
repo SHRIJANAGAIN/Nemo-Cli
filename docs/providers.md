@@ -1,11 +1,11 @@
 # Providers
 
-Trayambak talks to **10 backends** through one config surface. The list is the
+Trayambak talks to **22 backends** through one config surface. The list is the
 `provider` enum in `apps/runtime/src/config.ts` and `config.schema.json`;
 per-backend defaults come from `PROVIDER_CATALOG` in
 `packages/provider/src/catalog.ts`.
 
-## The 10 backends
+## The 22 backends
 
 | Provider id   | Label             | Default base URL                                            | Default model                                | Key          |
 | ------------- | ----------------- | ----------------------------------------------------------- | -------------------------------------------- | ------------ |
@@ -19,6 +19,18 @@ per-backend defaults come from `PROVIDER_CATALOG` in
 | `ollama`      | Ollama            | `http://localhost:11434`                                    | `llama3.1`                                   | none (local) |
 | `custom`      | Custom endpoint   | `http://localhost:8080`                                     | _(none — you must set one)_                  | optional     |
 | `llamacpp`    | llama.cpp (local) | _no per-provider default — use your `trayambak serve` port_ | _no per-provider default — set your GGUF id_ | none (local) |
+| `groq`        | Groq              | `https://api.groq.com/openai/v1`                            | `llama-3.3-70b-versatile`                    | required     |
+| `mistral`     | Mistral           | `https://api.mistral.ai/v1`                                 | `mistral-large-latest`                       | required     |
+| `cerebras`    | Cerebras          | `https://api.cerebras.ai/v1`                                | `llama3.1-70b`                               | required     |
+| `together`    | Together AI       | `https://api.together.xyz/v1`                               | `meta-llama/Llama-3.3-70B-Instruct-Turbo`    | required     |
+| `deepinfra`   | DeepInfra         | `https://api.deepinfra.com/v1/openai`                       | `meta-llama/Llama-3.3-70B-Instruct`          | required     |
+| `cohere`      | Cohere            | `https://api.cohere.com/compatibility/v1`                   | `command-r-plus`                             | required     |
+| `perplexity`  | Perplexity        | `https://api.perplexity.ai`                                 | `sonar-pro`                                  | required     |
+| `openrouter`  | OpenRouter        | `https://openrouter.ai/api/v1`                              | `anthropic/claude-sonnet-4`                  | required     |
+| `fireworks`   | Fireworks AI      | `https://api.fireworks.ai/inference/v1`                     | `accounts/fireworks/models/llama-v3p3-70b-instruct` | required |
+| `venice`      | Venice AI         | `https://api.venice.ai/api/v1`                              | `llama-3.3-70b`                              | required     |
+| `azure`       | Azure OpenAI      | `https://YOUR-RESOURCE.openai.azure.com/openai/deployments` | `gpt-4o`                                     | required     |
+| `skt-gateway` | SKT Gateway       | `https://gateway.skt-ai-labs.example/v1`                    | `auto`                                       | required     |
 
 Notes verified in code:
 

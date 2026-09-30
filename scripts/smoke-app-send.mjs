@@ -69,11 +69,15 @@ try {
   /* first run */
 }
 
+// Hard-fail policy: log and exit non-zero immediately — a logged-but-alive
+// handler turns a mid-run failure into an infinite hang (see devmode smoke).
 process.on("uncaughtException", (error) => {
   console.error("[uncaughtException]", error)
+  process.exit(1)
 })
 process.on("unhandledRejection", (error) => {
   console.error("[unhandledRejection]", error)
+  process.exit(1)
 })
 
 // ── Fake TTY ends (byte-identical to what a real terminal delivers) ────

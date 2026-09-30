@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { spawn, type ChildProcess } from "child_process"
@@ -10,6 +10,7 @@ import * as https from "https"
 import * as readline from "readline"
 import * as url from "url"
 import { McpAuthError, authorizeMcpServer, getValidAccessToken, type McpOAuthConfig } from "./oauth.js"
+import { resolveMcpCommand } from "./spawn-resolve.js"
 
 /** Transport spec for one MCP server: either stdio (`command`+`args`) or HTTP (`url`). */
 export interface McpServerSpec {
@@ -437,8 +438,11 @@ export class McpConnection {
 
   private spawnStdio(): void {
     const spec = this.spec
-    const [cmd, ...args] = spec.command ?? []
-    if (!cmd) throw new Error(`MCP server '${this.name}' has no command or url`)
+    const raw: string[] = spec.command ?? []
+    if (raw.length === 0) throw new Error(`MCP server '${this.name}' has no command or url`)
+    // Never spawn bare shims (npx/node/python): GUI-launched shells hit
+    // ENOENT, and *.cmd shims throw EINVAL — resolve first instead.
+    const { command: cmd, args } = resolveMcpCommand(raw)
     this.stderrTail = []
     this.child = spawn(cmd, args, {
       cwd: spec.cwd,
@@ -684,3 +688,13 @@ export {
   clearOAuthCaches,
 } from "./oauth.js"
 export type { McpOAuthConfig, McpOAuthTokens, McpOAuthClientInfo, McpAuthEntry, McpAuthStatus } from "./oauth.js"
+
+// Spawn resolution (see ./spawn-resolve.ts) — shared by the client, the
+// runner tool, and the installer so every stdio spawn resolves shims first.
+export {
+  resolveExecutable,
+  resolveMcpCommand,
+  resolveNpmCliJs,
+  resolveNpxCliJs,
+  type ResolvedCommand,
+} from "./spawn-resolve.js"

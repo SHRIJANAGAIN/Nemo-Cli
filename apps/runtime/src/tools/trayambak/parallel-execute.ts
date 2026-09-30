@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
@@ -53,6 +53,7 @@ export function createParallelExecuteTool(
   return {
     definition,
     async execute(_id, args, _signal, _update) {
+      if (!onRunSubagents) return textResult("Team runner is unavailable.", /*isError*/ true)
       const plan = (args.plan as string) ?? ""
       if (!plan.trim()) {
         return textResult("Missing required parameter: plan", /*isError*/ true)
@@ -149,15 +150,7 @@ Target Files: ${targetFiles.join(", ")}`,
         )
       }
 
-      let taskOutputs: Array<{ name: string; text: string; error?: string }> = []
-      if (onRunSubagents) {
-        taskOutputs = await onRunSubagents(parallelTasks)
-      } else {
-        taskOutputs = parallelTasks.map((t) => ({
-          name: t.name,
-          text: `[${t.name}] Analyzed plan and prepared implementation proposals.`,
-        }))
-      }
+      const taskOutputs: Array<{ name: string; text: string; error?: string }> = await onRunSubagents(parallelTasks)
 
       let report = `## Parallel Multi-Agent Execution Report\n`
       report += `- **Task Type**: ${taskType}\n`

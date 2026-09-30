@@ -1,0 +1,55 @@
+name: auto-close
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: "Log actions without closing items"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Close inactive PRs and issues (dry-run by default)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const PR_DAYS = 30, ISSUE_DAYS = 60;
+            const dryInput = context.payload.inputs?.dryRun;
+            const dryRun = dryInput === undefined ? true : dryInput !== 'false';
+            const { owner, repo } = context.repo;
+            const prCutoff = new Date(Date.now() - PR_DAYS * 864e5);
+            const issueCutoff = new Date(Date.now() - ISSUE_DAYS * 864e5);
+            core.info(`dry-run: ${dryRun}`);
+            const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 });
+            let closed = 0;
+            for (const pr of prs) {
+              const { data } = await github.rest.pulls.get({ owner, repo, pull_number: pr.number });
+              const activity = new Date(Math.max(Date.parse(data.created_at), Date.parse(data.updated_at)));
+              if (activity > prCutoff) continue;
+              if (dryRun) { core.info(`[dry-run] would close PR #${pr.number}: ${pr.title}`); continue; }
+              await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: `To stay organized pull requests are automatically closed after ${PR_DAYS} days of inactivity. Reopen if still relevant.` });
+              await github.rest.pulls.update({ owner, repo, pull_number: pr.number, state: 'closed' });
+              closed++;
+            }
+            const issues = await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', sort: 'updated', direction: 'asc', per_page: 100 });
+            for (const issue of issues) {
+              if (issue.pull_request) continue;
+              if (new Date(issue.updated_at) >= issueCutoff) break;
+              if (dryRun) { core.info(`[dry-run] would close issue #${issue.number}: ${issue.title}`); continue; }
+              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: `To stay organized issues are automatically closed after ${ISSUE_DAYS} days of no activity. Reopen if still relevant.` });
+              await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed', state_reason: 'not_planned' });
+              closed++;
+            }
+            core.info(`closed: ${closed}`);

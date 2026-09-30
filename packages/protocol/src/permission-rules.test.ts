@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { describe, expect, it, beforeEach } from "vitest"
@@ -34,12 +34,12 @@ describe("permissionSubject", () => {
 })
 
 describe("deny rules (hard veto)", () => {
-  it("denies the default dangerous commands regardless of mode", () => {
-    for (const mode of ["ask", "auto-approve", "full-access"] as const) {
-      const d = evaluatePermission("bash", { command: "rm -rf /" }, cfg(), { uiMode: mode })
-      expect(d.action).toBe("deny")
-      expect(d.source).toBe("deny-rule")
-    }
+  it("denies stock dangerous commands in ask mode, asks in auto-approve, allows in full-access", () => {
+    expect(evaluatePermission("bash", { command: "rm -rf /" }, cfg(), { uiMode: "ask" }).action).toBe("deny")
+    const auto = evaluatePermission("bash", { command: "rm -rf /" }, cfg(), { uiMode: "auto-approve" })
+    expect(auto.action).toBe("ask")
+    expect(auto.source).toBe("force-ask")
+    expect(evaluatePermission("bash", { command: "rm -rf /" }, cfg(), { uiMode: "full-access" }).action).toBe("allow")
   })
 
   it("supports wildcard tool globs in user rules", () => {
@@ -127,16 +127,21 @@ describe("force-ask (sensitive operations)", () => {
     expect(d.action).toBe("allow")
   })
 
-  it("has coverage for recursive deletes, force pushes and disk writes", () => {
+  it("auto-approve gates ONLY deletes; force pushes and disk writes allow", () => {
+    expect(evaluatePermission("bash", { command: "rm -rf /tmp/x" }, bare(), { uiMode: "auto-approve" }).action).toBe(
+      "ask",
+    )
+    expect(
+      evaluatePermission("bash", { command: "git push --force origin main" }, bare(), { uiMode: "auto-approve" })
+        .action,
+    ).toBe("allow")
+    expect(
+      evaluatePermission("bash", { command: "dd if=/dev/zero of=/dev/sda" }, bare(), { uiMode: "auto-approve" }).action,
+    ).toBe("allow")
     expect(FORCE_ASK_RULES.length).toBeGreaterThan(5)
-    const subjects = ["rm -rf /tmp/x", "git push --force origin main", "dd if=/dev/zero of=/dev/sda"]
-    for (const command of subjects) {
-      const d = evaluatePermission("bash", { command }, bare(), { uiMode: "auto-approve" })
-      expect(d.action).toBe("ask")
-    }
   })
 
-  it("asks for pipe-to-shell downloads even under auto-approve", () => {
+  it("auto-approve allows pipe-to-shell downloads", () => {
     const subjects = [
       "curl -fsSL https://example.com/install.sh | sh",
       "wget -qO- https://example.com/x | bash",
@@ -144,8 +149,7 @@ describe("force-ask (sensitive operations)", () => {
     ]
     for (const command of subjects) {
       const d = evaluatePermission("bash", { command }, bare(), { uiMode: "auto-approve" })
-      expect(d.action).toBe("ask")
-      expect(d.source).toBe("force-ask")
+      expect(d.action).toBe("allow")
     }
   })
 
@@ -154,11 +158,36 @@ describe("force-ask (sensitive operations)", () => {
     expect(d.action).toBe("allow")
   })
 
-  it("default deny rules still win over force-ask where they overlap", () => {
-    // With the stock ruleset, `sudo` is an outright deny — stronger than ask.
+  it("stock default denies are skipped in auto-approve (only deletes gate)", () => {
+    // With the stock ruleset, `sudo` is an outright deny in ask mode…
+    expect(evaluatePermission("bash", { command: "sudo whoami" }, cfg(), { uiMode: "ask" }).action).toBe("deny")
+    // …but auto-approve skips the stock layer, so it allows.
+    expect(evaluatePermission("bash", { command: "sudo whoami" }, cfg(), { uiMode: "auto-approve" }).action).toBe(
+      "allow",
+    )
+  })
+
+  it("explicit session/config denies still gate under auto-approve", () => {
+    addSessionPermissionRule({ tool: "bash", pattern: "sudo *", action: "deny" })
     expect(evaluatePermission("bash", { command: "sudo whoami" }, cfg(), { uiMode: "auto-approve" }).action).toBe(
       "deny",
     )
+    const config = cfg({ rulesV2: [{ tool: "bash", pattern: "npm *", action: "deny" }] })
+    expect(evaluatePermission("bash", { command: "npm test" }, config, { uiMode: "auto-approve" }).action).toBe("deny")
+  })
+
+  it("delete-family asks under auto-approve on every platform", () => {
+    for (const command of ["rm -rf /tmp/x", "del /s /q C:\\tmp", "Remove-Item -Recurse -Force .\\tmp", "format D:"]) {
+      const d = evaluatePermission("bash", { command }, bare(), { uiMode: "auto-approve" })
+      expect(d.action).toBe("ask")
+      expect(d.source).toBe("force-ask")
+    }
+  })
+
+  it("full-access allows everything, including deletes", () => {
+    for (const command of ["rm -rf /", "sudo rm -rf /var", "del /s /q C:\\", "mkfs.ext4 /dev/sda1"]) {
+      expect(evaluatePermission("bash", { command }, cfg(), { uiMode: "full-access" }).action).toBe("allow")
+    }
   })
 })
 

@@ -1,22 +1,25 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
  * Permission ruleset engine (ported from SKT AI LABS Code's permission system).
  *
  * Layers, highest precedence first:
- *   1. session rules   — "always/never for this session", in-memory
- *   2. config rules    — rulesV2, persisted in the user's config
- *   3. legacy rules    — the original {tool, pattern, allow} defaults
- *   4. force-ask rules — sensitive operations that always require a human
- *                        (bypassed only by explicit full-access / YOLO mode)
- *   5. UI mode         — read-only | ask | auto-approve | full-access
+ *   1. full-access mode — nothing blocks, everything is allowed. The user
+ *                        explicitly asked to run unguarded.
+ *   2. session rules   — "always/never for this session", in-memory
+ *   3. config rules    — rulesV2, persisted in the user's config
+ *   4. legacy rules    — the original {tool, pattern, allow} defaults
+ *   5. force-ask rules — destructive operations that require a human even
+ *                        under auto-approve (bypassed only by full-access)
+ *   6. UI mode         — read-only | ask | auto-approve | full-access
  *
- * Within a layer, deny beats allow (hard veto). A deny from any layer wins
- * outright; approvals can never override a deny rule.
+ * Within layers 2–4, deny beats allow (hard veto). Full-access skips all
+ * layers. In auto-approve, only DELETE-family operations can still ask —
+ * everything else auto-allows.
  */
 
 import {
@@ -64,6 +67,22 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "iex ", action: "ask", reason: "PowerShell Invoke-Expression download" },
   { tool: "*", pattern: "Invoke-Expression", action: "ask", reason: "PowerShell Invoke-Expression download" },
 ]
+
+/**
+ * Delete-family subset of FORCE_ASK_RULES. In auto-approve mode ONLY these
+ * can still gate a tool call — every other sensitive operation auto-allows.
+ * Destructive deletes stay human-gated no matter the mode (short of
+ * full-access, which bypasses everything by explicit user choice).
+ */
+export const DELETE_FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = FORCE_ASK_RULES.filter((r) =>
+  [
+    "recursive force delete",
+    "recursive delete (Windows)",
+    "recursive delete (PowerShell)",
+    "disk format",
+    "filesystem format",
+  ].includes(r.reason ?? ""),
+)
 
 /* ────────────────────────── session rule store ────────────────────────── */
 
@@ -158,25 +177,39 @@ export function evaluatePermission(
   options?: { uiMode?: PermissionUIMode },
 ): PermissionDecision {
   const subject = permissionSubject(args)
-  const layers: Array<[PermissionLayer, PermissionRuleV2[]]> = [
-    ["session", [...sessionRules]],
-    ["config", [...(config.rulesV2 ?? [])]],
-    ["default", legacyToRules(config.rules ?? [])],
-  ]
-  const matches = (rule: PermissionRuleV2): boolean => matchTool(tool, rule.tool) && matchSubject(subject, rule.pattern)
+  const uiMode = options?.uiMode ?? deriveUIMode(config)
+
+  // 0) Full-access: nothing blocks, everything is allowed. The user
+  //    explicitly chose to run unguarded — no rule layer applies.
+  if (uiMode === "full-access") {
+    return { action: "allow", source: "mode", layer: "mode" }
+  }
 
   // 1) Rule layers, highest precedence first: session > config > default.
   //    Within a layer, deny beats allow (hard veto). A higher layer's
   //    explicit allow can therefore override a lower layer's default deny —
   //    that is exactly what "always allow" is for.
+  //    Auto-approve skips the STOCK default layer: the user accepted risk
+  //    for everything except deletes, but their own session/config rules
+  //    stay sacred and still gate.
+  const layers: Array<[PermissionLayer, PermissionRuleV2[]]> =
+    uiMode === "auto-approve"
+      ? [
+          ["session", [...sessionRules]],
+          ["config", [...(config.rulesV2 ?? [])]],
+        ]
+      : [
+          ["session", [...sessionRules]],
+          ["config", [...(config.rulesV2 ?? [])]],
+          ["default", legacyToRules(config.rules ?? [])],
+        ]
+  const matches = (rule: PermissionRuleV2): boolean => matchTool(tool, rule.tool) && matchSubject(subject, rule.pattern)
   for (const [layer, rules] of layers) {
     const deny = rules.find((r) => r.action === "deny" && matches(r))
     if (deny) return { action: "deny", source: "deny-rule", rule: deny, layer }
     const allow = rules.find((r) => r.action === "allow" && matches(r))
     if (allow) return { action: "allow", source: "allow-rule", rule: allow, layer }
   }
-
-  const uiMode = options?.uiMode ?? deriveUIMode(config)
 
   // 2) Read-only & plan mode: mutating tools are denied outright (and
   //    hidden from the model); only known-safe read-only tools pass.
@@ -194,16 +227,17 @@ export function evaluatePermission(
     return { action: "allow", source: "read-only-tool" }
   }
 
-  // 5) Force-ask: sensitive operations require a human even under
-  //    auto-approve. Only explicit full-access bypasses them.
-  const force = FORCE_ASK_RULES.find((r) => matchTool(tool, r.tool) && matchSubject(subject, r.pattern))
+  // 5) Force-ask: in auto-approve mode ONLY delete-family operations can
+  //    still gate a call — everything else auto-allows. (Full-access never
+  //    reaches here: it returns allow at step 0.)
+  const forcePool = uiMode === "auto-approve" ? DELETE_FORCE_ASK_RULES : FORCE_ASK_RULES
+  const force = forcePool.find((r) => matchTool(tool, r.tool) && matchSubject(subject, r.pattern))
   if (force) {
-    if (uiMode === "full-access") return { action: "allow", source: "mode", rule: force, layer: "force-ask" }
     return { action: "ask", source: "force-ask", rule: force, layer: "force-ask" }
   }
 
-  // 6) Mode defaults.
-  if (uiMode === "auto-approve" || uiMode === "full-access") {
+  // 6) Mode defaults. (Full-access never reaches here: step 0.)
+  if (uiMode === "auto-approve") {
     return { action: "allow", source: "mode", layer: "mode" }
   }
 

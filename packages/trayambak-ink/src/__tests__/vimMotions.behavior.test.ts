@@ -105,59 +105,59 @@ describe("vim motions — source pins", () => {
 
   describe("Key dispatch table", () => {
     test("h → cursor.left()", () => {
-      expect(source).toMatch(/case 'h':\s*\n?\s*return cursor\.left\(\)/)
+      expect(source).toMatch(/case ['"]h['"]:\s*\n?\s*return cursor\.left\(\)/)
     })
 
     test("l → cursor.right()", () => {
-      expect(source).toMatch(/case 'l':\s*\n?\s*return cursor\.right\(\)/)
+      expect(source).toMatch(/case ['"]l['"]:\s*\n?\s*return cursor\.right\(\)/)
     })
 
     test("j → cursor.downLogicalLine()", () => {
       // Pin: j moves by LOGICAL line (the cursor's line, not display).
-      expect(source).toMatch(/case 'j':\s*\n?\s*return cursor\.downLogicalLine\(\)/)
+      expect(source).toMatch(/case ['"]j['"]:\s*\n?\s*return cursor\.downLogicalLine\(\)/)
     })
 
     test("k → cursor.upLogicalLine()", () => {
-      expect(source).toMatch(/case 'k':\s*\n?\s*return cursor\.upLogicalLine\(\)/)
+      expect(source).toMatch(/case ['"]k['"]:\s*\n?\s*return cursor\.upLogicalLine\(\)/)
     })
 
     test("gj/gk → cursor.down()/up() (visual line motions)", () => {
       // Pin: gj/gk move by DISPLAY line (down() not downLogicalLine()).
       // Distinct from j/k. A regression that confuses these breaks
       // wrap-line navigation.
-      expect(source).toMatch(/case 'gj':\s*\n?\s*return cursor\.down\(\)/)
-      expect(source).toMatch(/case 'gk':\s*\n?\s*return cursor\.up\(\)/)
+      expect(source).toMatch(/case ['"]gj['"]:\s*\n?\s*return cursor\.down\(\)/)
+      expect(source).toMatch(/case ['"]gk['"]:\s*\n?\s*return cursor\.up\(\)/)
     })
 
     test("w/b/e → vim word boundaries (NOT WORD)", () => {
       // Pin: lowercase uses vim's word definition (alphanumeric + _).
-      expect(source).toMatch(/case 'w':\s*\n?\s*return cursor\.nextVimWord\(\)/)
-      expect(source).toMatch(/case 'b':\s*\n?\s*return cursor\.prevVimWord\(\)/)
-      expect(source).toMatch(/case 'e':\s*\n?\s*return cursor\.endOfVimWord\(\)/)
+      expect(source).toMatch(/case ['"]w['"]:\s*\n?\s*return cursor\.nextVimWord\(\)/)
+      expect(source).toMatch(/case ['"]b['"]:\s*\n?\s*return cursor\.prevVimWord\(\)/)
+      expect(source).toMatch(/case ['"]e['"]:\s*\n?\s*return cursor\.endOfVimWord\(\)/)
     })
 
     test("W/B/E → WORD boundaries (whitespace-separated)", () => {
       // Pin: uppercase = WORD (whitespace-separated). Distinct from w/b/e.
-      expect(source).toMatch(/case 'W':\s*\n?\s*return cursor\.nextWORD\(\)/)
-      expect(source).toMatch(/case 'B':\s*\n?\s*return cursor\.prevWORD\(\)/)
-      expect(source).toMatch(/case 'E':\s*\n?\s*return cursor\.endOfWORD\(\)/)
+      expect(source).toMatch(/case ['"]W['"]:\s*\n?\s*return cursor\.nextWORD\(\)/)
+      expect(source).toMatch(/case ['"]B['"]:\s*\n?\s*return cursor\.prevWORD\(\)/)
+      expect(source).toMatch(/case ['"]E['"]:\s*\n?\s*return cursor\.endOfWORD\(\)/)
     })
 
     test("0 → startOfLogicalLine (NOT first non-blank)", () => {
       // Pin: 0 is column-0 even if blanks. ^ is the first non-blank.
-      expect(source).toMatch(/case '0':\s*\n?\s*return cursor\.startOfLogicalLine\(\)/)
+      expect(source).toMatch(/case ['"]0['"]:\s*\n?\s*return cursor\.startOfLogicalLine\(\)/)
     })
 
     test("^ → firstNonBlankInLogicalLine", () => {
-      expect(source).toMatch(/case '\^':\s*\n?\s*return cursor\.firstNonBlankInLogicalLine\(\)/)
+      expect(source).toMatch(/case ['"]\^['"]:\s*\n?\s*return cursor\.firstNonBlankInLogicalLine\(\)/)
     })
 
     test("$ → endOfLogicalLine", () => {
-      expect(source).toMatch(/case '\$':\s*\n?\s*return cursor\.endOfLogicalLine\(\)/)
+      expect(source).toMatch(/case ['"]\$['"]:\s*\n?\s*return cursor\.endOfLogicalLine\(\)/)
     })
 
     test("G → startOfLastLine (move to last line, beginning)", () => {
-      expect(source).toMatch(/case 'G':\s*\n?\s*return cursor\.startOfLastLine\(\)/)
+      expect(source).toMatch(/case ['"]G['"]:\s*\n?\s*return cursor\.startOfLastLine\(\)/)
     })
 
     test("default branch returns cursor unchanged (no-op on unknown)", () => {
@@ -169,12 +169,12 @@ describe("vim motions — source pins", () => {
   describe("Classification helpers", () => {
     test('isInclusiveMotion: exact string "eE$"', () => {
       // Pin: 3 characters, no spaces. Easy to over- or under-pin.
-      expect(source).toMatch(/return 'eE\$'\.includes\(key\)/)
+      expect(source).toMatch(/return ['"]eE\$['"].includes\(key\)/)
     })
 
     test('isLinewiseMotion: "jkG" includes + gg special-case', () => {
       // Pin: gg is multi-char so it can't be in the single-char string.
-      expect(source).toMatch(/return 'jkG'\.includes\(key\) \|\| key === 'gg'/)
+      expect(source).toMatch(/return ['"]jkG['"].includes\(key\) \|\| key === ['"]gg['"]/)
     })
   })
 })

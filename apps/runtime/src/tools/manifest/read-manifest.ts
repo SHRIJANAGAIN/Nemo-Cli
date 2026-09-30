@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -104,7 +104,9 @@ function summarizeManifest(file: string, kind: string, project: string): string[
 function summarizePackageJson(raw: string): string[] {
   let json: Record<string, unknown>
   try {
-    json = JSON.parse(raw) as Record<string, unknown>
+    // tsconfig.json is JSONC in practice (comments + trailing commas);
+    // plain JSON.parse marked nearly every real config "unparseable".
+    json = JSON.parse(raw.replace(/^\uFEFF/, "")) as Record<string, unknown>
   } catch {
     return summarizeGeneric(raw, "package.json (unparseable)")
   }
@@ -131,14 +133,21 @@ function summarizePackageJson(raw: string): string[] {
 
 function summarizePyproject(raw: string): string[] {
   const out: string[] = []
-  const name = field(raw, /^name\s*=\s*["']?([^"'\n]+)["']?/m, "project")
-  const version = field(raw, /^version\s*=\s*["']?([^"'\n]+)["']?/m, "project")
+  const nameRe = /^name\s*=\s*["']?([^"'\n]+)["']?/m
+  const versionRe = /^version\s*=\s*["']?([^"'\n]+)["']?/m
+  // Prefer [project]; fall back to a whole-file scan so tool.poetry-style
+  // files (no [project] table) still report their name/version.
+  const name = field(raw, nameRe, "project") ?? field(raw, nameRe)
+  const version = field(raw, versionRe, "project") ?? field(raw, versionRe)
   if (name) out.push(`name: ${name}`)
   if (version) out.push(`version: ${version}`)
-  const deps = sectionLines(raw, "project.dependencies")
+  // PEP 621 keeps these as ARRAY KEYS inside [project]/[build-system] — there
+  // is no [project.dependencies] header, which is what sectionLines() seeks,
+  // so it never matched a real pyproject.toml.
+  const deps = tomlArrayField(raw, "project", "dependencies")
   if (deps.length > 0)
     out.push(`dependencies (${deps.length}): ${deps.slice(0, 12).join(", ")}${deps.length > 12 ? "…" : ""}`)
-  const requires = sectionLines(raw, "build-system.requires")
+  const requires = tomlArrayField(raw, "build-system", "requires")
   if (requires.length > 0) out.push(`build requires (${requires.length}): ${requires.slice(0, 6).join(", ")}`)
   if (out.length === 0) out.push("empty/unknown pyproject.toml")
   return out
@@ -189,7 +198,9 @@ function summarizeGoMod(raw: string): string[] {
 function summarizeTsconfig(raw: string): string[] {
   let json: Record<string, unknown>
   try {
-    json = JSON.parse(raw.replace(/^\uFEFF/, "")) as Record<string, unknown>
+    // tsconfig.json is JSONC in practice (comments + trailing commas);
+    // plain JSON.parse marked nearly every real config "unparseable".
+    json = JSON.parse(stripJsonc(raw.replace(/^\uFEFF/, ""))) as Record<string, unknown>
   } catch {
     return ["unparseable tsconfig.json"]
   }
@@ -220,6 +231,76 @@ function field(raw: string, re: RegExp, section?: string): string | undefined {
   if (!scope) return undefined
   const m = scope.match(re)
   return m ? m[1].trim() : undefined
+}
+
+/** Items of a multi-line `key = ["a", "b"]` array inside a `[section]`.
+ *  sectionLines() cannot do this: it seeks a `[section.key]` HEADER, while
+ *  PEP 621 keeps `dependencies` as a plain key inside `[project]`. */
+function tomlArrayField(raw: string, section: string, key: string): string[] {
+  const scope = findSection(raw, section)
+  if (!scope) return []
+  const m = scope.match(new RegExp(`^${key}\\s*=\\s*\\[([\\s\\S]*?)\\]`, "m"))
+  if (!m) return []
+  return Array.from(m[1].matchAll(/["']([^"']+)["']/g)).map((x) => x[1])
+}
+
+/** Strip `//`/`/* *​/` comments and trailing commas (string-aware) so JSONC
+ *  configs like tsconfig.json parse. Inside strings nothing is touched, so
+ *  values like `"url": "https://x"` survive intact. */
+function stripJsonc(raw: string): string {
+  let out = ""
+  let inStr = false
+  let esc = false
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i]
+    if (inStr) {
+      out += c
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') {
+      inStr = true
+      out += c
+      continue
+    }
+    if (c === "/" && raw[i + 1] === "/") {
+      while (i < raw.length && raw[i] !== "\n") i++
+      continue
+    }
+    if (c === "/" && raw[i + 1] === "*") {
+      i += 2
+      while (i < raw.length && !(raw[i] === "*" && raw[i + 1] === "/")) i++
+      i++
+      continue
+    }
+    if (c === ",") {
+      let j = i + 1
+      while (j < raw.length) {
+        if (/\s/.test(raw[j])) {
+          j++
+          continue
+        }
+        if (raw[j] === "/" && raw[j + 1] === "/") {
+          while (j < raw.length && raw[j] !== "\n") j++
+          continue
+        }
+        if (raw[j] === "/" && raw[j + 1] === "*") {
+          j += 2
+          while (j < raw.length && !(raw[j] === "*" && raw[j + 1] === "/")) j++
+          j++
+          continue
+        }
+        break
+      }
+      if (raw[j] === "]" || raw[j] === "}") continue // drop trailing comma
+      out += c
+      continue
+    }
+    out += c
+  }
+  return out
 }
 
 function sectionField(raw: string, section: string, key: string): string | undefined {

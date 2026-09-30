@@ -862,7 +862,10 @@ export const SKT_SPECS: PaletteSpec[] = [
   },
 
   {
-    name: "kilo",
+    // Renamed from "kilo" in the rebrand: the palette is unchanged, and
+    // setThemeByName keeps "kilo" resolvable as a legacy alias so persisted
+    // configs never fall back to the default theme.
+    name: "solar-stone",
     dark: true,
     thinkingOpacity: 0.72,
     c: {

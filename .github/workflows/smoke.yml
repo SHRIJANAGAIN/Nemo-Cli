@@ -1,0 +1,51 @@
+name: smoke
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore: ["**/*.md", "docs/**"]
+  pull_request:
+    paths-ignore: ["**/*.md", "docs/**"]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Standalone smoke (build + CLI + e2e)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: CLI --version
+        run: node dist/apps/cli/src/index.js --version
+      - name: E2E smoke (version/modes/sandbox/execpolicy)
+        run: npm run test:e2e
+      - name: Smoke scripts
+        run: npm run smoke
+      - name: Windows cmd shims
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          bin\trayambak.cmd --version
+          if errorlevel 1 exit /b 1
+          bin\skt.cmd --version
+          if errorlevel 1 exit /b 1

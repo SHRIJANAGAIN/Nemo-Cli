@@ -10,8 +10,8 @@ Upload endpoint defaults to the SKT AI LABS collector at
 `https://telemetry.sktailabs.example/v1/ingest` — override with
 `SKT_UPLOAD_URL` env var.
 
-Failures are retried by `retryupload.py` (a separate process or
-co-routine) until the upload succeeds.
+Transient failures (500/502/503/504 and connection errors) are retried
+in-process up to `--max-attempts` with backoff; see RETRYABLE below.
 """
 
 from __future__ import annotations

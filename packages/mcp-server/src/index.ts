@@ -87,7 +87,7 @@ export async function dispatchMcpServer(req: {
     case "initialize":
       send(req.id, {
         protocolVersion: "2024-11-05",
-        serverInfo: { name: "trayambak", version: "0.5.0" },
+        serverInfo: { name: "trayambak", version: "0.6.0" }, // keep in sync with root package.json
         capabilities: { tools: {} },
       })
       break

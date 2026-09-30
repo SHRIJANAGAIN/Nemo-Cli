@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -164,7 +164,16 @@ export class DeveloperModeEngine {
         parsedConfig.cotChain = DEFAULT_DEVELOPER_MODE_CONFIG.cotChain
       }
     }
-    this.config = { ...DEFAULT_DEVELOPER_MODE_CONFIG, ...parsedConfig }
+    this.config = {
+      ...DEFAULT_DEVELOPER_MODE_CONFIG,
+      ...parsedConfig,
+      // Decoded strings (and partial objects) must merge OVER the defaults,
+      // not replace them — otherwise untouched fields (maxDepth) vanish.
+      cotChain: {
+        ...DEFAULT_DEVELOPER_MODE_CONFIG.cotChain,
+        ...((parsedConfig.cotChain as Partial<CotChainSubMenu> | undefined) ?? {}),
+      },
+    }
     const devDir = path.join(cwd, "skt", "12-control", "devmode")
     fs.mkdirSync(devDir, { recursive: true })
     this.mistakeLogPath = path.join(devDir, "mistakes.json")
@@ -325,7 +334,10 @@ export class DeveloperModeEngine {
     for (const p of active) {
       for (const [k, v] of Object.entries(p.adjustments)) {
         if (k === "temperature") {
-          merged.temperature = Math.max(0, Number(merged.temperature ?? 0) + Number(v))
+          // Round: 0.1 + 0.1 is 0.200000000000000011 in IEEE floats, and
+          // consumers compare exact budgets — same 3-decimal convention as
+          // the per-mistake setter above.
+          merged.temperature = +Math.max(0, Number(merged.temperature ?? 0) + Number(v)).toFixed(3)
         } else if (k === "maxToolCalls") {
           merged.maxToolCalls = Math.min(Number(merged.maxToolCalls ?? 10), Number(v))
         } else {
@@ -373,7 +385,7 @@ export class DeveloperModeEngine {
     ]
     const hasDetails =
       /\b(using|with|in|for|on|to|from|by|react|vue|node|python|javascript|typescript|css|html|database|api|rest|graphql|sql|mongodb|postgres|docker|aws|azure|gcp|vercel|netlify|next|express|fastapi|django|flask|tailwind|bootstrap|sass|scss|json|xml|yaml|toml)\b/i
-    if (hasDetails) return false
+    if (hasDetails.test(lower)) return false
     const wordCount = lower.split(/\s+/).filter(Boolean).length
     if (wordCount > 15) return false
     return vaguePatterns.some((re) => re.test(lower))

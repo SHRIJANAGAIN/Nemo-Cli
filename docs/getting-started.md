@@ -130,7 +130,7 @@ An unknown command prints help and exits `2` (the usage code).
 | `--token <t>`          | Bearer token for `web` (else `TRAYAMBAK_WEB_TOKEN`)                                                                                                                                                              |
 | `--dev`, `--dev-mode`  | Enable developer mode                                                                                                                                                                                            |
 | `--dump-system-prompt` | Print the built system prompt and exit (offline, no key needed)                                                                                                                                                  |
-| `--version`, `-v`      | Print version (`trayambak 0.5.0`; `skt 0.5.0` under the `skt` shim)                                                                                                                                              |
+| `--version`, `-v`      | Print version (`trayambak 0.6.0`; `skt 0.6.0` under the `skt` shim)                                                                                                                                              |
 | `--help`, `-h`, `help` | Show help                                                                                                                                                                                                        |
 
 Parsing notes (`apps/cli/src/flags.ts`):
@@ -208,7 +208,7 @@ Read elsewhere in the CLI (not by `loadConfig()`):
 | Variable                                                                                      | Used by                                                                                                                              |
 | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `TRAYAMBAK_DISABLE_AUTOUPDATE`                                                                | Auto-update kill switch (any value except `0`/`false` skips updates)                                                                 |
-| `TRAYAMBAK_WEB_TOKEN`, `TRAYAMBAK_SERVER_PORT`                                                | `trayambak web`                                                                                                                      |
+| `TRAYAMBAK_WEB_TOKEN`, `TRAYAMBAK_SERVER_PORT`, `TRAYAMBAK_WEB_ORIGINS`                       | `trayambak web` (origins: extra browser origins; same-origin + loopback always allowed, `*` re-allows all)                           |
 | `TRAYAMBAK_CREDENTIALS_FILE`                                                                  | `trayambak login` credentials path                                                                                                   |
 | `TRAYAMBAK_SESSIONS_DIR`, `TRAYAMBAK_SESSIONS_FILE`                                           | Session transcripts / index (see [Sessions](sessions.md))                                                                            |
 | `TRAYAMBAK_MCP_AUTH_FILE`                                                                     | MCP OAuth token file                                                                                                                 |

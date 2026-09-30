@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { DatabaseDatabase, getDatabase, initDatabases, resetDatabase } from "./state_db.js"
+import { DatabaseDatabase, getDatabase, initDatabases, resetDatabase, verifyAuditChain } from "./state_db.js"
 
 let home: string
 let storeFile: string
@@ -240,5 +240,212 @@ describe("singleton lifecycle", () => {
     expect(storeFile.startsWith(home)).toBe(true)
     const raw = JSON.parse(readFileSync(storeFile, "utf8")) as { threads: Record<string, unknown> }
     expect(raw.threads["isolation-check"]).toBeDefined()
+  })
+})
+
+describe("audit hash chain (json)", () => {
+  // Like the rest of this file, these cases assume the default backend:
+  // pin the sqliteState flag off so an ambient FEATURE_SQLITESTATE can't
+  // flip them onto the sqlite store mid-suite.
+  const savedFlag = process.env.FEATURE_SQLITESTATE
+  beforeEach(() => {
+    delete process.env.FEATURE_SQLITESTATE
+  })
+  afterEach(() => {
+    if (savedFlag === undefined) delete process.env.FEATURE_SQLITESTATE
+    else process.env.FEATURE_SQLITESTATE = savedFlag
+  })
+
+  /** Read the raw store so a test can tamper with it like an attacker would. */
+  function readStore(): Record<string, unknown> & { audit_log: Array<Record<string, unknown>> } {
+    return JSON.parse(readFileSync(storeFile, "utf8")) as Record<string, unknown> & {
+      audit_log: Array<Record<string, unknown>>
+    }
+  }
+
+  function writeStore(store: Record<string, unknown>): void {
+    writeFileSync(storeFile, JSON.stringify(store), "utf8")
+  }
+
+  it("verifies an empty store as ok with zero entries", () => {
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 0 })
+  })
+
+  it("verifies linked entries after multiple appends", () => {
+    const db = open()
+    db.recordAudit("tool.execute", "agent", "bash", "success")
+    db.recordAudit("file.write", "agent", "/etc/hosts", "denied")
+    db.recordAudit("tool.execute", "agent", "read", "success")
+    db.close()
+
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 3 })
+
+    const stored = readStore().audit_log
+    expect(stored).toHaveLength(3)
+    // The first chained entry anchors to the documented genesis value; each
+    // later entry carries its predecessor's hash, which is the linkage the
+    // deletion/reorder checks hang on.
+    expect(stored[0]?.prev_hash).toBe("")
+    for (let i = 1; i < stored.length; i++) {
+      expect(stored[i]?.prev_hash).toBe(stored[i - 1]?.hash)
+    }
+    expect(stored.every((e) => typeof e.hash === "string" && e.hash.length === 64)).toBe(true)
+  })
+
+  it("flags an edited middle entry at its index", () => {
+    const db = open()
+    db.recordAudit("a", "agent", "one", "ok")
+    db.recordAudit("b", "agent", "two", "ok")
+    db.recordAudit("c", "agent", "three", "ok")
+    db.close()
+
+    const store = readStore()
+    store.audit_log[1].action = "tampered"
+    writeStore(store)
+
+    expect(verifyAuditChain(open())).toEqual({
+      ok: false,
+      brokenAt: 1,
+      reason: "audit entry hash does not match its contents",
+    })
+  })
+
+  it("flags a tampered stored hash at its index", () => {
+    const db = open()
+    db.recordAudit("a", "agent", "one", "ok")
+    db.recordAudit("b", "agent", "two", "ok")
+    db.recordAudit("c", "agent", "three", "ok")
+    db.close()
+
+    const store = readStore()
+    store.audit_log[1].hash = "0".repeat(64)
+    writeStore(store)
+
+    expect(verifyAuditChain(open())).toEqual({
+      ok: false,
+      brokenAt: 1,
+      reason: "audit entry hash does not match its contents",
+    })
+  })
+
+  it("flags a deleted middle entry at the following index", () => {
+    const db = open()
+    for (const action of ["a", "b", "c"]) db.recordAudit(action, "agent", "target", "ok")
+    db.close()
+
+    const store = readStore()
+    store.audit_log.splice(1, 1)
+    writeStore(store)
+
+    expect(verifyAuditChain(open())).toEqual({
+      ok: false,
+      brokenAt: 1,
+      reason: "prev_hash does not match the expected predecessor",
+    })
+  })
+
+  it("returns ok after tail truncation — the documented limitation", () => {
+    const db = open()
+    for (const action of ["a", "b", "c", "d"]) db.recordAudit(action, "agent", "target", "ok")
+    db.close()
+
+    const store = readStore()
+    store.audit_log.splice(2)
+    writeStore(store)
+
+    // Pinned on purpose: the remaining prefix still verifies, so dropping
+    // the NEWEST entries is invisible without an external anchor (see the
+    // verifyAuditChain doc — this is tamper evidence, not append-only).
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 2 })
+  })
+
+  it("chains onto pre-chain legacy entries without flagging them", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    writeFileSync(
+      storeFile,
+      JSON.stringify({
+        threads: {},
+        events: [],
+        violations: [],
+        seq: 3,
+        audit_log: [
+          { id: 1, action: "legacy.import", actor: "old", target: "one", timestamp: 1, result: "ok" },
+          { id: 2, action: "legacy.import", actor: "old", target: "two", timestamp: 2, result: "ok" },
+        ],
+      }),
+      "utf8",
+    )
+
+    const db = open()
+    db.recordAudit("post.migration", "agent", "bash", "ok")
+    db.recordAudit("post.migration", "agent", "read", "ok")
+    db.close()
+
+    // Legacy rows carry no evidence but do not break verification; the new
+    // appends restart from genesis and link to each other.
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 4 })
+
+    const stored = readStore().audit_log
+    expect(stored[0]?.hash).toBeUndefined()
+    expect(stored[2]?.prev_hash).toBe("")
+    expect(stored[3]?.prev_hash).toBe(stored[2]?.hash)
+  })
+
+  it("flags an unhashed entry injected after the chain began", () => {
+    const db = open()
+    db.recordAudit("a", "agent", "target", "ok")
+    db.close()
+
+    const store = readStore()
+    store.audit_log.push({ id: 2, action: "forged", actor: "x", target: "y", timestamp: 3, result: "ok" })
+    writeStore(store)
+
+    expect(verifyAuditChain(open())).toEqual({
+      ok: false,
+      brokenAt: 1,
+      reason: "unhashed audit entry appears after the chain began",
+    })
+  })
+
+  it("flags a row with prev_hash but no hash", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    writeFileSync(
+      storeFile,
+      JSON.stringify({
+        threads: {},
+        events: [],
+        violations: [],
+        seq: 2,
+        audit_log: [{ id: 1, action: "a", actor: "b", target: "c", timestamp: 1, result: "ok", prev_hash: "" }],
+      }),
+      "utf8",
+    )
+
+    expect(verifyAuditChain(new DatabaseDatabase(storeFile))).toEqual({
+      ok: false,
+      brokenAt: 0,
+      reason: "audit entry has prev_hash but no hash",
+    })
+  })
+
+  it("flags a row with hash but no prev_hash", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    writeFileSync(
+      storeFile,
+      JSON.stringify({
+        threads: {},
+        events: [],
+        violations: [],
+        seq: 2,
+        audit_log: [{ id: 1, action: "a", actor: "b", target: "c", timestamp: 1, result: "ok", hash: "0".repeat(64) }],
+      }),
+      "utf8",
+    )
+
+    expect(verifyAuditChain(new DatabaseDatabase(storeFile))).toEqual({
+      ok: false,
+      brokenAt: 0,
+      reason: "audit entry has hash but no prev_hash",
+    })
   })
 })

@@ -12,7 +12,11 @@ export class TextStreamService {
   private bufferSize: number = 1024 * 1024
 
   stream(text: string, options: StreamOptions = {}): void {
-    const chunks = text.match(/.{1,100}/g) ?? [text]
+    // /[\s\S]/ — never /./ : a bare `.` does not match "\n", and
+    // String.match returns only the MATCHED spans, so multi-line text
+    // would silently lose every newline ("ab\ncd" streamed as "abcd").
+    // Chunk size stays 100 characters; every character survives in order.
+    const chunks = text.match(/[\s\S]{1,100}/g) ?? [text]
 
     for (const chunk of chunks) {
       if (options.onChunk) {

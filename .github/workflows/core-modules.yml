@@ -1,5 +1,10 @@
 name: core-modules
 on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   core-tests:
     runs-on: ubuntu-latest
@@ -11,10 +16,20 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test -- --filter=core
+      # The legacy TUI cluster and the DOM-aware logic/ tree each compile as
+      # their own program (root Node code must never see `window`) — gate
+      # them alongside the main program.
+      - run: npm run typecheck:ink
+      - run: npm run typecheck:logic
+      # Real gate: vitest exits non-zero when any test fails; the positional
+      # arg filters to the core package's test files. The exit code is the
+      # signal — no output grepping (a `grep -q "passed"` pipe swallows the
+      # test runner's exit status and passes whenever the word appears).
+      - run: npx vitest run packages/core
   coverage-gate:
     runs-on: ubuntu-latest
-    needs: [core-tests]
+    # Independent of core-tests: the coverage gate must report its own
+    # verdict even when unit tests fail (and vice versa).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,6 +37,15 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # vitest.config.ts coverage.thresholds fails this run (non-zero exit)
+      # when the measured coverage drops below the floor — that exit code is
+      # the gate. A previous `2>&1 | grep -q "passed" && echo …` line made
+      # the step succeed on the literal word "passed" while discarding
+      # vitest's own status, and ran the suite twice.
       - run: npm run test:coverage
-      - name: Assert coverage threshold
-        run: npx vitest run --coverage 2>&1 | grep -q "passed" && echo "Coverage threshold met"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14

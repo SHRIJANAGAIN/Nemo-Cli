@@ -13,6 +13,8 @@ export interface BoardStore {
   readonly participants: Set<string>
 }
 
+import { uniqueId } from "./unique-id.js"
+
 export class BoardService {
   private store: { messages: BoardMessage[]; participants: Set<string> } = {
     messages: [],
@@ -22,7 +24,11 @@ export class BoardService {
   post(message: Omit<BoardMessage, "id" | "timestamp">): BoardMessage {
     const fullMessage: BoardMessage = {
       ...message,
-      id: `board-${Date.now()}`,
+      // Messages minted in the same millisecond used to share an id.
+      id: uniqueId(
+        `board-${Date.now()}`,
+        this.store.messages.map((m) => m.id),
+      ),
       timestamp: new Date(),
     }
     this.store.messages.push(fullMessage)

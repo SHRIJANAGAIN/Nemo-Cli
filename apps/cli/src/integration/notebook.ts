@@ -16,13 +16,17 @@ export interface Notebook {
   readonly updatedAt: Date
 }
 
+import { uniqueId } from "./unique-id.js"
+
 export class NotebookService {
   private notebooks: Map<string, Notebook> = new Map()
   private activeNotebook?: Notebook
 
   create(name: string): Notebook {
     const notebook: Notebook = {
-      id: `notebook-${Date.now()}`,
+      // Disambiguated: two creates in one millisecond collided, and this Map
+      // is keyed by id, so the second notebook replaced the first.
+      id: uniqueId(`notebook-${Date.now()}`, this.notebooks.keys()),
       name,
       cells: [],
       createdAt: new Date(),

@@ -16,13 +16,11 @@ _It fits scenarios such as:_
 
 - The CLI is written in TypeScript, distributed via npm, and runs on Node.js
 
----
-
 ## **What's New & Different From The Rest ?**
 
-_We Used Philosophical Methods To Hunt Every Kinds Of Vulnerabilities In Lower Cost Of Thinking Language Models_
+We Used **Philosophical Methods** To Hunt Every Kinds Of **Vulnerabilities** In Lower Cost Of **Thinking Language Models**
 
-_While others reach for bigger models and larger languages to patch critical bugs and predict failures, We take the opposite path: we ask how the agent could cause damage — then shut every one of those doors first._
+_While others reach for **bigger models** and **larger languages** to patch **critical bugs** and **predict failures**, We take the opposite path: we ask how the agent could cause damage — then shut every one of those doors first._
 
 ---
 
@@ -47,13 +45,13 @@ _While others reach for bigger models and larger languages to patch critical bug
 
 ## Get Started
 
-1. Install Trayambak CLI
+1. **Install Trayambak CLI**
 
 ```
 npm install -g @skt-ai-labs/trayambak-cli
 ```
 
-2. How To Launch The CLI
+2. How To **Launch** The **CLI**
 
 Type `skt` or `trayambak` in your terminal:
 
@@ -61,7 +59,7 @@ Type `skt` or `trayambak` in your terminal:
 trayambak
 ```
 
-3. Connect With Any Provider
+3. **Connect** With Any **Provider**
 
 Type `/provider` and connect with any provider:
 
@@ -69,7 +67,7 @@ Type `/provider` and connect with any provider:
 /provider
 ```
 
-4. Choose A Model
+4. Choose A **Model**
 
 Type `/models` and pick one from the list:
 
@@ -77,13 +75,13 @@ Type `/models` and pick one from the list:
 /models
 ```
 
-_Use Trayambak to hunt vulnerabilities — or to build._
+_Use **Trayambak** to hunt **vulnerabilities** — or to **build**._
 
 ---
 
 ## Common commands and keyboard shortcuts
 
-_For a first-time user, the following is all you need to know:_
+_For a **first-time user**, the following is all you need to know:_
 
 **Session commands**
 
@@ -130,6 +128,11 @@ Run `trayambak help` for the authoritative list:
 | `run "prompt"`                                    | Interactive session that runs that prompt immediately       |
 | `exec "prompt"`                                   | Headless run — newline-delimited JSON events on stdout      |
 | `review [target]`                                 | Review code/changes for bugs, security issues, style        |
+| `commit [--staged\|--all]`                        | Draft a conventional-commit message for the diff            |
+| `stats`                                           | Show usage stats (sessions, events, violations)             |
+| `pr <checkout\|link\|unlink\|status>`             | Pull-request helpers via `gh`                               |
+| `db <path\|summary\|threads\|violations>`         | Inspect the local state store                               |
+| `uninstall`                                       | Remove launcher shims (keeps config/sessions/state)         |
 | `config get [key]` / `config set <k> <v>`         | Show / persist configuration                                |
 | `doctor`                                          | Diagnose the local environment                              |
 | `info`                                            | Runtime & config summary                                    |
@@ -142,6 +145,7 @@ Run `trayambak help` for the authoritative list:
 | `mode [list\|current\|set]`                       | Switch operating modes                                      |
 | `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                   |
 | `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                  |
+| `marketplace <list\|search\|install\|remove>`     | Browse/install shareable skills & agents                    |
 | `upgrade [version]`                               | Update trayambak (git/npm) and rebuild                      |
 | `serve [--port 8080]`                             | Start a local llama.cpp server                              |
 | `download <org/model>`                            | Download a GGUF model                                       |
@@ -185,18 +189,21 @@ trayambak config set provider openai
 **Key environment variables** (full list in
 [docs/getting-started.md](docs/getting-started.md#configuration)):
 
-| Variable                       | Sets                              |
-| ------------------------------ | --------------------------------- |
-| `TRAYAMBAK_BASE_URL`           | Provider base URL                 |
-| `TRAYAMBAK_MODEL`              | Model id                          |
-| `TRAYAMBAK_API_KEY`            | API key (beats the config file)   |
-| `TRAYAMBAK_PROVIDER`           | Provider id                       |
-| `TRAYAMBAK_CWD`                | Working directory for tools       |
-| `TRAYAMBAK_CONTEXT_WINDOW`     | Context window driving compaction |
-| `TRAYAMBAK_MCP_SERVERS`        | MCP servers as JSON               |
-| `TRAYAMBAK_WEB_TOKEN`          | Bearer token for `trayambak web`  |
-| `TRAYAMBAK_AUTOUPDATE`         | `true` / `false` / `notify`       |
-| `TRAYAMBAK_DISABLE_AUTOUPDATE` | Auto-update kill switch           |
+| Variable                       | Sets                                                  |
+| ------------------------------ | ----------------------------------------------------- |
+| `TRAYAMBAK_BASE_URL`           | Provider base URL                                     |
+| `TRAYAMBAK_MODEL`              | Model id                                              |
+| `TRAYAMBAK_SMALL_MODEL`        | Cheap model for background chores (auto-titles)       |
+| `TRAYAMBAK_SUBAGENT_MODEL`     | Default model for subagent children                   |
+| `TRAYAMBAK_API_KEY`            | API key (beats the config file)                       |
+| `TRAYAMBAK_PROVIDER`           | Provider id                                           |
+| `TRAYAMBAK_CWD`                | Working directory for tools                           |
+| `TRAYAMBAK_CONTEXT_WINDOW`     | Context window driving compaction                     |
+| `TRAYAMBAK_MCP_SERVERS`        | MCP servers as JSON                                   |
+| `TRAYAMBAK_WEB_TOKEN`          | Bearer token for `trayambak web`                      |
+| `TRAYAMBAK_WEB_ORIGINS`        | Extra browser origins for `trayambak web` (`*` = any) |
+| `TRAYAMBAK_AUTOUPDATE`         | `true` / `false` / `notify`                           |
+| `TRAYAMBAK_DISABLE_AUTOUPDATE` | Auto-update kill switch                               |
 
 ---
 
@@ -225,7 +232,7 @@ as `@skt-ai-labs/trayambak-cli` (bins `trayambak` and `skt`):
 - **`apps/cli`** — the CLI entry: subcommands, flags, session commands.
 - **`apps/runtime`** — the agent: config loader, agent loop, tools, prompts,
   auto-update.
-- **`packages/*`** — protocol types, provider adapters (10 backends), the Ink
+- **`packages/*`** — protocol types, provider adapters (22 backends), the Ink
   TUI, MCP client/server, ACP, HTTP server, SDK, sandbox, session backends,
   telemetry.
 - **`skt/`** — internal numbered subsystems: mistake memory, eval loop,
@@ -259,7 +266,7 @@ builds.
 | ------------------------------------------ | ---------------------------------------------------------------- |
 | [Getting started](docs/getting-started.md) | Install, first session, subcommands, flags, config, env vars     |
 | [Sessions](docs/sessions.md)               | Transcript storage, resume/fork/archive, compaction, checkpoints |
-| [Providers](docs/providers.md)             | All 10 backends, key handling, local models                      |
+| [Providers](docs/providers.md)             | All 22 backends, key handling, local models                      |
 | [MCP](docs/mcp.md)                         | MCP servers, OAuth, connector registry, `mcp-server`             |
 | [ACP](docs/acp.md)                         | Editor integration over stdio JSON-RPC                           |
 | [Web](docs/web.md)                         | Local HTTP agent API, SSE, token auth                            |
@@ -283,6 +290,10 @@ denied by default with writes asking for approval
 
 ## License
 
-Trayambak CLI is developed and maintained by **SKT AI LABS PRIVATE LIMITED**
-and licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) for the
-full terms.
+Trayambak CLI is **proprietary software** developed and maintained by
+**SKT AI LABS PRIVATE LIMITED**, licensed under the
+**Trayambak CLI Proprietary License** — see [LICENSE](LICENSE) for the full
+terms. You get a limited, non-exclusive, non-transferable licence to use the
+software for your own lawful purposes; copying, modification, redistribution,
+and reverse engineering (beyond where prohibited by law) require prior
+written permission. Not open source, and not Apache-licensed.

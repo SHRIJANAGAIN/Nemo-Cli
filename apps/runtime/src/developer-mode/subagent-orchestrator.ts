@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type { SubagentTask, DeveloperModeConfig } from "./developer-mode.js"
@@ -19,7 +19,7 @@ export interface SubagentOrchestratorOptions {
     model?: string
     isolation?: string
   }) => Promise<string>
-  /** When set, the orchestrator delegates execution to a real Agent.run instead of the mock fallback. */
+  /** When set, the orchestrator delegates execution to a real runner instead of failing. */
   agentRunner?: (task: {
     name: string
     prompt: string
@@ -76,7 +76,11 @@ export class SubagentOrchestrator {
     peerId?: string,
   ): Promise<SubagentTask> {
     const maxSubagents = this.options.config.maxSubagents
-    this.crossMonitorFn = engine.crossMonitorSubagents
+    // Store an invoker closure, never the bare method: `crossMonitorSubagents`
+    // may live on the engine's prototype, and a detached reference loses its
+    // receiver — the monitor interval would then throw every tick. The closure
+    // re-receives on each call and always targets the most recent engine.
+    this.crossMonitorFn = () => engine.crossMonitorSubagents()
     const active = engine.getActiveSubagents()
     if (active.length >= maxSubagents) {
       const oldest = active[0]
@@ -150,17 +154,5 @@ export class SubagentOrchestrator {
     if (eventType === "permission_denied") return true
     if (eventType === "tui_error") return true
     return false
-  }
-
-  trySpawnBugFixSubagent(task: string, error: string): boolean {
-    if (!this.running) return false
-    try {
-      const engine = (this as unknown as { engineRef?: { startSubagent: (n: string, p: string) => unknown } }).engineRef
-      if (!engine || typeof engine.startSubagent !== "function") return false
-      engine.startSubagent("bug-fix-specialist", "Fix: " + task + "\\nError: " + error.slice(0, 800))
-      return true
-    } catch {
-      return false
-    }
   }
 }

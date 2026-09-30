@@ -12,8 +12,10 @@ v1 only acts on explicit human comments, never on pushes or PR opens
 3. Webhook: check **Active**, URL `https://YOUR-VPS/webhooks/github`,
    secret: generate one (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
 4. Permissions (minimum): **Issues: read-write**, **Pull requests: read-write**,
-   **Metadata: read-only**. No contents access in v1 (the agent works in a
-   local checkout, it never pushes).
+   **Metadata: read-only**. Add **Contents: read-write** once you want the
+   bot to write files / open PRs (self-service trial keys, `/trayambak`
+   fixes, autofix below — all need it).
+5. Subscribe to events: **Issue comment** (and PR review comment, same switch).
 5. Subscribe to events: **Issue comment** (and PR review comment, same switch).
 6. Install it on your repo(s). Note the **App ID**; generate a **private key**
    (Downloads a `.pem` — VPS only, never the repo).
@@ -46,9 +48,53 @@ not silent.
 
 ## 4. Rules of the road
 
-- The App never pushes code in v1 — it comments. Commit-back is a later,
-  explicitly-gated phase.
+- Comment jobs never push to main: file writes the agent makes go through
+  the github tool (API commits) or a fix branch + PR — humans merge.
 - Edits to comments don't re-fire (only `created` actions run).
 - Bodies over 1MB get HTTP 413; unknown events get 200+ignored (no retry storms).
 - Keep the webhook secret + `.pem` off git. If either leaks: rotate in
   GitHub settings first, then on the VPS.
+
+## 5. Automatic fixing (label-gated autopilot)
+
+The bot watches issues by itself — no comment needed:
+
+1. Label an issue `trayambak` (or your `GITHUB_AUTOFIX_LABEL`).
+2. Within one poll interval the server picks the oldest labeled, unhandled
+   issue (one per tick), and the agent: reads it → creates branch
+   `trayambak/issue-N` → writes the fix via the API → opens a PR →
+   comments the PR link on the issue.
+3. You review + merge. The issue number runs once ever (ledger in
+   `data/github-autofix.json`); retry via `/trayambak` comment (ignores it).
+
+Env:
+
+```bash
+GITHUB_AUTOFIX_REPOS=owner/repo,owner/other   # allowlist; "*" = every installed repo; empty = idle
+GITHUB_AUTOFIX_LABEL=trayambak                # the intent gate
+GITHUB_AUTOFIX_INTERVAL_MIN=30                # 5..1440
+# GITHUB_AUTOFIX_TRIAGE_COMMENT=              # custom greeting; empty disables triage greetings
+```
+
+Every tick the poller also **triages**: each new open issue (any label)
+gets one static greeting comment — *"I can fix this — reply with the error
+details…"* — inviting details and pointing at the label. No model spend,
+no prompt-injection surface (the text is fixed), max 5 greetings per tick,
+once per issue ever. Set `GITHUB_AUTOFIX_TRIAGE_COMMENT=` empty to turn
+greetings off while keeping label-fixes on.
+
+Safety, read twice: the label IS the approval (a human put it there),
+fixes never touch the default branch, one job at a time, and every model
+call burns your provider key — a busy label on a big repo spends money.
+Start with one repo + a long interval.
+
+## 6. CLI GitHub login (OAuth loop)
+
+End users authorize from the TUI without ever handling tokens:
+
+1. App settings → **Callback URL**: `https://YOUR-VPS/auth/github/callback`.
+   Note the **Client ID**; generate a **Client secret** if you need one.
+2. VPS env: `GITHUB_CLIENT_ID=<id>` + `GITHUB_CLIENT_SECRET=<secret>`.
+3. CLI: `/github login` → browser opens the approve page → CLI polls and
+   confirms. Then `/github issue <owner/repo#n>` reads through the server.
+   `/github logout` forgets the token (also revocable in GitHub settings).

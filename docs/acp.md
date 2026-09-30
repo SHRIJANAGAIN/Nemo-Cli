@@ -50,7 +50,7 @@ Request → response pairs, one JSON object per line:
 // →
 {"jsonrpc":"2.0","id":1,"method":"initialize"}
 // ←
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"prompt":true,"mcp":true,"sessions":true},"agentInfo":{"name":"trayambak","version":"0.5.0"}}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"prompt":true,"mcp":true,"sessions":true},"agentInfo":{"name":"trayambak","version": "0.6.0"}}}
 
 // →
 {"jsonrpc":"2.0","id":2,"method":"new_session","params":{"workDir":"C:\\proj"}}

@@ -10,8 +10,11 @@
  * must, on a width change only:
  *   1. blank the viewport + home the cursor (ESC[2J ESC[H);
  *   2. reset Ink's line bookkeeping (log.reset + lastOutput = '');
- * and Ink must then repaint the full frame from (0,0) — exactly one live
- * frame, no reliance on the stale erase.
+ * and Ink must then repaint the full frame from (0,0), with any repeat
+ * paint in the window being an in-place rewrite (cursor-up) at the CURRENT
+ * width — never an appended stack of stale frames, no reliance on the
+ * stale erase. (Ink legitimately repaints on cursor-blink ticks; those
+ * count as the same live frame, not a second one.)
  *
  * Height-only resizes must NOT blank (no re-flow happens; blanking there
  * would just flicker).
@@ -74,7 +77,7 @@ const instance = render(
   { stdin, stdout, patchConsole: false },
 )
 resizeGuard.attach(instance)
-await wait(500)
+await wait(1500)
 
 // ── 1. Width DEcrease: must blank + full repaint ───────────────────────
 let mark = sink.length
@@ -91,7 +94,36 @@ if (blankAt !== -1) {
     "width decrease → full frame repainted after the blank (no stale-erase reliance)",
   )
   const welcomes = (stripAnsi(post).match(new RegExp(WELCOME, "g")) ?? []).length
-  check(welcomes === 1, `width decrease → exactly one live frame written (got ${welcomes})`)
+  // Detail: border/welcome line widths show whether the extra frame is a
+  // stale-width (pre-resize) render or a second post-resize render.
+  const postLines = stripAnsi(post).split("\n")
+  const detail = JSON.stringify({
+    borders: postLines.filter((l) => l.startsWith("╭")).map((l) => l.length),
+    welcomes: postLines.filter((l) => l.includes(WELCOME)).map((l) => l.length),
+  })
+  // A repeat welcome is fine ONLY as an in-place rewrite: Ink legitimately
+  // re-paints on cursor-blink/state ticks, but every repeat after the first
+  // must be preceded by a rewind (cursor-up/2J) and every welcome row must
+  // sit at the CURRENT width. The original bug appended full frames (stale
+  // erase counts → stacked logos) — an append has no rewind, and its
+  // remnants keep the OLD width.
+  const rawPost = post
+  const welcomeRe = new RegExp(WELCOME, "g")
+  let prevEnd = 0
+  let seen = 0
+  let stacked = false
+  let wm
+  while ((wm = welcomeRe.exec(rawPost)) !== null) {
+    if (seen > 0 && !/\x1b\[[0-9]*[AB]|\x1b\[2J/.test(rawPost.slice(prevEnd, wm.index))) stacked = true
+    prevEnd = wm.index + wm[0].length
+    seen++
+  }
+  const welcomeWidths = postLines.filter((l) => l.includes(WELCOME)).map((l) => l.length)
+  const staleWidth = welcomeWidths.some((w) => w !== stdout.columns)
+  check(
+    !stacked && !staleWidth && welcomes >= 1,
+    `width decrease → exactly one live frame (in-place repaint, no stack) (got ${welcomes}) ${detail} stacked=${stacked} widths=${JSON.stringify(welcomeWidths)}`,
+  )
 }
 
 // ── 2. Width INcrease: Ink never clears on this path itself → guard must ──

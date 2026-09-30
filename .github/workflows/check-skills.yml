@@ -1,0 +1,61 @@
+name: check-skills
+
+on:
+  pull_request:
+    paths:
+      - "skills/**"
+      - "rules/**"
+      - ".github/workflows/check-skills.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "skills/**"
+      - "rules/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontmatter:
+    name: SKILL.md frontmatter + rules layout
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Every skill dir ships SKILL.md with name + description
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const roots = ['skills'];
+            let bad = 0, count = 0;
+            for (const root of roots) {
+              if (!fs.existsSync(root)) continue;
+              for (const d of fs.readdirSync(root)) {
+                const dir = path.join(root, d);
+                if (!fs.statSync(dir).isDirectory()) continue;
+                const f = path.join(dir, 'SKILL.md');
+                if (!fs.existsSync(f)) { console.error('missing: ' + f); bad++; continue; }
+                count++;
+                const text = fs.readFileSync(f, 'utf8');
+                if (!/^---\n[\s\S]*?\n---/.test(text)) { console.error('no frontmatter: ' + f); bad++; continue; }
+                const fm = text.match(/^---\n([\s\S]*?)\n---/)[1];
+                if (!/^name:/m.test(fm)) { console.error('no name: ' + f); bad++; }
+                if (!/^description:/m.test(fm)) { console.error('no description: ' + f); bad++; }
+              }
+            }
+            console.log('skills checked: ' + count);
+            if (bad) process.exit(1);
+          "
+      - name: rules/ layout intact (22 lanes + README)
+        run: |
+          test -f rules/README.md || { echo "::error::rules/README.md missing"; exit 1; }
+          DIRS=$(ls -d rules/*/ 2>/dev/null | wc -l)
+          echo "rule lanes: $DIRS"
+          test "$DIRS" -ge 10 || { echo "::error::rules/ lanes collapsed (found $DIRS)"; exit 1; }

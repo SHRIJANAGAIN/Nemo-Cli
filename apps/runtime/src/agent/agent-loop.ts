@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type {
@@ -29,6 +29,8 @@ import {
 } from "../../../../packages/core/src/token_budget.js"
 import { DEFAULT_PERMISSIONS, type PermissionConfig } from "../../../../packages/protocol/src/permissions.js"
 import { evaluatePermission } from "../../../../packages/protocol/src/permission-rules.js"
+import { approvalFor, DenialTracker } from "../../../../packages/core/src/approval.js"
+import { redactPayload } from "../../../../packages/core/src/secrets.js"
 import { compactMessages, policyFromConfig } from "../compaction.js"
 import { readInbox } from "../tools/trayambak/send-message.js"
 import { runPreToolUseHooks, runPostToolUseHooks, type HookShellExecutor } from "../tools/hook-exec.js"
@@ -63,6 +65,15 @@ export interface RunConfig {
   /** Shell executor for config command hooks (Pre/PostToolUse). Defaults
    *  to the real executor; tests inject a stub (no processes spawned). */
   hookExecutor?: HookShellExecutor
+  /** Denial tracker for the approval ladder (approvalFor). Created per
+   *  loop when absent, so denial counts survive across turns in a run. */
+  approvalTracker?: DenialTracker
+  /** Audit sink for the tool gate (recordAudit). Opt-in: when absent the
+   *  loop runs with no durable audit (tests, embeddings). Production
+   *  (Agent.run) passes getDatabase(); the gate never awaits it and never
+   *  throws through it. Structural type so tests inject a fake without
+   *  importing the state store. */
+  audit?: { recordAudit(action: string, actor: string, target: string, result: string): void }
 }
 
 async function chatWithRetry(run: RunConfig, request: Parameters<Provider["chat"]>[0]): ReturnType<Provider["chat"]> {
@@ -513,6 +524,19 @@ async function executeToolCalls(
   return results
 }
 
+/**
+ * Append one tool-gate audit row. Fire-and-forget by contract: the store
+ * persists synchronously today, but the gate must survive a throwing,
+ * slow, or absent sink — audit is evidence, never control flow.
+ */
+function recordGateAudit(run: RunConfig, toolName: string, result: string): void {
+  try {
+    run.audit?.recordAudit("tool.execute", "agent", toolName, result)
+  } catch {
+    /* audit must never break the turn */
+  }
+}
+
 async function runOneTool(
   call: Extract<AssistantMessage["content"][number], { type: "toolCall" }>,
   run: RunConfig,
@@ -543,6 +567,7 @@ async function runOneTool(
     }
     await run.emit({ type: "permission_response", id: permissionId, allowed: approved })
     if (!approved) {
+      recordGateAudit(run, call.name, "doom-loop-denied")
       const denied: ToolResult = {
         content: [{ type: "text", text: `Trayambak blocked a repeating tool-call loop for ${call.name}.` }],
         isError: true,
@@ -626,6 +651,12 @@ async function runOneTool(
 
   const effectivePermissions: PermissionConfig =
     (run.config.permissions as PermissionConfig | undefined) ?? DEFAULT_PERMISSIONS
+  // Hook payloads are redacted BEFORE hooks run: shell hooks already receive
+  // redactPayload output via payloadFor, and this keeps the in-process
+  // HookRuntime (plugin/observer hooks, hook history) on the same boundary.
+  // Approval, permission prompts, and tool execution keep the raw arguments
+  // (the approver must see the real command; the tool needs real inputs).
+  const hookArgs = redactPayload(call.arguments)
   // PreToolUse command hooks (config.hooks.preToolUse): user scripts that
   // can block (deny/stop), request approval (ask), or inject context.
   // Denials land as tool errors so the model sees and adapts to them.
@@ -633,12 +664,13 @@ async function runOneTool(
   try {
     const verdict = await runPreToolUseHooks(
       run.config,
-      { toolName: call.name, args: call.arguments, cwd: run.config.cwd, signal: run.signal, sessionId: run.sessionId },
+      { toolName: call.name, args: hookArgs, cwd: run.config.cwd, signal: run.signal, sessionId: run.sessionId },
       run.hookExecutor,
     )
     hookContext = verdict.additionalContext
     if (verdict.decision === "deny" || verdict.stop) {
       const why = verdict.reason ?? verdict.stopReason ?? `hook denied ${call.name}`
+      recordGateAudit(run, call.name, "hook-denied")
       const denied: ToolResult = {
         content: [{ type: "text", text: `Hook blocked ${call.name}: ${why}` }],
         isError: true,
@@ -671,6 +703,7 @@ async function runOneTool(
       }
       await run.emit({ type: "permission_response", id: permissionId, allowed: approved })
       if (!approved) {
+        recordGateAudit(run, call.name, "approval-declined")
         const denied: ToolResult = {
           content: [{ type: "text", text: `Hook-gated ${call.name} was not approved.` }],
           isError: true,
@@ -688,8 +721,19 @@ async function runOneTool(
   } catch {
     /* hook infra failures never break the turn */
   }
-  const decision = evaluatePermission(call.name, call.arguments, effectivePermissions)
+  // Single decision point: every tool call flows through approvalFor()
+  // (packages/core/src/approval.ts) — deny hard-blocks, ask emits a
+  // permission_request, allow proceeds. Denials accumulate on the run's
+  // tracker for telemetry and backoff.
+  const tracker = run.approvalTracker ?? (run.approvalTracker = new DenialTracker())
+  const outcome = approvalFor(call.name, call.arguments, {
+    uiMode: effectivePermissions.uiMode,
+    config: effectivePermissions,
+    tracker,
+  })
+  const decision = { action: outcome.decision, source: outcome.source, rule: outcome.rule, layer: outcome.layer }
   if (decision.action === "deny") {
+    recordGateAudit(run, call.name, "denied")
     const why = decision.rule
       ? `denied by rule [${decision.layer ?? "default"}]: ${decision.rule.tool} ${decision.rule.pattern ? `→ ${decision.rule.pattern}` : ""}`
       : decision.source === "read-only-mode"
@@ -739,6 +783,7 @@ async function runOneTool(
     }
     await run.emit({ type: "permission_response", id: permissionId, allowed: approved })
     if (!approved) {
+      recordGateAudit(run, call.name, "approval-declined")
       const denied: ToolResult = {
         content: [{ type: "text", text: `Trayambak permission denied for ${call.name}. Tool execution blocked.` }],
         isError: true,
@@ -771,6 +816,7 @@ async function runOneTool(
   }
   let result: ToolResult
   if (!tool) {
+    recordGateAudit(run, call.name, "unknown-tool")
     result = { content: [{ type: "text", text: `Unknown tool: ${call.name}` }], isError: true }
     if (run.developerMode?.isEnabled() && run.developerMode.config.observeMistakes) {
       run.developerMode.recordMistake({
@@ -781,10 +827,15 @@ async function runOneTool(
       })
     }
   } else {
+    // Per-tool ceiling binds first: a tool declaring timeoutMs dies on its
+    // own budget even when the run allows more; the run-wide timeoutMs still
+    // caps tools that declare generously (or nothing at all).
+    const toolTimeoutMs = tool.definition.timeoutMs
+    const timeoutMs = toolTimeoutMs === undefined ? run.config.timeoutMs : Math.min(toolTimeoutMs, run.config.timeoutMs)
     try {
       result = await withTimeout(
         tool.execute(call.id, call.arguments as Record<string, unknown>, run.signal, undefined, context),
-        run.config.timeoutMs,
+        timeoutMs,
         call.name,
       )
     } catch (err) {
@@ -803,6 +854,8 @@ async function runOneTool(
     }
   }
 
+  recordGateAudit(run, call.name, result.isError ? "error" : "success")
+
   await run.emit({
     type: "tool_execution_end",
     toolCallId: call.id,
@@ -816,7 +869,7 @@ async function runOneTool(
   try {
     const post = await runPostToolUseHooks(
       run.config,
-      { toolName: call.name, args: call.arguments, cwd: run.config.cwd, signal: run.signal, sessionId: run.sessionId },
+      { toolName: call.name, args: hookArgs, cwd: run.config.cwd, signal: run.signal, sessionId: run.sessionId },
       run.hookExecutor,
     )
     const extra = [...hookContext, ...post].filter((s) => s.trim().length > 0)

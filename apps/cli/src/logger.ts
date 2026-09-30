@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
@@ -21,6 +21,7 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import { redactLogValue } from "../../../packages/core/src/secrets.js"
 
 export type LogLevel = "debug" | "info" | "warn" | "error" | "silent"
 
@@ -75,10 +76,14 @@ function writeFileLine(level: LogLevel, message: string, fields?: Record<string,
 }
 
 function emit(level: Exclude<LogLevel, "silent">, message: string, fields?: Record<string, unknown>): void {
-  writeFileLine(level, message, fields)
+  // Redact at the single chokepoint: both the JSONL file and stderr go
+  // through here, so no log sink can ever see raw credential material.
+  const safeMessage = redactLogValue(message) as string
+  const safeFields = fields ? (redactLogValue(fields) as Record<string, unknown>) : undefined
+  writeFileLine(level, safeMessage, safeFields)
   if (RANK[level] >= RANK[consoleThreshold()]) {
-    const suffix = fields && Object.keys(fields).length ? " " + JSON.stringify(fields) : ""
-    process.stderr.write(`[${level}] ${message}${suffix}\n`)
+    const suffix = safeFields && Object.keys(safeFields).length ? " " + JSON.stringify(safeFields) : ""
+    process.stderr.write(`[${level}] ${safeMessage}${suffix}\n`)
   }
 }
 

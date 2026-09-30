@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
@@ -43,7 +43,7 @@ const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "trayambak__ParallelReview",
   description:
-    "Run multi-dimensional parallel code review across quality, security, and language-specific specialists with automatic finding deduplication and adversarial verification.",
+    "Run multi-dimensional parallel code review across quality, security, test coverage, performance, and language-specific specialists with automatic finding deduplication and adversarial verification.",
   parameters: {
     type: "object",
     required: ["diff"],

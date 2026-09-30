@@ -1,0 +1,63 @@
+name: beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump major, minor, or patch"
+        required: false
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+      version:
+        description: "Override version (optional, e.g. 0.7.0-beta.1)"
+        required: false
+        type: string
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version || inputs.bump }}
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Resolve beta version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            CURRENT=$(node -e "console.log(require('./package.json').version)")
+            echo "version=${CURRENT%-*}-beta.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+          echo "resolved=$(grep version $GITHUB_OUTPUT)"
+      - run: npm run build
+      - run: node dist/apps/cli/src/index.js --version
+      - name: Stage publish tree (obfuscation skipped for speed)
+        run: npm run publish:build:debug
+        env:
+          TRAYAMBAK_SKIP_OBFUSCATION: "1"
+      - run: npm run verify:pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trayambak-beta-${{ steps.ver.outputs.version }}
+          path: |
+            dist/
+            publish/
+          retention-days: 14
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" --prerelease --title "Trayambak v${{ steps.ver.outputs.version }} (beta)" --generate-notes \
+            || echo "release exists, skipping create"

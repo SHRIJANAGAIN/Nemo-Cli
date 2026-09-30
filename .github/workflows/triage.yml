@@ -1,0 +1,20 @@
+name: triage
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: Path-based auto-label
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/labeler@v6
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: true

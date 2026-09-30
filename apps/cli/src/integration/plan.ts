@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 export * as TrayambakPlan from "./plan"
@@ -9,6 +9,7 @@ export * as TrayambakPlan from "./plan"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import { uniqueId } from "./unique-id.js"
 
 export interface PlanStep {
   readonly id: string
@@ -28,8 +29,12 @@ export interface Plan {
   readonly updatedAt: Date
 }
 
-const PLANS_DIR = path.join(os.homedir(), ".trayambak")
-const PLANS_FILE = path.join(PLANS_DIR, "plans.json")
+/** Resolved per call, not at import: reading os.homedir() at module load made
+ *  the store path depend on import-time environment (untestable without
+ *  dynamic import gymnastics, and wrong if HOME changes later). */
+function plansFile(): string {
+  return path.join(os.homedir(), ".trayambak", "plans.json")
+}
 
 interface PlanStore {
   plans: Plan[]
@@ -37,8 +42,9 @@ interface PlanStore {
 
 function loadStore(): PlanStore {
   try {
-    if (fs.existsSync(PLANS_FILE)) {
-      return JSON.parse(fs.readFileSync(PLANS_FILE, "utf8")) as PlanStore
+    const file = plansFile()
+    if (fs.existsSync(file)) {
+      return JSON.parse(fs.readFileSync(file, "utf8")) as PlanStore
     }
   } catch {
     /* fall through */
@@ -47,8 +53,9 @@ function loadStore(): PlanStore {
 }
 
 function saveStore(store: PlanStore): void {
-  fs.mkdirSync(PLANS_DIR, { recursive: true })
-  fs.writeFileSync(PLANS_FILE, JSON.stringify(store, null, 2), "utf8")
+  const file = plansFile()
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(store, null, 2), "utf8")
 }
 
 export class PlanService {
@@ -77,7 +84,9 @@ export class PlanService {
 
   create(name: string, description: string): Plan {
     const plan: Plan = {
-      id: `plan-${Date.now().toString(36)}`,
+      // Same-millisecond creates used to collide, and this Map is keyed by id —
+      // the second create() silently replaced the first plan.
+      id: uniqueId(`plan-${Date.now().toString(36)}`, this.plans.keys()),
       name,
       description,
       steps: [],
@@ -104,7 +113,13 @@ export class PlanService {
     if (!plan) return undefined
 
     const step: PlanStep = {
-      id: `step-${Date.now().toString(36)}`,
+      // Disambiguated against this plan's existing steps: two steps minted in
+      // one millisecond shared an id, so updateStep() patched whichever the
+      // scan happened to find first.
+      id: uniqueId(
+        `step-${Date.now().toString(36)}`,
+        plan.steps.map((s) => s.id),
+      ),
       description,
       status: "pending",
       dependsOn,
@@ -154,5 +169,5 @@ export class PlanService {
 export const planService = new PlanService()
 
 export function getPlansFilePath(): string {
-  return PLANS_FILE
+  return plansFile()
 }

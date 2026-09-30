@@ -6,7 +6,8 @@
  * Bash tool — enhanced with OS-level sandbox spawning.
  *
  * Key improvements over original:
- * 1. Spawns under OS-level sandbox (seatbelt, landlock, Windows restricted token)
+ * 1. Spawns under OS-level sandbox when engaged (seatbelt/landlock behind
+ *    the sandboxSpawn flag; in-process policy evaluation otherwise)
  * 2. Filters environment variables (no secrets leaked to child process)
  * 3. Output capping (256KB hard cap to prevent OOM)
  * 4. Process group kill (kills entire tree, not just direct child)
@@ -18,10 +19,19 @@
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { isCommandAllowed, isCommandDangerous } from "../../../../../packages/protocol/src/permissions.js"
 import { textResult, truncateOutput, type Tool, type ToolContext, type ToolResult } from "../types.js"
-import { detectSandboxType, OUTPUT_MAX_BYTES } from "../../../../../packages/sandbox/src/index.js"
+import {
+  detectSandboxType,
+  filterEnv,
+  OUTPUT_MAX_BYTES,
+  shouldUseOsSandbox,
+  spawnProcess,
+  type SandboxType,
+  type SpawnedProcess,
+} from "../../../../../packages/sandbox/src/index.js"
 import { evaluatePolicy } from "../../../../../packages/execpolicy/src/policy.js"
 import { ProcessManager } from "../../../../../packages/core/src/process.js"
 import { getSafeEnv, validateEnv } from "../../../../../packages/core/src/env_filter.js"
+import { checkAutoApproval } from "../../../../../packages/approval/src/index.js"
 import { randomUUID } from "crypto"
 
 const definition: ToolDefinition = {
@@ -112,6 +122,9 @@ async function startBackgroundJob(opts: {
   safeEnv: Record<string, string>
   timeoutMs: number
   timeoutSec: number
+  sandboxType: SandboxType
+  networkDisabled: boolean
+  spawnFn?: typeof spawnProcess
 }): Promise<ToolResult> {
   sweepBackgroundJobs()
   const running = [...backgroundJobs.values()].filter((j) => j.state === "running").length
@@ -132,6 +145,51 @@ async function startBackgroundJob(opts: {
     state: "running",
   }
   backgroundJobs.set(id, job)
+
+  // OS-sandbox path (flag-gated): the same spawnProcess every foreground
+  // run uses — pid/kill/wait/read map 1:1 onto the job registry.
+  if (shouldUseOsSandbox(opts.sandboxType)) {
+    let proc: SpawnedProcess
+    try {
+      proc = await (opts.spawnFn ?? spawnProcess)(
+        osSpawnRequest({
+          shell: opts.shell,
+          shellArgs: opts.shellArgs,
+          command: opts.command,
+          cwd: opts.ctx.cwd,
+          env: opts.safeEnv,
+          sandboxType: opts.sandboxType,
+          networkDisabled: opts.networkDisabled,
+          timeoutMs: opts.timeoutMs,
+        }),
+      )
+    } catch (e) {
+      backgroundJobs.delete(id)
+      return textResult(
+        `Failed to start background job: ${e instanceof Error ? e.message : String(e)}`,
+        /*isError*/ true,
+      )
+    }
+    job.pid = proc.pid
+    job.kill = proc.kill
+    void proc
+      .waitForExit()
+      .then(async (exitCode) => {
+        job.output = await proc.readAll().catch(() => "")
+        job.exitCode = exitCode
+        job.settledAt = Date.now()
+        job.state = "done"
+      })
+      .catch(() => {
+        job.output = job.output ?? ""
+        job.exitCode = 1
+        job.settledAt = Date.now()
+        job.state = "done"
+      })
+    return textResult(
+      `Background job started.\njob_id: ${id}\ncommand: ${opts.command}\ntimeout: ${opts.timeoutSec}s\nsandbox: os (${proc.sandboxType})\n\nPoll with bash({"job_id": "${id}"}) for status and output; stop it with bash({"job_id": "${id}", "action": "kill"}).`,
+    )
+  }
 
   const processManager = new ProcessManager()
   let handle: Awaited<ReturnType<ProcessManager["spawn"]>>
@@ -215,7 +273,151 @@ async function handleJobOperation(jobId: string, action: unknown, ctx: ToolConte
   )
 }
 
-export function createBashTool(): Tool {
+export interface BashToolDeps {
+  /** Override the OS-sandbox spawner (tests inject a stub; default is spawnProcess). */
+  spawnFn?: typeof spawnProcess
+}
+
+/** Build the spawnProcess request every OS-sandboxed bash run uses. */
+export function osSpawnRequest(opts: {
+  shell: string
+  shellArgs: string[]
+  command: string
+  cwd: string
+  env: Record<string, string>
+  sandboxType: SandboxType
+  networkDisabled: boolean
+  timeoutMs: number
+  signal?: AbortSignal
+}): Parameters<typeof spawnProcess>[0] {
+  return {
+    command: [opts.shell, ...opts.shellArgs, opts.command],
+    cwd: opts.cwd,
+    sandboxType: opts.sandboxType,
+    env: opts.env,
+    networkPolicy: { disableNetwork: opts.networkDisabled, allowedDomains: [], blockedDomains: [] },
+    filesystemPolicy: {
+      writableRoots: [opts.cwd],
+      readOnlySubpaths: [],
+      denyReadPaths: [],
+      denyWritePaths: [],
+    },
+    outputCap: OUTPUT_MAX_BYTES,
+    timeoutMs: opts.timeoutMs,
+    signal: opts.signal,
+  }
+}
+
+/**
+ * Foreground run under OS isolation. Mirrors the ProcessManager path's
+ * contract exactly (timeout/abort messages, truncation, exit-code suffix)
+ * plus a truthful `[sandbox: os (<type>)]` marker from the spawn handle.
+ */
+export function runForegroundOsSandboxed(opts: {
+  shell: string
+  shellArgs: string[]
+  command: string
+  ctx: ToolContext
+  safeEnv: Record<string, string>
+  sandboxType: SandboxType
+  networkDisabled: boolean
+  timeoutMs: number
+  timeoutSec: number
+  signal: AbortSignal | undefined
+  spawnFn?: typeof spawnProcess
+}): Promise<ToolResult> {
+  const spawnFn = opts.spawnFn ?? spawnProcess
+  return new Promise<ToolResult>((resolve) => {
+    let settled = false
+    let proc: SpawnedProcess | undefined
+    const finish = (result: ToolResult): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      opts.signal?.removeEventListener("abort", onAbort)
+      resolve(result)
+    }
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        void proc?.kill("SIGKILL")
+        resolve(textResult(`Command timed out after ${opts.timeoutSec}s`, /*isError*/ true))
+      }
+    }, opts.timeoutMs)
+    const onAbort = (): void => {
+      if (!settled) {
+        settled = true
+        clearTimeout(timeout)
+        void proc?.kill("SIGKILL")
+        resolve(textResult("Command aborted", /*isError*/ true))
+      }
+    }
+    opts.signal?.addEventListener("abort", onAbort, { once: true })
+
+    spawnFn(
+      osSpawnRequest({
+        shell: opts.shell,
+        shellArgs: opts.shellArgs,
+        command: opts.command,
+        cwd: opts.ctx.cwd,
+        env: opts.safeEnv,
+        sandboxType: opts.sandboxType,
+        networkDisabled: opts.networkDisabled,
+        timeoutMs: opts.timeoutMs,
+        signal: opts.signal,
+      }),
+    )
+      .then(async (p) => {
+        proc = p
+        if (settled) {
+          void p.kill("SIGKILL")
+          return
+        }
+        const out = await p.readAll().catch(() => "")
+        const exitCodeResult = await p.waitForExit()
+        const truncated = truncateOutput(out, opts.ctx.config)
+        const isError = exitCodeResult !== 0
+        const status = isError ? `\n\n[exit code ${exitCodeResult}]` : ""
+        finish(textResult(`${truncated.text}${status}\n\n[sandbox: os (${p.sandboxType})]`, isError))
+      })
+      .catch((err: unknown) => {
+        finish(textResult(`Command failed: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true))
+      })
+  })
+}
+
+/**
+ * Child environment for every bash run (audit 4.1).
+ *
+ * `getSafeEnv` (core) is deny-list only: DATABASE_URL, SENTRY_DSN,
+ * SLACK_WEBHOOK, NPM_AUTH and DOCKER_CONFIG all pass straight through it.
+ * `filterEnv` (sandbox) is deny patterns PLUS a 32-name allowlist, so an
+ * unrecognised name is dropped by default - the right default for a shell.
+ * Compose them: `filterEnv` first (allowlist + its 24 deny patterns),
+ * then `getSafeEnv` for its extra deny patterns and for the authoritative
+ * sandbox-metadata stamps it owns (the CODEX sandbox marker and its
+ * network-disabled sibling - named here without the literal so the
+ * marker tripwire in .github/workflows/check-forbidden-strings.yml still
+ * means something). PATH, HOME, TEMP and USERPROFILE are all on the
+ * allowlist, so real commands keep working.
+ *
+ * `permissions` is deliberately passed empty: bash has already computed
+ * sandboxType/networkDisabled, and getSafeEnv stamps the metadata from
+ * those explicit values (filterEnv's own stamp would be overwritten).
+ */
+export function buildBashEnv(
+  processEnv: NodeJS.ProcessEnv,
+  sandboxType: string,
+  networkDisabled: boolean,
+): Record<string, string> {
+  const stringOnly: Record<string, string> = {}
+  for (const [key, value] of Object.entries(processEnv)) {
+    if (typeof value === "string") stringOnly[key] = value
+  }
+  return getSafeEnv(filterEnv(stringOnly, {}), sandboxType, networkDisabled)
+}
+
+export function createBashTool(deps?: BashToolDeps): Tool {
   return {
     definition,
     async execute(_toolCallId, args, signal, _onUpdate, context) {
@@ -259,17 +461,25 @@ export function createBashTool(): Tool {
           }
         }
 
+        // ─── 1b. Auto-Approval Policy (pre-compute before permission check) ───
+        const approval = checkAutoApproval(command)
+        const isPreApproved = approval === "allow"
+
         // ─── 2. Permission System Check ───
         if (!isCommandAllowed("bash", command, ctx.permissions)) {
-          const allowed = await ctx.requestPermission?.("bash", command, "Risky bash command blocked by permissions")
-          if (allowed === false) {
-            return textResult(`Permission denied for command: ${command}`, /*isError*/ true)
-          }
-          if (allowed === undefined && isCommandDangerous("bash", command, ctx.permissions)) {
-            return textResult(
-              `Permission denied (headless): command matches a deny rule and no approver is available: ${command}`,
-              /*isError*/ true,
-            )
+          if (isPreApproved) {
+            // Already pre-approved by the auto-approval policy; run it.
+          } else {
+            const allowed = await ctx.requestPermission?.("bash", command, "Risky bash command blocked by permissions")
+            if (allowed === false) {
+              return textResult(`Permission denied for command: ${command}`, /*isError*/ true)
+            }
+            if (allowed === undefined && isCommandDangerous("bash", command, ctx.permissions)) {
+              return textResult(
+                `Permission denied (headless): command matches a deny rule and no approver is available: ${command}`,
+                /*isError*/ true,
+              )
+            }
           }
         }
 
@@ -285,15 +495,44 @@ export function createBashTool(): Tool {
             : false
 
         // ─── 5. Filter Environment Variables ───
-        const safeEnv = getSafeEnv(process.env, sandboxType, networkDisabled)
+        const safeEnv = buildBashEnv(process.env, sandboxType, networkDisabled)
 
         // ─── 6. Background mode: same checks as foreground, but the job
         //     is handed to the registry and we return its id at once. ───
         if (background) {
-          return await startBackgroundJob({ command, shell, shellArgs, ctx, safeEnv, timeoutMs, timeoutSec })
+          return await startBackgroundJob({
+            command,
+            shell,
+            shellArgs,
+            ctx,
+            safeEnv,
+            timeoutMs,
+            timeoutSec,
+            sandboxType,
+            networkDisabled,
+            spawnFn: deps?.spawnFn,
+          })
         }
 
-        // ─── 7. Execute Under Sandbox ───
+        // ─── 7. Execute: OS-isolated when the sandboxSpawn flag engages a
+        //     real backend, otherwise the long-standing policy path. ───
+        if (shouldUseOsSandbox(sandboxType)) {
+          return runForegroundOsSandboxed({
+            shell,
+            shellArgs,
+            command,
+            ctx,
+            safeEnv,
+            sandboxType,
+            networkDisabled,
+            timeoutMs,
+            timeoutSec,
+            signal,
+            spawnFn: deps?.spawnFn,
+          })
+        }
+
+        // ─── 7. Execute Under Sandbox (OS-isolated when engaged, else policy) ───
         return new Promise<ToolResult>((resolve) => {
           let settled = false
           const processManager = new ProcessManager()
@@ -317,7 +556,7 @@ export function createBashTool(): Tool {
           }
           signal?.addEventListener("abort", onAbort, { once: true })
 
-          // ─── Spawn with OS-level sandbox ───
+          // ─── Spawn under policy (in-process evaluation) ───
           processManager
             .spawn({
               command: [shell, ...shellArgs, command],

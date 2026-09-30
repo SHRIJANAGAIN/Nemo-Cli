@@ -7,6 +7,8 @@
  * Provides a full lifecycle hook system for the agent.
  */
 
+import { redactPayload } from "./secrets.js"
+
 /**
  * Hook source — where the hook is triggered from.
  */
@@ -171,6 +173,39 @@ export interface HookRegistration {
   timeoutMs: number
 }
 
+/** Bounded hook history: one summary per event that actually ran a hook,
+ *  oldest entries dropped past the cap. The runtime is a process-wide
+ *  singleton wired into every tool call (see apps/runtime hook-exec), so
+ *  long sessions must not grow this array without bound. */
+export const HOOK_HISTORY_LIMIT = 200
+
+/**
+ * Redact the context a hook handler receives (AGENTS.md: "Secrets are redacted
+ * before hooks"). Handlers are in-process today but routinely forward
+ * `args`/`config` into a shell command payload, so the values must be clean
+ * BEFORE they cross the handler boundary. `redactPayload` masks secret-named
+ * keys and embedded credential material while leaving ordinary tool arguments
+ * (paths, commands, prose of any length) byte-for-byte intact.
+ */
+function redactHookContext(context: HookContext): HookContext {
+  const safe: HookContext = { ...context }
+  if (context.args !== undefined) safe.args = redactPayload(context.args) as Record<string, unknown>
+  safe.config = redactPayload(context.config) as Record<string, unknown>
+  safe.permissions = redactPayload(context.permissions) as Record<string, unknown>
+  return safe
+}
+
+/**
+ * Redact hook-produced text before it leaves the runtime. `HookRunSummary`
+ * output and `additionalContext` are handed back to the caller, pushed into
+ * history, and can be recorded by analytics — a hook that echoes its payload
+ * (or leaks a credential it saw) must not be able to write raw key material
+ * into any of those sinks.
+ */
+function redactHookText(text: string): string {
+  return redactPayload(text) as string
+}
+
 /**
  * Hook runtime — manages all lifecycle hooks.
  *
@@ -224,19 +259,31 @@ export class HookRuntime {
     for (const result of results) {
       if (result.status === "fulfilled") {
         const hookResult = result.value
+        const contextLines = hookResult.additionalContext.map(redactHookText)
         if (hookResult.shouldStop) {
           summary.status = HookRunStatus.Cancelled
-          summary.output = hookResult.additionalContext.join("\n")
+          summary.output = contextLines.join("\n")
+          // Collect alongside the joined `output` too: evaluatePreToolUse /
+          // onStop expose the two fields separately, and a denying hook's
+          // explanation must reach the caller's additionalContext (it is the
+          // deny reason the UI shows), not just the stop reason string.
+          summary.additionalContext?.push(...contextLines)
           summary.exitCode = 1
           break
         }
-        summary.additionalContext?.push(...hookResult.additionalContext)
+        summary.additionalContext?.push(...contextLines)
       } else {
         summary.status = HookRunStatus.Failed
       }
     }
 
-    this.history.push(summary)
+    // History only for events that actually ran a hook (an empty event is a
+    // no-op, not an entry) and bounded: the runtime is a process-wide
+    // singleton, so long sessions would otherwise grow this without limit.
+    if (hooks.length > 0) {
+      this.history.push(summary)
+      while (this.history.length > HOOK_HISTORY_LIMIT) this.history.shift()
+    }
     return summary
   }
 
@@ -244,11 +291,24 @@ export class HookRuntime {
    * Execute a single hook with timeout.
    */
   private async executeHook(hook: HookRegistration, context: HookContext): Promise<HookResult> {
+    let timer: ReturnType<typeof setTimeout> | undefined = undefined
     const timeout = new Promise<HookResult>((_, reject) => {
-      setTimeout(() => reject(new Error(`Hook ${hook.name} timed out after ${hook.timeoutMs}ms`)), hook.timeoutMs)
+      timer = setTimeout(
+        () => reject(new Error(`Hook ${hook.name} timed out after ${hook.timeoutMs}ms`)),
+        hook.timeoutMs,
+      )
     })
-
-    return Promise.race([hook.handler(context), timeout])
+    try {
+      // Redaction boundary: the handler (and anything it shells out to) must
+      // never see raw credential material in the event payload.
+      return await Promise.race([hook.handler(redactHookContext(context)), timeout])
+    } finally {
+      // Handler won the race: cancel the timeout so its late rejection is
+      // never scheduled and the timer can't hold the event loop open for the
+      // full timeout window (this path runs on every tool call since
+      // hook-exec wired the runtime into the live pre/post points).
+      if (timer !== undefined) clearTimeout(timer)
+    }
   }
 
   /**

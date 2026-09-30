@@ -12,6 +12,9 @@
     "./vim": "./src/vim/index.ts"
   },
   "dependencies": {
+    "@claude-code/local-observability": "file:./vendor/claude-code-local-observability",
+    "@claude-code/output": "file:./vendor/claude-code-output",
+    "@claude-code/repl": "file:./vendor/claude-code-repl",
     "auto-bind": "^5.0.1",
     "bidi-js": "^1.0.3",
     "chalk": "^5.6.2",

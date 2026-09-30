@@ -1,25 +1,51 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 
+import { BLOCKED_ENV_PATTERNS as SANDBOX_BLOCKED_ENV_PATTERNS } from "../../sandbox/src/types.js"
+
 /**
  * Environment variable filtering for sandboxed processes.
  *
- * Ensures no secrets leak into child process environments.
- * BLOCKED_ENV_PATTERNS and filterEnv are defined here rather than
- * imported from sandbox/types to avoid circular dependencies and
- * keep the env filtering logic self-contained.
+ * Ensures no secrets leak into child process environments. The block list
+ * is the UNION of the local entries below and the canonical provider-key
+ * list in packages/sandbox (single source of truth for model-provider
+ * families: OPENAI, ANTHROPIC, NVAPI_, XAI_, …). sandbox/types.ts imports
+ * only node:fs, so this import introduces no dependency cycle — and the
+ * deny-list semantics stay here because shells need their full environment
+ * to build and test (the sandbox allowlist would strip JAVA_HOME,
+ * NODE_OPTIONS, npm config, … and break real builds).
  */
 
-/** Patterns that match blocked environment variable names. */
-export const BLOCKED_ENV_PATTERNS: string[] = [
+/** Local deny entries: secret-shaped names plus families the sandbox list
+ *  does not cover (DSN/WEBHOOK/DATABASE_URL/DOCKER/KUBE, bare KEY/SESSION/
+ *  AUTH which are broader than the sandbox's suffixed variants). */
+const LOCAL_BLOCKED_ENV_PATTERNS: string[] = [
   "SECRET",
   "KEY",
   "PASSWORD",
   "TOKEN",
   "CREDENTIAL",
   "PRIVATE_KEY",
+  "BEARER",
+  "JWT",
+  "COOKIE",
+  "SESSION",
+  "AUTH",
+  "DSN",
+  "WEBHOOK",
+  "DATABASE_URL",
+  "DOCKER",
+  "KUBE",
   "AWS_",
   "GITHUB_",
   "GH_",
+]
+
+/** Patterns that match blocked environment variable names. Deny-list: anything
+ *  not matching passes through (shells need their full environment to build
+ *  and test), so secret-bearing families must be enumerated here. */
+export const BLOCKED_ENV_PATTERNS: string[] = [
+  ...LOCAL_BLOCKED_ENV_PATTERNS,
+  ...SANDBOX_BLOCKED_ENV_PATTERNS.filter((p) => !LOCAL_BLOCKED_ENV_PATTERNS.includes(p)),
 ]
 
 /**

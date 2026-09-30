@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
@@ -19,6 +19,7 @@ import { Box, Text } from "ink"
 import { useThemeColors } from "./themeColors.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
+import { GLOBAL_SHORTCUTS } from "../keybindings.js"
 
 export interface WhichKeyAction {
   key: string
@@ -31,20 +32,11 @@ export interface WhichKeyProps {
   onClose: () => void
 }
 
+// Global chords come from the shared table (keybindings.ts) so this window
+// and /keymap can never drift apart again; esc is overlay-contextual, not a
+// global chord, so it is appended here.
 const GLOBAL_HOTKEYS: Array<[string, string]> = [
-  ["ctrl+k", "leader — open this window"],
-  ["ctrl+c", "interrupt (empty idle ×2 exits)"],
-  ["ctrl+s", "inject draft to front of queue"],
-  ["ctrl+g", "subagents panel"],
-  ["ctrl+b", "background tasks panel"],
-  ["ctrl+o", "expand/collapse tool output"],
-  ["shift+tab", "toggle plan mode"],
-  ["ctrl+p", "command palette"],
-  ["ctrl+k p", "cycle permission mode"],
-  ["ctrl+z", "undo checkpoint"],
-  ["ctrl+y", "redo checkpoint"],
-  ["ctrl+x", "clear queued prompts"],
-  ["ctrl+d", "abort current turn"],
+  ...GLOBAL_SHORTCUTS.map((s): [string, string] => [s.keys, s.label]),
   ["esc", "close overlay / clear input"],
 ]
 

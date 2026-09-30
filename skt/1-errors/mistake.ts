@@ -1,12 +1,13 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
 import * as os from "os"
 import path from "path"
+import { redactEmbeddedSecrets } from "../../packages/core/src/secrets.js"
 
 declare const __dirname: string
 
@@ -149,14 +150,17 @@ export function logMistake(
   futurePrevention = "",
 ): MistakeEntry {
   const repeated = isRepeatedMistake(errorName)
+  // Free-text fields can carry pasted keys (URLs, Bearer tokens) — redact
+  // embedded key patterns before anything touches disk (prose preserved).
+  const safe = (s: string, cap: number): string => redactEmbeddedSecrets(s).slice(0, cap)
   const entry: MistakeEntry = {
     errorId: `err_${Date.now().toString(36)}`,
     errorName,
     errorDescription,
     errorParagraph,
     timestamp: new Date().toISOString(),
-    userInput: userInput.slice(0, 1000),
-    assistantOutput: assistantOutput.slice(0, 2000),
+    userInput: safe(userInput, 1000),
+    assistantOutput: safe(assistantOutput, 2000),
     tokensConsumed,
     whyAssistantDidIt,
     reasonItHeld,

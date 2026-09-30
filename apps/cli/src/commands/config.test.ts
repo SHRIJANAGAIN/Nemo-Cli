@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -142,6 +142,17 @@ describe("configCommand set", () => {
     expect(file.model).toBe("alpha")
     expect(file.maxTurns).toBe(9)
     expect(Object.keys(file).length).toBe(2)
+  })
+
+  it("never prints secret values (masks apiKey on get and set)", () => {
+    configCommand(["set", "apiKey", "nvapi-abcdefghijklmnopqrstuvwxyz012345"])
+    expect(out).not.toContain("nvapi-abcdefghijklmnopqrstuvwxyz012345")
+    expect(out).toContain("(set,")
+    expect(readConfig().apiKey).toBe("nvapi-abcdefghijklmnopqrstuvwxyz012345")
+    out = ""
+    configCommand(["get", "apiKey"])
+    expect(out).not.toContain("nvapi-abcdefghijklmnopqrstuvwxyz012345")
+    expect(out).toContain("(set,")
   })
 
   it("refuses to write when the value is missing", () => {

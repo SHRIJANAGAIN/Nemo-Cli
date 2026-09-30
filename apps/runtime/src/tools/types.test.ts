@@ -1,11 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- *
- * Path-constraint behaviour for every file tool (read/write/edit/list/grep/
- * glob). Home-relative expectations derive from os.homedir() so the suite
- * passes on any host rather than encoding one developer's directory layout.
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 import * as os from "os"
 import * as path from "path"

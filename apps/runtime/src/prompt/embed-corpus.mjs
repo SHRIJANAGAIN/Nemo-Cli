@@ -1,17 +1,8 @@
 #!/usr/bin/env node
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
- *
- * Re-inlines corpus.txt into power-prompt.ts between the EMBED-CORPUS markers.
- *
- *   node apps/runtime/src/prompt/embed-corpus.mjs
- *
- * corpus.txt stays the editable master. After every edit, run this script so
- * the embedded copy used by buildSystemPrompt() matches. power-prompt.test.ts
- * asserts the prompt contains corpus.txt VERBATIM, so a missed re-run fails
- * the test instead of shipping a stale system prompt.
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 import * as fs from "fs"
 import * as path from "path"

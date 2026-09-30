@@ -23,6 +23,14 @@ export class ParentWatchdogService {
   private intervalId?: NodeJS.Timeout
 
   start(parentPid: number): void {
+    // Re-arming must clear any live interval first: overwriting
+    // `intervalId` leaked the previous timer, which stop() could never
+    // reach (it only knows the last id) — the orphan kept calling check()
+    // forever.
+    if (this.intervalId) {
+      clearInterval(this.intervalId)
+      this.intervalId = undefined
+    }
     this.state = {
       parentPid,
       alive: true,

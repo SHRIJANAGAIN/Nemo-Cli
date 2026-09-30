@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type { TrayambakConfig } from "../../../runtime/src/index.js"
@@ -160,6 +160,48 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
       handler: async () => {
         const { worktreeCommand } = await import("./worktree.js")
         return worktreeCommand({ action: "list" })
+      },
+    }),
+  )
+
+  registry.register(
+    makeDef({
+      name: "client",
+      description: "Start or query the trayambak local HTTP client",
+      category: "Tools & Skills",
+      argsHint: "<health|run <prompt>>",
+      handler: async (args: string[]) => {
+        const { TrayambakClient } = await import("../../../../packages/client/src/index.js")
+        const client = new TrayambakClient()
+        if (args[0] === "health" || !args[0]) {
+          const status = await client.health()
+          return `Client connected: ${status.status} (model: ${status.model})`
+        }
+        if (args[0] === "run") {
+          const prompt = args.slice(1).join(" ")
+          if (!prompt) return "Usage: /client run <prompt>"
+          const events: unknown[] = []
+          await client.run(prompt, (e) => events.push(e))
+          return `Client run complete. ${events.length} events received.`
+        }
+        return `Unknown client subcommand: ${args[0]}`
+      },
+    }),
+  )
+
+  registry.register(
+    makeDef({
+      name: "sdk",
+      description: "Start a thread via the trayambak TypeScript SDK",
+      category: "Tools & Skills",
+      argsHint: "<prompt>",
+      handler: async (args: string[]) => {
+        const { TrayambakClient } = await import("../../../../packages/sdk/src/index.js")
+        const client = new TrayambakClient()
+        const prompt = args.join(" ")
+        if (!prompt) return "Usage: /sdk <prompt>"
+        const thread = await client.startThread(prompt)
+        return `SDK thread ${thread.id} started. ${thread.events.length} events.`
       },
     }),
   )

@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
@@ -138,6 +138,12 @@ export const COMMANDS: CommandSpec[] = [
     usage: "trayambak mcp <list|add|remove|auth|logout|status> [name] [url]",
   },
   {
+    name: "marketplace",
+    summary: "Browse/install shareable skills & agents",
+    usage: "trayambak marketplace <list|search|install|remove> [kind] [name|query] [--source <dir>]",
+    flags: [{ name: "source", type: "string", description: "Marketplace shelf directory", placeholder: "<dir>" }],
+  },
+  {
     name: "upgrade",
     summary: "Update trayambak and rebuild",
     usage: "trayambak upgrade [version]",
@@ -183,6 +189,27 @@ export const COMMANDS: CommandSpec[] = [
     ],
   },
   { name: "review", summary: "Review code/changes", usage: "trayambak review [target]" },
+  {
+    name: "commit",
+    summary: "Draft a commit message for the diff",
+    usage: "trayambak commit [--staged|--all]",
+    flags: [
+      { name: "staged", type: "boolean", description: "Use the staged diff (default)" },
+      { name: "all", type: "boolean", description: "Use the full working-tree diff" },
+    ],
+  },
+  { name: "stats", summary: "Show usage stats", usage: "trayambak stats" },
+  {
+    name: "pr",
+    summary: "Pull-request helpers (checkout/link/status)",
+    usage: "trayambak pr <checkout|link|unlink|status> [number|url]",
+  },
+  {
+    name: "db",
+    summary: "Inspect the local state store",
+    usage: "trayambak db <path|summary|threads|violations>",
+  },
+  { name: "uninstall", summary: "Remove launcher shims (keeps data)", usage: "trayambak uninstall" },
   { name: "archive", summary: "Archive session", usage: "trayambak archive <id>" },
   { name: "unarchive", summary: "Unarchive session", usage: "trayambak unarchive <id>" },
   { name: "delete", summary: "Delete session", usage: "trayambak delete <id>" },
@@ -215,6 +242,12 @@ export const COMMANDS: CommandSpec[] = [
     description: "Checks a shell command against the ordered allow/deny exec rule engine.",
   },
   { name: "flags", summary: "List feature flags and overrides", usage: "trayambak flags", hidden: false },
+  {
+    name: "client",
+    summary: "Query or run the trayambak local HTTP client",
+    usage: "trayambak client [health|run <prompt>]",
+  },
+  { name: "sdk", summary: "Start a thread via the TypeScript SDK", usage: "trayambak sdk <prompt>" },
   {
     name: "completion",
     summary: "Print shell completion script",
@@ -333,7 +366,8 @@ Environment:
   TRAYAMBAK_BASE_URL, TRAYAMBAK_MODEL, TRAYAMBAK_API_KEY,
   TRAYAMBAK_CWD, TRAYAMBAK_PROVIDER, TRAYAMBAK_AUTOUPDATE,
   TRAYAMBAK_DISABLE_AUTOUPDATE, TRAYAMBAK_CONFIG, TRAYAMBAK_WEB_TOKEN,
-  TRAYAMBAK_BUDGET, TRAYAMBAK_LOG (debug|info|warn|error), TRAYAMBAK_LOG_FILE
+  TRAYAMBAK_WEB_ORIGINS, TRAYAMBAK_BUDGET, TRAYAMBAK_LOG (debug|info|warn|error),
+  TRAYAMBAK_LOG_FILE
 
 Exit codes:
   0  success    1  runtime error    2  usage error

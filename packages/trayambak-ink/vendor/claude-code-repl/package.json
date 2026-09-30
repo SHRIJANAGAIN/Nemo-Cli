@@ -1,0 +1,14 @@
+{
+  "name": "@claude-code/repl",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vendored stand-in for the unpublished @claude-code/repl package (registry E404). Provides the Cursor text-editing primitive the trayambak-ink fork consumes; see Cursor.js for scope and semantics.",
+  "type": "module",
+  "main": "./Cursor.js",
+  "types": "./Cursor.d.ts",
+  "exports": {
+    ".": "./Cursor.js",
+    "./Cursor.js": "./Cursor.js",
+    "./Cursor.d.ts": "./Cursor.d.ts"
+  }
+}

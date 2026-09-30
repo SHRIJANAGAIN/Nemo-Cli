@@ -1,10 +1,21 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { loadConfig, saveConfig, type TrayambakConfig } from "../../../runtime/src/index.js"
+import { isSecretKey, redactSecrets } from "../../../../packages/core/src/secrets.js"
+
+function displayValue(key: string, value: unknown): string {
+  if (isSecretKey(key)) {
+    const redacted = redactSecrets({ [key]: value }) as Record<string, unknown>
+    return typeof value === "string" && value.length > 0
+      ? `${String(redacted[key])} (set, ${value.length} chars)`
+      : "(not set)"
+  }
+  return typeof value === "string" ? value : JSON.stringify(value)
+}
 
 export function configCommand(args: string[]): void {
   const sub = args[0]
@@ -13,11 +24,11 @@ export function configCommand(args: string[]): void {
     const cfg = loadConfig()
     if (!key) {
       for (const [k, v] of Object.entries(cfg)) {
-        process.stdout.write(`${k} = ${typeof v === "string" ? v : JSON.stringify(v)}\n`)
+        process.stdout.write(`${k} = ${displayValue(k, v)}\n`)
       }
       return
     }
-    process.stdout.write(`${String((cfg as unknown as Record<string, unknown>)[key] ?? "")}\n`)
+    process.stdout.write(`${displayValue(key, (cfg as unknown as Record<string, unknown>)[key] ?? "")}\n`)
     return
   }
 
@@ -34,7 +45,7 @@ export function configCommand(args: string[]): void {
     const key = rawKey.replace(/^--+/, "").replace(/-([a-z])/g, (_, c: string) => (c as string).toUpperCase())
     const coerced = coerce(value)
     saveConfig({ [key]: coerced } as Partial<TrayambakConfig>)
-    process.stdout.write(`Set ${key} = ${typeof coerced === "string" ? coerced : JSON.stringify(coerced)}\n`)
+    process.stdout.write(`Set ${key} = ${displayValue(key, coerced)}\n`)
     return
   }
 

@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -206,6 +206,12 @@ const LANGUAGE_REVIEWER_MAP: Record<string, string> = {
 const SECURITY_PATTERN =
   /\b(auth|login|password|passwd|token|secret|credential|api[_-]?key|session|jwt|oauth|cookie|sql|query|exec|eval|crypto|cipher|hash|hmac|sign|fs\.|readFile|writeFile|fetch|axios|request|subprocess|os\.system)\b/i
 
+const COVERAGE_PATTERN =
+  /\b(test|spec|__tests__|coverage|vitest|jest|playwright|pytest|unittest|assert|expect\(|describe\(|it\()\b/i
+
+const PERF_PATTERN =
+  /\b(N\+1|n\+1|performance|latency|p95|p99|throughput|memory leak|OOM|setTimeout|setInterval|requestAnimationFrame|Promise\.all|worker|thread|pool|cache|memo|debounce|throttle|virtualize|pagination|index\b|query plan|explain\b)\b|for\s*\(.*;\s*.*<\s*.*\.length|while\s*\(true\)/i
+
 export function findReviewersForFiles(
   files: string[],
   diffText: string = "",
@@ -250,6 +256,19 @@ export function findReviewersForFiles(
   const combinedText = `${files.join(" ")}\n${diffText}`
   if (SECURITY_PATTERN.test(combinedText)) {
     addProfile("security-reviewer")
+  }
+
+  // Test-coverage dimension: test files changed, or source logic changed
+  // without an accompanying test (legacy Review parity: performance, security,
+  // style, test coverage). Bounded to one profile, deduped via addProfile.
+  const touchesTests = files.some((f) => COVERAGE_PATTERN.test(f))
+  if (touchesTests || COVERAGE_PATTERN.test(diffText)) {
+    addProfile("pr-test-analyzer")
+  }
+
+  // Performance dimension: perf-sensitive code or hot-loop patterns.
+  if (PERF_PATTERN.test(combinedText)) {
+    addProfile("performance-optimizer")
   }
 
   // Silent failure hunter for bug/defect checks

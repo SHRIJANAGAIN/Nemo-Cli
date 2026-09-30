@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import https from "https"
@@ -335,7 +335,10 @@ async function searchGoogle(query: string, maxResults: number): Promise<SearchRe
     const html = await fetchHtml(`https://www.google.com/search?q=${encoded}&num=${maxResults * 2}`)
     if (!html) return []
     const results: SearchResult[] = []
-    const re = /<a[^>]+href="\/url\?q=([^&"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+    // Real Google markup appends tracking params after the target
+    // (q=TARGET&amp;sa=U) — the closing quote must not be required directly
+    // after the capture or nothing ever matches.
+    const re = /<a[^>]+href="\/url\?q=([^&"]+)[^"]*"[^>]*>([\s\S]*?)<\/a>/gi
     const snipRe = /<span[^>]+class="[^"]*VwiC3b[^"]*"[^>]*>([\s\S]*?)<\/span>/gi
     const snipMatches = Array.from(html.matchAll(snipRe))
     let i = 0
@@ -512,7 +515,9 @@ async function searchGitHub(query: string, maxResults: number): Promise<SearchRe
     const re = /<a[^>]+class="[^"]*Link[^"]*"[^>]+href="\/([^"]+\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
     let m: RegExpExecArray | null
     while ((m = re.exec(raw)) !== null && results.length < maxResults) {
-      const href = `https://github.com${decodeEntities(m[1])}`
+      // The regex consumes the leading "/" outside the capture group, so it
+      // must be re-added — without it every URL reads github.com<owner>/…
+      const href = `https://github.com/${decodeEntities(m[1])}`
       const title = decodeEntities(stripHtml(m[2]))
       if (title.length > 3) results.push({ title, url: href, snippet: "GitHub repository", source: "github" })
     }

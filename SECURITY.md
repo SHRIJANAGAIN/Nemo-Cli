@@ -4,9 +4,9 @@
 
 | Version | Supported               |
 | ------- | ----------------------- |
-| 0.5.x   | Yes — latest patch only |
-| 0.4.x   | Security fixes only     |
-| < 0.4   | No — please upgrade     |
+| 0.6.x   | Yes — latest patch only |
+| 0.5.x   | Security fixes only     |
+| < 0.5   | No — please upgrade     |
 
 Security fixes ship as patch releases. `npm run sbom` emits
 `sbom.cyclonedx.json`; npm publishes use `--provenance` for

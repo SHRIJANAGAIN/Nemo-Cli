@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import fs from "node:fs"
@@ -53,6 +53,14 @@ function getLogo(): string {
     logoCache = loadLogo()
   }
   return logoCache
+}
+
+/** Line count of the active banner (0 when absent) — lets overlays budget
+ *  their height BEFORE rendering (the file banner is 10 lines; a missing
+ *  logo renders null, and callers must not assume either). */
+export function logoLineCount(): number {
+  const logo = getLogo()
+  return logo ? logo.split("\n").length : 0
 }
 
 export function TrayambakLogo({ compact = false }: TrayambakLogoProps): ReactNode {

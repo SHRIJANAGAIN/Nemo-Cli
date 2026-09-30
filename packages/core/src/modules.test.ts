@@ -151,6 +151,81 @@ describe("HookRuntime", () => {
     })
     expect(summary.exitCode).toBe(0)
   })
+  it("redacts secrets in the context a handler receives, without mutating the caller's args", async () => {
+    let seenArgs: Record<string, unknown> = {}
+    let seenConfig: Record<string, unknown> = {}
+    runtime.register({
+      name: "echo",
+      events: [HookEventName.PreToolUse],
+      mode: HookExecutionMode.Blocking,
+      timeoutMs: 5000,
+      handler: async (ctx) => {
+        seenArgs = ctx.args ?? {}
+        seenConfig = ctx.config
+        return { shouldStop: false, additionalContext: [] }
+      },
+    })
+    const longPath = "/home/someone/very/long/project/path/src/deeply/nested/index.ts"
+    const args = {
+      command: "curl -H 'Authorization: Bearer abc.def.ghi' https://api.example.com/v1",
+      apiKey: "sk-abcdefghijklmnop0123456789",
+      file_path: longPath,
+    }
+    await runtime.evaluatePreToolUse("bash", args, {
+      eventName: HookEventName.PreToolUse,
+      source: HookSource.Model,
+      cwd: "/tmp",
+      config: { provider: { apiKey: "nvapi-0123456789abcdefmaterial" } },
+      permissions: {},
+    })
+    // Secret-named keys and embedded credentials are gone…
+    expect(seenArgs.apiKey).toBe("****")
+    expect(String(seenArgs.command)).toContain("[REDACTED]")
+    expect(String(seenArgs.command)).not.toContain("abc.def.ghi")
+    expect(seenConfig).toEqual({ provider: { apiKey: "****" } })
+    // …while the ordinary long argument arrives byte-for-byte.
+    expect(seenArgs.file_path).toBe(longPath)
+    // The redaction is a copy: the caller's own args object is untouched.
+    expect(args.apiKey).toBe("sk-abcdefghijklmnop0123456789")
+    expect(args.command).toContain("Bearer abc.def.ghi")
+  })
+
+  it("redacts hook-produced output before it reaches the summary and history", async () => {
+    runtime.register({
+      name: "leaky",
+      events: [HookEventName.PreToolUse],
+      mode: HookExecutionMode.Blocking,
+      timeoutMs: 5000,
+      handler: async () => ({
+        shouldStop: true,
+        additionalContext: [
+          "denied: leaked sk-abcdefghijklmnop0123456789 from args",
+          "keep this explanation line intact",
+        ],
+      }),
+    })
+    const result = await runtime.evaluatePreToolUse(
+      "bash",
+      {},
+      {
+        eventName: HookEventName.PreToolUse,
+        source: HookSource.Model,
+        cwd: "/tmp",
+        config: {},
+        permissions: {},
+      },
+    )
+    expect(result.decision).toBe("deny")
+    expect(result.additionalContext[0]).not.toContain("sk-abcdefghijklmnop0123456789")
+    expect(result.additionalContext[0]).toContain("[REDACTED]")
+    expect(result.additionalContext[1]).toBe("keep this explanation line intact")
+
+    const history = runtime.getHistory()
+    expect(history).toHaveLength(1)
+    expect(history[0].output).not.toContain("sk-abcdefghijklmnop0123456789")
+    expect(history[0].output).toContain("[REDACTED]")
+    expect(history[0].output).toContain("keep this explanation line intact")
+  })
 })
 
 // ── RolloutBudget ────────────────────────────────────────────────
@@ -399,6 +474,77 @@ describe("AnalyticsManager", () => {
     const a = getAnalyticsManager()
     a.recordEvent("turn_start", {})
     expect(a.getEventsByType("turn_start").length).toBe(1)
+  })
+
+  it("redacts secrets in event data before buffering it", () => {
+    const a = getAnalyticsManager()
+    const longPath = "/home/someone/very/long/project/path/src/deeply/nested/index.ts"
+    a.recordEvent("tool_execution", {
+      tool: "bash",
+      apiKey: "sk-abcdefghijklmnop0123456789",
+      command: "curl -H 'Authorization: Bearer abc.def.ghi' https://api.example.com/v1",
+      cwd: longPath,
+    })
+    const stored = a.getEventsByType("tool_execution")[0]
+    expect(stored.data.apiKey).toBe("****")
+    expect(String(stored.data.command)).toContain("[REDACTED]")
+    expect(String(stored.data.command)).not.toContain("abc.def.ghi")
+    // Long ordinary values are stored verbatim — redactPayload never truncates.
+    expect(stored.data.cwd).toBe(longPath)
+    // Nothing secret survives anywhere in the buffered event.
+    expect(JSON.stringify(a.getEvents())).not.toContain("sk-abcdefghijklmnop0123456789")
+    expect(JSON.stringify(a.getEvents())).not.toContain("abc.def.ghi")
+  })
+
+  it("stores a normal event unchanged", () => {
+    const a = getAnalyticsManager()
+    const data = { tool: "read", file_path: "/home/someone/very/long/project/path/src/index.ts", turns: 3 }
+    a.recordEvent("turn_start", data)
+    expect(a.getEventsByType("turn_start")[0].data).toEqual(data)
+  })
+
+  it("redacts free text in hook run output before buffering it", () => {
+    const a = getAnalyticsManager()
+    a.recordHookRun({
+      eventName: "pre-tool-use",
+      durationMs: 10,
+      status: "success",
+      output: "stdout: used sk-abcdefghijklmnop0123456789 then finished",
+    })
+    const fact = a.getHookRunFacts()[0]
+    expect(fact.output).not.toContain("sk-abcdefghijklmnop0123456789")
+    expect(fact.output).toContain("[REDACTED]")
+    expect(fact.output).toContain("then finished")
+    expect(JSON.stringify(a.getEvents())).not.toContain("sk-abcdefghijklmnop0123456789")
+  })
+
+  it("redacts compaction metadata while the numeric stats stay intact", () => {
+    const a = getAnalyticsManager()
+    a.recordCompaction({
+      reason: CompactionReason.Auto,
+      strategy: CompactionStrategy.Default,
+      phase: CompactionPhase.Compacting,
+      trigger: CompactionTrigger.TokenLimit,
+      status: CompactionStatus.Completed,
+      implementation: CompactionImplementation.Api,
+      turnCount: 1,
+      tokensBefore: 1000,
+      tokensAfter: 500,
+      durationMs: 200,
+      metadata: {
+        apiKey: "sk-abcdefghijklmnop0123456789",
+        source: "/home/someone/very/long/project/path/src/index.ts",
+      },
+    })
+    const stored = a.getCompactionEvents()[0]
+    expect(stored.metadata?.apiKey).toBe("****")
+    expect(stored.metadata?.source).toBe("/home/someone/very/long/project/path/src/index.ts")
+    // Regression guard: isSecretKey substring-matches "token", so a naive deep
+    // redact would turn tokensBefore/tokensAfter into "****" and NaN the stats.
+    expect(stored.tokensBefore).toBe(1000)
+    expect(stored.tokensAfter).toBe(500)
+    expect(a.getCompactionStats().averageTokensSaved).toBe(500)
+    expect(JSON.stringify(a.getEvents())).not.toContain("sk-abcdefghijklmnop0123456789")
   })
 })
 

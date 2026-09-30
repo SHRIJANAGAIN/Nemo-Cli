@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import React, { type ReactNode } from "react"
@@ -9,6 +9,7 @@ import { Box, Text, useStdout } from "ink"
 import { ToolUseLoader } from "./ToolUseLoader.js"
 import { MCPToolCallItem } from "./MCPToolCallItem.js"
 import { ExecToolCallItem } from "./ExecToolCallItem.js"
+import { SwarmToolCallItem } from "./SwarmToolCallItem.js"
 import type { ToolCallDisplay, ToolCallRenderMode } from "./types.js"
 import { toolBoxWidth } from "./types.js"
 import { truncateMiddleLines } from "../../../../apps/runtime/src/tools/text/diff-render.js"
@@ -37,6 +38,10 @@ function isExecToolCall(toolCall: ToolCallDisplay): boolean {
   return toolCall.toolType === "exec" || !!toolCall.command
 }
 
+function isSwarmToolCall(toolCall: ToolCallDisplay): boolean {
+  return toolCall.name === "skt__Swarm"
+}
+
 export const ToolCallItem = ({
   toolCall,
   shouldAnimate = false,
@@ -60,7 +65,7 @@ export const ToolCallItem = ({
   // branch — but STAYS OFF when delegating (the inner item runs its own
   // chase; otherwise every MCP/exec row ran two intervals + double
   // renders).
-  const delegated = isMCPToolCall(toolCall) || isExecToolCall(toolCall)
+  const delegated = isMCPToolCall(toolCall) || isExecToolCall(toolCall) || isSwarmToolCall(toolCall)
   const pulse = useBorderPulse(
     toolCall.status === "running" && !delegated,
     [theme.primary, theme.accent, theme.warning, theme.success],
@@ -80,6 +85,10 @@ export const ToolCallItem = ({
         expandOutput={expandOutput}
       />
     )
+  }
+
+  if (isSwarmToolCall(toolCall)) {
+    return <SwarmToolCallItem toolCall={toolCall} shouldAnimate={shouldAnimate} />
   }
 
   if (isExecToolCall(toolCall)) {

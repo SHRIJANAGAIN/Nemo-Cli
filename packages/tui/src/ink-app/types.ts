@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import type {
@@ -286,7 +286,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       { value: "status", description: "Show gate status" },
     ],
   },
-  { name: "devmode", description: "Toggle developer mode", category: "Developer" },
+  {
+    name: "devmode",
+    description: "Toggle developer mode — turning ON opens the pentest tools enable/disable menu (gate shown there)",
+    category: "Developer",
+  },
   {
     name: "question",
     description: "Set default question option (1-9) or answer mode (both/choose/type)",

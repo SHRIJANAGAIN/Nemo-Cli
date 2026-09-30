@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 /**
@@ -56,10 +56,18 @@ async function handlePrompt(id: number | string | undefined, params: Record<stri
       if (cancelled.has(sessionId)) return
       notify("session/update", { sessionId, event })
     })
-    cancelled.delete(sessionId)
-    send(id, { sessionId, stopReason: cancelled.has(sessionId) ? "cancelled" : "end_turn" })
+    // Read the cancel flag BEFORE clearing it — deleting first made
+    // `stopReason: "cancelled"` unreachable (every reply said "end_turn",
+    // even mid-cancel ones).
+    const wasCancelled = cancelled.has(sessionId)
+    send(id, { sessionId, stopReason: wasCancelled ? "cancelled" : "end_turn" })
   } catch (err) {
     sendError(id, -32000, err instanceof Error ? err.message : String(err))
+  } finally {
+    // Clear on every exit (success *and* failure): a flag leaked past a
+    // rejected run would suppress all events of the next prompt on this
+    // session and mislabel it "cancelled".
+    cancelled.delete(sessionId)
   }
 }
 
@@ -70,7 +78,7 @@ async function dispatch(req: RpcRequest): Promise<void> {
       send(req.id, {
         protocolVersion: PROTOCOL_VERSION,
         agentCapabilities: { loadSession: true, prompt: true, mcp: true, sessions: true },
-        agentInfo: { name: "trayambak", version: "0.5.0" },
+        agentInfo: { name: "trayambak", version: "0.6.0" }, // keep in sync with root package.json
       })
       break
     case "new_session":

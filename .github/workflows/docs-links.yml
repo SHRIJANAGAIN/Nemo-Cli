@@ -1,0 +1,45 @@
+name: docs-links
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    paths:
+      - "docs/**"
+      - "*.md"
+      - "scripts/check-docs-links.mjs"
+      - ".github/workflows/docs-links.yml"
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  internal:
+    name: Internal docs links + anchors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:links
+
+  external:
+    name: External links (lychee)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link Checker
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress 'docs/**/*.md' 'README.md' 'AGENTS.md' --exclude '^http://127\.0\.0\.1' --exclude '^http://localhost'
+          fail: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

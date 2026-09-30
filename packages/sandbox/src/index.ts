@@ -14,6 +14,7 @@
 
 import * as fs from "fs"
 import * as path from "path"
+import { enforcementForBackend } from "./gate.js"
 
 // ─── Original Policy Engine ───
 
@@ -37,8 +38,12 @@ export function detectBackend(): SandboxBackend {
   return "fallback"
 }
 
-export function enforcementFor(_backend: SandboxBackend): EnforcementMode {
-  return "policy-only"
+export function enforcementFor(backend: SandboxBackend): EnforcementMode {
+  // Single source of truth: gate.enforcementForBackend computes
+  // (flag && isolator-capable backend), so this can never disagree with
+  // describeEnforcement on the CLI status surface. The flag still
+  // defaults off, so the default answer here is unchanged.
+  return enforcementForBackend(backend)
 }
 
 export interface SandboxCheck {
@@ -104,6 +109,12 @@ function canonicalizeForMatch(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase()
 }
 
+/**
+ * Pure rule matcher for display/CLI (`execpolicy check`). Unmatched
+ * commands allow — enforcement fail-closed lives in the execpolicy
+ * PolicyManager (`evaluate` defaults to Ask) and the protocol permission
+ * engine, which are the gates that actually run before execution.
+ */
 export function checkExecPolicy(command: string, rules: ExecRule[]): { allowed: boolean; rule?: ExecRule } {
   const candidate = canonicalizeForMatch(command)
   for (const rule of rules) {
@@ -135,6 +146,7 @@ export const DEFAULT_EXEC_RULES: ExecRule[] = [
 // ─── New OS-Level Enforcement Types ───
 
 export { SandboxType, SandboxEnforcement, SandboxablePreference } from "./types.js"
+export { describeEnforcement, enforcementForBackend, osCapableBackend, shouldUseOsSandbox } from "./gate.js"
 export {
   NetworkSandboxPolicy,
   FileSystemSandboxPolicy,

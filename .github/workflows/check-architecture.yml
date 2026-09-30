@@ -1,0 +1,77 @@
+name: check-architecture
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "skt/**"
+      - "eslint.config.mjs"
+      - "packages/eslint-plugin-trayambak/**"
+      - ".github/workflows/check-architecture.yml"
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  boundaries:
+    name: Package boundaries + duplication ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: packages/core must NOT depend on apps/*
+        run: |
+          VIOLATIONS=$(grep -rn "from [\"'].*apps/" --include="*.ts" --include="*.tsx" packages/core/src 2>/dev/null || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::packages/core imports from apps/*:"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "core boundary ok"
+      - name: packages/execpolicy must NOT depend on packages/core
+        run: |
+          VIOLATIONS=$(grep -rn "packages/core\|from [\"'].*core/" --include="*.ts" packages/execpolicy/src 2>/dev/null || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::packages/execpolicy imports from packages/core:"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "execpolicy boundary ok"
+      - name: trayambak-ink must NOT deep-import core/src/*
+        run: |
+          VIOLATIONS=$(grep -rn "packages/core/src/" --include="*.ts" --include="*.tsx" packages/trayambak-ink/src 2>/dev/null || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::trayambak-ink deep-imports packages/core/src/* (use core index):"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "ink boundary ok"
+      - name: Custom lint rules pass (16 trayambak/* rules)
+        run: npm run lint
+      - name: Workflow allowlist (no unknown workflow files)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const dir = '.github/workflows';
+            const known = new Set(fs.readdirSync(dir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml')));
+            const expect = ['ci.yml','core-modules.yml','release.yml','secret-scan.yml','session-analytics.yml','codeql.yml','check-forbidden-strings.yml','check-md-tables.yml','docs-links.yml','containers.yml','smoke.yml','typecheck.yml','test-sharded.yml','beta.yml','check-generated.yml','check-architecture.yml','docs-build.yml','test-vscode-extension.yml','auto-close.yml','publish-gate.yml','check-skills.yml','dependency-review.yml','e2e-matrix.yml','pr-standards.yml','triage.yml'];
+            const unknown = [...known].filter(f => !expect.includes(f));
+            if (unknown.length) { console.error('::error::unknown workflow files: ' + unknown.join(', ')); process.exit(1); }
+            console.log('workflows ok: ' + known.size);
+          "

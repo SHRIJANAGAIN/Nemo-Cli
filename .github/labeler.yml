@@ -1,0 +1,49 @@
+# Path-based auto-labels for PRs (no secrets, no LLM).
+# Used by .github/workflows/triage.yml via actions/labeler.
+area/docs:
+  - docs/**
+  - "*.md"
+
+area/core:
+  - packages/core/**
+  - packages/approval/**
+  - packages/execpolicy/**
+  - packages/protocol/**
+
+area/sandbox-security:
+  - packages/sandbox/**
+  - packages/core/src/sandbox.ts
+  - packages/core/src/secret_redaction.ts
+  - packages/execpolicy/**
+
+area/runtime-tools:
+  - apps/runtime/src/tools/**
+  - apps/runtime/src/agent/**
+
+area/tui:
+  - packages/tui/**
+  - packages/trayambak-ink/**
+  - apps/cli/src/ui/**
+
+area/skills-rules:
+  - skills/**
+  - rules/**
+
+area/vscode-extension:
+  - apps/vscode-extension/**
+
+area/ci:
+  - .github/workflows/**
+  - scripts/**
+  - vitest.config.ts
+  - eslint.config.mjs
+  - package.json
+  - package-lock.json
+
+area/providers:
+  - packages/provider/**
+  - packages/model*/**
+
+area/telemetry:
+  - packages/telemetry/**
+  - packages/core/src/analytics.ts

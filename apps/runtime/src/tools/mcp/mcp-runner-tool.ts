@@ -1,12 +1,13 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { spawn, type ChildProcess } from "child_process"
 import * as readline from "readline"
 import { getConnectorRegistry } from "./registry.js"
+import { resolveMcpCommand } from "../../../../../packages/mcp/src/spawn-resolve.js"
 import type { McpServerSpec } from "../../../../../packages/mcp/src/index.js"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
@@ -181,8 +182,11 @@ export class McpProcess {
 
   private spawnStdio(): void {
     const spec = this.spec
-    const [cmd, ...args] = spec.command ?? []
-    if (!cmd) throw new Error(`MCP server '${this.name}' has no command`)
+    const raw: string[] = spec.command ?? []
+    if (raw.length === 0) throw new Error(`MCP server '${this.name}' has no command`)
+    // Same shim resolution as the client (see spawn-resolve.ts): bare npx
+    // fails with ENOENT from GUI shells, *.cmd fails with EINVAL.
+    const { command: cmd, args } = resolveMcpCommand(raw)
 
     // No shell: argv passes straight through, so registry specs with
     // spaces/metachars can't inject (the old shell:true mis-split them).

@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import { describe, expect, it } from "vitest"
@@ -10,7 +10,13 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { createMcpConnection } from "../../../../../packages/mcp/src/index.js"
 import { createMcpTools, resetMcpRegistry, slugify, toToolProperty } from "./mcp.js"
-import { resolveInstalledEntry } from "./mcp-install.js"
+import {
+  createMcpInstallTool,
+  execAsync,
+  resolveExecutable,
+  resolveInstalledEntry,
+  resolveNpmCliJs,
+} from "./mcp-install.js"
 
 /**
  * MCP client + tool-exposure fixes, proven against a fake stdio server:
@@ -135,5 +141,57 @@ describe("createMcpTools exposure fixes", () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  it("resolveExecutable finds node and rejects ghost binaries", () => {
+    // node runs this very test, so it must resolve (absolute path back).
+    const nodeBin = resolveExecutable("node")
+    expect(nodeBin).toBeDefined()
+    expect(path.isAbsolute(nodeBin as string)).toBe(true)
+    if (process.platform === "win32" && nodeBin) {
+      // Regression: returning the extensionless POSIX shim (...\nodejs\npm)
+      // makes spawn() throw ENOENT. Only PATHEXT executables are spawnable.
+      expect(/\.(exe|cmd|bat|com)$/i.test(nodeBin)).toBe(true)
+    }
+    expect(resolveExecutable("definitely-not-a-binary-xyz-123")).toBeUndefined()
+  })
+
+  it("resolveNpmCliJs finds the npm entry point next to node", () => {
+    const cli = resolveNpmCliJs()
+    // Wherever node itself was installed, its npm payload ships alongside.
+    expect(cli).toBeDefined()
+    expect((cli as string).endsWith("npm-cli.js")).toBe(true)
+  })
+})
+
+describe("mcp__install execution", () => {
+  it("execAsync resolves on exit 0 and carries the exit code in rejections", async () => {
+    await expect(execAsync(process.execPath, ["-e", "process.exit(0)"], process.cwd())).resolves.toBeUndefined()
+    await expect(execAsync(process.execPath, ["-e", "process.exit(3)"], process.cwd())).rejects.toThrow(/\(3\)/)
+  })
+
+  it("execAsync rejects instead of hanging when the command cannot spawn", async () => {
+    await expect(execAsync("definitely-not-a-binary-xyz-123", [], process.cwd())).rejects.toThrow(
+      /definitely-not-a-binary-xyz-123|ENOENT/,
+    )
+  })
+
+  it("install reports registry misses as errors without spawning anything", async () => {
+    const tool = createMcpInstallTool()
+    const res = await tool.execute("t", { action: "install", query: "no-such-server-xyz" }, undefined, undefined)
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("not found in registry")
+  })
+
+  it("list/info/unknown actions route to the right responses", async () => {
+    const tool = createMcpInstallTool()
+    const list = await tool.execute("t", { action: "list" }, undefined, undefined)
+    expect(list.isError).toBe(false)
+    expect(list.content[0].text).toContain("Available MCP servers")
+    const info = await tool.execute("t", { action: "info", query: "puppeteer" }, undefined, undefined)
+    expect(info.isError).toBe(false)
+    expect(info.content[0].text).toContain("@modelcontextprotocol/server-puppeteer")
+    const unknown = await tool.execute("t", { action: "definitely-unknown" }, undefined, undefined)
+    expect(unknown.isError).toBe(true)
   })
 })

@@ -21,8 +21,9 @@ import { createHmac, createSign, timingSafeEqual } from "node:crypto"
 /** Prefix GitHub puts in front of the hex HMAC-SHA256 digest. */
 const SIGNATURE_PREFIX = "sha256="
 
-/** A comment triggers the agent when it contains one of these prefixes. */
-const COMMAND_PREFIXES = ["/trayambak", "@trayambak"] as const
+/** A comment triggers the agent when it contains one of these prefixes.
+ *  `/skt` is the short form — same bot, less typing. */
+const COMMAND_PREFIXES = ["/trayambak", "@trayambak", "/skt", "@skt"] as const
 
 /**
  * Verify an X-Hub-Signature-256 header against the raw request body.
@@ -123,6 +124,85 @@ export function routeGithubEvent(event: GithubEventName, payload: unknown): Gith
   }
 
   return { kind: "ignored", reason: `unsupported event ${event}` }
+}
+
+/**
+ * Thread context for the job prompt: the webhook already carries the issue
+ * title/body and the triggering comment — hand them to the agent verbatim
+ * so trivial tasks ("hello", questions) resolve with zero API calls, and
+ * deeper work starts informed instead of blind.
+ */
+export function describeGithubThread(payload: unknown): string {
+  if (typeof payload !== "object" || payload === null) return ""
+  const body = payload as Record<string, unknown>
+  const issue = body.issue as { number?: unknown; title?: unknown; body?: unknown } | undefined
+  const comment = body.comment as { body?: unknown; user?: { login?: unknown } } | undefined
+  const lines: string[] = []
+  if (issue && (typeof issue.title === "string" || typeof issue.body === "string")) {
+    const title = typeof issue.title === "string" ? issue.title : "(no title)"
+    const ibody = typeof issue.body === "string" ? issue.body.slice(0, 2000) : ""
+    lines.push(`Issue #${typeof issue.number === "number" ? issue.number : "?"}: ${title}`)
+    if (ibody.trim()) lines.push(`Issue body:\n${ibody}`)
+  }
+  if (comment && typeof comment.body === "string" && comment.body.trim()) {
+    const who = (comment.user as { login?: unknown } | undefined)?.login
+    lines.push(`Triggering comment${typeof who === "string" ? ` by ${who}` : ""}:\n${comment.body.slice(0, 1000)}`)
+  }
+  return lines.join("\n\n")
+}
+
+/**
+ * Squeeze a human-readable reply out of agent messages for thread comments.
+ * Prefers the last assistant text; falls back to the last tool result text
+ * (agentic models often answer tool-only); never returns empty — the caller
+ * posts SOMETHING so threads never show a confusing blank reply.
+ */
+export function extractFinalReply(messages: Array<{ role?: string; content?: unknown }>): string {
+  const textOf = (content: unknown): string => {
+    if (!Array.isArray(content)) return ""
+    return content
+      .filter(
+        (p): p is { type: "text"; text: string } =>
+          !!p && typeof p === "object" && (p as { type?: unknown }).type === "text",
+      )
+      .map((p) => p.text)
+      .join("\n")
+      .trim()
+  }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role === "assistant") {
+      const t = textOf(m.content)
+      if (t) return t
+    }
+  }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role === "tool") {
+      const t = textOf(m.content)
+      if (t) return `(no direct answer; last tool result)\n\n${t}`.slice(0, 60000)
+    }
+  }
+  return "(agent produced no text output)"
+}
+
+/**
+ * Pick the thread reply for a finished GitHub job. Thrown runs and empty
+ * runs surface the provider's own error text (captured from the error
+ * message_end emits — those never enter the session, so without this the
+ * thread shows a blank reply while the real error evaporates into a
+ * no-op emit sink). Never returns empty.
+ */
+export function selectJobReply(
+  messages: Array<{ role?: string; content?: unknown }>,
+  runError: string,
+  errorTexts: string[],
+): string {
+  if (runError) return `Agent run failed: ${runError}`.slice(0, 2000)
+  const reply = extractFinalReply(messages)
+  if (reply !== "(agent produced no text output)") return reply
+  if (errorTexts.length > 0) return errorTexts.join("\n").slice(0, 2000)
+  return reply
 }
 
 export interface ApiClient {

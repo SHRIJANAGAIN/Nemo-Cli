@@ -35,6 +35,14 @@ export class IndexingService {
     return this.state
   }
 
+  /**
+   * Runs one indexing pass. The catch looks unreachable because indexFiles()
+   * is still a timer stub — but `status: "error"` is part of this method's
+   * public contract (IndexingState.error), and the first real walk (fs
+   * errors, unreadable trees) is exactly what will throw. Do not delete the
+   * catch as dead code; it is the difference between a rejected state and an
+   * unhandled rejection.
+   */
   async run(): Promise<void> {
     this.state = { status: "running", progress: 0 }
     try {
@@ -49,6 +57,7 @@ export class IndexingService {
     }
   }
 
+  /** Indexing stub: the pass is a timer until a real walk lands here. */
   private async indexFiles(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 100))
   }

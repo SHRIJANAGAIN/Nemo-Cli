@@ -146,7 +146,7 @@ set TRAYAMBAK_DISABLE_AUTOUPDATE=1   # kill switch (anything but 0/false skips)
 trayambak config set autoupdate false
 trayambak config set autoupdate notify   # check but only notify
 trayambak upgrade                        # manual update: git pull / npm install -g
-trayambak upgrade 0.5.0                  # pin a specific version (git)
+trayambak upgrade 0.6.0                  # pin a specific version (git)
 ```
 
 Auto-update only acts on `git` and `npm` installs; a plain source copy prints

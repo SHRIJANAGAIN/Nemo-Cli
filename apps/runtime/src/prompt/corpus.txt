@@ -84,6 +84,7 @@ Prefer dedicated tools over shell: glob (not find/ls), grep tool (not grep/rg), 
 edit_file accepts whitespace-tolerant matches (indentation drift, trailing spaces, CRLF); it still fails honest when no unique match exists.
 Large outputs truncate (2000 lines / 256KB, spill file on overflow): read the spill with offset/limit instead of re-running.
 The live tool list with exact params follows under "# Available Tools" below — that generated list wins over any example here.
+Pentest (built-in security suite, native tools): trayambak__PentestListTools(category?) lists the scanner catalog by category (network, web, password, binary, cloud, osint, ad, wireless, mobile, social — nmap, ffuf, nuclei, sqlmap, hydra, john, masscan, rustscan …); trayambak__PentestStartEngagement(target, scope[]) opens a scoped engagement and returns an engagementId; trayambak__PentestRunTool(toolName, target, engagementId?, args?, timeoutSeconds? = 1–600, default 120) runs a catalog tool, parses structured findings and records them into the engagement; trayambak__PentestGetStatus(engagementId) reports progress; trayambak__PentestGetFindings(engagementId, severity?, status?, url?, since?) returns the findings. Flow: start engagement → list/run tools with its engagementId → collect findings. Scan authorized targets only. Defensive guard only: harden and protect infrastructure — never exploitation, attacks, or damage.
 Never mock tool results. A result you did not receive did not happen.
 
 # PRINCIPLES

@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { loginWithApiKey, logout, loginStatus } from "./auth.js"
+import { credentialsPath, loginWithApiKey, logout, loginStatus } from "./auth.js"
 
 const savedKey = process.env.TRAYAMBAK_API_KEY
 
@@ -25,5 +25,16 @@ describe("auth", () => {
     expect(loginStatus().kind).toBe("api-key")
     expect(logout()).toBe(true)
     expect(loginStatus().kind).toBe("none")
+  })
+
+  it("logout clears without deleting the file (no path oracle)", () => {
+    loginWithApiKey("sk-test-123")
+    expect(logout()).toBe(true)
+    expect(fs.existsSync(credentialsPath())).toBe(true)
+    expect(loginStatus()).toEqual({ kind: "none", hasFile: false, hasEnv: false })
+  })
+
+  it("logout on a missing file returns false", () => {
+    expect(logout()).toBe(false)
   })
 })

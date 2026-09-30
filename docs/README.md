@@ -9,7 +9,7 @@ terminal coding agent by SKT AI LABS PRIVATE LIMITED.
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | [Getting started](getting-started.md) | Install, launch, every subcommand, global flags, configuration precedence, env vars, where files live |
 | [Sessions](sessions.md)               | Transcript layout, picker keys, archive/delete, compaction, checkpoints                               |
-| [Providers](providers.md)             | The 10 backends, defaults, key handling, model listing, fully local models                            |
+| [Providers](providers.md)             | The 22 backends, defaults, key handling, model listing, fully local models                            |
 | [MCP](mcp.md)                         | Configuring servers, `trayambak mcp …`, OAuth tokens, connector registry, `mcp-server`                |
 | [ACP](acp.md)                         | `trayambak acp` — stdio JSON-RPC methods, examples, when to use it                                    |
 | [Web](web.md)                         | `trayambak web` — endpoints, SSE agent runs, token auth, CORS                                         |
@@ -27,7 +27,7 @@ trayambak          # or: skt
 ```
 
 Then inside the session: `/provider` → `/models`. Type `/help` for all
-**52 slash commands**, `/keymap` for shortcuts, or press `Ctrl+K` for the
+**99 slash commands**, `/keymap` for shortcuts, or press `Ctrl+K` for the
 leader overlay.
 
 **Authentication**
@@ -57,8 +57,10 @@ legacy single-file transcripts migrate automatically. Details:
 
 **Providers**
 
-10 backends: `llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `xai`,
-`huggingface`, `anthropic`, `google`, `ollama`, `custom`.
+22 backends: `llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `anthropic`,
+`google`, `xai`, `huggingface`, `ollama`, `groq`, `mistral`, `cerebras`,
+`together`, `deepinfra`, `cohere`, `perplexity`, `openrouter`, `fireworks`,
+`venice`, `azure`, `skt-gateway`, `custom`.
 `verifyProviderKey` does a 1-token chat ping; `cleanApiKey` strips pasted
 prefixes. Details: [Providers](providers.md).
 
@@ -117,4 +119,4 @@ default. Details: [Security](security.md); reporting SLA and scope in
 
 **License**
 
-Apache-2.0 — see [`LICENSE`](../LICENSE) (Apache License 2.0, SKT AI LABS PRIVATE LIMITED).
+Proprietary — see [`LICENSE`](../LICENSE) (Trayambak CLI Proprietary License, SKT AI LABS PRIVATE LIMITED). Not open source, not Apache-2.0.

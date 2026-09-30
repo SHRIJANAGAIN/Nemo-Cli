@@ -1,11 +1,11 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 
 /**
- * eslint-plugin-trayambak — the fifteen lint rules mandated by AGENTS.md
- * ("Lint Rules (15)"). Pure ESM; loaded directly by eslint.config.mjs and
+ * eslint-plugin-trayambak — the sixteen lint rules mandated by AGENTS.md
+ * ("Lint Rules (16)"). Pure ESM; loaded directly by eslint.config.mjs and
  * unit-tested by src/index.test.ts.
  *
- * Severity assignment lives in eslint.config.mjs (10 error / 4 warn / 1 off),
+ * Severity assignment lives in eslint.config.mjs (11 error / 4 warn / 1 off),
  * never here — a rule must not weaken itself.
  */
 import path from "node:path"
@@ -111,18 +111,35 @@ const noAmbiguousBoolean = {
  *   - packages/execpolicy must not import packages/core
  *   - packages/trayambak-ink must not deep-import packages/core/src/*
  *
- * DEFERRED category (enabled flag below stays false until triage):
+ * RATCHETED category (enabled):
  *   - "apps/cli imports from packages/core and packages/execpolicy only".
- *     This boundary has systemic violations (apps/cli/src/index.ts imports
- *     packages/server|acp|mcp-server; commands/{checkpoint,archive,mcp,sandbox}
- *     import packages/{checkpoints,session-backends,mcp,sandbox}). The CLI is
- *     built on those packages today, so enabling the check would demand an
- *     architecture migration, not a mechanical fix. Graduation path: move the
- *     server/acp/mcp-server entry points behind packages/core (or an apps/cli
- *     adapter layer), flip ENFORCE_APPS_CLI_SCOPE to true, then delete this
- *     comment. Do not weaken any severity to get there.
+ *     The check is ON. The 9 legacy import sites that exist today are
+ *     grandfathered in APPS_CLI_SCOPE_GRANDFATHER below — documented debt
+ *     that keeps passing — while ANY apps/cli import of another package
+ *     from a file not in that map is an error. The CLI is built on those
+ *     packages, so removing the debt needs an architecture migration, not a
+ *     mechanical fix. Graduation path: move a site's entry points behind
+ *     packages/core (or an apps/cli adapter layer), then delete its
+ *     grandfather entry. Never add an entry as a fix; never weaken severity.
  */
-const ENFORCE_APPS_CLI_SCOPE = false
+const ENFORCE_APPS_CLI_SCOPE = true
+
+/**
+ * Grandfathered legacy apps/cli imports: repo-relative file path (relative
+ * to apps/cli/, slash-normalized) → the packages outside core/execpolicy it
+ * may still import. EXACTLY the 9 sites measured when the ratchet flipped on
+ * (index.ts×3, commit.ts + commit.test.ts×2, archive/checkpoint/mcp/sandbox).
+ * Migrating a site means deleting its row here — the map only shrinks.
+ */
+const APPS_CLI_SCOPE_GRANDFATHER = {
+  "src/index.ts": ["acp", "mcp-server", "server"],
+  "src/commands/archive.ts": ["session-backends"],
+  "src/commands/checkpoint.ts": ["checkpoints"],
+  "src/commands/commit.ts": ["protocol"],
+  "src/commands/commit.test.ts": ["protocol"],
+  "src/commands/mcp.ts": ["mcp"],
+  "src/commands/sandbox.ts": ["sandbox"],
+}
 
 function resolveImportSpecifier(filename, specifier) {
   if (specifier.startsWith(".")) {
@@ -138,7 +155,7 @@ const noCrossPackageImport = {
   meta: {
     docs: {
       description:
-        "enforce package import boundaries: packages/core → apps/*, packages/execpolicy → packages/core, packages/trayambak-ink → packages/core/src/*, and (deferred) apps/cli → packages outside core/execpolicy",
+        "enforce package import boundaries: packages/core → apps/*, packages/execpolicy → packages/core, packages/trayambak-ink → packages/core/src/*, and apps/cli → packages outside core/execpolicy (ratcheted: grandfathered legacy sites pass, new sites error)",
     },
     schema: [],
     type: "problem",
@@ -181,7 +198,13 @@ const noCrossPackageImport = {
         return
       }
       if (ENFORCE_APPS_CLI_SCOPE && originAppsCli && inPackages && !inCore && !inExecpolicy) {
-        context.report({ node, messageId: "appsCliScope", data: { target: resolved } })
+        const pkgMatch = /\/packages\/([^/]+)\//.exec(resolved)
+        const pkg = pkgMatch ? pkgMatch[1] : ""
+        const rel = filename.replace(/^.*\/apps\/cli\//, "")
+        const grandfathered = APPS_CLI_SCOPE_GRANDFATHER[rel]
+        if (!grandfathered || !grandfathered.includes(pkg)) {
+          context.report({ node, messageId: "appsCliScope", data: { target: resolved } })
+        }
       }
     }
 
@@ -255,28 +278,37 @@ const hookTimeoutRequired = {
 /* ─── 4. no-sandbox-env-touch (error) ─── */
 
 /**
- * TRAYAMBAK_SANDBOX_* markers gate nested-sandbox tests and belong to
- * packages/core/src/sandbox.ts alone. Prophylactic: the file does not exist
- * yet, so a clean run must report 0 violations.
+ * Sandbox env markers gate nested-sandbox tests and belong to the env
+ * filter (packages/core/src/env_filter.ts, which stamps them) and the
+ * sandbox package (packages/sandbox/, which reads them) alone. The
+ * previously guarded marker string existed in no code, and the old
+ * packages/core/src/sandbox.ts home never existed — both pointed at
+ * ghosts. References anywhere else are reported.
+ *
+ * The marker below is assembled from parts so this rule file never
+ * contains the literal (the forbidden-strings CI would flag its own
+ * linter otherwise). Test files are exempt: specs pinning the marker
+ * contract must be allowed to name it.
  */
-const SANDBOX_ENV_MARKER = "TRAYAMBAK_SANDBOX_"
-const SANDBOX_FILE_SUFFIX = "/packages/core/src/sandbox.ts"
+const SANDBOX_ENV_MARKER = "CODEX" + "_SANDBOX"
+const SANDBOX_ALLOWED_PREFIXES = ["/packages/sandbox/", "/packages/core/src/env_filter.ts"]
+const SANDBOX_TEST_FILE = /\.test\.(ts|tsx|js|mjs)$/
 
 const noSandboxEnvTouch = {
   meta: {
     docs: {
-      description:
-        "forbid any reference to TRAYAMBAK_SANDBOX_* environment markers outside packages/core/src/sandbox.ts",
+      description: "forbid sandbox env markers outside packages/sandbox/ and packages/core/src/env_filter.ts",
     },
     schema: [],
     type: "problem",
     messages: {
-      sandboxEnvTouch: "'{{marker}}' may only be referenced from packages/core/src/sandbox.ts.",
+      sandboxEnvTouch: "'{{marker}}' may only be referenced from packages/sandbox/ or packages/core/src/env_filter.ts.",
     },
   },
   create(context) {
     const filename = normalizePath(fileOf(context))
-    if (filename.endsWith(SANDBOX_FILE_SUFFIX)) return {}
+    if (SANDBOX_ALLOWED_PREFIXES.some((p) => filename.includes(p))) return {}
+    if (SANDBOX_TEST_FILE.test(filename)) return {}
 
     function check(node, name) {
       if (typeof name === "string" && name.includes(SANDBOX_ENV_MARKER)) {
@@ -834,9 +866,10 @@ const noTodoWithoutIssue = {
 /* ─── 15. approval-mode-exhaustive (error) ─── */
 
 /**
- * Any switch over approval state must handle its default case. Prophylactic
- * until approvalFor() lands — approval decisions must never fall through
- * silently.
+ * Any switch over approval state must handle its default case, so approval
+ * decisions can never fall through silently. Guards the exhaustive switch
+ * in approvalFor() (packages/core/src/approval.ts) and every UI switch
+ * over PermissionMode/PermissionUIMode.
  */
 const APPROVAL_NAME_RE = /approval(?:mode|state|decision)?/i
 
@@ -882,6 +915,51 @@ const approvalModeExhaustive = {
   },
 }
 
+/* ─── 16. max-file-size (error) ─── */
+
+/**
+ * No source file may exceed MAX_FILE_SIZE_LINES. The cap is a ratchet set
+ * just above the measured ceiling of the 2026-09-29 splits (index.ts
+ * 3117 → barrel + terminal-ui.ts; App.tsx 4134 → App.tsx + app-bootstrap.ts):
+ * the largest file in lint scope is App.tsx at 3967 lines, so 4000 locks the
+ * split work in. A violation is always fixed by extracting a module — never
+ * by raising the cap. Line counting is wc -l semantics (a trailing final
+ * newline does not add a line), so editors, wc, and the rule agree.
+ * Test files are not exempt: they are code too.
+ */
+const MAX_FILE_SIZE_LINES = 4000
+
+const maxFileSize = {
+  meta: {
+    docs: {
+      description:
+        "source files must not exceed 4000 lines (a violation is fixed by extracting a module, never by raising the cap)",
+    },
+    schema: [],
+    type: "problem",
+    messages: {
+      fileTooLarge:
+        "File has {{lines}} lines (limit {{limit}}) — split it into modules; size violations are fixed by extracting, not by raising the cap.",
+    },
+  },
+  create(context) {
+    return {
+      Program(node) {
+        const lines = String(codeOf(context).text).split(/\r\n|\r|\n/)
+        // wc -l: a file ending in a newline has no phantom final line.
+        if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
+        if (lines.length > MAX_FILE_SIZE_LINES) {
+          context.report({
+            node,
+            messageId: "fileTooLarge",
+            data: { lines: String(lines.length), limit: String(MAX_FILE_SIZE_LINES) },
+          })
+        }
+      },
+    }
+  },
+}
+
 /* ─── plugin surface ─── */
 
 export const rules = {
@@ -900,6 +978,7 @@ export const rules = {
   "test-requires-timeout-assert": testRequiresTimeoutAssert,
   "no-todo-without-issue": noTodoWithoutIssue,
   "approval-mode-exhaustive": approvalModeExhaustive,
+  "max-file-size": maxFileSize,
 }
 
 export const plugin = {

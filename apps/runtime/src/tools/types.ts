@@ -1,7 +1,7 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ * Trayambak CLI Proprietary License - use, copying, modification, and
+ * distribution require a written license agreement with SKT AI LABS
+ * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
 import * as fs from "fs"
@@ -142,6 +142,9 @@ export function assertMutablePath(filepath: string): void {
   const parts = filepath.split(/[\\/]/)
   const file = parts.at(-1)
   const dir = parts.at(-2)
+  // Legacy state dirs from pre-rebrand installs: their agent-manager.json
+  // must stay tool-protected (`.trayambak` is covered by
+  // PROTECTED_METADATA_DIRS below with the generic message).
   if (file === "agent-manager.json" && [".kilo", ".SKT AI LABS"].includes(dir ?? "")) {
     throw new Error("Do not edit Agent Manager state directly. Use the agent_manager tool.")
   }

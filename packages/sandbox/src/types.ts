@@ -218,7 +218,22 @@ export const BLOCKED_ENV_PATTERNS = [
 ] as const
 
 /**
+ * ALLOWED_ENV_VARS upper-cased once. The membership test below must be
+ * case-INsensitive: Windows environment blocks spell names `Path` and
+ * `SystemRoot` while the allowlist writes `PATH`/`SYSTEMROOT`, and a
+ * case-sensitive `includes()` silently dropped PATH from every child
+ * process spawned there (on Windows the OS treats `Path` and `PATH` as
+ * the same variable, so folding case loses nothing).
+ */
+const ALLOWED_ENV_VARS_UPPER: ReadonlySet<string> = new Set(ALLOWED_ENV_VARS.map((name) => name.toUpperCase()))
+
+/**
  * Filter process.env to remove secrets and add sandbox metadata.
+ *
+ * Deny patterns first (a blocked name never survives, even if it is also
+ * allowlisted), then an allowlist: anything not named in
+ * ALLOWED_ENV_VARS is dropped, so unknown credential-shaped variables
+ * never reach a sandboxed child by default.
  */
 export function filterEnv(
   processEnv: Record<string, string>,
@@ -231,8 +246,8 @@ export function filterEnv(
     if (BLOCKED_ENV_PATTERNS.some((p) => key.toUpperCase().includes(p))) {
       continue
     }
-    // Only include allowed vars
-    if ((ALLOWED_ENV_VARS as readonly string[]).includes(key)) {
+    // Only include allowed vars (case-insensitively, see the set above)
+    if (ALLOWED_ENV_VARS_UPPER.has(key.toUpperCase())) {
       filtered[key] = value
     }
   }
@@ -279,9 +294,13 @@ function detectAvailableSandbox(): SandboxType {
     if (platform === "linux" && existsSync("/usr/bin/bwrap")) {
       return SandboxType.LinuxSeccomp
     }
-    if (platform === "win32") {
-      return SandboxType.WindowsRestrictedToken
-    }
+    // Windows: the restricted-token spawn path (`spawnUnderWindowsRestrictedToken`)
+    // currently delegates to the unsandboxed path and reports `None` /
+    // `isSandboxed: false`. Detection must not claim an enforcement that is
+    // never applied — the stamp feeds `CODEX_SANDBOX` in child envs, and a
+    // marker that lies is worse than no marker (policy-first rule). Return
+    // `WindowsRestrictedToken` here once restricted-token spawn is actually
+    // wired end-to-end.
   } catch {
     /* ignore */
   }

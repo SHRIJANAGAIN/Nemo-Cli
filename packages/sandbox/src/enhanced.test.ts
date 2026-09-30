@@ -113,6 +113,18 @@ describe("environment filtering", () => {
     expect(filtered.PATH).toBe("/usr/bin")
     expect(filtered.HOME).toBe("/home/user")
   })
+  it("matches the allowlist case-insensitively so Windows spellings survive", () => {
+    // Windows env blocks spell these `Path`/`SystemRoot`; a case-sensitive
+    // allowlist check dropped PATH from every child process there.
+    const filtered = filterEnv(
+      { Path: "C:\\Windows\\System32", SystemRoot: "C:\\Windows", USERNAME: "dev", random_thing: "x" },
+      {},
+    )
+    expect(filtered.Path).toBe("C:\\Windows\\System32")
+    expect(filtered.SystemRoot).toBe("C:\\Windows")
+    expect(filtered.USERNAME).toBe("dev")
+    expect(filtered.random_thing).toBeUndefined()
+  })
   it("includes CODEX_SANDBOX metadata", () => {
     const env = { PATH: "/usr/bin" }
     const filtered = filterEnv(env, { __sandboxType: "seatbelt" })
