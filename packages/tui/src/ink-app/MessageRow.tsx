@@ -105,7 +105,9 @@ export const MessageRow = ({
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
         {hasActiveThinking && isStreaming && phase !== "running" && (
           <Box flexDirection="row" marginLeft={2} marginTop={1}>
-            <Spinner color={theme.warning}>Thinking…</Spinner>
+            <Spinner color={theme.warning} wave>
+              Thinking…
+            </Spinner>
           </Box>
         )}
         {message.parts && message.parts.length > 0 ? (

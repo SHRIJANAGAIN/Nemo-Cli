@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { mkdtempSync, existsSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import {
   COMMANDS,
   GLOBAL_FLAGS,
@@ -7,6 +10,7 @@ import {
   findCommand,
   flagTypeMap,
   knownFlagNames,
+  refuseSystemPromptDump,
   renderCommandHelp,
   renderRootHelp,
 } from "./command-registry.js"
@@ -33,6 +37,21 @@ describe("command registry", () => {
           c.usage.startsWith(`trayambak ${c.name}`) || c.usage.includes(`trayambak ${c.name} `) || c.name === "chat",
         ).toBe(true)
       }
+    }
+  })
+  /**
+   * Non-leak guard. The system prompt (tools + memory + rules + mode blocks) is
+   * the agent's core secret; a flag that prints it turns any shell history, CI
+   * log or crash artifact into a full capability spec. The flag was removed from
+   * index.ts — this pins that it cannot come back through the registry, where
+   * it would also reappear in `--help` and shell completion.
+   */
+  it("registers no flag that prints or dumps the system prompt", () => {
+    const offenders = GLOBAL_FLAGS.filter((f) => /system.?prompt|prompt.?dump|dump.?prompt/i.test(f.name))
+    expect(offenders.map((f) => f.name)).toEqual([])
+    expect(knownFlagNames()).not.toContain("dump-system-prompt")
+    for (const f of GLOBAL_FLAGS) {
+      expect(f.description).not.toMatch(/system prompt/i)
     }
   })
 })
@@ -130,5 +149,39 @@ describe("shell completion", () => {
   })
   it("throws on unsupported shells", () => {
     expect(() => completionScript("tcsh", "trayambak")).toThrow(/unsupported shell/)
+  })
+})
+
+describe("dump-system-prompt lock", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    process.exitCode = 0
+  })
+
+  it("refuses the flag AND stores the attempt in the security trail", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "dump-lock-")), "security.log")
+    vi.stubEnv("TRAYAMBAK_SECURITY_LOG", file)
+    const origWrite = process.stderr.write
+    process.stderr.write = (() => true) as typeof process.stderr.write
+    try {
+      const prevExit = process.exitCode
+      expect(refuseSystemPromptDump(["trayambak", "--dump-system-prompt"], "trayambak")).toBe(true)
+      expect(process.exitCode).toBe(2)
+      process.exitCode = prevExit
+    } finally {
+      process.stderr.write = origWrite
+    }
+    const lines = readFileSync(file, "utf8").trim().split("\n")
+    expect(lines).toHaveLength(1)
+    const evt = JSON.parse(lines[0]) as { type: string; flag: string }
+    expect(evt.type).toBe("prompt_exfil_attempt")
+    expect(evt.flag).toBe("--dump-system-prompt")
+  })
+
+  it("passes clean invocations through with no trail write", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "dump-lock-clean-")), "security.log")
+    vi.stubEnv("TRAYAMBAK_SECURITY_LOG", file)
+    expect(refuseSystemPromptDump(["trayambak", "--version"], "trayambak")).toBe(false)
+    expect(existsSync(file)).toBe(false)
   })
 })

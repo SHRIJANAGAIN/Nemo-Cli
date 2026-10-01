@@ -6,6 +6,7 @@ import {
   createTranscript,
   appendContext,
   appendWire,
+  contextFile,
   readState,
   listTranscripts,
   isEmptyTranscript,
@@ -24,6 +25,15 @@ describe("transcript store", () => {
     appendWire(id, { type: "TurnBegin", user_input: "hello world" })
     expect(isEmptyTranscript(id)).toBe(false)
     expect(readState(id)?.workDir).toBe(process.cwd())
+  })
+
+  it("refuses system-role records (fail-closed, mirrors Session.save)", () => {
+    const { id } = createTranscript(process.cwd())
+    appendContext(id, { role: "system", content: "SNEAKY PROMPT BODY" })
+    appendContext(id, { role: "user", content: "hello" })
+    const raw = fs.readFileSync(contextFile(id), "utf8")
+    expect(raw).not.toContain("SNEAKY PROMPT BODY")
+    expect(raw).toContain("hello")
   })
 
   it("lists non-empty transcripts newest first", () => {

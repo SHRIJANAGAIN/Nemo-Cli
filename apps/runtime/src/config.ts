@@ -9,6 +9,7 @@ import * as os from "os"
 import * as path from "path"
 import type { McpOAuthConfig } from "../../../packages/mcp/src/oauth.js"
 import { parseTokenBudget } from "../../../packages/core/src/token_budget.js"
+import { agentignoreDenyRules } from "./agentignore.js"
 
 export interface TrayambakConfig {
   baseUrl: string
@@ -17,6 +18,10 @@ export interface TrayambakConfig {
   small_model?: string
   /** Default model for subagent children. Falls back to the parent run's model when unset. */
   subagent_model?: string
+  /** Decision-maker model for backend verdicts over local-LLM work (sota verify/attack).
+   *  The user supplies one local model (e.g. a HuggingFace id served by llama.cpp/Ollama);
+   *  enforced local-only like everything in cot/sota. Falls back to the worker model when unset. */
+  judge_model?: string
   apiKey: string
   cwd: string
   temperature: number
@@ -214,6 +219,7 @@ const DEFAULTS: TrayambakConfig = {
   model: "nvidia/nemotron-3-super-120b-a12b",
   small_model: undefined,
   subagent_model: undefined,
+  judge_model: undefined,
   apiKey: "",
   cwd: process.cwd(),
   temperature: 0,
@@ -335,6 +341,7 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   if (process.env.TRAYAMBAK_MODEL) envConfig.model = process.env.TRAYAMBAK_MODEL
   if (process.env.TRAYAMBAK_SMALL_MODEL) envConfig.small_model = process.env.TRAYAMBAK_SMALL_MODEL
   if (process.env.TRAYAMBAK_SUBAGENT_MODEL) envConfig.subagent_model = process.env.TRAYAMBAK_SUBAGENT_MODEL
+  if (process.env.TRAYAMBAK_JUDGE_MODEL) envConfig.judge_model = process.env.TRAYAMBAK_JUDGE_MODEL
   if (process.env.TRAYAMBAK_API_KEY) envConfig.apiKey = process.env.TRAYAMBAK_API_KEY
   if (process.env.TRAYAMBAK_CWD) envConfig.cwd = process.env.TRAYAMBAK_CWD
   if (process.env.TRAYAMBAK_TEMPERATURE) envConfig.temperature = Number(process.env.TRAYAMBAK_TEMPERATURE)
@@ -615,6 +622,19 @@ export function cleanApiKey(raw: string): string {
   return t.replace(/^["']|["']$/g, "")
 }
 
+/**
+ * Out-of-range temperatures fall back to the default instead of clamping to
+ * the edge: 2.0 is technically in-range but samples near-gibberish on most
+ * models, so a misconfigured 2.7 must land on the safe default — not on the
+ * wildest allowed value. Missing/NaN/non-numeric values fall back too.
+ * Provider body-builders keep their own per-backend ceilings as backstop.
+ */
+function sanitizeTemperature(raw: unknown): number {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0 || n > 2) return DEFAULTS.temperature
+  return n
+}
+
 function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
   const provider = cfg.provider ?? DEFAULTS.provider ?? "llamacpp"
   const numDefault = (val: unknown, fallback: number | undefined): number => {
@@ -697,9 +717,11 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       typeof cfg.subagent_model === "string" && cfg.subagent_model.trim().length > 0
         ? cfg.subagent_model.trim()
         : undefined,
+    judge_model:
+      typeof cfg.judge_model === "string" && cfg.judge_model.trim().length > 0 ? cfg.judge_model.trim() : undefined,
     apiKey: cleanApiKey(typeof cfg.apiKey === "string" ? cfg.apiKey : DEFAULTS.apiKey),
     cwd: typeof cfg.cwd === "string" && cfg.cwd.length > 0 ? path.resolve(cfg.cwd) : path.resolve(DEFAULTS.cwd),
-    temperature: Math.max(0, Math.min(2, numDefault(cfg.temperature, DEFAULTS.temperature))),
+    temperature: sanitizeTemperature(cfg.temperature),
     topP: Math.max(0, Math.min(1, numDefault(cfg.topP, DEFAULTS.topP))),
     maxTokens: Math.max(1, Math.min(1_000_000, numDefault(cfg.maxTokens, DEFAULTS.maxTokens))),
     contextWindow: Math.max(4_096, Math.min(2_000_000, numDefault(cfg.contextWindow, DEFAULTS.contextWindow))),
@@ -877,6 +899,20 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
               .filter(([, v]) => v && typeof v === "object"),
           )
         : undefined,
+  }
+  // `.agentignore` (cwd): per-project credential deny-list, merged as
+  // config-layer deny rules AFTER user config rules (deny beats allow in
+  // the ladder; full-access still bypasses by design). Rebuilt from disk
+  // on every loadConfig, so the file is never duplicated and edits apply
+  // on the next load. Best-effort: a missing/unreadable file means [].
+  try {
+    const ignoreRules = agentignoreDenyRules(safe.cwd)
+    if (ignoreRules.length > 0) {
+      const perms = safe.permissions ?? {}
+      safe.permissions = { ...perms, rulesV2: [...(perms.rulesV2 ?? []), ...ignoreRules] }
+    }
+  } catch {
+    /* best effort */
   }
   return safe
 }

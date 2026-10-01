@@ -304,6 +304,17 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   { name: "copy", description: "Copy the transcript to the clipboard (/copy, /copy last)", category: "Session" },
   { name: "doctor", description: "Run environment diagnostics", category: "Server" },
+  {
+    name: "github",
+    description: "GitHub: login (browser opens), status, logout, issue <owner/repo#n>",
+    category: "Server",
+    chooser: [
+      { value: "login", description: "Authorize via browser (auto-opens, CLI polls)" },
+      { value: "status", description: "Show GitHub login state" },
+      { value: "logout", description: "Forget this machine's token" },
+      { value: "issue", description: "Read an issue — needs more: /github issue <owner/repo#n>" },
+    ],
+  },
 ]
 
 export interface QuestionOption {

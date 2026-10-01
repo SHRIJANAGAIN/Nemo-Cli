@@ -14,7 +14,8 @@ import type { TrayambakMessage } from "./types.js"
  * behavioral contracts that have regressed before in live use:
  *  - createAgentConfig: optional fields must PASS THROUGH (dropping
  *    `provider` silently rebuilt every agent as NVIDIA → HF logins 401'd;
- *    dropping `developerMode` reset /devmode on every restart).
+ *    dropping `developerMode` reset /devmode on every restart; dropping
+ *    `githubLogin` rebuilt every fresh session logged-out).
  *  - convertToAgentMessages: history rebuilds must keep tool context
  *    (toolCall + result rows) and thinking parts across turns.
  */
@@ -38,6 +39,31 @@ describe("createAgentConfig passthrough", () => {
     expect(cfg.model).toBe("qwen3")
     expect(cfg.baseUrl).toBe("http://router:8000")
     expect(cfg.maxTurns).toBe(3)
+  })
+
+  test("operator identity survives the rebuild (absent stays absent)", () => {
+    const named = createAgentConfig({
+      githubLogin: "octocat",
+      licenseKey: "1102-AAAA-BBBB-CCCC",
+      licenseServerUrl: "https://skt.sktailabs.in",
+    })
+    expect(named.githubLogin).toBe("octocat")
+    expect(named.licenseKey).toBe("1102-AAAA-BBBB-CCCC")
+    expect(named.licenseServerUrl).toBe("https://skt.sktailabs.in")
+    const anon = createAgentConfig({})
+    expect(anon.githubLogin).toBeUndefined()
+    expect(anon.licenseKey).toBeUndefined()
+    expect(anon.licenseServerUrl).toBeUndefined()
+  })
+
+  test("mcpServers + skillsDir survive the rebuild (absent stays absent)", () => {
+    const mcpServers = { gh: { command: ["npx", "-y", "x"] } }
+    const cfg = createAgentConfig({ mcpServers, skillsDir: "/skills" })
+    expect(cfg.mcpServers).toBe(mcpServers)
+    expect(cfg.skillsDir).toBe("/skills")
+    const bare = createAgentConfig({})
+    expect(bare.mcpServers).toBeUndefined()
+    expect(bare.skillsDir).toBeUndefined()
   })
 
   test("toolsets: empty default list fills the stock set, a real set passes through", () => {

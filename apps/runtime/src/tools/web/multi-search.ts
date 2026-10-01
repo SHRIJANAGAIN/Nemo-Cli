@@ -150,6 +150,21 @@ async function searchHsearch(query: string, maxResults: number): Promise<SearchR
   }
 }
 
+/** Real destination behind a DDG redirect link (`//duckduckgo.com/l/?uddg=<url>&rut=…`).
+ *  Falls back to the href itself (protocol-relative → https). */
+export function resolveDuckDuckGoHref(href: string): string {
+  const withProto = href.startsWith("//") ? `https:${href}` : href
+  const uddg = /[?&]uddg=([^&]+)/.exec(withProto)
+  if (uddg?.[1]) {
+    try {
+      return decodeURIComponent(uddg[1])
+    } catch {
+      return uddg[1]
+    }
+  }
+  return withProto
+}
+
 async function searchDuckDuckGo(query: string, maxResults: number): Promise<SearchResult[]> {
   try {
     const encoded = encodeURIComponent(query)
@@ -162,7 +177,7 @@ async function searchDuckDuckGo(query: string, maxResults: number): Promise<Sear
     let i = 0
     let m: RegExpExecArray | null
     while ((m = re.exec(html)) !== null && results.length < maxResults) {
-      const href = decodeEntities(m[1])
+      const href = resolveDuckDuckGoHref(decodeEntities(m[1]))
       const title = decodeEntities(stripHtml(m[2]))
       const snippet = i < snipMatches.length ? decodeEntities(stripHtml(snipMatches[i][1])) : ""
       results.push({ title, url: href, snippet: snippet.slice(0, 220), source: "duckduckgo" })
@@ -638,10 +653,9 @@ function formatResults(results: SearchResult[], query: string): string {
   for (const [source, list] of bySource) {
     lines.push(`[${source.toUpperCase()}]`)
     for (const r of list) {
-      // Summary only — URLs are noisy for the model (especially DuckDuckGo
-      // redirect links like //duckduckgo.com/l/?uddg=...). The model can use
-      // web_fetch/web_browse with the stored result links when it needs a page.
-      lines.push(`${idx}. ${r.title}\n   ${r.snippet}\n`)
+      // Links are real destinations (DuckDuckGo uddg redirects are resolved
+      // at parse time), so the model can web_fetch/web_browse them directly.
+      lines.push(`${idx}. ${r.title}\n   ${r.url}\n   ${r.snippet}\n`)
       idx++
     }
   }

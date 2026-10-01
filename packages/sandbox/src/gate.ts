@@ -4,11 +4,12 @@
  * OS-sandbox engagement gate — the single decision point for whether a tool
  * run spawns under real OS isolation or stays on in-process policy.
  *
- * OS enforcement is opt-in behind the `sandboxSpawn` feature flag
- * (`FEATURE_SANDBOXSPAWN=1`): the flag defaults off, and only backends with
- * a real isolator (seatbelt, landlock, bwrap) ever engage — Windows and
- * unknown platforms stay policy-only because no OS enforcement exists
- * there, and the handle must never claim isolation it does not have.
+ * OS enforcement engages when the `sandboxSpawn` feature flag is on
+ * (the default: `STABLE_FEATURES.sandboxSpawn` is true; `FEATURE_SANDBOXSPAWN=0`
+ * forces it off) AND the backend has a real isolator (seatbelt, landlock,
+ * bwrap) — Windows and unknown platforms stay policy-only because no OS
+ * enforcement exists there, and the handle must never claim isolation it
+ * does not have.
  */
 
 import { isEnabled } from "../../core/src/feature_flags.js"
@@ -31,10 +32,9 @@ export function shouldUseOsSandbox(sandboxType: SandboxType): boolean {
  *
  * `describeEnforcement` (CLI status) and `enforcementFor`
  * (`SandboxCheck` in index.ts) both route here so no two surfaces can
- * disagree about what the sandbox actually does. This creates the
- * truthful *path* to `os-sandbox`; it does not flip the default -
- * `STABLE_FEATURES.sandboxSpawn` stays false, so with the flag off every
- * backend still reports `policy-only`.
+ * disagree about what the sandbox actually does. Where a real isolator
+ * exists the default is already `os-sandbox` (`STABLE_FEATURES.sandboxSpawn`
+ * is true); `FEATURE_SANDBOXSPAWN=0` forces everything back to `policy-only`.
  */
 export function enforcementForBackend(backend: string): "policy-only" | "os-sandbox" {
   return isEnabled("sandboxSpawn") && osCapableBackend(backend) ? "os-sandbox" : "policy-only"

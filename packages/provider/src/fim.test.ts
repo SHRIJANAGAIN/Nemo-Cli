@@ -84,6 +84,17 @@ describe("NvidiaProvider.fim", () => {
     expect(seen.body.temperature).toBe(0.2)
   }, 15000)
 
+  it("clamps fim temperature to the backend ceiling", async () => {
+    const seen = await withStub(
+      () => ({ status: 200, payload: { choices: [{ text: "x" }] } }),
+      async (stubUrl) => {
+        const provider = createNvidiaProvider({ baseUrl: stubUrl, model: "m" })
+        await provider.fim?.({ prompt: "const x =", temperature: 2.7 })
+      },
+    )
+    expect(seen.body.temperature).toBe(2)
+  }, 15000)
+
   it("rejects an empty prompt without a request", async () => {
     let calls = 0
     const server = http.createServer((_req, res) => {

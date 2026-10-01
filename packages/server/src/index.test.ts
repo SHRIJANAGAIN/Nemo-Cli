@@ -1,6 +1,9 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { createHmac } from "node:crypto"
+import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { AddressInfo } from "node:net"
 import { startServer } from "./index.js"
 
@@ -286,6 +289,59 @@ describe("server-side licensing", () => {
       expect(pub.status).toBe(200)
       const gated = await fetch(`${base(port)}/admin/licenses`)
       expect(gated.status).toBe(401)
+      const installer = await fetch(`${base(port)}/install.ps1`)
+      expect(installer.status).toBe(200)
+      expect(await installer.text()).toContain("npm install -g @skt-ai-labs/trayambak-cli")
+      // macOS/Linux one-liner serves the animated bash installer too.
+      const sh = await fetch(`${base(port)}/install.sh`)
+      expect(sh.status).toBe(200)
+      expect(await sh.text()).toContain("npm install -g @skt-ai-labs/trayambak-cli")
+      // Docs pages serve as markdown; traversal and odd names 404.
+      const docDir = mkdtempSync(join(tmpdir(), "lic-doc-"))
+      writeFileSync(join(docDir, "getting-started.md"), "# Getting started\n")
+      const { port: portDocs, close: closeDocs } = await boot({
+        token: "secret",
+        licenseStorePath: join(mkdtempSync(join(tmpdir(), "lic-doc1-")), "l.json"),
+        licenseUsagePath: join(mkdtempSync(join(tmpdir(), "lic-doc2-")), "u.jsonl"),
+        githubOAuthPath: join(mkdtempSync(join(tmpdir(), "lic-doc3-")), "o.json"),
+        imgDir: docDir,
+        docsDir: docDir,
+      })
+      try {
+        const doc = await fetch(`${base(portDocs)}/docs/getting-started.md`)
+        expect(doc.status).toBe(200)
+        expect(doc.headers.get("content-type")).toContain("text/markdown")
+        expect(await doc.text()).toContain("Getting started")
+        // Encoded slashes stay encoded on the wire — the whitelist sees
+        // only literal characters, so traversal can never address a file.
+        expect((await fetch(`${base(portDocs)}/docs/a%2Fb.md`)).status).toBe(404)
+        expect((await fetch(`${base(portDocs)}/docs/evil.txt`)).status).toBe(404)
+      } finally {
+        await closeDocs()
+      }
+      // README images: real png serves, traversal and odd names 404.
+      const imgDir = mkdtempSync(join(tmpdir(), "lic-img-"))
+      writeFileSync(join(imgDir, "IM1.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+      const { port: port2, close: close2 } = await boot({
+        token: "secret",
+        licenseStorePath: join(mkdtempSync(join(tmpdir(), "lic-img2-")), "l.json"),
+        licenseUsagePath: join(mkdtempSync(join(tmpdir(), "lic-img3-")), "u.jsonl"),
+        githubOAuthPath: join(mkdtempSync(join(tmpdir(), "lic-img4-")), "o.json"),
+        imgDir,
+      })
+      try {
+        const png = await fetch(`${base(port2)}/img/IM1.png`)
+        expect(png.status).toBe(200)
+        expect(png.headers.get("content-type")).toBe("image/png")
+        expect((await png.arrayBuffer()).byteLength).toBe(4)
+        // The whitelist has no slashes/dots-outside-extension by
+        // construction: traversal names can never address a file.
+        expect((await fetch(`${base(port2)}/img/a%20b.png`)).status).toBe(404)
+        expect((await fetch(`${base(port2)}/img/evil.exe`)).status).toBe(404)
+        expect((await fetch(`${base(port2)}/img/missing.png`)).status).toBe(404)
+      } finally {
+        await close2()
+      }
     } finally {
       await close()
     }
@@ -550,4 +606,159 @@ describe("github webhook auth", () => {
       await close()
     }
   }, 15000)
+})
+
+describe("VPS-routed GitHub writes", () => {
+  const REAL_FETCH = globalThis.fetch
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /** Boot with one logged-in machine; api.github.com answers canned while
+   *  every other URL (the server under test) rides the real fetch. */
+  async function bootLoggedIn(
+    gh: (url: string, method: string) => { status: number; json: unknown },
+  ): Promise<{ port: number; close: () => Promise<void> }> {
+    const dir = mkdtempSync(join(tmpdir(), "gh-vps-"))
+    writeFileSync(
+      join(dir, "oauth.json"),
+      JSON.stringify({
+        version: 1,
+        states: {},
+        tokens: {
+          "machine-1": { machineId: "machine-1", token: "gho-test", login: "octocat", createdAt: Date.now() },
+        },
+      }),
+    )
+    vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
+      const u = String(url)
+      if (!u.startsWith("https://api.github.com")) return REAL_FETCH(u, init)
+      const { status, json } = gh(u, (init?.method ?? "GET").toUpperCase())
+      return { status, json: async () => json } as unknown as Response
+    })
+    return boot({
+      token: "secret",
+      licenseStorePath: join(dir, "l.json"),
+      licenseUsagePath: join(dir, "u.jsonl"),
+      githubOAuthPath: join(dir, "oauth.json"),
+    })
+  }
+
+  const post = (port: number, path: string, body: unknown) =>
+    fetch(`${base(port)}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+
+  it("401s logged-out machines on every VPS GitHub route", async () => {
+    const { port, close } = await boot({
+      token: "secret",
+      licenseStorePath: join(mkdtempSync(join(tmpdir(), "gh-vps-out-")), "l.json"),
+      licenseUsagePath: join(mkdtempSync(join(tmpdir(), "gh-vps-out2-")), "u.jsonl"),
+      githubOAuthPath: join(mkdtempSync(join(tmpdir(), "gh-vps-out3-")), "o.json"),
+    })
+    try {
+      expect((await fetch(`${base(port)}/github/repos?machineId=machine-1`)).status).toBe(401)
+      const bodies: Array<[string, unknown]> = [
+        ["/github/write", { machineId: "machine-1", repo: "o/r", path: "a.md", content: "x" }],
+        ["/github/branch", { machineId: "machine-1", repo: "o/r", branch: "x" }],
+        ["/github/pr", { machineId: "machine-1", repo: "o/r", head: "x", title: "t" }],
+        ["/github/copy", { machineId: "machine-1", repo: "o/r", sourcePath: "a", destPath: "b" }],
+      ]
+      for (const [path, body] of bodies) {
+        const r = await post(port, path, body)
+        expect(r.status).toBe(401)
+        expect(((await r.json()) as { error: string }).error).toContain("/github login")
+      }
+    } finally {
+      await close()
+    }
+  })
+
+  it("lists repos, writes, branches, PRs, and copies as the logged-in user", async () => {
+    const { port, close } = await bootLoggedIn((u, method) => {
+      if (u.includes("/user/repos"))
+        return {
+          status: 200,
+          json: [
+            {
+              full_name: "octocat/mytest1",
+              private: false,
+              default_branch: "main",
+              updated_at: "2026-09-30T00:00:00Z",
+            },
+          ],
+        }
+      if (u.includes("/contents/README.md"))
+        return method === "PUT"
+          ? { status: 201, json: { commit: { sha: "aaa1111" } } }
+          : { status: 404, json: { message: "Not Found" } }
+      if (u.includes("/contents/src/a.txt"))
+        return {
+          status: 200,
+          json: { content: Buffer.from("hello").toString("base64") },
+        }
+      if (u.includes("/contents/src/b.txt"))
+        return method === "PUT"
+          ? { status: 201, json: { commit: { sha: "bbb2222" } } }
+          : { status: 404, json: { message: "Not Found" } }
+      if (u.includes("/git/ref/heads/main")) return { status: 200, json: { object: { sha: "abc123" } } }
+      if (u.includes("/git/refs")) return { status: 201, json: { ref: "refs/heads/trayambak/x" } }
+      if (u.includes("/pulls")) return { status: 201, json: { number: 7, html_url: "https://github.com/o/r/pull/7" } }
+      if (u.endsWith("/repos/o/r")) return { status: 200, json: { default_branch: "main" } }
+      return { status: 404, json: { message: "Not Found" } }
+    })
+    try {
+      const repos = await fetch(`${base(port)}/github/repos?machineId=machine-1`)
+      expect(repos.status).toBe(200)
+      const list = (await repos.json()) as { ok: boolean; login: string; repos: Array<{ fullName: string }> }
+      expect(list.ok).toBe(true)
+      expect(list.login).toBe("octocat")
+      expect(list.repos.map((r) => r.fullName)).toEqual(["octocat/mytest1"])
+
+      const write = await post(port, "/github/write", {
+        machineId: "machine-1",
+        repo: "o/r",
+        path: "README.md",
+        content: "# mytest1",
+      })
+      expect(write.status).toBe(200)
+      expect(((await write.json()) as { ok: boolean; commit: string }).commit).toBe("aaa1111")
+
+      // Traversal never reaches GitHub: the route refuses first.
+      const evil = await post(port, "/github/write", {
+        machineId: "machine-1",
+        repo: "o/r",
+        path: "../evil.md",
+        content: "x",
+      })
+      expect(evil.status).toBe(400)
+
+      const br = await post(port, "/github/branch", { machineId: "machine-1", repo: "o/r", branch: "trayambak/x" })
+      expect(br.status).toBe(200)
+      expect(((await br.json()) as { ok: boolean; base: string }).base).toBe("main")
+
+      const pr = await post(port, "/github/pr", {
+        machineId: "machine-1",
+        repo: "o/r",
+        head: "trayambak/x",
+        title: "Fix",
+      })
+      expect(pr.status).toBe(200)
+      expect(((await pr.json()) as { ok: boolean; number: number }).number).toBe(7)
+
+      const cp = await post(port, "/github/copy", {
+        machineId: "machine-1",
+        repo: "o/r",
+        sourcePath: "src/a.txt",
+        destPath: "src/b.txt",
+      })
+      expect(cp.status).toBe(200)
+      expect(((await cp.json()) as { ok: boolean; commit: string }).commit).toBe("bbb2222")
+    } finally {
+      await close()
+    }
+  })
 })

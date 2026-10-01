@@ -19,6 +19,7 @@ import {
   createAnthropicProvider,
   createGoogleProvider,
   createOllamaProvider,
+  clampTemperature,
   type Provider,
   type ProviderOptions,
   type WireMessage,
@@ -30,7 +31,7 @@ import { Session } from "../session/session.js"
 import { createDefaultTools, buildOptionalTools, toolDefinitions, getContextBlock, type Tool } from "../tools/index.js"
 import { getSktContextBlock } from "../../../../skt/context.js"
 import { getRulesContextBlock } from "../prompt/rules.js"
-import { DeveloperModeEngine, DEFAULT_DEVELOPER_MODE_CONFIG } from "../developer-mode/index.js"
+import { DeveloperModeEngine, DEFAULT_DEVELOPER_MODE_CONFIG, isLocalProvider } from "../developer-mode/index.js"
 import { SotaDevMode } from "../developer-mode/sota-mode.js"
 import { runAgentLoop } from "./agent-loop.js"
 import type { GoalStore } from "../goals.js"
@@ -186,7 +187,14 @@ function auditSink(): { recordAudit(action: string, actor: string, target: strin
 
 export class Agent {
   readonly config: TrayambakConfig
-  readonly provider: Provider
+  provider: Provider
+  /**
+   * Options the config-built provider was created from, kept so a
+   * backend supervisor decision can rebuild it with a new temperature.
+   * Undefined when `options.provider` was injected (tests / TUI) — the
+   * agent must never swap an injected provider out.
+   */
+  private providerOptions?: ProviderOptions
   tools: Tool[]
   session: Session
   sessionId?: string
@@ -252,26 +260,35 @@ export class Agent {
       this.arsenal = arsenal
     }
     this.developerMode = new DeveloperModeEngine(this.config.cwd, devConfig)
-    const devOverrides = this.developerMode.getConfigOverrides()
-    const temperature = (
-      devOverrides.temperature !== undefined ? Number(devOverrides.temperature) : this.config.temperature
-    ) as number
+    // Provider-aware: mistake penalties tune local samplers only (ollama /
+    // llama.cpp) — hosted backends get the clean control-mode base. Same
+    // default as provider selection below (unknown → nvidia).
+    const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "nvidia" })
+    // Clamped like config sanitize ([0, 2]): an unbounded dev override used
+    // to reach the wire verbatim (observed live: 2.7 → NVIDIA HTTP 400).
+    // Per-backend ceilings bind later, at each provider's body builder.
+    const temperature =
+      devOverrides.temperature !== undefined
+        ? clampTemperature(Number(devOverrides.temperature), this.config.temperature, 2)
+        : this.config.temperature
     const topP = (devOverrides.topP !== undefined ? Number(devOverrides.topP) : this.config.topP) as number
     const maxTokens = (
       devOverrides.maxTokens !== undefined ? Number(devOverrides.maxTokens) : this.config.maxTokens
     ) as number
-    this.provider =
-      options.provider ??
-      this.createProviderForConfig({
-        baseUrl: this.config.baseUrl,
-        apiKey: this.config.apiKey,
-        model: this.config.model,
-        temperature,
-        topP,
-        maxTokens,
-        timeoutMs: this.config.timeoutMs,
-        reasoningEffort: this.config.reasoningEffort,
-      })
+    const providerOptions: ProviderOptions = {
+      baseUrl: this.config.baseUrl,
+      apiKey: this.config.apiKey,
+      model: this.config.model,
+      temperature,
+      topP,
+      maxTokens,
+      timeoutMs: this.config.timeoutMs,
+      reasoningEffort: this.config.reasoningEffort,
+    }
+    if (!options.provider) {
+      this.providerOptions = providerOptions
+    }
+    this.provider = options.provider ?? this.createProviderForConfig(providerOptions)
     this.session = options.sessionFile ? (Session.load(options.sessionFile) ?? new Session()) : new Session()
     const reorderedTools = this.developerMode.isEnabled() ? this.developerMode.reorderTools(this.tools) : this.tools
     const specialistBlock = this.specialistPrompt
@@ -521,10 +538,31 @@ export class Agent {
       }
     }
 
+    // Backend decision LLM: when the PRIMARY model is a weak local sampler
+    // (ollama / llama.cpp) and a supervisor is configured, let that backend
+    // model re-choose the penalty knobs from the mistake log before the
+    // turn runs. Gated to local providers only (hosted APIs never pay this
+    // call), and fail-open inside — unconfigured / no new mistakes / any
+    // error keeps the heuristic penalties.
+    const activeProviderId = this.config.provider ?? "nvidia"
+    if (this.developerMode.isEnabled() && isLocalProvider(activeProviderId)) {
+      const decision = await this.developerMode.runSupervisorDecision({ signal })
+      const baseOptions = this.providerOptions
+      if (decision?.temperature !== undefined && baseOptions) {
+        // Temperature is baked into the provider at construction — rebuild
+        // it so the backend's decision actually reaches the wire. Injected
+        // providers (providerOptions undefined) are never swapped.
+        this.providerOptions = { ...baseOptions, temperature: decision.temperature }
+        this.provider = this.createProviderForConfig(this.providerOptions)
+      }
+    }
+
     let messages: AgentMessage[]
     try {
       const runTools = this.arsenal ? this.arsenal.resolveTools(this.tools) : this.tools
-      const devOverrides = this.developerMode.getConfigOverrides()
+      // Same provider-aware penalties as construction above (maxToolCalls
+      // caps from foreign-backend mistake logs must not leak in either).
+      const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "nvidia" })
       messages = await runAgentLoop(prompt, {
         onRequestPermission: this.onRequestPermission,
         provider: this.provider,

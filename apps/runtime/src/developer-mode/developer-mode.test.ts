@@ -4,14 +4,19 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import type { AssistantMessage } from "../../../../packages/protocol/src/index.js"
+import type { Provider } from "../../../../packages/provider/src/types.js"
 import {
   DEFAULT_DEVELOPER_MODE_CONFIG,
+  DEFAULT_LOCAL_SUPERVISOR_CONFIG,
   DeveloperModeEngine,
+  isLocalProvider,
   type DeveloperModeConfig,
+  type LocalSupervisorConfig,
   type MistakeRecord,
 } from "./index.js"
 import type { Tool } from "../tools/index.js"
@@ -173,6 +178,40 @@ describe("DeveloperModeEngine mistakes and penalties", () => {
     expect(merged.temperature).toBeCloseTo(0.4)
     expect(merged.maxToolCalls).toBe(5) // the stricter cap wins
     expect(merged.webSearchFirst).toBe(true)
+  })
+
+  it("caps accumulated temperature penalties at the backend ceiling", () => {
+    const engine = makeEngine({ enabled: true })
+    for (let i = 0; i < 30; i++) recordMistake(engine, 2)
+    // Raw sum would be 3.0 (30 × +0.1) — the override must never reach it.
+    expect(engine.getActivePenaltyAdjustments().temperature as number).toBeGreaterThan(2)
+    expect(engine.getConfigOverrides().temperature).toBeLessThanOrEqual(2)
+  })
+
+  it("routes penalties to local samplers only — hosted backends stay clean", () => {
+    expect(isLocalProvider("ollama")).toBe(true)
+    expect(isLocalProvider("llamacpp")).toBe(true)
+    expect(isLocalProvider("custom")).toBe(false)
+    expect(isLocalProvider("nvidia")).toBe(false)
+    expect(isLocalProvider("nvidia-nim")).toBe(false)
+    expect(isLocalProvider("openai")).toBe(false)
+    expect(isLocalProvider("NVIDIA")).toBe(false)
+    expect(isLocalProvider("custom")).toBe(false)
+    expect(isLocalProvider("typo-backend")).toBe(false)
+    expect(isLocalProvider(undefined)).toBe(true) // legacy: no provider stated, penalties apply
+  })
+
+  it("ignores a mountain of penalties on hosted providers", () => {
+    const hosted = makeEngine({ enabled: true })
+    for (let i = 0; i < 30; i++) recordMistake(hosted, 2)
+    // Base general-mode override survives; the 3.0 penalty sum never lands.
+    expect(hosted.getConfigOverrides({ provider: "nvidia" }).temperature).toBe(0.2)
+    expect(hosted.getConfigOverrides({ provider: "openai" }).temperature).toBe(0.2)
+    // …while local samplers still get the (capped) tuning.
+    const local = makeEngine({ enabled: true })
+    for (let i = 0; i < 30; i++) recordMistake(local, 2)
+    expect(local.getConfigOverrides({ provider: "ollama" }).temperature).toBe(2)
+    expect(local.getConfigOverrides({ provider: "llamacpp" }).temperature).toBe(2)
   })
 
   it("resolveMistake flips resolved via the persisted log and survives a restart", () => {
@@ -616,5 +655,129 @@ describe("DeveloperModeEngine config overrides", () => {
     expect(overrides.maxToolCalls).toBe(5)
     expect(overrides.clarificationRequired).toBe(true)
     expect(overrides.stepByStep).toBe(true)
+  })
+})
+
+describe("backend supervisor (penalty decisions for local LLMs)", () => {
+  const supervisor = (overrides: Partial<LocalSupervisorConfig> = {}): LocalSupervisorConfig => ({
+    provider: "nvidia",
+    model: "judge-model",
+    baseUrl: "",
+    apiKey: "",
+    timeoutMs: 5_000,
+    ...overrides,
+  })
+
+  const reply = (text: string): AssistantMessage => ({
+    role: "assistant",
+    content: [{ type: "text", text }],
+    stopReason: "end_turn",
+  })
+
+  it("stays silent when devmode is off (never calls the backend)", async () => {
+    const engine = makeEngine({ enabled: false, localSupervisor: supervisor() })
+    recordMistake(engine, 3)
+    const createProvider = vi.fn(() => undefined)
+    expect(await engine.runSupervisorDecision({ createProvider })).toBeNull()
+    expect(createProvider).not.toHaveBeenCalled()
+  })
+
+  it("stays silent when the supervisor is unconfigured", async () => {
+    const engine = makeEngine({ enabled: true })
+    recordMistake(engine, 3)
+    const createProvider = vi.fn(() => undefined)
+    expect(await engine.runSupervisorDecision({ createProvider })).toBeNull()
+    expect(createProvider).not.toHaveBeenCalled()
+  })
+
+  it("stays silent when there are no mistakes to decide from", async () => {
+    const engine = makeEngine({ enabled: true, localSupervisor: supervisor() })
+    const createProvider = vi.fn(() => undefined)
+    expect(await engine.runSupervisorDecision({ createProvider })).toBeNull()
+    expect(createProvider).not.toHaveBeenCalled()
+  })
+
+  it("applies a backend decision absolutely over the heuristic and re-asks only on new mistakes", async () => {
+    const engine = makeEngine({ enabled: true, localSupervisor: supervisor() })
+    recordMistake(engine, 3)
+    recordMistake(engine, 3)
+    const chat = vi.fn(async () => reply('{"temperature": 0.05, "maxToolCalls": 4, "stepByStep": false}'))
+    const fake: Provider = { id: "fake", chat }
+    const createProvider = vi.fn(() => fake)
+
+    const decision = await engine.runSupervisorDecision({ createProvider })
+    expect(decision).toMatchObject({ temperature: 0.05, maxToolCalls: 4, stepByStep: false })
+
+    const overrides = engine.getConfigOverrides({ provider: "ollama" })
+    // Heuristic would be temperature 0.2 (0.1 + 0.1 summed) and
+    // maxToolCalls 7 — the backend decision wins ABSOLUTELY per key.
+    expect(overrides.temperature).toBe(0.05)
+    expect(overrides.maxToolCalls).toBe(4)
+    expect(overrides.stepByStep).toBe(false)
+    expect(engine.config.stepByStep).toBe(false)
+
+    // No new mistake → no second paid request.
+    expect(await engine.runSupervisorDecision({ createProvider })).toBeNull()
+    expect(chat).toHaveBeenCalledTimes(1)
+
+    // A new mistake re-triggers the decision.
+    recordMistake(engine, 2)
+    expect(await engine.runSupervisorDecision({ createProvider })).not.toBeNull()
+    expect(chat).toHaveBeenCalledTimes(2)
+  })
+
+  it("fails open to the heuristic penalties when the backend errors", async () => {
+    const engine = makeEngine({ enabled: true, localSupervisor: supervisor() })
+    recordMistake(engine, 3)
+    const failing: Provider = {
+      id: "fake",
+      chat: async () => {
+        throw new Error("backend down")
+      },
+    }
+    expect(await engine.runSupervisorDecision({ createProvider: () => failing })).toBeNull()
+    // Heuristic untouched by the failed attempt...
+    expect(engine.getConfigOverrides({ provider: "ollama" }).temperature).toBe(0.1)
+    // ...and the failure does NOT consume the "already asked" slot.
+    const working: Provider = { id: "fake", chat: async () => reply('{"temperature": 0.4}') }
+    const decision = await engine.runSupervisorDecision({ createProvider: () => working })
+    expect(decision?.temperature).toBe(0.4)
+  })
+
+  it("clamps decisions and mirrors boolean knobs into config", () => {
+    const engine = makeEngine({ enabled: true })
+    engine.applySupervisorDecision({
+      temperature: 9,
+      maxToolCalls: 0,
+      clarificationRequired: true,
+      webSearchFirst: false,
+    })
+    const overrides = engine.getConfigOverrides({ provider: "llamacpp" })
+    expect(overrides.temperature).toBe(2)
+    expect(overrides.maxToolCalls).toBe(1)
+    expect(overrides.clarificationRequired).toBe(true)
+    expect(overrides.webSearchFirst).toBe(false)
+    expect(engine.config.clarificationRequired).toBe(true)
+    expect(engine.config.webSearchFirst).toBe(false)
+  })
+
+  it("decodes a serialized localSupervisor block and falls back on garbage", () => {
+    const decoded = makeEngine({
+      enabled: true,
+      localSupervisor: JSON.stringify({
+        provider: "openai",
+        model: "judge",
+        timeoutMs: 99,
+      }) as unknown as LocalSupervisorConfig,
+    })
+    expect(decoded.config.localSupervisor.provider).toBe("openai")
+    expect(decoded.config.localSupervisor.model).toBe("judge")
+    expect(decoded.config.localSupervisor.timeoutMs).toBe(1_000)
+
+    const garbage = makeEngine({
+      enabled: true,
+      localSupervisor: "}not-json{" as unknown as LocalSupervisorConfig,
+    })
+    expect(garbage.config.localSupervisor).toEqual(DEFAULT_LOCAL_SUPERVISOR_CONFIG)
   })
 })

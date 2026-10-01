@@ -13,6 +13,8 @@
  * block that fell behind the dispatcher).
  */
 
+import { logSecurityEvent } from "../../runtime/src/security-log.js"
+
 export type FlagType = "string" | "boolean"
 
 export interface CommandFlag {
@@ -75,10 +77,33 @@ export const GLOBAL_FLAGS: CommandFlag[] = [
     placeholder: "<spec>",
   },
   { name: "dev", type: "boolean", description: "Enable developer mode with advanced controls", aliases: ["dev-mode"] },
-  { name: "dump-system-prompt", type: "boolean", description: "Print the built system prompt and exit (diagnostics)" },
+  // No `--dump-system-prompt` flag, on purpose: the built system prompt is the
+  // agent's core secret and must never be writable to stdout, a log or a CI
+  // artifact. See the note in index.ts.
   { name: "help", type: "boolean", description: "Show help for this command", aliases: ["h"] },
   { name: "version", type: "boolean", description: "Print version", aliases: ["v"] },
 ]
+
+/**
+ * Hard refusal for `--dump-system-prompt`, kept here (next to the registry
+ * that must never contain it) so the behavior is unit-testable without
+ * running main() — main() has evalr side effects. Returns true when it
+ * refused (caller must return immediately, before any command runs).
+ *
+ * LOCKED: the attempt is ALSO stored in the local security trail as a
+ * prompt-exfiltration probe (`prompt_exfil_attempt`). The prompt itself is
+ * never printed, logged, or persisted — only the fact that someone asked.
+ * Repeated hits mean someone (or some script) is mining the system prompt.
+ */
+export function refuseSystemPromptDump(argv: readonly string[], binName: string): boolean {
+  if (!argv.includes("--dump-system-prompt")) return false
+  logSecurityEvent({ type: "prompt_exfil_attempt", source: "cli-flag", flag: "--dump-system-prompt" })
+  process.stderr.write(
+    `${binName}: --dump-system-prompt was removed — the system prompt is never printed, logged or persisted.\n`,
+  )
+  process.exitCode = 2
+  return true
+}
 
 export const COMMANDS: CommandSpec[] = [
   {

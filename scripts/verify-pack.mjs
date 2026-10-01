@@ -139,6 +139,175 @@ for (const file of jsFiles) {
 }
 if (secretHits === 0) ok(`secret scan clean (${jsFiles.length} files)`)
 
+// --- module linkage gate ---------------------------------------------------
+// Every static named import in publish/dist must resolve against the
+// target file's static exports — the same linkage contract the obfuscator
+// is told to preserve (reservedStrings in make-publish.mjs). Regex-level,
+// dependency-free: ESM named imports, `export..from` re-exports, and
+// destructured CJS requires against `exports.X` / `exports['X']` /
+// defineProperty / `module.exports = {}` / ESM export declarations.
+// Shipped broken 0.6.0 exactly here (SessionPicker importing
+// backfillUntitledSessions from an obfuscated session.js whose export had
+// become a computed lookup) — this gate fails the pack instead.
+function splitNames(list) {
+  const out = []
+  for (const part of String(list).split(",")) {
+    for (const w of part.split(/\s+as\s+/)) {
+      const t = w.trim().replace(/^type\s+/, "")
+      if (/^[A-Za-z_$][\w$]*$/.test(t) && t !== "type") out.push(t)
+    }
+  }
+  return out
+}
+
+// Alias-correct variants: `import {Orig as Local}` needs Orig from the
+// target (Local exists only in the importer — demanding it from the target
+// is a false failure, e.g. App.js `setThemeByName as applyTrayambakTheme`
+// vs theme.js). Conversely `export {A as B}` (no from) provides B, not A.
+function splitNeedNames(list) {
+  const out = []
+  for (const part of String(list).split(",")) {
+    const t = part
+      .split(/\s+as\s+/)[0]
+      .trim()
+      .replace(/^type\s+/, "")
+    if (/^[A-Za-z_$][\w$]*$/.test(t) && t !== "type") out.push(t)
+  }
+  return out
+}
+
+function splitProvideNames(list) {
+  const out = []
+  for (const part of String(list).split(",")) {
+    const segs = part.split(/\s+as\s+/)
+    const t = segs[segs.length - 1].trim().replace(/^type\s+/, "")
+    if (/^[A-Za-z_$][\w$]*$/.test(t) && t !== "type") out.push(t)
+  }
+  return out
+}
+
+function collectFileImports(code) {
+  // Returns [{names, spec}]. Default/namespace imports carry no static
+  // names to check; dynamic import() is unchecked by design.
+  const out = []
+  for (const m of code.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+    out.push({ names: splitNeedNames(m[1]), spec: m[2] })
+  }
+  for (const m of code.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+    out.push({ names: splitNeedNames(m[1]), spec: m[2] })
+  }
+  for (const m of code.matchAll(/(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+    out.push({ names: splitNames(m[1]), spec: m[2] })
+  }
+  return out
+}
+
+function collectFileExports(code) {
+  const names = new Set()
+  let star = false
+  for (const m of code.matchAll(/exports\.([A-Za-z_$][\w$]*)/g)) names.add(m[1])
+  for (const m of code.matchAll(/exports\[['"]([^'"]+)['"]\]/g)) names.add(m[1])
+  for (const m of code.matchAll(/defineProperty\(\s*exports\s*,\s*['"]([^'"]+)['"]/g)) names.add(m[1])
+  for (const m of code.matchAll(/module\.exports\s*=\s*\{([^}]*)\}/g)) {
+    for (const key of m[1].matchAll(/['"]?([A-Za-z_$][\w$]*)['"]?\s*:/g)) names.add(key[1])
+    for (const sh of m[1].split(",")) {
+      const t = sh.trim()
+      if (/^[A-Za-z_$][\w$]*$/.test(t)) names.add(t)
+    }
+  }
+  for (const m of code.matchAll(/export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/g))
+    names.add(m[1])
+  for (const m of code.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const n of splitProvideNames(m[1])) names.add(n)
+  }
+  if (/export\s*\*/.test(code)) star = true
+  return { names, star }
+}
+
+function resolveRelative(fromFile, spec) {
+  // Bare packages (react, ink), node builtins (node:fs, fs), and JSON are
+  // someone else's contract — the gate only polices OUR relative files.
+  if (!spec.startsWith(".")) return "external"
+  if (spec.endsWith(".json")) return "external"
+  const base = path.resolve(path.dirname(fromFile), spec)
+  const candidates = [base, `${base}.js`, `${base}.mjs`, `${base}.cjs`]
+  for (const c of candidates) {
+    try {
+      if (fs.statSync(c).isFile()) return c
+    } catch {
+      /* try next */
+    }
+  }
+  for (const c of [".js", ".mjs", ".cjs"].map((e) => path.join(base, `index${e}`))) {
+    try {
+      if (fs.statSync(c).isFile()) return c
+    } catch {
+      /* try next */
+    }
+  }
+  return null
+}
+
+{
+  const allJs = walk(OUT_DIST, (p) => p.endsWith(".js") || p.endsWith(".mjs"))
+  const exportCache = new Map()
+  const textCache = new Map()
+  const readText = (file) => {
+    if (!textCache.has(file)) textCache.set(file, fs.readFileSync(file, "utf8"))
+    return textCache.get(file)
+  }
+  const literalExports = (file) => {
+    if (!exportCache.has(file)) {
+      exportCache.set(file, collectFileExports(readText(file)))
+    }
+    return exportCache.get(file)
+  }
+  // tsc CommonJS barrels re-export via __exportStar(require(spec)) calls —
+  // no static spellings of their own. Resolve transitively (cycle-guarded);
+  // star never re-exports "default".
+  const targetExports = (file, seen = new Set()) => {
+    const { names, star } = literalExports(file)
+    const out = new Set(names)
+    if (!star) {
+      for (const m of readText(file).matchAll(/__exportStar\s*\(\s*require\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+        const t = resolveRelative(file, m[1])
+        if (!t || t === "external" || seen.has(t)) continue
+        seen.add(t)
+        for (const n of targetExports(t, seen).names) if (n !== "default") out.add(n)
+      }
+    }
+    return { names: out, star }
+  }
+  let linksChecked = 0
+  for (const file of allJs) {
+    const code = readText(file)
+    for (const { names, spec } of collectFileImports(code)) {
+      if (names.length === 0) continue
+      const target = resolveRelative(file, spec)
+      if (target === "external") continue
+      if (!target) {
+        fail(`${path.relative(OUT, file)} imports from unresolvable "${spec}"`)
+        continue
+      }
+      const { names: provided, star } = targetExports(target, new Set([target]))
+      if (star) continue // export *: membership unknowable statically
+      for (const name of names) {
+        linksChecked++
+        if (!provided.has(name)) {
+          fail(
+            `${path.relative(OUT, file)} imports {${name}} from ${path.relative(OUT, target)} but it is not statically exported there`,
+          )
+        }
+      }
+    }
+  }
+  errors.length === 0 && linksChecked > 0
+    ? ok(`module linkage: ${linksChecked} static imports resolve`)
+    : errors.length === 0
+      ? fail("module linkage: no static imports found — gate is blind, investigate")
+      : undefined
+}
+
 // --- report --------------------------------------------------------------
 console.log(checks.join("\n"))
 if (errors.length) {

@@ -1013,5 +1013,262 @@
     "totalTokens": 0,
     "status": "completed",
     "endedAt": "2026-09-30T09:35:05.485Z"
+  },
+  {
+    "sessionId": "sess_muo55b8q",
+    "sessionName": "Greeting and Assistance Offer",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T13:28:34.346Z",
+    "messageCount": 7,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T13:42:15.560Z"
+  },
+  {
+    "sessionId": "sess_muo5n8fc",
+    "sessionName": "Validate orch-review input login",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T13:42:30.504Z",
+    "messageCount": 6,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T13:48:22.994Z"
+  },
+  {
+    "sessionId": "sess_muo5v6y4",
+    "sessionName": "User Says Hi Assistant Replies",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T13:48:41.836Z",
+    "messageCount": 30,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_muo6zqb9",
+    "sessionName": "Greeting and Assistance Offer",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T14:20:13.173Z",
+    "messageCount": 3,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T14:20:39.354Z"
+  },
+  {
+    "sessionId": "sess_muo7rh0t",
+    "sessionName": "user greets assistant",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T14:41:47.501Z",
+    "messageCount": 13,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T14:52:25.299Z"
+  },
+  {
+    "sessionId": "sess_muo85ccs",
+    "sessionName": "Retrieve GitHub account name",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T14:52:34.636Z",
+    "messageCount": 103,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T15:17:11.265Z"
+  },
+  {
+    "sessionId": "sess_muo91sf7",
+    "sessionName": "Check Repository Contents",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T15:17:48.451Z",
+    "messageCount": 34,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T15:23:00.961Z"
+  },
+  {
+    "sessionId": "sess_muo9foeq",
+    "sessionName": "Determine GitHub Account Name",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T15:28:36.434Z",
+    "messageCount": 25,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T15:30:15.039Z"
+  },
+  {
+    "sessionId": "sess_muoa9y68",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-09-30T15:52:08.768Z",
+    "messageCount": 7,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-09-30T17:18:42.002Z"
+  },
+  {
+    "sessionId": "sess_muoytc7b",
+    "sessionName": "Clarify review request",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T03:19:04.199Z",
+    "messageCount": 38,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_muozp8i0",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T03:43:52.392Z",
+    "messageCount": 3,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T03:48:05.300Z"
+  },
+  {
+    "sessionId": "sess_muozu50h",
+    "sessionName": "Find GitHub account name",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T03:47:41.153Z",
+    "messageCount": 193,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T03:55:30.463Z"
+  },
+  {
+    "sessionId": "sess_muozyuik",
+    "sessionName": "ask about pentest tools",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T03:51:20.828Z",
+    "messageCount": 20,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T03:54:41.525Z"
+  },
+  {
+    "sessionId": "sess_mup09yow",
+    "sessionName": "Plan database connection pooling refactor",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T03:59:59.456Z",
+    "messageCount": 8,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T04:32:39.677Z"
+  },
+  {
+    "sessionId": "sess_mup2nx9t",
+    "sessionName": "Initial greeting",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T05:06:50.033Z",
+    "messageCount": 32,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T05:36:15.860Z"
+  },
+  {
+    "sessionId": "sess_mup4owjs",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T06:03:34.984Z",
+    "messageCount": 5,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T06:20:55.713Z"
+  },
+  {
+    "sessionId": "sess_mup5c1ug",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T06:21:34.936Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T06:24:29.233Z"
+  },
+  {
+    "sessionId": "sess_mup93ios",
+    "sessionName": "Initial Greeting Followed by Confusion",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T08:06:55.324Z",
+    "messageCount": 5,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T08:12:54.714Z"
+  },
+  {
+    "sessionId": "sess_mup9cjbq",
+    "sessionName": "Missile lessons discussion",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T08:13:56.054Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T08:57:57.500Z"
+  },
+  {
+    "sessionId": "sess_mupaxerv",
+    "sessionName": "resolve protas paradox curiosity",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T08:58:09.547Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T09:13:28.381Z"
+  },
+  {
+    "sessionId": "sess_mupb6fxp",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T09:05:10.957Z",
+    "messageCount": 1,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T09:05:17.260Z"
+  },
+  {
+    "sessionId": "sess_mupbhhix",
+    "sessionName": "HI",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T09:13:46.233Z",
+    "messageCount": 10,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T09:57:39.439Z"
+  },
+  {
+    "sessionId": "sess_mupd23vb",
+    "sessionName": "hi",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T09:57:47.927Z",
+    "messageCount": 10,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T10:05:50.433Z"
+  },
+  {
+    "sessionId": "sess_mupdclod",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T10:05:57.565Z",
+    "messageCount": 3,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T10:11:41.852Z"
+  },
+  {
+    "sessionId": "sess_mupdjwh7",
+    "sessionName": "Initial Greeting",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T10:11:38.155Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T10:26:23.177Z"
+  },
+  {
+    "sessionId": "sess_mupe33g4",
+    "sessionName": "HI",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T10:26:33.652Z",
+    "messageCount": 5,
+    "totalTokens": 0,
+    "status": "active"
   }
 ]

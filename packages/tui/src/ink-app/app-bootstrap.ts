@@ -84,6 +84,21 @@ export function createAgentConfig(partial: Partial<TrayambakConfig>): TrayambakC
     // a saved /devmode ON (and the gate flag) never reached the model after
     // a restart.
     ...(partial.developerMode ? { developerMode: partial.developerMode } : {}),
+    // Operator identity must survive the rebuild too: dropping githubLogin
+    // here rebuilt every fresh session's agent as logged-out — /github
+    // login worked, TUI restarted, and the ## OPERATOR block still read
+    // "not logged in", so the agent never knew its principal. License key
+    // + server URL ride along for the same reason (operator-block license
+    // line). Display values only — secrets never reach the prompt.
+    ...(partial.githubLogin ? { githubLogin: partial.githubLogin } : {}),
+    ...(partial.licenseKey ? { licenseKey: partial.licenseKey } : {}),
+    ...(partial.licenseServerUrl ? { licenseServerUrl: partial.licenseServerUrl } : {}),
+    // MCP servers + skills dir must survive the rebuild too: dropping
+    // mcpServers rebuilt every agent with zero MCP tools even when servers
+    // were configured (observed live: /mcp dead, mcp__* never reached the
+    // model). Same drop class as provider/developerMode above.
+    ...(partial.mcpServers ? { mcpServers: partial.mcpServers } : {}),
+    ...(partial.skillsDir ? { skillsDir: partial.skillsDir } : {}),
   }
 }
 

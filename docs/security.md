@@ -70,6 +70,13 @@ You can add your own tri-state rules (`rulesV2`: `allow` / `ask` / `deny`
 with tool + pattern globs) via config; they are evaluated **before** the
 legacy rules.
 
+**`.agentignore` (per-project credential deny-list):** one glob per line in
+`<cwd>/.agentignore` (`#` comments, blanks ignored) becomes config-layer
+`deny` rules for every tool — `*.pem`, `.env`, `secrets/` and friends can
+never be read, written, or executed, in any mode except explicit
+full-access. No `!` negation in v1 (deny beats allow within a layer, so an
+exception could never win — documented, not half-honored).
+
 ### Modes
 
 | Where                        | Values                                                                             |
@@ -103,13 +110,14 @@ deny rules, which still gate.
 | `windows-restricted`, `landlock` | implemented in `spawn.ts` behind `FEATURE_SANDBOXSPAWN`, but **`detectBackend()` never returns them** — it yields only `seatbelt`, `bwrap`, or `fallback` |
 
 **Honesty note:** with the `sandboxSpawn` feature flag at its default
-(`false`), every check reports `enforcement: "policy-only"` — in-process
+(`true`), backends with a real isolator (`seatbelt`, `bwrap`) engage OS
+isolation and report `"os-sandbox"`; everywhere else (including Windows
+today) every check reports `enforcement: "policy-only"` — in-process
 policy evaluation, no OS sandbox process is spawned, so the backend name
 describes the available _integration point_, not kernel-level isolation.
-Turning on `FEATURE_SANDBOXSPAWN` on a capable backend (`seatbelt`, `bwrap`,
-`landlock`) flips the reported level to `"os-sandbox"` — `enforcementFor()`
-and `describeEnforcement()` share one source of truth, so the label always
-matches what is actually enforced; every other backend stays `"policy-only"`.
+Setting `FEATURE_SANDBOXSPAWN=0` forces `"policy-only"` everywhere —
+`enforcementFor()` and `describeEnforcement()` share one source of truth,
+so the label always matches what is actually enforced.
 Actual command/file enforcement in the runtime comes from the
 agent-loop permission gate (`packages/protocol/src/permission-rules.ts`);
 deny rules are an absolute veto and "ask" routes to an interactive

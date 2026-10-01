@@ -61,6 +61,15 @@ export interface Provider {
   fim?(input: FimInput): Promise<FimResult>
 }
 
+/** Clamp a sampling temperature into a backend's documented range.
+ *  Non-finite input (NaN from a bad override, Infinity) falls back instead
+ *  of reaching the wire — an out-of-range temperature is a certain HTTP 400
+ *  (observed live: NVIDIA rejects anything outside 0–2). */
+export function clampTemperature(value: number | undefined, fallback: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+  return Math.min(Math.max(value, 0), max)
+}
+
 export interface FimInput {
   /** Code before the cursor. */
   prompt: string

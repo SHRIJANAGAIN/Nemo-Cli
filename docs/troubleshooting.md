@@ -193,7 +193,6 @@ check:links` for internal doc links + anchors), and codespell.
 
 | Aid                   | How                                                                                                                                            |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Exact system prompt   | `trayambak --dump-system-prompt` (offline, no key needed)                                                                                      |
 | Input + config trace  | `TRAYAMBAK_DEBUG_INPUT=1` → keystrokes/turn stages to `<os tmpdir>/trayambak-input.log`, config-corruption backups to `./trayambak-config.log` |
 | Headless event stream | `trayambak exec "…"` → one JSON event per line                                                                                                 |
 | Crash log             | unhandled errors are recorded via `skt/1-errors/mistake.ts` and printed as `trayambak error: <stack>`                                          |

@@ -14,9 +14,9 @@ supply-chain attestation.
 
 ## Reporting a vulnerability
 
-- **Do not open a public issue.** Report privately to the SKT AI LABS
-  security contact with: affected version, reproduction steps, impact,
-  and logs with secrets redacted.
+- **Do not open a public issue.** Report privately — directly to
+  support@sktailabs.in — with: affected version, reproduction
+  steps, impact, and logs with secrets redacted.
 - Expect an acknowledgement within **3 business days** and a fix
   timeline within **14 days** for confirmed High/Critical issues.
 - Coordinated disclosure: please allow a fix + release before public

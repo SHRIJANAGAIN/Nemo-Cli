@@ -359,8 +359,9 @@ export function createDefaultTools(
   }
   // License choke (single point, server-side): pentest tools stay registered
   // (prompt/toolset parity invariants forbid silent drops) but EVERY
-  // execution verifies the license LIVE against the license server and
-  // reports usage back for the audit trail. No local checksum is trusted
+  // execution passes TWO gates: developer mode ON (local, no network) and a
+  // LIVE license check against the license server, and reports usage back
+  // for the audit trail. No local checksum is trusted
   // for access — a forged code dies server-side as an unknown license.
   // The TUI menu explains this up front; this wrapper enforces it for
   // CLI/server/headless too.
@@ -369,6 +370,17 @@ export function createDefaultTools(
   const gatePentest = (t: Tool): Tool => ({
     ...t,
     execute: async (toolCallId, args, signal, onUpdate, context) => {
+      // Developer-mode master switch: pentest tools only run inside an
+      // explicit devmode session. The license check below used to be the
+      // only gate, so a live trial key executed scans with devmode OFF
+      // (observed live) — and every refused call below skips the network
+      // entirely, so OFF also means offline-quiet.
+      if (config?.developerMode?.enabled !== true) {
+        return textResult(
+          `${t.definition.name} refused: developer mode is OFF — turn it on with /devmode on (pentest tools only run under an explicit devmode session).`,
+          /*isError*/ true,
+        )
+      }
       const v = await serverCanUsePentest(gateLicenseKey, { serverUrl: gateServerUrl })
       if (v.valid !== true) {
         return textResult(

@@ -17,12 +17,15 @@ import { loadConfig } from "./config.js"
 
 const savedSmall = process.env.TRAYAMBAK_SMALL_MODEL
 const savedSubagent = process.env.TRAYAMBAK_SUBAGENT_MODEL
+const savedJudge = process.env.TRAYAMBAK_JUDGE_MODEL
 
 afterEach(() => {
   if (savedSmall === undefined) delete process.env.TRAYAMBAK_SMALL_MODEL
   else process.env.TRAYAMBAK_SMALL_MODEL = savedSmall
   if (savedSubagent === undefined) delete process.env.TRAYAMBAK_SUBAGENT_MODEL
   else process.env.TRAYAMBAK_SUBAGENT_MODEL = savedSubagent
+  if (savedJudge === undefined) delete process.env.TRAYAMBAK_JUDGE_MODEL
+  else process.env.TRAYAMBAK_JUDGE_MODEL = savedJudge
 })
 
 describe("config cheap models", () => {
@@ -66,5 +69,24 @@ describe("config cheap models", () => {
 
     expect(cfg.small_model).toBe("tiny")
     expect(cfg.subagent_model).toBe("worker")
+  })
+
+  it("defaults judge_model to undefined and reads overrides / env like the other tiers", () => {
+    expect(loadConfig({ provider: "ollama", baseUrl: "", model: "" }).judge_model).toBeUndefined()
+
+    const cfg = loadConfig({
+      provider: "ollama",
+      baseUrl: "",
+      model: "",
+      judge_model: "  convaiinnovations/laya-multilingual  ",
+    })
+    expect(cfg.judge_model).toBe("convaiinnovations/laya-multilingual")
+
+    const blank = loadConfig({ provider: "ollama", baseUrl: "", model: "", judge_model: "   " })
+    expect(blank.judge_model).toBeUndefined()
+
+    process.env.TRAYAMBAK_JUDGE_MODEL = "judge-tiny"
+    const fromEnv = loadConfig({ provider: "ollama", baseUrl: "", model: "" })
+    expect(fromEnv.judge_model).toBe("judge-tiny")
   })
 })

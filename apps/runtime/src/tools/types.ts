@@ -10,6 +10,7 @@ import * as path from "path"
 import type { ToolDefinition, ToolResult } from "../../../../packages/protocol/src/index.js"
 import type { TrayambakConfig } from "../config.js"
 import type { PermissionConfig } from "../../../../packages/protocol/src/permissions.js"
+import type { Provider } from "../../../../packages/provider/src/index.js"
 
 export type { ToolResult, ToolDefinition } from "../../../../packages/protocol/src/index.js"
 
@@ -22,6 +23,9 @@ export interface ToolContext {
   permissions: PermissionConfig
   sessionId?: string
   requestPermission?: (tool: string, command: string, reason: string) => Promise<boolean>
+  /** Live model provider for tools that generate (sota_solve). Absent in
+   *  offline/test contexts — tools must fall back gracefully. */
+  provider?: Provider
 }
 
 export interface Tool {

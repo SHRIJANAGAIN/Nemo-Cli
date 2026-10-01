@@ -107,11 +107,56 @@ describe("license config", () => {
     expect(blank.githubLogin).toBeUndefined()
   })
 
+  it("falls back out-of-range temperatures to the safe default (never the wild edge)", () => {
+    // 2.7 used to clamp to 2.0 — technically in-range but sampling mush on
+    // most models (and an NVIDIA 400 on old builds). Now it lands on the
+    // default (0, deterministic) instead of the wildest allowed value.
+    const base = { provider: "nvidia", baseUrl: "", model: "" } as const
+    expect(loadConfig({ ...base, temperature: 2.7 }).temperature).toBe(0)
+    expect(loadConfig({ ...base, temperature: -1 }).temperature).toBe(0)
+    expect(loadConfig({ ...base, temperature: Number.NaN }).temperature).toBe(0)
+    expect(loadConfig({ ...base, temperature: "garbage" as unknown as number }).temperature).toBe(0)
+    vi.stubEnv("TRAYAMBAK_TEMPERATURE", "2.7")
+    expect(loadConfig({ ...base }).temperature).toBe(0)
+    vi.unstubAllEnvs()
+    // In-range values pass through untouched, including the 2.0 ceiling.
+    expect(loadConfig({ ...base, temperature: 0.7 }).temperature).toBe(0.7)
+    expect(loadConfig({ ...base, temperature: 2 }).temperature).toBe(2)
+    expect(loadConfig({ ...base, temperature: 0 }).temperature).toBe(0)
+  })
+
+  it("refuses pentest execution when developer mode is OFF — before any network", async () => {
+    tmpMachineFile()
+    const stub = await stubLicenseServer({ valid: true, plan: "pentest" })
+    try {
+      const { createDefaultTools } = await import("./tools/index.js")
+      // Devmode OFF (missing flag counts as OFF) with a live-valid license
+      // on file: the exact live shape that used to execute scans. The gate
+      // must refuse locally — the license server must never even be asked.
+      const closed = createDefaultTools(undefined, undefined, undefined, undefined, {
+        licenseKey: "1102-AAAA-BBBB-CCCC",
+        licenseServerUrl: stub.url,
+        cwd: process.cwd(),
+      } as never)
+      const pentest = closed.tools.find((t) => t.definition.name === "trayambak__PentestRunTool")
+      expect(pentest).toBeDefined()
+      const result = await pentest!.execute("c1", { toolName: "nmap", target: "example.com" }, undefined)
+      expect(result.isError).toBe(true)
+      const text = result.content.map((c) => ("text" in c ? c.text : "")).join("")
+      expect(text).toContain("refused")
+      expect(text).toContain("developer mode is OFF")
+      expect(stub.seen.verify).toBe(0)
+    } finally {
+      await stub.close()
+    }
+  }, 60000)
+
   it("refuses pentest execution when the license server is unreachable (fail closed)", async () => {
     tmpMachineFile()
     const { createDefaultTools } = await import("./tools/index.js")
     // Nothing listens on port 1 — the gate must refuse, never fail open.
     const closed = createDefaultTools(undefined, undefined, undefined, undefined, {
+      developerMode: { enabled: true },
       licenseKey: "1102-AAAA-BBBB-CCCC",
       licenseServerUrl: "http://127.0.0.1:1",
       cwd: process.cwd(),
@@ -133,6 +178,7 @@ describe("license config", () => {
     try {
       const { createDefaultTools } = await import("./tools/index.js")
       const closed = createDefaultTools(undefined, undefined, undefined, undefined, {
+        developerMode: { enabled: true },
         licenseKey: "1102-AAAA-BBBB-CCCC",
         licenseServerUrl: stub.url,
         cwd: process.cwd(),
@@ -193,6 +239,7 @@ describe("license config", () => {
       // NOTE: config is the 5th positional (devMode, onRunAgent, onRunTeam,
       // onAskUserQuestion, config) — 4th slot is onAskUserQuestion.
       const opened = createDefaultTools(undefined, undefined, undefined, undefined, {
+        developerMode: { enabled: true },
         licenseKey: "1102-AAAA-BBBB-CCCC",
         licenseServerUrl: stub.url,
         cwd: process.cwd(),

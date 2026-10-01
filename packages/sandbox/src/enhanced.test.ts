@@ -51,9 +51,24 @@ describe("sandbox file policy", () => {
 })
 
 describe("sandbox honesty", () => {
-  it("reports policy-only enforcement for whatever backend is detected", () => {
-    for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
+  it("reports os-sandbox only for backends that actually have an isolator", () => {
+    for (const b of ["seatbelt", "landlock", "bwrap"] as const) {
+      expect(enforcementFor(b)).toBe("os-sandbox")
+    }
+    for (const b of ["windows-restricted", "fallback"] as const) {
       expect(enforcementFor(b)).toBe("policy-only")
+    }
+  })
+  it("reports policy-only everywhere once the flag is explicitly disabled", () => {
+    const saved = process.env.FEATURE_SANDBOXSPAWN
+    process.env.FEATURE_SANDBOXSPAWN = "0"
+    try {
+      for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
+        expect(enforcementFor(b)).toBe("policy-only")
+      }
+    } finally {
+      if (saved === undefined) delete process.env.FEATURE_SANDBOXSPAWN
+      else process.env.FEATURE_SANDBOXSPAWN = saved
     }
   })
   it("detectBackend returns a real value", () => {

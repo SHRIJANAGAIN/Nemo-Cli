@@ -242,3 +242,181 @@ export async function readGithubIssue(
     return { ok: false, reason: "license server unreachable" }
   }
 }
+
+export interface GithubRepo {
+  fullName: string
+  private: boolean
+  defaultBranch: string
+  updatedAt: string
+}
+
+/** 401 from the VPS write/read proxies always means the same thing. */
+function loginRequired(status: number, reason: string): string {
+  return status === 401 ? "GitHub login required — run /github login first" : reason
+}
+
+/** List the logged-in user's repos through the server's stored token —
+ *  the agent's way to check "user ke handle se user ki repo". */
+export async function listGithubRepos(
+  opts: GithubAuthOptions = {},
+): Promise<{ ok: boolean; login?: string; repos?: GithubRepo[]; reason?: string }> {
+  let machineId: string
+  try {
+    machineId = machine(opts)
+  } catch {
+    return { ok: false, reason: "cannot read machine identity" }
+  }
+  try {
+    const { status, json } = await getAuth(
+      `/github/repos?machineId=${encodeURIComponent(machineId)}`,
+      opts.serverUrl,
+      opts.timeoutMs ?? 15_000,
+    )
+    if (status !== 200 || json.ok !== true) {
+      const reason =
+        typeof json.error === "string" ? json.error : typeof json.reason === "string" ? json.reason : `HTTP ${status}`
+      return { ok: false, reason: loginRequired(status, reason) }
+    }
+    return {
+      ok: true,
+      login: typeof json.login === "string" ? json.login : undefined,
+      repos: Array.isArray(json.repos) ? (json.repos as GithubRepo[]) : [],
+    }
+  } catch {
+    return { ok: false, reason: "license server unreachable" }
+  }
+}
+
+/** Write a repo file through the server's stored token (VPS-routed: the
+ *  CLI never holds the OAuth token). Callers with a local GITHUB_TOKEN go
+ *  direct instead — this is the logged-in fallback. */
+export async function writeGithubFileViaServer(
+  repo: string,
+  filePath: string,
+  content: string,
+  message: string,
+  branch: string | undefined,
+  opts: GithubAuthOptions = {},
+): Promise<{ ok: boolean; commit?: string | null; reason?: string }> {
+  let machineId: string
+  try {
+    machineId = machine(opts)
+  } catch {
+    return { ok: false, reason: "cannot read machine identity" }
+  }
+  try {
+    const { status, json } = await postAuth(
+      "/github/write",
+      { machineId, repo, path: filePath, content, message, ...(branch ? { branch } : {}) },
+      opts.serverUrl,
+      opts.timeoutMs ?? 20_000,
+    )
+    if (status !== 200 || json.ok !== true) {
+      const reason =
+        typeof json.error === "string" ? json.error : typeof json.reason === "string" ? json.reason : `HTTP ${status}`
+      return { ok: false, reason: loginRequired(status, reason) }
+    }
+    return { ok: true, commit: typeof json.commit === "string" ? json.commit : null }
+  } catch {
+    return { ok: false, reason: "license server unreachable" }
+  }
+}
+
+/** Create a repo branch through the server's stored token. */
+export async function createGithubBranchViaServer(
+  repo: string,
+  branch: string,
+  base: string | undefined,
+  opts: GithubAuthOptions = {},
+): Promise<{ ok: boolean; base?: string; reason?: string }> {
+  let machineId: string
+  try {
+    machineId = machine(opts)
+  } catch {
+    return { ok: false, reason: "cannot read machine identity" }
+  }
+  try {
+    const { status, json } = await postAuth(
+      "/github/branch",
+      { machineId, repo, branch, ...(base ? { base } : {}) },
+      opts.serverUrl,
+      opts.timeoutMs ?? 20_000,
+    )
+    if (status !== 200 || json.ok !== true) {
+      const reason =
+        typeof json.error === "string" ? json.error : typeof json.reason === "string" ? json.reason : `HTTP ${status}`
+      return { ok: false, reason: loginRequired(status, reason) }
+    }
+    return { ok: true, base: typeof json.base === "string" ? json.base : undefined }
+  } catch {
+    return { ok: false, reason: "license server unreachable" }
+  }
+}
+
+/** Open a repo PR through the server's stored token. */
+export async function createGithubPrViaServer(
+  repo: string,
+  head: string,
+  base: string | undefined,
+  title: string,
+  body: string,
+  opts: GithubAuthOptions = {},
+): Promise<{ ok: boolean; number?: number | null; url?: string; reason?: string }> {
+  let machineId: string
+  try {
+    machineId = machine(opts)
+  } catch {
+    return { ok: false, reason: "cannot read machine identity" }
+  }
+  try {
+    const { status, json } = await postAuth(
+      "/github/pr",
+      { machineId, repo, head, title, body, ...(base ? { base } : {}) },
+      opts.serverUrl,
+      opts.timeoutMs ?? 20_000,
+    )
+    if (status !== 200 || json.ok !== true) {
+      const reason =
+        typeof json.error === "string" ? json.error : typeof json.reason === "string" ? json.reason : `HTTP ${status}`
+      return { ok: false, reason: loginRequired(status, reason) }
+    }
+    return {
+      ok: true,
+      number: typeof json.number === "number" ? json.number : null,
+      url: typeof json.url === "string" ? json.url : undefined,
+    }
+  } catch {
+    return { ok: false, reason: "license server unreachable" }
+  }
+}
+
+/** Copy a repo file through the server's stored token. */
+export async function copyGithubFileViaServer(
+  repo: string,
+  sourcePath: string,
+  destPath: string,
+  opts: GithubAuthOptions = {},
+): Promise<{ ok: boolean; commit?: string | null; reason?: string }> {
+  let machineId: string
+  try {
+    machineId = machine(opts)
+  } catch {
+    return { ok: false, reason: "cannot read machine identity" }
+  }
+  try {
+    const { status, json } = await postAuth(
+      "/github/copy",
+      { machineId, repo, sourcePath, destPath },
+      opts.serverUrl,
+      opts.timeoutMs ?? 20_000,
+    )
+    if (status !== 200 || json.ok !== true) {
+      const reason =
+        typeof json.error === "string" ? json.error : typeof json.reason === "string" ? json.reason : `HTTP ${status}`
+      return { ok: false, reason: loginRequired(status, reason) }
+    }
+    return { ok: true, commit: typeof json.commit === "string" ? json.commit : null }
+  } catch {
+    return { ok: false, reason: "license server unreachable" }
+  }
+}

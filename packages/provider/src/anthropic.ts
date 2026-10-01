@@ -9,6 +9,7 @@ import * as https from "https"
 import * as url from "url"
 import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
+import { clampTemperature } from "./types.js"
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
@@ -118,7 +119,7 @@ export class AnthropicProvider implements Provider {
       messages,
     }
     if (system.trim().length > 0) body.system = system
-    if (this.options.temperature !== undefined) body.temperature = this.options.temperature
+    if (this.options.temperature !== undefined) body.temperature = clampTemperature(this.options.temperature, 1, 1)
     if (this.options.topP !== undefined) body.top_p = this.options.topP
     if (input.tools && input.tools.length > 0) body.tools = toAnthropicTools(input.tools)
     return body

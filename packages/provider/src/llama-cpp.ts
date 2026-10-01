@@ -15,6 +15,7 @@ import type {
   ToolDefinition,
 } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
+import { clampTemperature } from "./types.js"
 
 interface SktTool {
   type: "function"
@@ -76,7 +77,10 @@ export class LlamaCppProvider implements Provider {
       model: this.options.model,
       messages,
       stream: true,
-      temperature: this.options.temperature ?? 0.7,
+      // Local servers accept ANY temperature without complaint — 2.7 sails
+      // through and the sampler melts into multilingual mush (observed
+      // live). Same 0–2 ceiling as the hosted backends.
+      temperature: clampTemperature(this.options.temperature, 0.7, 2),
       top_p: this.options.topP ?? 0.95,
       max_tokens: this.options.maxTokens ?? 4096,
     }

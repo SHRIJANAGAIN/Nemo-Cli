@@ -12,6 +12,7 @@ import { createXAIProvider } from "./xai.js"
 import { createHuggingFaceProvider } from "./huggingface.js"
 import { createCustomProvider } from "./custom.js"
 import { createNvidiaProvider } from "./nvidia.js"
+import { createLlamaCppProvider } from "./llama-cpp.js"
 import { createAnthropicProvider, toAnthropicBody } from "./anthropic.js"
 import { createGoogleProvider, toGeminiBody } from "./google.js"
 import { createOllamaProvider } from "./ollama.js"
@@ -25,6 +26,7 @@ import {
 } from "./catalog.js"
 import { createProviderRegistry } from "../../core/src/providers/registry.js"
 import type { ChatInput } from "./types.js"
+import { clampTemperature } from "./types.js"
 
 /**
  * Built-in OpenAI-compatible providers (openai/xai/huggingface/custom):
@@ -407,5 +409,124 @@ describe("anthropic/google providers", () => {
     expect(seen.body).not.toHaveProperty("reasoning_tokens")
     expect(seen.body).not.toHaveProperty("reasoning_effort")
     expect(seen.url).toBe("/v1/chat/completions")
+  }, 15000)
+})
+
+describe("temperature clamping (per-backend ceilings)", () => {
+  it("clampTemperature bounds finite input and falls back otherwise", () => {
+    expect(clampTemperature(2.7, 0.7, 2)).toBe(2)
+    expect(clampTemperature(-1, 0.7, 2)).toBe(0)
+    expect(clampTemperature(0.5, 0.7, 2)).toBe(0.5)
+    expect(clampTemperature(2, 0.7, 2)).toBe(2)
+    expect(clampTemperature(undefined, 0.7, 2)).toBe(0.7)
+    expect(clampTemperature(Number.NaN, 0.7, 2)).toBe(0.7)
+    expect(clampTemperature(Number.POSITIVE_INFINITY, 1, 1)).toBe(1)
+  })
+
+  it("nvidia/openai clamp chat temperature to 0–2 (the reported 400)", async () => {
+    for (const [temp, want] of [
+      [2.7, 2],
+      [-1, 0],
+    ] as Array<[number, number]>) {
+      const seen = await withStub(async (stubUrl) => {
+        const p = createNvidiaProvider({ baseUrl: stubUrl, model: "m", temperature: temp })
+        await p.chat({ messages: [{ role: "user", content: "hi" }] })
+      })
+      expect(seen.body.temperature).toBe(want)
+    }
+    // OpenAI + xAI ride NvidiaProvider.buildBody — same ceiling by inheritance.
+    const seenOpenAI = await withStub(async (stubUrl) => {
+      const p = createOpenAIProvider({ baseUrl: stubUrl, model: "m", temperature: 2.7 })
+      await p.chat({ messages: [{ role: "user", content: "hi" }] })
+    })
+    expect(seenOpenAI.body.temperature).toBe(2)
+  }, 15000)
+
+  it("llama-cpp clamps chat temperature to 0–2 (local servers accept anything)", async () => {
+    // A local backend never 400s — 2.7 sails through and the sampler melts
+    // into multilingual mush (observed live). Same ceiling as hosted.
+    for (const [temp, want] of [
+      [2.7, 2],
+      [-1, 0],
+    ] as Array<[number, number]>) {
+      const seen = await withStub(async (stubUrl) => {
+        const p = createLlamaCppProvider({ baseUrl: stubUrl, model: "m", temperature: temp })
+        await p.chat({ messages: [{ role: "user", content: "hi" }] })
+      })
+      expect(seen.body.temperature).toBe(want)
+    }
+    const def = await withStub(async (stubUrl) => {
+      const p = createLlamaCppProvider({ baseUrl: stubUrl, model: "m" })
+      await p.chat({ messages: [{ role: "user", content: "hi" }] })
+    })
+    expect(def.body.temperature).toBe(0.7)
+  }, 15000)
+
+  it("anthropic clamps to 0–1 and still omits an unset temperature", async () => {
+    const bodies: Record<string, unknown>[] = []
+    const server = http.createServer((req, res) => {
+      let raw = ""
+      req.on("data", (c) => (raw += c))
+      req.on("end", () => {
+        bodies.push(JSON.parse(raw) as Record<string, unknown>)
+        res.writeHead(200, { "Content-Type": "text/event-stream" })
+        res.end(
+          'event: message_start\ndata: {"type":"message_start","message":{"id":"m","usage":{"input_tokens":1}}}\n\n' +
+            'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n' +
+            'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+        )
+      })
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const hot = createAnthropicProvider({
+        baseUrl: `http://127.0.0.1:${port}`,
+        model: "claude-3-5-sonnet-latest",
+        apiKey: "k",
+        temperature: 2.7,
+      })
+      await hot.chat({ messages: [{ role: "user", content: "hi" }] })
+      const unset = createAnthropicProvider({ baseUrl: `http://127.0.0.1:${port}`, model: "m", apiKey: "k" })
+      await unset.chat({ messages: [{ role: "user", content: "hi" }] })
+    } finally {
+      server.close()
+    }
+    expect(bodies).toHaveLength(2)
+    expect(bodies[0]?.temperature).toBe(1)
+    expect(bodies[1]).not.toHaveProperty("temperature")
+  }, 15000)
+
+  it("google clamps generationConfig.temperature to 0–2", async () => {
+    const bodies: Record<string, unknown>[] = []
+    const server = http.createServer((req, res) => {
+      let raw = ""
+      req.on("data", (c) => (raw += c))
+      req.on("end", () => {
+        bodies.push(JSON.parse(raw) as Record<string, unknown>)
+        res.writeHead(200, { "Content-Type": "application/json" })
+        res.end(
+          JSON.stringify({
+            candidates: [{ content: { parts: [{ text: "Hello" }] }, finishReason: "STOP" }],
+          }),
+        )
+      })
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const p = createGoogleProvider({
+        baseUrl: `http://127.0.0.1:${port}`,
+        model: "gemini-2.5-flash",
+        apiKey: "k",
+        temperature: 2.7,
+      })
+      await p.chat({ messages: [{ role: "user", content: "hi" }] })
+    } finally {
+      server.close()
+    }
+    expect(bodies).toHaveLength(1)
+    const gen = bodies[0]?.generationConfig as Record<string, unknown> | undefined
+    expect(gen?.temperature).toBe(2)
   }, 15000)
 })

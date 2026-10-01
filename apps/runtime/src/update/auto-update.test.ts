@@ -16,6 +16,8 @@ import {
   findInstallRoot,
   getInstalledVersion,
   getReleaseType,
+  isInstallRootName,
+  npmCommand,
   parseMaxTagVersion,
   parseVersion,
   type UpdateMethod,
@@ -152,6 +154,28 @@ describe("findInstallRoot / getInstalledVersion", () => {
     // A bogus TRAYAMBAK_HOME falls back to the walk-up.
     expect(findInstallRoot({ startDir: root, env: { TRAYAMBAK_HOME: elsewhere } })).toBe(root)
   })
+
+  it("recognizes the published scoped package name (production installs)", () => {
+    expect(isInstallRootName("trayambak")).toBe(true)
+    expect(isInstallRootName("Trayambak")).toBe(true)
+    expect(isInstallRootName("@skt-ai-labs/trayambak-cli")).toBe(true)
+    expect(isInstallRootName("@SKT-AI-LABS/TRAYAMBAK-CLI")).toBe(true)
+    expect(isInstallRootName("someone-else")).toBe(false)
+    expect(isInstallRootName(undefined)).toBe(false)
+    expect(isInstallRootName(42)).toBe(false)
+    // The published layout (scoped name, no source-tree marker) locates.
+    const root = makeRoot("0.6.5", "@skt-ai-labs/trayambak-cli")
+    const nested = path.join(root, "dist", "apps", "cli", "src")
+    fs.mkdirSync(nested, { recursive: true })
+    expect(findInstallRoot({ startDir: nested, env: {} })).toBe(root)
+    expect(getInstalledVersion({ startDir: nested, env: {} })).toBe("0.6.5")
+  })
+
+  it("uses npm.cmd on Windows, bare npm elsewhere", () => {
+    expect(npmCommand("win32")).toBe("npm.cmd")
+    expect(npmCommand("darwin")).toBe("npm")
+    expect(npmCommand("linux")).toBe("npm")
+  })
 })
 
 describe("checkForUpdate policy (SKT AI LABS upgrade() port)", () => {
@@ -279,5 +303,14 @@ describe("checkForUpdate policy (SKT AI LABS upgrade() port)", () => {
       deps: { env: {}, fetchLatest: async () => "1.0.0" },
     })
     expect(outcome).toEqual({ kind: "skipped", reason: "cannot determine installed version" })
+  })
+
+  it("flows end to end on the published layout (scoped name + npm method)", async () => {
+    // Regression: the published tarball's scoped package.json used to miss
+    // the root marker, so production installs skipped before any check ran.
+    const root = makeRoot("0.6.5", "@skt-ai-labs/trayambak-cli")
+    const { outcome, applied } = await run(root, { method: "npm", latest: "0.6.6" })
+    expect(outcome).toEqual({ kind: "updated", previous: "0.6.5", latest: "0.6.6" })
+    expect(applied).toEqual(["npm:0.6.6"])
   })
 })

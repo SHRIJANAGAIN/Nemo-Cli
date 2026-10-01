@@ -95,9 +95,24 @@ function readPackageJson(dir: string): { name?: string; version?: string } | und
 }
 
 /**
+ * Install-root package names: the source tree is "trayambak", but the
+ * published npm tarball is "@skt-ai-labs/trayambak-cli" — matching only the
+ * former made every production install unlocatable, so checkForUpdate
+ * always skipped with "cannot determine installed version" (observed live:
+ * auto-update never fired outside dev checkouts).
+ */
+export function isInstallRootName(name: unknown): boolean {
+  if (typeof name !== "string") return false
+  const n = name.toLowerCase()
+  return n === "trayambak" || n === "@skt-ai-labs/trayambak-cli"
+}
+
+/**
  * Locate the trayambak installation root: TRAYAMBAK_HOME first (what the
  * global shim sets), then walk up from the module until a package.json whose
- * name is "trayambak" — the same two-signal root rule the shim uses, so stray
+ * name is an install-root name (isInstallRootName: source "trayambak" or
+ * published "@skt-ai-labs/trayambak-cli") — the same two-signal root rule
+ * the shim uses, so stray
  * package.json files can't hijack version detection. Works from both the
  * source tree and dist/ (walk-up is depth-independent).
  */
@@ -105,7 +120,7 @@ export function findInstallRoot(opts?: { startDir?: string; env?: NodeJS.Process
   const env = opts?.env ?? process.env
   const marker = (dir: string): string | undefined => {
     const pkg = readPackageJson(dir)
-    if (pkg?.name && pkg.name.toLowerCase() === "trayambak") return dir
+    if (isInstallRootName(pkg?.name)) return dir
     return undefined
   }
   const envRoot = env.TRAYAMBAK_HOME
@@ -232,8 +247,17 @@ export async function fetchLatestGitVersion(cwd: string): Promise<string | undef
   return parseMaxTagVersion(result.out)
 }
 
+/**
+ * npm executable per platform: on Windows npm is a .cmd shim, which
+ * spawn() without a shell cannot launch (ENOENT) — every Windows
+ * auto-apply died as an "error" outcome. npm.cmd runs directly.
+ */
+export function npmCommand(platform: NodeJS.Platform = process.platform): string {
+  return platform === "win32" ? "npm.cmd" : "npm"
+}
+
 async function applyNpmUpdate(root: string, pkgName: string, latest: string): Promise<void> {
-  const result = await runCapture("npm", ["install", "-g", `${pkgName}@${latest}`], {
+  const result = await runCapture(npmCommand(), ["install", "-g", `${pkgName}@${latest}`], {
     cwd: root,
     timeoutMs: NPM_APPLY_TIMEOUT_MS,
   })

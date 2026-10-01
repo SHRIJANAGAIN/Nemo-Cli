@@ -64,9 +64,25 @@ export class Session {
     return out
   }
 
+  /**
+   * Persist conversation history — and deliberately NOT the system prompt.
+   *
+   * The prompt used to be written verbatim into the session file, which parked
+   * the agent's full capability spec (tools + memory + rules + mode blocks) in
+   * plaintext on disk, in backups, and in anything that later archived the
+   * file. It was also never read back: Agent constructs the session and then
+   * calls `setSystemPrompt()` immediately, so a stored copy had no consumer.
+   *
+   * Belt and braces: besides never adding the prompt to `messages`, `save()`
+   * also strips any `role: "system"` row that ever lands here, so a future
+   * caller cannot silently reintroduce the leak by pushing one.
+   *
+   * `load()` still accepts a legacy `system` field and discards it, so old
+   * session files keep resuming — they just stop being a leak.
+   */
   save(file: string): void {
     fs.mkdirSync(path.dirname(file), { recursive: true })
-    const payload = { system: this.systemPrompt, messages: this.messages }
+    const payload = { messages: this.messages.filter((m) => m.role !== "system") }
     fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf8")
   }
 
@@ -74,12 +90,14 @@ export class Session {
     if (!fs.existsSync(file)) return null
     try {
       const payload = JSON.parse(fs.readFileSync(file, "utf8")) as {
-        system: string
+        system?: string
         messages: AgentMessage[]
       }
       const s = new Session()
-      s.setSystemPrompt(payload.system)
-      s.messages.push(...payload.messages)
+      // Legacy files carry a `system` field. It is intentionally NOT applied:
+      // the caller rebuilds the prompt from config, and restoring a stale copy
+      // from disk would pin an outdated (or tampered) prompt.
+      s.messages.push(...(payload.messages ?? []))
       return s
     } catch {
       return null

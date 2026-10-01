@@ -804,6 +804,7 @@ async function runOneTool(
     config: run.config,
     permissions: effectivePermissions,
     sessionId: run.sessionId,
+    provider: run.provider,
     requestPermission: run.onRequestPermission
       ? async (toolName, command, reason) => {
           const pid = `${call.id}-perm-${toolName}`

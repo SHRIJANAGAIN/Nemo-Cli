@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { getTheme, fg, RESET, type Rgb, type Theme } from "./theme"
+import { getTheme, fg, RESET, type Rgb, type Theme } from "./theme.js"
 
 /** Braille dot spinner frames (b' style). */
 export const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -55,4 +55,19 @@ export function toolSpinnerLabel(frame: number): string {
   const phase = Math.floor(frame / TOOL_GLYPHS.length)
   if (phase < word.length) return word.slice(0, phase)
   return word
+}
+
+/** Wave-shimmer level per character: a hot spot travels one char per frame
+ *  across the label and wraps around. Pure (no Ink) so it unit-tests
+ *  without a renderer. 2 = hot, 1 = warm, 0 = dim. */
+export type WaveLevel = 0 | 1 | 2
+
+export function waveLevels(length: number, frame: number, wavelength = 6): WaveLevel[] {
+  if (length <= 0 || wavelength <= 0) return []
+  const out: WaveLevel[] = []
+  for (let i = 0; i < length; i++) {
+    const phase = ((((i - frame) % wavelength) + wavelength) % wavelength) + 1
+    out.push(phase === 1 ? 2 : phase === 2 || phase === wavelength ? 1 : 0)
+  }
+  return out
 }

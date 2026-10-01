@@ -3,7 +3,129 @@
 All notable changes to trayambak are documented here. The format is based on keeping an
 `Unreleased` section; released sections are immutable.
 
+## [0.6.6]
+
+- **Out-of-range temperature falls back to default, not the wild edge**:
+  a misconfigured 2.7 used to clamp to 2.0 (still near-gibberish, and an
+  NVIDIA 400 on older builds) — now it lands on the safe deterministic
+  default instead. (0.6.5 on npm was a stale bundle missing recent work;
+  0.6.6 ships everything below in one clean release.)
+- **Mistake penalties tune local samplers only**: the backend-blind
+  penalty log piled +0.1s onto every provider until hosted calls carried
+  wild temperatures. `getConfigOverrides` now takes the provider and drops
+  penalties for hosted APIs (base control-mode values stay); ollama /
+  llama.cpp keep the capped tuning.
+- **Backend decision LLM for local runs** (`developerMode.localSupervisor`):
+  a configured backend model (any BYOK id — your API judge) now DECIDES the
+  penalty knobs (temperature / maxToolCalls / webSearchFirst /
+  clarificationRequired / stepByStep) from the mistake log instead of the
+  fixed heuristic — but ONLY when the primary model is a local sampler
+  (ollama / llama.cpp) with devmode on. Consulted once per new-mistake
+  turn (no new mistake = no paid request), bounded payload (last 10
+  mistakes, 200-char descriptions), 15s default timeout. Fail-open on
+  every path: unconfigured / unknown provider id / timeout / abort /
+  malformed reply keeps the heuristic penalties. Decisions are absolute
+  per key (they replace, never sum), temperature decisions rebuild the
+  provider so they reach the wire, and boolean decisions mirror into
+  config (system-prompt suffix + step-by-step loop). Unset
+  provider/model = disabled.
+- **Web search serves real links**: DuckDuckGo redirect URLs
+  (`//duckduckgo.com/l/?uddg=…`) are resolved to destinations at parse
+  time and printed in results, so the model can fetch pages directly.
+
+## [0.6.5]
+
+- **Welcome screen restored**: the boot GitHub notice put a system row into
+  the transcript, and the old `messages.length === 0` check let that single
+  row kill the WelcomeScreen (logo + Welcome) on every logged-in boot. The
+  welcome now lives until the first real user/assistant exchange, with boot
+  notices listed beneath it.
+- **`/mcp` actually works now**: the old command only printed dead usage
+  rows. New `mcp-command.ts` implements list/search/install/add/remove/test
+  against the connector registry + live servers — every accepted change
+  persists and rebuilds the agent with no restart, failed adds never touch
+  config.
+- **MCP/skill tools survive agent rebuilds**: `createAgentConfig` dropped
+  `mcpServers`/`skillsDir`, so every rebuild produced an agent with zero
+  MCP tools even when servers were configured. Same drop class as the
+  earlier provider/developerMode/identity fixes.
+- **System-prompt exfil lock + security trail**: `--dump-system-prompt`
+  attempts are now stored as `prompt_exfil_attempt` events, and every
+  pentest tool run/refusal is stored as `pentest_run` (tool, target,
+  outcome, capped output) — append-only JSONL at `~/.trayambak/security.log`,
+  redacted, never throwing.
+- **Pentest tools honor devmode OFF**: the execution gate only checked the
+  license, so a live trial key ran scans with developer mode OFF. The gate
+  now refuses first on devmode OFF (offline-quiet, no network), then on
+  license. Missing scanner binaries are refused up front with per-OS
+  install guidance instead of a bare `spawn ENOENT`.
+- **Boot cinematic**: returning users get a ~2.5s third-eye opening on
+  every launch (any key skips, prompt-arg launches skip it) before the
+  welcome screen.
+- **Temperature clamped on every backend**: hosted providers already
+  clamped to their ceilings, but llama.cpp sent the raw value — local
+  servers accept anything, so 2.7 sailed through and the sampler melted
+  into multilingual mush (and NVIDIA 400s anything over 2). Same 0–2
+  ceiling everywhere now, config → provider both layers.
+
+## [0.6.4]
+
+- **Agent writes with your GitHub handle (no GITHUB_TOKEN paste)**: the
+  license server now proxies repo writes with the stored `/github login`
+  OAuth token — `POST /github/write`, `/github/branch`, `/github/pr`,
+  `/github/copy`, plus `GET /github/repos` (your repo list). The agent's
+  `github` tool rides them automatically when logged in
+  (`write_file`/`create_branch`/`create_pr`/`copy_files` fall back to VPS,
+  new `list_repos` action). The OAuth token itself still never leaves the
+  server. Note: the authorize URL now requests `repo` scope, so existing
+  logins must `/github logout` + `/github login` once for writes to work.
+- **Operator identity survives restarts**: `createAgentConfig` dropped
+  `githubLogin`/`licenseKey`/`licenseServerUrl`, so after a TUI restart the
+  agent's `## OPERATOR` block read "not logged in" even with a live login.
+- **Boot GitHub reconnect**: a saved login is verified once at startup —
+  live connections announce (`connected as @x`) and seed the first turn;
+  dead ones are cleared with a one-line re-login nudge instead of failing
+  mid-task at the first write.
+
+## [0.6.3]
+
+- **Boot-time provider connect**: fresh installs (no API key anywhere) now
+  open the provider chooser automatically — model selection up front,
+  kimi-style. Esc drops back to welcome; configured users never see it.
+
+## [0.6.2]
+
+- Identical to 0.6.1 (which wedged in npm's "Validating" queue and could
+  not be republished — "Cannot publish over previously staged version").
+  Bumped to sidestep the stuck staging slot; use 0.6.2+.
+
+## [0.6.1]
+
+- **Fixed broken 0.6.0 bundle (P0, user-reported)**: the obfuscator's string
+  array rewrote some `exports['name']` bindings to computed lookups, which
+  Node's static export detection cannot see — so cross-file
+  `import {name}` died at startup (`SessionPicker → backfillUntitledSessions`
+  crashed every launch). Two systemic fixes, not a one-name patch:
+  `scripts/make-publish.mjs` now reserves every module-linkage identifier per
+  file (`reservedStrings`), and `scripts/verify-pack.mjs` has a module
+  linkage gate proving every static import resolves (it fails the pack
+  otherwise). 0.6.0 stays on npm for history; use 0.6.1+.
+
 ## [Unreleased]
+
+### Fixed — the leak was still live in the _installed_ CLI, and the shims hid it
+
+- **The patched repo was not what `trayambak` on `PATH` ran.** The globally installed `@skt-ai-labs/trayambak-cli@0.6.5` shadowed the `bin\*.cmd` shims, and its bundled `dist` still contained the dump handler: `trayambak --dump-system-prompt` printed **92 KB** of the live prompt (tool definitions, memory block, project rules) and exited **0**, so it looked like a successful no-op to any script. npm's latest is also 0.6.5, so no upgrade path existed — the leaky global copy was uninstalled and `PATH` now resolves to the patched `bin\trayambak.cmd` / `bin\skt.cmd`. Verified end-to-end after the change: both binaries print the 100-byte refusal and nothing else, with exit 2.
+- **`bin\trayambak.cmd` and `bin\skt.cmd` swallowed the CLI's exit code.** `endlocal` resets `ERRORLEVEL`, so _every_ refusal and error surfaced as exit 0 through the shim — including this one, which is why the leak looked harmless. Both shims now capture `%ERRORLEVEL%` before `endlocal` and re-exit with it; confirmed the shim now reports 2 for the refusal and for an unknown command, and 0 for `--version`.
+- Recorded so the same trap is visible next time: a patched source tree means nothing while a stale published copy shadows it, and a shim that flattens exit codes hides the difference between "refused" and "succeeded".
+
+### Removed — `--dump-system-prompt`: the system prompt is never printed or persisted
+
+- **`trayambak --dump-system-prompt` is gone** (handler, `GLOBAL_FLAGS` entry, and all three docs + README mentions). It wrote the agent's full prompt — every tool definition, the memory block, project rules, mode/specialist blocks — to stdout, where it lands in shell scrollback, CI logs, crash artifacts and screenshots. An old script now gets a loud refusal on stderr and **exit 2** instead of a silent empty chat (an unrecognised flag in the command position falls through to `case undefined:`, so without the refusal the flag exited 0 having printed nothing). Refusal lives in `refuseSystemPromptDump()` (`command-registry.ts`) so it is unit-testable without `main()`'s evalr side effects.
+- **The prompt is no longer written to disk**: `Session.save()` persisted `{ system, messages }`, parking the full capability spec in plaintext in every `--session` file (and any backup/archive of it). It was also never read back — `Agent` rebuilds the prompt from config via `setSystemPrompt()` immediately after `Session.load()` and again before every run — so the stored copy had no consumer. `save()` now writes messages only; `load()` still accepts a legacy `system` field and **discards** it, so old session files resume unchanged while ceasing to be a leak.
+- **Attempted dumps are recorded, not executed**: the refusal logs a `prompt_exfil_attempt` event (`apps/runtime/src/security-log.ts`, append-only JSONL, `TRAYAMBAK_SECURITY_LOG` to relocate) with the shim name and flag — the attempt is the evidence, the prompt is never in the log. Verified live: both `trayambak --dump-system-prompt` and `trayambak run --dump-system-prompt` exit 2 with the refusal on stderr and nothing on stdout, each attempt landing as one JSONL row.
+- **Guards**: `apps/cli/src/system-prompt-lock.test.ts` pins that the refusal fires for the flag in _any_ argv position, writes nothing for ordinary argv, and uses the invoking shim name; the registry test asserts no registered flag name/description can dump the prompt (it would otherwise reappear in `--help` and shell completion); new `apps/runtime/src/session/session.test.ts` pins messages round-trip, prompt absent from disk, and the legacy-field discard; a new `check-forbidden-strings.yml` step fails on any _executable_ reference to the retired flag, a re-persisted `system:` in `session.ts`, any stdout/stderr write of the prompt, or removal of the refusal/guard tests. Locally simulated with four synthetic regressions (re-persisted prompt, stdout write, deleted refusal, deleted guard test) — all four detected.
+- Verified there is no other surface: the server, ACP and MCP surfaces never expose it, and compaction receives it purely for token accounting (it is never written into a summary, the `compaction` event carries counts only, and analytics redacts that event's only free-text field).
 
 ### Added — weakness-audit round 2 (security hardening, test-depth sweep, real bugs fixed)
 

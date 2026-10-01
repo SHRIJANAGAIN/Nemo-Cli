@@ -7,6 +7,15 @@
 import * as fs from "fs"
 import * as path from "path"
 import type { Tool } from "../tools/index.js"
+import type { Provider, ProviderOptions } from "../../../../packages/provider/src/types.js"
+import {
+  DEFAULT_LOCAL_SUPERVISOR_CONFIG,
+  isSupervisorConfigured,
+  requestSupervisorDecision,
+  sanitizeSupervisorConfig,
+  type LocalSupervisorConfig,
+  type SupervisorDecision,
+} from "./local-supervisor.js"
 
 export type ControlMode = "general" | "accurate"
 
@@ -50,6 +59,25 @@ export interface DeveloperModeConfig {
   sotaEnabled: boolean
   gateEnabled: boolean
   cotChain: CotChainSubMenu
+  /**
+   * Backend decision model for LOCAL primary models (ollama / llama.cpp).
+   * Empty provider/model = disabled; the heuristic penalty log stays in
+   * charge. Consulted once per new-mistake turn via `runSupervisorDecision`.
+   */
+  localSupervisor: LocalSupervisorConfig
+}
+
+/**
+ * Providers whose samplers the penalty tuning exists for: the weak LOCAL
+ * backends (ollama / llama.cpp). Every hosted flagship API — and anything
+ * else, including custom remote gateways — is steady on its own and must
+ * never inherit another backend's mistake log. Omitted (legacy callers,
+ * tests) keeps the old behavior: penalties apply.
+ */
+export function isLocalProvider(provider?: string): boolean {
+  const p = (provider ?? "").toLowerCase()
+  if (p === "") return true
+  return p === "ollama" || p === "llamacpp" || p === "llama.cpp"
 }
 
 export const DEFAULT_DEVELOPER_MODE_CONFIG: DeveloperModeConfig = {
@@ -86,6 +114,7 @@ export const DEFAULT_DEVELOPER_MODE_CONFIG: DeveloperModeConfig = {
     reverseVerification: false,
     externalizedScratchpad: false,
   },
+  localSupervisor: DEFAULT_LOCAL_SUPERVISOR_CONFIG,
 }
 export interface MistakeRecord {
   id: string
@@ -143,6 +172,14 @@ export class DeveloperModeEngine {
   readonly config: DeveloperModeConfig
   private mistakes: MistakeRecord[] = []
   private penalties: PenaltyRecord[] = []
+  /**
+   * Absolute penalty values decided by the backend supervisor LLM for
+   * local runs. These WIN per-key over the summed heuristic penalties
+   * (a decision is an absolute value, not an increment).
+   */
+  private supervisorOverrides: Record<string, number | string | boolean> = {}
+  /** mistakes.length at the last accepted supervisor decision (skip re-ask). */
+  private supervisorDecidedAtCount = -1
   private subagents: Map<string, SubagentTask> = new Map()
   private stepPlans: Map<string, StepPlan> = new Map()
   private clarifications: Map<string, ClarificationQuestion> = new Map()
@@ -164,6 +201,18 @@ export class DeveloperModeEngine {
         parsedConfig.cotChain = DEFAULT_DEVELOPER_MODE_CONFIG.cotChain
       }
     }
+    // The supervisor block may arrive pre-serialized too (CLI flags, env
+    // bridges); decode before sanitizing so bad values fall back to the
+    // defaults instead of throwing.
+    const supOverride: unknown = parsedConfig.localSupervisor
+    let supDecoded: unknown = parsedConfig.localSupervisor
+    if (typeof supOverride === "string") {
+      try {
+        supDecoded = JSON.parse(supOverride)
+      } catch {
+        supDecoded = DEFAULT_LOCAL_SUPERVISOR_CONFIG
+      }
+    }
     this.config = {
       ...DEFAULT_DEVELOPER_MODE_CONFIG,
       ...parsedConfig,
@@ -173,6 +222,7 @@ export class DeveloperModeEngine {
         ...DEFAULT_DEVELOPER_MODE_CONFIG.cotChain,
         ...((parsedConfig.cotChain as Partial<CotChainSubMenu> | undefined) ?? {}),
       },
+      localSupervisor: sanitizeSupervisorConfig(supDecoded),
     }
     const devDir = path.join(cwd, "skt", "12-control", "devmode")
     fs.mkdirSync(devDir, { recursive: true })
@@ -345,7 +395,70 @@ export class DeveloperModeEngine {
         }
       }
     }
-    return merged
+    // Supervisor decisions are absolute: they replace (not add to) the
+    // heuristic value for every key they set.
+    return { ...merged, ...this.supervisorOverrides }
+  }
+
+  /**
+   * Apply a backend supervisor decision (local runs only — the agent
+   * gates on `isLocalProvider` before requesting one). Numeric knobs are
+   * clamped twice: the parser already clamps, this is the last line of
+   * defense before the values reach config overrides / the wire.
+   * Boolean knobs are mirrored into `config` because the runtime reads
+   * them there directly (system-prompt suffix, agent-loop stepByStep).
+   */
+  applySupervisorDecision(decision: SupervisorDecision): void {
+    const overrides: Record<string, number | string | boolean> = {}
+    if (typeof decision.temperature === "number" && Number.isFinite(decision.temperature)) {
+      overrides.temperature = +Math.min(2, Math.max(0, decision.temperature)).toFixed(3)
+    }
+    if (typeof decision.maxToolCalls === "number" && Number.isFinite(decision.maxToolCalls)) {
+      overrides.maxToolCalls = Math.min(64, Math.max(1, Math.round(decision.maxToolCalls)))
+    }
+    if (typeof decision.webSearchFirst === "boolean") {
+      overrides.webSearchFirst = decision.webSearchFirst
+      this.config.webSearchFirst = decision.webSearchFirst
+    }
+    if (typeof decision.clarificationRequired === "boolean") {
+      overrides.clarificationRequired = decision.clarificationRequired
+      this.config.clarificationRequired = decision.clarificationRequired
+    }
+    if (typeof decision.stepByStep === "boolean") {
+      overrides.stepByStep = decision.stepByStep
+      this.config.stepByStep = decision.stepByStep
+    }
+    this.supervisorOverrides = overrides
+  }
+
+  /**
+   * Ask the backend decision LLM to (re)choose penalties for a local
+   * run. Gated: devmode on, supervisor configured, and at least one NEW
+   * mistake since the last accepted decision (no new information = no
+   * paid request). Returns null on every failure path — fail-open, the
+   * heuristic penalties stay in charge.
+   */
+  async runSupervisorDecision(opts?: {
+    signal?: AbortSignal
+    /** Injection seam for tests; defaults to the core provider registry. */
+    createProvider?: (providerId: string, options: ProviderOptions) => Provider | undefined
+  }): Promise<SupervisorDecision | null> {
+    if (!this.config.enabled) return null
+    const supervisor = this.config.localSupervisor
+    if (!isSupervisorConfigured(supervisor)) return null
+    if (this.mistakes.length === 0) return null
+    if (this.mistakes.length === this.supervisorDecidedAtCount) return null
+    const decision = await requestSupervisorDecision({
+      supervisor,
+      mistakes: this.mistakes,
+      currentAdjustments: this.getActivePenaltyAdjustments(),
+      signal: opts?.signal,
+      createProvider: opts?.createProvider,
+    })
+    if (!decision) return null
+    this.applySupervisorDecision(decision)
+    this.supervisorDecidedAtCount = this.mistakes.length
+    return decision
   }
 
   createClarification(
@@ -750,7 +863,7 @@ export class DeveloperModeEngine {
     return [...priorityTools, ...normalTools]
   }
 
-  getConfigOverrides(): Record<string, number | string | boolean> {
+  getConfigOverrides(opts?: { provider?: string }): Record<string, number | string | boolean> {
     const overrides: Record<string, number | string | boolean> = {}
     const mode = this.config.controlMode
     if (mode === "accurate") {
@@ -762,9 +875,20 @@ export class DeveloperModeEngine {
       overrides.topP = 0.9
       overrides.maxTokens = 4096
     }
-    const penaltyAdj = this.getActivePenaltyAdjustments()
+    // Penalties tune weak LOCAL samplers only (ollama / llama.cpp —
+    // isLocalProvider): hosted flagship APIs ignore them entirely. The
+    // penalty log is backend-blind, so without this gate, mistakes made
+    // under a local model piled +0.1s onto the override until NVIDIA calls
+    // carried temperature 2.7 (observed live: HTTP 400 + multilingual
+    // mush). Omitted provider keeps the legacy behavior (penalties apply).
+    const penaltyAdj = isLocalProvider(opts?.provider) ? this.getActivePenaltyAdjustments() : {}
     if (penaltyAdj.temperature !== undefined) {
-      overrides.temperature = Math.max(0, Number(penaltyAdj.temperature))
+      // Ceiling: per-mistake +0.05/+0.1 adjustments accumulate WITHOUT bound
+      // and persist across restarts (~25 mistakes ≈ 2.7 → provider HTTP 400
+      // or max-temperature babble, observed live). The damp is a nudge, so
+      // cap it at the widest backend ceiling (providers clamp to their own
+      // maxima anyway).
+      overrides.temperature = Math.min(2, Math.max(0, Number(penaltyAdj.temperature)))
     }
     if (penaltyAdj.maxToolCalls !== undefined) {
       overrides.maxToolCalls = Math.max(1, Number(penaltyAdj.maxToolCalls))

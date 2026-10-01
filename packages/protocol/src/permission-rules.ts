@@ -51,37 +51,180 @@ export interface PermissionDecision {
  * these, and a user can consciously allow-list them via config rules.
  */
 export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
+  // ── recursive / forced delete ───────────────────────────���─────────────
   { tool: "*", pattern: "rm -rf", action: "ask", reason: "recursive force delete" },
-  { tool: "*", pattern: "sudo ", action: "ask", reason: "privilege escalation" },
-  { tool: "*", pattern: "shutdown", action: "ask", reason: "system power" },
-  { tool: "*", pattern: "reboot", action: "ask", reason: "system power" },
-  { tool: "*", pattern: "mkfs", action: "ask", reason: "filesystem format" },
-  { tool: "*", pattern: "dd if=", action: "ask", reason: "raw disk write" },
-  { tool: "*", pattern: "git push --force", action: "ask", reason: "force push" },
-  { tool: "*", pattern: "git push -f", action: "ask", reason: "force push" },
+  { tool: "*", pattern: "rm -fr", action: "ask", reason: "recursive force delete" },
   { tool: "*", pattern: "del /s /q", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "Remove-Item -Recurse -Force", action: "ask", reason: "recursive delete (PowerShell)" },
+  { tool: "*", pattern: "rmdir /s", action: "ask", reason: "recursive delete (Windows)" },
+  { tool: "*", pattern: "rd /s /q", action: "ask", reason: "recursive delete (Windows)" },
+  { tool: "*", pattern: "find / -delete", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean -fdx", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean -fd", action: "ask", reason: "recursive delete" },
+
+  // ── privilege escalation ─────────────────────────────────────────────
+  { tool: "*", pattern: "sudo ", action: "ask", reason: "privilege escalation" },
+  { tool: "*", pattern: "su -", action: "ask", reason: "privilege escalation" },
+  { tool: "*", pattern: "doas ", action: "ask", reason: "privilege escalation" },
+  { tool: "*", pattern: "runas ", action: "ask", reason: "privilege escalation (Windows)" },
+  { tool: "*", pattern: "Start-Process -Verb RunAs", action: "ask", reason: "privilege escalation (PowerShell)" },
+
+  // ── system power / reboot ───────────────────────────────────────────
+  { tool: "*", pattern: "shutdown", action: "ask", reason: "system power" },
+  { tool: "*", pattern: "reboot", action: "ask", reason: "system power" },
+  { tool: "*", pattern: "poweroff", action: "ask", reason: "system power" },
+  { tool: "*", pattern: "halt ", action: "ask", reason: "system power" },
+  { tool: "*", pattern: "Stop-Computer", action: "ask", reason: "system power (PowerShell)" },
+  { tool: "*", pattern: "systemctl poweroff", action: "ask", reason: "system power" },
+  { tool: "*", pattern: "systemctl reboot", action: "ask", reason: "system power" },
+
+  // ── filesystem / disk destruction ───────────────────────────────────
+  { tool: "*", pattern: "mkfs", action: "ask", reason: "filesystem format" },
   { tool: "*", pattern: "format ", action: "ask", reason: "disk format" },
+  { tool: "*", pattern: "format.com", action: "ask", reason: "disk format (Windows)" },
+  { tool: "*", pattern: "dd if=", action: "ask", reason: "raw disk write" },
+  { tool: "*", pattern: "of=/dev/", action: "ask", reason: "raw disk write" },
+  { tool: "*", pattern: "> /dev/sd", action: "ask", reason: "raw disk write" },
+  { tool: "*", pattern: "fdisk", action: "ask", reason: "partition table write" },
+  { tool: "*", pattern: "parted", action: "ask", reason: "partition table write" },
+  { tool: "*", pattern: "diskpart", action: "ask", reason: "partition table write (Windows)" },
+  { tool: "*", pattern: "shred ", action: "ask", reason: "irreversible erase" },
+  { tool: "*", pattern: "chmod -R 777", action: "ask", reason: "permission destruction" },
+  { tool: "*", pattern: "chmod 777 /", action: "ask", reason: "permission destruction" },
+  { tool: "*", pattern: "chown -R", action: "ask", reason: "ownership rewrite" },
+  { tool: "*", pattern: "takeown", action: "ask", reason: "ownership rewrite (Windows)" },
+  { tool: "*", pattern: "icacls", action: "ask", reason: "ACL rewrite (Windows)" },
+  { tool: "*", pattern: "reg delete", action: "ask", reason: "registry deletion" },
+  { tool: "*", pattern: "vssadmin", action: "ask", reason: "shadow copy deletion" },
+  { tool: "*", pattern: "wmic shadowcopy delete", action: "ask", reason: "shadow copy deletion" },
+
+  // ── force push / history rewriting ──────────────────────────────────
+  { tool: "*", pattern: "git push --force", action: "ask", reason: "force push" },
+  { tool: "*", pattern: "git push -f", action: "ask", reason: "force push" },
+  { tool: "*", pattern: "git push origin", action: "ask", reason: "remote mutation" },
+  { tool: "*", pattern: "git reset --hard", action: "ask", reason: "discard working tree" },
+  { tool: "*", pattern: "git filter-branch", action: "ask", reason: "history rewrite" },
+  { tool: "*", pattern: "git update-ref -d", action: "ask", reason: "history rewrite" },
+
+  // ── pipe-to-shell / remote code execution ───────────────────────────
   { tool: "*", pattern: " | sh", action: "ask", reason: "pipe-to-shell download" },
   { tool: "*", pattern: " | bash", action: "ask", reason: "pipe-to-shell download" },
+  { tool: "*", pattern: "|zsh", action: "ask", reason: "pipe-to-shell download" },
+  { tool: "*", pattern: "|python", action: "ask", reason: "pipe-to-interpreter" },
+  { tool: "*", pattern: "|node", action: "ask", reason: "pipe-to-interpreter" },
+  { tool: "*", pattern: "| perl", action: "ask", reason: "pipe-to-interpreter" },
+  { tool: "*", pattern: "| ruby", action: "ask", reason: "pipe-to-interpreter" },
   { tool: "*", pattern: "iex ", action: "ask", reason: "PowerShell Invoke-Expression download" },
   { tool: "*", pattern: "Invoke-Expression", action: "ask", reason: "PowerShell Invoke-Expression download" },
+  { tool: "*", pattern: "iwr ", action: "ask", reason: "PowerShell web request download" },
+  { tool: "*", pattern: "Invoke-WebRequest", action: "ask", reason: "PowerShell web request download" },
+  { tool: "*", pattern: "wget http", action: "ask", reason: "remote download" },
+  { tool: "*", pattern: "curl http", action: "ask", reason: "remote download" },
+  { tool: "*", pattern: "eval(", action: "ask", reason: "dynamic evaluation" },
+
+  // ── anti-forensics / evidence destruction ───────────────────────────
+  { tool: "*", pattern: "history -c", action: "ask", reason: "shell history erasure" },
+  { tool: "*", pattern: "> .bash_history", action: "ask", reason: "shell history erasure" },
+  { tool: "*", pattern: "Clear-Content", action: "ask", reason: "log truncation (PowerShell)" },
+  { tool: "*", pattern: "> /var/log", action: "ask", reason: "system log truncation" },
+  { tool: "*", pattern: "truncate -s 0", action: "ask", reason: "file truncation" },
+  { tool: "*", pattern: "Remove-Message", action: "ask", reason: "audit log deletion (PowerShell)" },
+  { tool: "*", pattern: "wevtutil cl", action: "ask", reason: "audit log deletion (Windows)" },
+
+  // ── irreversible data / infrastructure loss ─────────────────────────
+  { tool: "*", pattern: "DROP DATABASE", action: "ask", reason: "database destruction" },
+  { tool: "*", pattern: "DROP TABLE", action: "ask", reason: "table destruction" },
+  { tool: "*", pattern: "TRUNCATE TABLE", action: "ask", reason: "table destruction" },
+  { tool: "*", pattern: "db.dropDatabase", action: "ask", reason: "database destruction" },
+  { tool: "*", pattern: "DROP SCHEMA", action: "ask", reason: "schema destruction" },
+  { tool: "*", pattern: "docker system prune", action: "ask", reason: "container destruction" },
+  { tool: "*", pattern: "docker volume rm", action: "ask", reason: "volume destruction" },
+  { tool: "*", pattern: "terraform destroy", action: "ask", reason: "infrastructure destruction" },
+  { tool: "*", pattern: "terraform apply", action: "ask", reason: "infrastructure mutation" },
+  { tool: "*", pattern: "kubectl delete", action: "ask", reason: "cluster destruction" },
+  { tool: "*", pattern: "aws s3 rb", action: "ask", reason: "cloud storage destruction" },
+  { tool: "*", pattern: "gsutil rm -r", action: "ask", reason: "cloud storage destruction" },
+  { tool: "*", pattern: "az storage delete", action: "ask", reason: "cloud storage destruction" },
+  { tool: "*", pattern: "helm delete", action: "ask", reason: "cluster destruction" },
+  { tool: "*", pattern: "DROP VOLUME", action: "ask", reason: "volume destruction" },
+
+  // ── credential / secret access ─────────────────────────────────────
+  { tool: "*", pattern: "cat ~/.ssh", action: "ask", reason: "private key read" },
+  { tool: "*", pattern: "cat /etc/shadow", action: "ask", reason: "credential read" },
+  { tool: "*", pattern: "cat .aws/credentials", action: "ask", reason: "cloud credential read" },
+  { tool: "*", pattern: "printenv", action: "ask", reason: "environment dump" },
+  { tool: "*", pattern: "env | grep", action: "ask", reason: "environment dump" },
+  { tool: "*", pattern: "setx", action: "ask", reason: "persistent env mutation (Windows)" },
 ]
 
 /**
- * Delete-family subset of FORCE_ASK_RULES. In auto-approve mode ONLY these
- * can still gate a tool call — every other sensitive operation auto-allows.
- * Destructive deletes stay human-gated no matter the mode (short of
- * full-access, which bypasses everything by explicit user choice).
+ * Irreversible-action subset of FORCE_ASK_RULES — the rules that still gate
+ * a tool call under auto-approve mode.
+ *
+ * Auto-approve exists to stop *routine* work from prompting, not to hand the
+ * agent a blank cheque. So the gate covers every action whose damage is
+ * unrecoverable or unauditable: deleting data, destroying infrastructure,
+ * erasing evidence, and executing code that has not been read yet.
+ *
+ * Deliberately NOT in this set (they still ask in the default `ask` mode, but
+ * auto-approve lets them through because they are recoverable or routine):
+ *   - privilege escalation (`sudo`, `doas`, `runas`) — noisy, and the
+ *     escalation itself fails without real credentials;
+ *   - force push / `git reset --hard` — recoverable from the reflog;
+ *   - raw disk writes and permission churn outside the delete families;
+ *   - credential *reads* (`cat ~/.ssh/id_rsa`, `printenv`) — these are
+ *     read-only, and the network-deny sandbox plus secret redaction are the
+ *     controls that actually limit exfiltration.
+ *
+ * full-access mode bypasses the whole set by explicit user choice.
+ */
+export const IRREVERSIBLE_FORCE_ASK_REASONS: ReadonlySet<string> = new Set([
+  // deletion
+  "recursive force delete",
+  "recursive delete (Windows)",
+  "recursive delete (PowerShell)",
+  "disk format",
+  "filesystem format",
+  "partition table write",
+  "partition table write (Windows)",
+  "raw disk write",
+  "database destruction",
+  "table destruction",
+  "schema destruction",
+  "volume destruction",
+  "container destruction",
+  "infrastructure destruction",
+  "cluster destruction",
+  "cloud storage destruction",
+  "irreversible erase",
+  "permission destruction",
+  "registry deletion",
+  "shadow copy deletion",
+  "audit log deletion (PowerShell)",
+  "audit log deletion (Windows)",
+  "shell history erasure",
+  "system log truncation",
+  "log truncation (PowerShell)",
+  "file truncation",
+  "ownership rewrite",
+  "ownership rewrite (Windows)",
+  "ACL rewrite (Windows)",
+  "pipe-to-shell download",
+  "pipe-to-interpreter",
+  "PowerShell web request download",
+  "PowerShell Invoke-Expression download",
+  "remote download",
+  "dynamic evaluation",
+  "persistent env mutation (Windows)",
+])
+
+/**
+ * Delete-family subset of FORCE_ASK_RULES, retained under its original name
+ * because it is the historical export. In auto-approve mode ONLY these can
+ * still gate a tool call — every other sensitive operation auto-allows.
  */
 export const DELETE_FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = FORCE_ASK_RULES.filter((r) =>
-  [
-    "recursive force delete",
-    "recursive delete (Windows)",
-    "recursive delete (PowerShell)",
-    "disk format",
-    "filesystem format",
-  ].includes(r.reason ?? ""),
+  IRREVERSIBLE_FORCE_ASK_REASONS.has(r.reason ?? ""),
 )
 
 /* ────────────────────────── session rule store ────────────────────────── */

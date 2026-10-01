@@ -24,9 +24,9 @@ _While others reach for **bigger models** and **larger languages** to patch **cr
 
 ---
 
-|                        ![Bug-hunter subagent is born — inversion thinking, permission gate up](Img/IM1.png)                        |           ![The hunt, live — 11 toolcalls deep, session rules holding](Img/IM2.png)            |
-| :--------------------------------------------------------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
-| _Here's the moment the bug-hunter subagent spins up — it flips the problem around and asks for permission before it does anything_ | _A few Seconds into a real hunt: 11 tool calls in, and the session rules haven't slipped once_ |
+|           ![Bug-hunter subagent is born — inversion thinking, permission gate up](https://skt.sktailabs.in/img/IM1.png)            | ![The hunt, live — 11 toolcalls deep, session rules holding](https://skt.sktailabs.in/img/IM2.png) |
+| :--------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------: |
+| _Here's the moment the bug-hunter subagent spins up — it flips the problem around and asks for permission before it does anything_ |   _A few Seconds into a real hunt: 11 tool calls in, and the session rules haven't slipped once_   |
 
 > **What's the actual difference?**
 >
@@ -46,6 +46,20 @@ _While others reach for **bigger models** and **larger languages** to patch **cr
 ## Get Started
 
 1. **Install Trayambak CLI**
+
+Windows (PowerShell):
+
+```
+irm https://skt.sktailabs.in/install.ps1 | iex
+```
+
+macOS / Linux:
+
+```
+curl -fsSL https://skt.sktailabs.in/install.sh | bash
+```
+
+Or directly with npm (all platforms):
 
 ```
 npm install -g @skt-ai-labs/trayambak-cli
@@ -122,52 +136,57 @@ _For a **first-time user**, the following is all you need to know:_
 
 Run `trayambak help` for the authoritative list:
 
-| Command                                           | Description                                                 |
-| ------------------------------------------------- | ----------------------------------------------------------- |
-| `trayambak`                                       | Start an interactive session (alias: `skt`)                 |
-| `run "prompt"`                                    | Interactive session that runs that prompt immediately       |
-| `exec "prompt"`                                   | Headless run — newline-delimited JSON events on stdout      |
-| `review [target]`                                 | Review code/changes for bugs, security issues, style        |
-| `commit [--staged\|--all]`                        | Draft a conventional-commit message for the diff            |
-| `stats`                                           | Show usage stats (sessions, events, violations)             |
-| `pr <checkout\|link\|unlink\|status>`             | Pull-request helpers via `gh`                               |
-| `db <path\|summary\|threads\|violations>`         | Inspect the local state store                               |
-| `uninstall`                                       | Remove launcher shims (keeps config/sessions/state)         |
-| `config get [key]` / `config set <k> <v>`         | Show / persist configuration                                |
-| `doctor`                                          | Diagnose the local environment                              |
-| `info`                                            | Runtime & config summary                                    |
-| `agent [list\|info\|run]`                         | Manage agent profiles                                       |
-| `task [list\|create]`                             | Manage trayambak tasks                                      |
-| `todo [list\|add\|update]`                        | Manage session todos                                        |
-| `plan [create\|list\|show]`                       | Manage multi-step plans                                     |
-| `manager [status\|summary]`                       | Show manager status                                         |
-| `compact [config\|estimate\|run\|reset]`          | Configure/run session compaction                            |
-| `mode [list\|current\|set]`                       | Switch operating modes                                      |
-| `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                   |
-| `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                  |
-| `marketplace <list\|search\|install\|remove>`     | Browse/install shareable skills & agents                    |
-| `upgrade [version]`                               | Update trayambak (git/npm) and rebuild                      |
-| `serve [--port 8080]`                             | Start a local llama.cpp server                              |
-| `download <org/model>`                            | Download a GGUF model                                       |
-| `acp`                                             | Run as an ACP agent server (stdio JSON-RPC)                 |
-| `web [--port 8787]`                               | HTTP agent API + `/api/sessions` + `/openapi.json`          |
-| `login [--with-api-key K\|status]` / `logout`     | Store or delete credentials                                 |
-| `archive <id>` / `unarchive <id>` / `delete <id>` | Manage saved sessions                                       |
-| `mcp-server`                                      | Run an MCP server (tools over stdio)                        |
-| `sandbox check <file>`                            | Check the sandbox policy for a file                         |
-| `execpolicy check <cmd>`                          | Check the exec policy for a command                         |
-| `resume <id>`                                     | Resume a stored session                                     |
-| `export [id] [--format markdown\|json\|text]`     | Export a session transcript (default `markdown`)            |
-| `completion <bash\|zsh\|fish\|powershell>`        | Print a shell completion script to source from your profile |
+| Command                                           | Description                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `trayambak`                                       | Start an interactive session (alias: `skt`)                   |
+| `run "prompt"`                                    | Interactive session that runs that prompt immediately         |
+| `exec "prompt"`                                   | Headless run — newline-delimited JSON events on stdout        |
+| `git diff \| trayambak exec "review"`             | Piped stdin becomes model context (capped, instruction first) |
+| `review [target]`                                 | Review code/changes for bugs, security issues, style          |
+| `commit [--staged\|--all]`                        | Draft a conventional-commit message for the diff              |
+| `stats`                                           | Show usage stats (sessions, events, violations)               |
+| `pr <checkout\|link\|unlink\|status>`             | Pull-request helpers via `gh`                                 |
+| `db <path\|summary\|threads\|violations>`         | Inspect the local state store                                 |
+| `uninstall`                                       | Remove launcher shims (keeps config/sessions/state)           |
+| `config get [key]` / `config set <k> <v>`         | Show / persist configuration                                  |
+| `doctor`                                          | Diagnose the local environment                                |
+| `info`                                            | Runtime & config summary                                      |
+| `agent [list\|info\|run]`                         | Manage agent profiles                                         |
+| `task [list\|create]`                             | Manage trayambak tasks                                        |
+| `todo [list\|add\|update]`                        | Manage session todos                                          |
+| `plan [create\|list\|show]`                       | Manage multi-step plans                                       |
+| `manager [status\|summary]`                       | Show manager status                                           |
+| `compact [config\|estimate\|run\|reset]`          | Configure/run session compaction                              |
+| `mode [list\|current\|set]`                       | Switch operating modes                                        |
+| `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                     |
+| `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                    |
+| `marketplace <list\|search\|install\|remove>`     | Browse/install shareable skills & agents                      |
+| `upgrade [version]`                               | Update trayambak (git/npm) and rebuild                        |
+| `serve [--port 8080]`                             | Start a local llama.cpp server                                |
+| `download <org/model>`                            | Download a GGUF model                                         |
+| `acp`                                             | Run as an ACP agent server (stdio JSON-RPC)                   |
+| `web [--port 8787]`                               | HTTP agent API + `/api/sessions` + `/openapi.json`            |
+| `login [--with-api-key K\|status]` / `logout`     | Store or delete credentials                                   |
+| `archive <id>` / `unarchive <id>` / `delete <id>` | Manage saved sessions                                         |
+| `mcp-server`                                      | Run an MCP server (tools over stdio)                          |
+| `sandbox check <file>`                            | Check the sandbox policy for a file                           |
+| `execpolicy check <cmd>`                          | Check the exec policy for a command                           |
+| `resume <id>`                                     | Resume a stored session                                       |
+| `export [id] [--format markdown\|json\|text]`     | Export a session transcript (default `markdown`)              |
+| `completion <bash\|zsh\|fish\|powershell>`        | Print a shell completion script to source from your profile   |
 
 **Global flags:** `--base-url <url>`, `--model <name>`, `--provider <name>`
 (`llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `xai`, `huggingface`,
 `anthropic`, `google`, `ollama`, `custom`), `--cwd <dir>`, `--session <file>`,
-`--port <n>`, `--host <addr>`, `--dev`, `--dump-system-prompt`,
+`--port <n>`, `--host <addr>`, `--dev`,
 `--version`/`-v`, `--help`/`-h`. Shorthands: `-p` prompt, `-m` model,
 `-c` cwd; `--no-<flag>` sets a flag to `false`.
 
 ---
+
+## Models
+
+Currently Our **SKT Console** in Maninatance so We Will Start Our Models free Usages later.
 
 ## Configuration reference
 
@@ -182,12 +201,12 @@ atomically with `0600` permissions and a `.bak` rotation. Schema:
 ```sh
 trayambak config get              # dump every effective value
 trayambak config get model        # one value
-trayambak config set model gpt-4o # persist (numbers/booleans coerced)
+trayambak config set model gpt-6 # persist (numbers/booleans coerced)
 trayambak config set provider openai
 ```
 
 **Key environment variables** (full list in
-[docs/getting-started.md](docs/getting-started.md#configuration)):
+[docs/getting-started.md](https://skt.sktailabs.in/docs/getting-started.md#configuration)):
 
 | Variable                       | Sets                                                  |
 | ------------------------------ | ----------------------------------------------------- |
@@ -240,7 +259,7 @@ as `@skt-ai-labs/trayambak-cli` (bins `trayambak` and `skt`):
 
 The build runs `tsc` (main), `tsc -p tsconfig.ink.json` (the Ink UI as ESM),
 then an asset-copy + `fix-esm-imports.js` flatten step. Full walkthrough:
-[docs/architecture.md](docs/architecture.md).
+[docs/architecture.md](https://skt.sktailabs.in/docs/architecture.md).
 
 ---
 
@@ -253,38 +272,67 @@ trayambak doctor   # Node, config, model, llama.cpp binary, endpoint reachabilit
 trayambak info     # version, node, platform, cwd, baseUrl, model, shell
 ```
 
-Then see **[docs/troubleshooting.md](docs/troubleshooting.md)** for the usual
+Then see **[docs/troubleshooting.md](https://skt.sktailabs.in/docs/troubleshooting.md)** for the usual
 suspects — 401s and prefixed keys, Ollama not running, a missing llama.cpp
 binary, the wrong config file, web-server 401s, MCP timeouts, and stale
 builds.
 
 ---
 
+## Bug reporting
+
+Found a bug? Reports that follow this flow get fixed fastest:
+
+1. **Security vulnerability? Stop — report privately.** Do not open a
+   public issue. Report directly to support@sktailabs.in
+   with: affected version, reproduction steps, impact, and logs with
+   secrets redacted ([SECURITY.md](SECURITY.md): acknowledgement within
+   3 business days, fix timeline within 14 days for confirmed
+   High/Critical, 90-day coordinated-disclosure window).
+2. **Regular bug? Open a public issue** at
+   <https://github.com/SKT-AI-LABS/Trayambak-cli/issues> with:
+   - Title + severity (`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`)
+   - Version and platform (`trayambak info`: version, node, platform)
+   - Minimal reproduction steps and minimal repro input
+   - Expected vs actual behaviour, with evidence (output, logs)
+   - Secrets redacted from everything you paste — never paste tokens,
+     `0600` files, or `mcp-auth.json` contents
+
+Triage is severity-first: crash, data-loss, and security-adjacent
+`CRITICAL`–`HIGH` reports jump the queue, and anything with a failing
+reproduction beats a description-only report.
+
+---
+
 ## Documentation
 
-| Doc                                        | Contents                                                         |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| [Getting started](docs/getting-started.md) | Install, first session, subcommands, flags, config, env vars     |
-| [Sessions](docs/sessions.md)               | Transcript storage, resume/fork/archive, compaction, checkpoints |
-| [Providers](docs/providers.md)             | All 22 backends, key handling, local models                      |
-| [MCP](docs/mcp.md)                         | MCP servers, OAuth, connector registry, `mcp-server`             |
-| [ACP](docs/acp.md)                         | Editor integration over stdio JSON-RPC                           |
-| [Web](docs/web.md)                         | Local HTTP agent API, SSE, token auth                            |
-| [Security](docs/security.md)               | Permissions, sandbox, secret storage                             |
-| [Troubleshooting](docs/troubleshooting.md) | Diagnosis and fixes                                              |
-| [Architecture](docs/architecture.md)       | Monorepo layout, build pipeline, CI                              |
-| [Docs index](docs/README.md)               | Quick reference for everything above                             |
+| Doc                                                                 | Contents                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [Getting started](https://skt.sktailabs.in/docs/getting-started.md) | Install, first session, subcommands, flags, config, env vars     |
+| [Sessions](https://skt.sktailabs.in/docs/sessions.md)               | Transcript storage, resume/fork/archive, compaction, checkpoints |
+| [Providers](https://skt.sktailabs.in/docs/providers.md)             | All 22 backends, key handling, local models                      |
+| [MCP](https://skt.sktailabs.in/docs/mcp.md)                         | MCP servers, OAuth, connector registry, `mcp-server`             |
+| [ACP](https://skt.sktailabs.in/docs/acp.md)                         | Editor integration over stdio JSON-RPC                           |
+| [Web](https://skt.sktailabs.in/docs/web.md)                         | Local HTTP agent API, SSE, token auth                            |
+| [Security](https://skt.sktailabs.in/docs/security.md)               | Permissions, sandbox, secret storage                             |
+| [Troubleshooting](https://skt.sktailabs.in/docs/troubleshooting.md) | Diagnosis and fixes                                              |
+| [Architecture](https://skt.sktailabs.in/docs/architecture.md)       | Monorepo layout, build pipeline, CI                              |
+| [Docs index](https://skt.sktailabs.in/docs/README.md)               | Quick reference for everything above                             |
 
 ---
 
 ## Security
 
-Found a vulnerability? **Do not open a public issue** — the reporting process,
+Found a vulnerability? **open a public issue** — the reporting process,
 supported versions, scope, and disclosure window are in
 [SECURITY.md](SECURITY.md). Highlights: secrets are stored `0600` and
 atomic, telemetry is off by default, and destructive shell commands are
 denied by default with writes asking for approval
-([docs/security.md](docs/security.md)).
+([docs/security.md](https://skt.sktailabs.in/docs/security.md)).
+
+**License For Devmodes are Opnened It's free no charge for **individual developer** But its only for security and testing of your infrastucture to safe your infrastucture We Will Only Track Pentest Tools Usages to Create a safer community. Companies required To Contact Us and get it they require a plan
+
+**Trayamabak** Suppports Local Models Its Best For Privacy Bydefault it is off you can enable it also
 
 ---
 

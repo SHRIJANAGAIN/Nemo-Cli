@@ -20,9 +20,14 @@
  *  - copy_files performs the real GET/GET/PUT flow (it used to return a
  *    success-looking stub) and honestly refuses without a write token
  *  - parseRepo accepts scheme-less `github.com/owner/repo`
+ *  - tokenless writes ride the VPS login (global fetch stub below, default
+ *    logged-out 401): api.github.com is never touched on that path
  */
 
 import { EventEmitter } from "node:events"
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ToolResult } from "../types.js"
 import type { ToolContext } from "../types.js"
@@ -68,6 +73,24 @@ const net = vi.hoisted(() => {
         return value
       }
       return { status: 404, body: JSON.stringify({ message: "Not Found" }) }
+    },
+  }
+})
+
+/** VPS stand-in for tokenless writes (global fetch): api.github.com is
+ *  mocked above via node:https/http, but the login-routed path uses fetch
+ *  against the license server — without this stub those tests would hit
+ *  the real network. String shorthand not needed: exact specs only,
+ *  default is logged-out 401. */
+const vps = vi.hoisted(() => {
+  const routes = new Map<string, { status: number; json: unknown }>()
+  const calls: string[] = []
+  return {
+    routes,
+    calls,
+    reset(): void {
+      routes.clear()
+      calls.length = 0
     },
   }
 })
@@ -164,12 +187,26 @@ const call = async (tool: ReturnType<typeof createGithubTool>, args: Record<stri
 
 beforeEach(() => {
   net.reset()
+  vps.reset()
   // Clear any ambient token so "no token" paths are deterministic.
   vi.stubEnv("GITHUB_TOKEN", "")
+  // Tokenless writes consult the VPS login (never api.github.com): default
+  // logged-out 401 so refusal tests stay offline.
+  vi.stubGlobal("fetch", async (url: unknown) => {
+    const u = String(url)
+    vps.calls.push(u)
+    for (const [needle, spec] of vps.routes) {
+      if (u.includes(needle)) return { status: spec.status, json: async () => spec.json }
+    }
+    return { status: 401, json: async () => ({ error: "GitHub login required — run /github login first" }) }
+  })
+  // Machine identity must not touch the real home dir.
+  vi.stubEnv("TRAYAMBAK_MACHINE_ID_FILE", join(mkdtempSync(join(tmpdir(), "gh-tool-")), "machine-id"))
 })
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
 describe("parseRepo", () => {
@@ -353,11 +390,15 @@ describe("write_file", () => {
     expect(firstText(updated)).toContain("github: wrote old.md in o/r (commit bbb2222)")
   })
 
-  it("refuses without token, without path/content, oversized, and non-files", async () => {
+  it("routes tokenless writes through the VPS login, refusing with the login hint when logged out", async () => {
     const tool = createGithubTool()
-    const noToken = await call(tool, { repo: "o/r", action: "write_file", path: "a.md", content: "x" })
-    expect(noToken.isError).toBe(true)
-    expect(firstText(noToken)).toContain("needs a write token")
+    const loggedOut = await call(tool, { repo: "o/r", action: "write_file", path: "a.md", content: "x" })
+    expect(loggedOut.isError).toBe(true)
+    expect(firstText(loggedOut)).toContain("via your GitHub login failed")
+    expect(firstText(loggedOut)).toContain("/github login")
+    // api.github.com untouched — only the VPS saw this call.
+    expect(net.requests).toEqual([])
+    expect(vps.calls.some((u) => u.includes("/github/write"))).toBe(true)
 
     const keyed = createGithubTool("tok")
     expect(firstText(await call(keyed, { repo: "o/r", action: "write_file", content: "x" }))).toContain(
@@ -377,6 +418,15 @@ describe("write_file", () => {
     expect(
       firstText(await call(keyed, { repo: "o/r", action: "write_file", path: "denied.md", content: "x" })),
     ).toContain("failed to check denied.md")
+  })
+
+  it("writes through the VPS when logged in (no local token)", async () => {
+    vps.routes.set("/github/write", { status: 200, json: { ok: true, commit: "aaa1111" } })
+    const tool = createGithubTool()
+    const res = await call(tool, { repo: "o/r", action: "write_file", path: "new.md", content: "hi" })
+    expect(res.isError).toBe(false)
+    expect(firstText(res)).toContain("github: wrote new.md in o/r (commit aaa1111) (via your GitHub login)")
+    expect(net.requests).toEqual([])
   })
 })
 
@@ -403,14 +453,15 @@ describe("create_branch and create_pr", () => {
     expect(firstText(pr)).toContain("github: opened PR #7")
   })
 
-  it("refuses without token, bad names, and existing branches", async () => {
+  it("routes tokenless branch/PR calls through the VPS login, plus the direct guards", async () => {
     const tool = createGithubTool()
     expect(firstText(await call(tool, { repo: "o/r", action: "create_branch", branch: "x" }))).toContain(
-      "needs a write token",
+      "via your GitHub login failed",
     )
     expect(firstText(await call(tool, { repo: "o/r", action: "create_pr", branch: "x", title: "t" }))).toContain(
-      "needs a write token",
+      "via your GitHub login failed",
     )
+    expect(net.requests).toEqual([])
     const keyed = createGithubTool("tok")
     expect(firstText(await call(keyed, { repo: "o/r", action: "create_branch" }))).toContain("branch is required")
     expect(firstText(await call(keyed, { repo: "o/r", action: "create_branch", branch: "../evil" }))).toContain(
@@ -451,11 +502,28 @@ describe("compare", () => {
 })
 
 describe("copy_files", () => {
-  it("refuses honestly without a write token and never touches the network", async () => {
+  it("consults the VPS when tokenless and surfaces the login hint when logged out", async () => {
     const tool = createGithubTool()
     const res = await call(tool, { repo: "o/r", action: "copy_files", source_path: "a", dest_path: "b" })
     expect(res.isError).toBe(true)
-    expect(firstText(res)).toContain("needs a write token")
+    expect(firstText(res)).toContain("via your GitHub login failed")
+    expect(firstText(res)).toContain("/github login")
+    // api.github.com untouched — the login check went to the VPS only.
+    expect(net.requests).toEqual([])
+    expect(vps.calls.some((u) => u.includes("/github/copy"))).toBe(true)
+  })
+
+  it("copies through the VPS when logged in (no local token)", async () => {
+    vps.routes.set("/github/copy", { status: 200, json: { ok: true, commit: "deadbee" } })
+    const tool = createGithubTool()
+    const res = await call(tool, {
+      repo: "o/r",
+      action: "copy_files",
+      source_path: "src/hello.txt",
+      dest_path: "dir/out.txt",
+    })
+    expect(res.isError).toBe(false)
+    expect(firstText(res)).toContain("github: copied src/hello.txt -> dir/out.txt in o/r (commit deadbee)")
     expect(net.requests).toEqual([])
   })
 
@@ -513,5 +581,49 @@ describe("copy_files", () => {
     const putBody = JSON.parse(net.writes[0]) as { sha?: string; content?: string }
     expect(putBody.sha).toBe("dest-sha-000")
     expect(putBody.content).toBe(Buffer.from("src-data").toString("base64"))
+  })
+})
+
+describe("list_repos", () => {
+  it("lists repos direct with a token", async () => {
+    net.routes.set("/user/repos", {
+      status: 200,
+      body: JSON.stringify([
+        { full_name: "octocat/mytest1", private: false, default_branch: "main" },
+        { full_name: "octocat/secret", private: true, default_branch: "master" },
+      ]),
+    })
+    const tool = createGithubTool("tok")
+    const res = await call(tool, { repo: "o/r", action: "list_repos" })
+    const text = firstText(res)
+    expect(res.isError).toBe(false)
+    expect(text).toContain("octocat/mytest1")
+    expect(text).toContain("octocat/secret")
+    expect(net.headers[0]["Authorization"]).toBe("Bearer tok")
+  })
+
+  it("lists repos through the VPS login when tokenless", async () => {
+    vps.routes.set("/github/repos", {
+      status: 200,
+      json: {
+        ok: true,
+        login: "octocat",
+        repos: [{ fullName: "octocat/mytest1", private: false, defaultBranch: "main" }],
+      },
+    })
+    const tool = createGithubTool()
+    const res = await call(tool, { repo: "o/r", action: "list_repos" })
+    const text = firstText(res)
+    expect(res.isError).toBe(false)
+    expect(text).toContain("github repos for @octocat (1)")
+    expect(text).toContain("octocat/mytest1")
+    expect(net.requests).toEqual([])
+  })
+
+  it("surfaces the login hint when logged out and tokenless", async () => {
+    const tool = createGithubTool()
+    const res = await call(tool, { repo: "o/r", action: "list_repos" })
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("/github login")
   })
 })

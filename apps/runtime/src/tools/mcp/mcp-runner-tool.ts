@@ -11,6 +11,7 @@ import { resolveMcpCommand } from "../../../../../packages/mcp/src/spawn-resolve
 import type { McpServerSpec } from "../../../../../packages/mcp/src/index.js"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
+import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 
 type JsonRpcRequest = { jsonrpc: "2.0"; id: number; method: string; params?: unknown }
 type JsonRpcResponse = { jsonrpc: "2.0"; id: number; result?: unknown; error?: { code: number; message: string } }
@@ -192,7 +193,10 @@ export class McpProcess {
     // spaces/metachars can't inject (the old shell:true mis-split them).
     this.child = spawn(cmd, args, {
       cwd: spec.cwd ?? process.cwd(),
-      env: { ...process.env, ...(spec.env ?? {}) },
+      // Filtered like hook children (hookChildEnv): MCP servers are
+      // third-party code — they must not inherit API keys wholesale.
+      // Operator-declared spec.env merges on top (explicit values win).
+      env: { ...getSafeEnv(process.env), ...(spec.env ?? {}) },
       stdio: ["pipe", "pipe", "pipe"],
       shell: false,
       windowsHide: true,

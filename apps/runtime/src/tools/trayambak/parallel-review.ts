@@ -151,12 +151,19 @@ export function createParallelReviewTool(
   return {
     definition,
     async execute(_id, args, _signal, _update, context: ToolContext | undefined) {
-      const diff = (args.diff as string) ?? ""
+      const diff = typeof args.diff === "string" ? args.diff : ""
       if (!diff.trim()) {
         return textResult("Missing or empty 'diff' parameter.", /*isError*/ true)
       }
 
-      const files = Array.isArray(args.files) ? (args.files as string[]) : []
+      // Models often pass a single path string instead of an array — coerce
+      // so an explicit `files` selection is never silently dropped.
+      const files =
+        Array.isArray(args.files) && args.files.every((f) => typeof f === "string")
+          ? (args.files as string[])
+          : typeof args.files === "string"
+            ? [args.files]
+            : []
       const language = args.language as string | undefined
       const includeSecurity = Boolean(args.includeSecurity)
       const cwd = context?.cwd ?? process.cwd()
@@ -205,13 +212,15 @@ ${diff}
 ----- END DIFF -----`,
       }))
 
-      const results: Array<{ name: string; text: string; error?: string }> = onRunSubagents
-        ? await onRunSubagents(reviewTasks)
-        : reviewerProfiles.map((p) => ({
-            name: p.name,
-            text: `[${p.name}] Evaluated diff. No blocking regressions detected.`,
-            error: undefined,
-          }))
+      if (!onRunSubagents) {
+        // Fail honest, never rubber-stamp: with no runner nothing was
+        // reviewed, so APPROVE would be a fabricated verdict on a gate.
+        return textResult(
+          `trayambak__ParallelReview selected ${reviewerProfiles.length} dimension(s) (${reviewerProfiles.map((p) => p.name).join(", ")}) but no subagent runner is configured, so nothing was actually reviewed. Configure onRunSubagents to execute the review.`,
+          /*isError*/ true,
+        )
+      }
+      const results: Array<{ name: string; text: string; error?: string }> = await onRunSubagents(reviewTasks)
 
       const failedDimensions: Array<{ dimension: string; error: string }> = []
       const rawFindings: ReviewFinding[] = []

@@ -11,12 +11,17 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  copyGithubFileViaServer,
+  createGithubBranchViaServer,
+  createGithubPrViaServer,
   githubLoginStatus,
   githubLogout,
+  listGithubRepos,
   openBrowser,
   pollGithubLogin,
   readGithubIssue,
   startGithubLogin,
+  writeGithubFileViaServer,
 } from "./github-auth.js"
 
 afterEach(() => {
@@ -113,5 +118,61 @@ describe("github-auth client", () => {
   it("openBrowser respects the headless opt-out", () => {
     vi.stubEnv("TRAYAMBAK_NO_BROWSER", "1")
     expect(openBrowser("https://example.com")).toBe(false)
+  })
+
+  it("rides the VPS for repos, writes, branches, PRs, and copies", async () => {
+    tmpMachine()
+    const s = await stubAuthServer({
+      "GET /github/repos": () => ({
+        status: 200,
+        json: { ok: true, login: "octocat", repos: [{ fullName: "octocat/mytest1" }] },
+      }),
+      "POST /github/write": () => ({ status: 200, json: { ok: true, commit: "aaa1111" } }),
+      "POST /github/branch": () => ({ status: 200, json: { ok: true, base: "main" } }),
+      "POST /github/pr": () => ({ status: 200, json: { ok: true, number: 7, url: "https://github.com/o/r/pull/7" } }),
+      "POST /github/copy": () => ({ status: 200, json: { ok: true, commit: "bbb2222" } }),
+    })
+    try {
+      const repos = await listGithubRepos({ serverUrl: s.url })
+      expect(repos.ok).toBe(true)
+      expect(repos.login).toBe("octocat")
+      expect(repos.repos?.map((r) => r.fullName)).toEqual(["octocat/mytest1"])
+      const w = await writeGithubFileViaServer("o/r", "README.md", "# hi", "docs", undefined, { serverUrl: s.url })
+      expect(w).toMatchObject({ ok: true, commit: "aaa1111" })
+      const b = await createGithubBranchViaServer("o/r", "trayambak/x", undefined, { serverUrl: s.url })
+      expect(b).toMatchObject({ ok: true, base: "main" })
+      const p = await createGithubPrViaServer("o/r", "trayambak/x", undefined, "Fix", "", { serverUrl: s.url })
+      expect(p).toMatchObject({ ok: true, number: 7 })
+      const c = await copyGithubFileViaServer("o/r", "a", "b", { serverUrl: s.url })
+      expect(c).toMatchObject({ ok: true, commit: "bbb2222" })
+      expect(s.seen.filter((u) => u.startsWith("POST /github/") || u.startsWith("GET /github/"))).toHaveLength(5)
+    } finally {
+      await s.close()
+    }
+  })
+
+  it("maps VPS 401s to the login hint on every write route", async () => {
+    tmpMachine()
+    const s = await stubAuthServer({
+      "GET /github/repos": () => ({ status: 401, json: { error: "GitHub login required" } }),
+      "POST /github/write": () => ({ status: 401, json: { error: "GitHub login required" } }),
+      "POST /github/branch": () => ({ status: 401, json: { error: "GitHub login required" } }),
+      "POST /github/pr": () => ({ status: 401, json: { error: "GitHub login required" } }),
+      "POST /github/copy": () => ({ status: 401, json: { error: "GitHub login required" } }),
+    })
+    try {
+      for (const r of [
+        await listGithubRepos({ serverUrl: s.url }),
+        await writeGithubFileViaServer("o/r", "a.md", "x", "m", undefined, { serverUrl: s.url }),
+        await createGithubBranchViaServer("o/r", "x", undefined, { serverUrl: s.url }),
+        await createGithubPrViaServer("o/r", "x", undefined, "t", "", { serverUrl: s.url }),
+        await copyGithubFileViaServer("o/r", "a", "b", { serverUrl: s.url }),
+      ]) {
+        expect(r.ok).toBe(false)
+        expect(r.reason).toContain("/github login")
+      }
+    } finally {
+      await s.close()
+    }
   })
 })

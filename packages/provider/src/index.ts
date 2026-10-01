@@ -36,6 +36,7 @@ export { OllamaProvider, createOllamaProvider }
 export { PROVIDER_CATALOG, fetchModelsForProvider, fetchModelsDetailed, getCatalogEntry, verifyProviderKey }
 export type { ModelFetchStatus, KeyCheck } from "./catalog.js"
 export type { ChatInput, FimInput, FimResult, Provider, ProviderOptions, WireMessage, WireToolCall } from "./types.js"
+export { clampTemperature } from "./types.js"
 
 /**
  * Fallback parser for models that cannot do native function calling. When the

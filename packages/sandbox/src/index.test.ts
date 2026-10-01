@@ -49,8 +49,11 @@ describe("sandbox honesty", () => {
     vi.unstubAllEnvs()
   })
 
-  it("reports policy-only enforcement for whatever backend is detected", () => {
-    for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted", "fallback"] as const) {
+  it("reports os-sandbox for capable backends with the flag enabled by default", () => {
+    for (const b of ["seatbelt", "landlock", "bwrap"] as const) {
+      expect(enforcementFor(b)).toBe("os-sandbox")
+    }
+    for (const b of ["windows-restricted", "fallback"] as const) {
       expect(enforcementFor(b)).toBe("policy-only")
     }
   })

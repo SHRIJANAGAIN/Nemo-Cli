@@ -13,7 +13,7 @@
  */
 
 export const STABLE_FEATURES: Record<string, boolean> = {
-  sandboxSpawn: false,
+  sandboxSpawn: true,
   sqliteState: false,
   vscodeExtension: false,
   streamingGate: true,

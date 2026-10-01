@@ -9,6 +9,7 @@ import * as https from "https"
 import * as url from "url"
 import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
+import { clampTemperature } from "./types.js"
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
@@ -102,7 +103,7 @@ export class GoogleProvider implements Provider {
       ]
     }
     const gen: Record<string, unknown> = {}
-    if (this.options.temperature !== undefined) gen.temperature = this.options.temperature
+    if (this.options.temperature !== undefined) gen.temperature = clampTemperature(this.options.temperature, 1, 2)
     if (this.options.topP !== undefined) gen.topP = this.options.topP
     if (this.options.maxTokens !== undefined) gen.maxOutputTokens = this.options.maxTokens
     if (Object.keys(gen).length > 0) body.generationConfig = gen

@@ -7,6 +7,7 @@
 import * as http from "http"
 import { randomBytes, timingSafeEqual } from "crypto"
 import { readFileSync } from "node:fs"
+import { join as pathJoin } from "node:path"
 import { Agent, loadConfig } from "../../../apps/runtime/src/index.js"
 import { createTelemetry } from "../../telemetry/src/index.js"
 import { listTranscripts } from "../../session-backends/src/transcript.js"
@@ -24,6 +25,8 @@ import {
 import { activationCheckKey, mintActivationKey } from "../../../apps/runtime/src/license.js"
 import { LicenseStore, defaultLicenseStorePaths } from "./license-store.js"
 import { GitHubOAuthStore, defaultOAuthPath } from "./github-oauth.js"
+import { INSTALL_PS1 } from "./install-ps1.js"
+import { INSTALL_SH } from "./install-sh.js"
 import { recordJob } from "./github-jobs.js"
 import {
   AutofixLedger,
@@ -166,7 +169,10 @@ export interface ServerOptions {
   licenseUsagePath?: string
   /** GitHub OAuth store file (GITHUB_OAUTH_PATH). Tests point it at tmp. */
   githubOAuthPath?: string
-  /**
+  /** Static image dir for /img/:name (Img/). Tests point it at tmp. */
+  imgDir?: string
+  /** Docs dir for /docs/:name (docs/). Tests point it at tmp. */
+  docsDir?: string /**
    * Extra browser origins allowed to call the API, comma-separated
    * (TRAYAMBAK_WEB_ORIGINS). Same-origin plus loopback origins are always
    * allowed; "*" restores the pre-hardening wildcard; anything else is
@@ -189,7 +195,7 @@ const MAX_BODY_BYTES = 1_048_576
 
 export const OPENAPI_SPEC = {
   openapi: "3.0.0",
-  info: { title: "Trayambak Agent API", version: "0.6.0" }, // keep in sync with root package.json
+  info: { title: "Trayambak Agent API", version: "0.6.3" }, // keep in sync with root package.json
   paths: {
     "/health": { get: { summary: "Health check" } },
     "/v1/models": { get: { summary: "List models" } },
@@ -211,6 +217,15 @@ export const OPENAPI_SPEC = {
     "/auth/github/status": { get: { summary: "Poll login completion by machine (public)" } },
     "/auth/github/logout": { post: { summary: "Forget a machine's token (public)" } },
     "/github/read": { post: { summary: "Read an issue + comments with the stored user token (public, logged-in)" } },
+    "/github/repos": { get: { summary: "List the logged-in user's repos with the stored token (public, logged-in)" } },
+    "/github/write": { post: { summary: "Create/update a repo file with the stored user token (public, logged-in)" } },
+    "/github/branch": { post: { summary: "Create a repo branch with the stored user token (public, logged-in)" } },
+    "/github/pr": { post: { summary: "Open a repo PR with the stored user token (public, logged-in)" } },
+    "/github/copy": { post: { summary: "Copy a repo file with the stored user token (public, logged-in)" } },
+    "/img/:name": { get: { summary: "Static README images (public, png/jpg only)" } },
+    "/docs/:name": { get: { summary: "Docs pages as markdown (public, .md only)" } },
+    "/install.ps1": { get: { summary: "Windows one-line installer (public)" } },
+    "/install.sh": { get: { summary: "macOS/Linux one-line installer (public)" } },
     "/license/usage": { post: { summary: "Record pentest tool usage (public, licensed)" } },
     "/webhooks/github": { post: { summary: "GitHub App webhook (HMAC verified)" } },
     "/openapi.json": { get: { summary: "OpenAPI spec" } },
@@ -269,7 +284,21 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
     "/auth/github/status",
     "/auth/github/logout",
     "/github/read",
+    "/github/repos",
+    "/github/write",
+    "/github/branch",
+    "/github/pr",
+    "/github/copy",
+    "/install.ps1",
+    "/install.sh",
   ])
+  // README images live next to the code (Img/); npmjs.com renders
+  // tarball-relative image links unreliably, so absolute URLs point here.
+  const imgDir = options.imgDir ?? process.env.TRAYAMBAK_IMG_DIR ?? "./Img"
+  // Same story for the README's Documentation table: docs/*.md links would
+  // 404 on npm (docs/ isn't even in the tarball), so /docs/:name serves
+  // them as markdown text. Whitelist-only, like /img/.
+  const docsDir = options.docsDir ?? process.env.TRAYAMBAK_DOCS_DIR ?? "./docs"
 
   /** Self-service trial abuse guard: max 5 trial mints per client IP per
    *  hour (in-memory, per process — adequate for trial issuance rates).
@@ -367,6 +396,18 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       return
     }
     const pathname = (req.url ?? "/").split("?")[0]
+    // Static README images (public). Exact-path gate below can't express
+    // /img/:name, so this prefix branch runs first — read-only, strict
+    // filename whitelist, no traversal possible by construction.
+    if (req.method === "GET" && pathname.startsWith("/img/")) {
+      serveReadmeImage(req, res, imgDir, pathname)
+      return
+    }
+    // Same for the README's Documentation table (/docs/:name, markdown).
+    if (req.method === "GET" && pathname.startsWith("/docs/")) {
+      serveDocsFile(req, res, docsDir, pathname)
+      return
+    }
     if (token && req.url !== "/health" && !PUBLIC_LICENSE_PATHS.has(pathname)) {
       // Constant-time compare: a plain !== leaks prefix length via timing.
       const presented = Buffer.from(req.headers.authorization ?? "")
@@ -453,6 +494,18 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
 
     // ---- Server-side licensing (public: the CLI holds no bearer token) ----
     // verify: live check (registry + expiry + revocation + machine binding).
+    if (req.method === "GET" && pathname === "/install.ps1") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
+      res.end(INSTALL_PS1)
+      return
+    }
+
+    if (req.method === "GET" && pathname === "/install.sh") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
+      res.end(INSTALL_SH)
+      return
+    }
+
     if (req.method === "POST" && pathname === "/license/verify") {
       const parsed = await readJsonBody(req, res)
       if (!parsed) return
@@ -603,7 +656,11 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       hits.push(now)
       oauthHitsByIp.set(ip, hits)
       const st = githubOAuth.beginLogin(machine)
-      const url = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&state=${st.state}`
+      // `repo` scope: without it the stored token reads but can never
+      // write — /github/write|branch|pr|copy would 403 on every call and
+      // the agent would keep asking for GITHUB_TOKEN. Scope is granted at
+      // Approve-time in the browser; existing logins re-login once.
+      const url = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=repo&state=${st.state}`
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(JSON.stringify({ ok: true, url }))
       return
@@ -773,6 +830,333 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
             })),
         }),
       )
+      return
+    }
+
+    // ---- VPS-routed GitHub writes (public, machine-bound, logged-in) ----
+    // The CLI never holds the user OAuth token (github-oauth.ts: it is
+    // NEVER returned), so agent writes ride the SAME stored token that
+    // /github/read uses — a direct VPS relation, no GITHUB_TOKEN paste.
+    // MachineId-bound like reads; the token never leaves this process.
+    // Writes are the sharp edge (a leaked machineId writes AS the user),
+    // so every route validates repo/path/branch shapes + the 100KB content
+    // cap before touching api.github.com, and answers 401 with the login
+    // hint when no token is filed for the machine.
+    if (req.method === "GET" && pathname === "/github/repos") {
+      const machine = licenseMachineId(new URL(req.url ?? "/", "http://localhost").searchParams.get("machineId"))
+      const tok = machine ? githubOAuth.tokenFor(machine) : undefined
+      if (!tok) {
+        res.writeHead(401, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "GitHub login required — run /github login first" }))
+        return
+      }
+      const list = await githubApi(`/user/repos?per_page=100&sort=updated`, tok.token)
+      if (list.status === 0) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "GitHub unreachable from the license server" }))
+        return
+      }
+      if (list.status !== 200 || !Array.isArray(list.json)) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(list.json, list.status)}` }))
+        return
+      }
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(
+        JSON.stringify({
+          ok: true,
+          login: tok.login,
+          repos: (list.json as Array<Record<string, unknown>>)
+            .filter((r): r is Record<string, unknown> => !!r && typeof r === "object")
+            .map((r) => ({
+              fullName: typeof r.full_name === "string" ? r.full_name : "",
+              private: r.private === true,
+              defaultBranch: typeof r.default_branch === "string" ? r.default_branch : "main",
+              updatedAt: typeof r.updated_at === "string" ? r.updated_at : "",
+            }))
+            .filter((r) => r.fullName.length > 0),
+        }),
+      )
+      return
+    }
+
+    if (req.method === "POST" && pathname === "/github/write") {
+      const parsed = await readJsonBody(req, res)
+      if (!parsed) return
+      const machine = licenseMachineId(parsed.machineId)
+      const tok = machine ? githubOAuth.tokenFor(machine) : undefined
+      if (!tok) {
+        res.writeHead(401, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "GitHub login required — run /github login first" }))
+        return
+      }
+      let owner = ""
+      let repo = ""
+      try {
+        ;({ owner, repo } = splitRepo(typeof parsed.repo === "string" ? parsed.repo : ""))
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "repo must be owner/name" }))
+        return
+      }
+      const filePath = typeof parsed.path === "string" ? parsed.path.trim().replace(/^\/+/, "") : ""
+      if (!filePath || filePath.split("/").includes("..")) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "path must be a repo-relative file path (no ..)" }))
+        return
+      }
+      const content = typeof parsed.content === "string" ? parsed.content : ""
+      if (Buffer.byteLength(content, "utf8") > 100_000) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "content over 100KB — split it or open a PR" }))
+        return
+      }
+      const message =
+        typeof parsed.message === "string" && parsed.message.trim()
+          ? parsed.message.trim().slice(0, 200)
+          : `trayambak: update ${filePath}`
+      const branch = typeof parsed.branch === "string" && parsed.branch.trim() ? parsed.branch.trim() : undefined
+      const refQuery = branch ? `?ref=${encodeURIComponent(branch)}` : ""
+      const existing = await githubApi(
+        `/repos/${owner}/${repo}/contents/${encodeContentPath(filePath)}${refQuery}`,
+        tok.token,
+      )
+      let sha: string | undefined
+      if (existing.status >= 200 && existing.status < 300) {
+        const ej = existing.json as { sha?: unknown; type?: unknown } | null
+        if (!ej || typeof ej !== "object" || ej.type === undefined || ej.type === "file") {
+          sha =
+            typeof (ej as { sha?: unknown } | null)?.sha === "string"
+              ? ((ej as { sha: string }).sha as string)
+              : undefined
+        } else {
+          res.writeHead(400, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ error: `${filePath} exists but is not a file — refusing to overwrite` }))
+          return
+        }
+      } else if (existing.status !== 404) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(existing.json, existing.status)}` }))
+        return
+      }
+      const put = await githubApi(
+        `/repos/${owner}/${repo}/contents/${encodeContentPath(filePath)}`,
+        tok.token,
+        20_000,
+        {
+          method: "PUT",
+          body: {
+            message,
+            content: Buffer.from(content, "utf8").toString("base64"),
+            ...(sha ? { sha } : {}),
+            ...(branch ? { branch } : {}),
+          },
+        },
+      )
+      if (put.status < 200 || put.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(put.json, put.status)}` }))
+        return
+      }
+      const pj = put.json as { commit?: { sha?: unknown } } | null
+      const commitSha =
+        pj && typeof pj === "object" && pj.commit && typeof pj.commit.sha === "string" ? pj.commit.sha : ""
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ ok: true, commit: commitSha.slice(0, 7) || null }))
+      return
+    }
+
+    if (req.method === "POST" && pathname === "/github/branch") {
+      const parsed = await readJsonBody(req, res)
+      if (!parsed) return
+      const machine = licenseMachineId(parsed.machineId)
+      const tok = machine ? githubOAuth.tokenFor(machine) : undefined
+      if (!tok) {
+        res.writeHead(401, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "GitHub login required — run /github login first" }))
+        return
+      }
+      let owner = ""
+      let repo = ""
+      try {
+        ;({ owner, repo } = splitRepo(typeof parsed.repo === "string" ? parsed.repo : ""))
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "repo must be owner/name" }))
+        return
+      }
+      const branch = typeof parsed.branch === "string" ? parsed.branch.trim() : ""
+      if (!/^[A-Za-z0-9][A-Za-z0-9/_.-]{0,120}$/.test(branch)) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `invalid branch name "${branch}"` }))
+        return
+      }
+      const meta = await githubApi(`/repos/${owner}/${repo}`, tok.token)
+      if (meta.status < 200 || meta.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(meta.json, meta.status)}` }))
+        return
+      }
+      const mj = meta.json as { default_branch?: unknown } | null
+      const baseBranch =
+        typeof parsed.base === "string" && parsed.base.trim()
+          ? parsed.base.trim()
+          : mj && typeof mj === "object" && typeof mj.default_branch === "string"
+            ? mj.default_branch
+            : "main"
+      const ref = await githubApi(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(baseBranch)}`, tok.token)
+      if (ref.status < 200 || ref.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(ref.json, ref.status)}` }))
+        return
+      }
+      const rj = ref.json as { object?: { sha?: unknown } } | null
+      const baseSha =
+        rj && typeof rj === "object" && rj.object && typeof rj.object.sha === "string" ? rj.object.sha : ""
+      if (!baseSha) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `could not find sha for base ${baseBranch}` }))
+        return
+      }
+      const created = await githubApi(`/repos/${owner}/${repo}/git/refs`, tok.token, 20_000, {
+        method: "POST",
+        body: { ref: `refs/heads/${branch}`, sha: baseSha },
+      })
+      if (created.status === 422) {
+        res.writeHead(409, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `branch ${branch} already exists — write onto it directly` }))
+        return
+      }
+      if (created.status < 200 || created.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(created.json, created.status)}` }))
+        return
+      }
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ ok: true, branch, base: baseBranch }))
+      return
+    }
+
+    if (req.method === "POST" && pathname === "/github/pr") {
+      const parsed = await readJsonBody(req, res)
+      if (!parsed) return
+      const machine = licenseMachineId(parsed.machineId)
+      const tok = machine ? githubOAuth.tokenFor(machine) : undefined
+      if (!tok) {
+        res.writeHead(401, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "GitHub login required — run /github login first" }))
+        return
+      }
+      let owner = ""
+      let repo = ""
+      try {
+        ;({ owner, repo } = splitRepo(typeof parsed.repo === "string" ? parsed.repo : ""))
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "repo must be owner/name" }))
+        return
+      }
+      const head = typeof parsed.head === "string" ? parsed.head.trim() : ""
+      const title = typeof parsed.title === "string" ? parsed.title.trim() : ""
+      if (!head || !title) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "head branch and title are required" }))
+        return
+      }
+      const created = await githubApi(`/repos/${owner}/${repo}/pulls`, tok.token, 20_000, {
+        method: "POST",
+        body: {
+          title: title.slice(0, 200),
+          head,
+          ...(typeof parsed.base === "string" && parsed.base.trim() ? { base: parsed.base.trim() } : {}),
+          body: typeof parsed.body === "string" ? parsed.body.slice(0, 8000) : "",
+        },
+      })
+      if (created.status < 200 || created.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(created.json, created.status)}` }))
+        return
+      }
+      const cj = created.json as { html_url?: unknown; number?: unknown } | null
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(
+        JSON.stringify({
+          ok: true,
+          number: cj && typeof cj === "object" && typeof cj.number === "number" ? cj.number : null,
+          url: cj && typeof cj === "object" && typeof cj.html_url === "string" ? cj.html_url : "",
+        }),
+      )
+      return
+    }
+
+    if (req.method === "POST" && pathname === "/github/copy") {
+      const parsed = await readJsonBody(req, res)
+      if (!parsed) return
+      const machine = licenseMachineId(parsed.machineId)
+      const tok = machine ? githubOAuth.tokenFor(machine) : undefined
+      if (!tok) {
+        res.writeHead(401, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "GitHub login required — run /github login first" }))
+        return
+      }
+      let owner = ""
+      let repo = ""
+      try {
+        ;({ owner, repo } = splitRepo(typeof parsed.repo === "string" ? parsed.repo : ""))
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "repo must be owner/name" }))
+        return
+      }
+      const sourcePath = typeof parsed.sourcePath === "string" ? parsed.sourcePath.trim().replace(/^\/+/, "") : ""
+      const destPath = typeof parsed.destPath === "string" ? parsed.destPath.trim().replace(/^\/+/, "") : ""
+      if (!sourcePath || !destPath || sourcePath.split("/").includes("..") || destPath.split("/").includes("..")) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "sourcePath and destPath must be repo-relative file paths (no ..)" }))
+        return
+      }
+      const src = await githubApi(`/repos/${owner}/${repo}/contents/${encodeContentPath(sourcePath)}`, tok.token)
+      if (src.status < 200 || src.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(src.json, src.status)}` }))
+        return
+      }
+      const sj = src.json as { content?: unknown } | null
+      if (!sj || typeof sj !== "object" || typeof sj.content !== "string" || !sj.content) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `${sourcePath} has no retrievable content` }))
+        return
+      }
+      const b64 = Buffer.from(Buffer.from(sj.content, "base64").toString("utf8"), "utf8").toString("base64")
+      const existing = await githubApi(`/repos/${owner}/${repo}/contents/${encodeContentPath(destPath)}`, tok.token)
+      let sha: string | undefined
+      if (existing.status >= 200 && existing.status < 300) {
+        const ej = existing.json as { sha?: unknown } | null
+        sha = ej && typeof ej === "object" && typeof ej.sha === "string" ? ej.sha : undefined
+      }
+      const put = await githubApi(
+        `/repos/${owner}/${repo}/contents/${encodeContentPath(destPath)}`,
+        tok.token,
+        20_000,
+        {
+          method: "PUT",
+          body: {
+            message: `trayambak: copy ${sourcePath} -> ${destPath}`,
+            content: b64,
+            ...(sha ? { sha } : {}),
+          },
+        },
+      )
+      if (put.status < 200 || put.status >= 300) {
+        res.writeHead(502, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: `GitHub: ${githubErrorMessage(put.json, put.status)}` }))
+        return
+      }
+      const pj = put.json as { commit?: { sha?: unknown } } | null
+      const commitSha =
+        pj && typeof pj === "object" && pj.commit && typeof pj.commit.sha === "string" ? pj.commit.sha : ""
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ ok: true, commit: commitSha.slice(0, 7) || null }))
       return
     }
 
@@ -1154,6 +1538,59 @@ async function installationTokenFor(installationId: number): Promise<string> {
   }
 }
 
+/** Serve one README image by exact filename. Whitelist-only (no dots
+ *  beyond the extension, no slashes): traversal is impossible because the
+ *  name can never name a directory. Never throws (async boundary). */
+async function serveReadmeImage(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+  imgDir: string,
+  pathname: string,
+): Promise<void> {
+  try {
+    const name = pathname.slice("/img/".length)
+    if (!/^[A-Za-z0-9_-]+\.(png|jpg|jpeg)$/i.test(name)) {
+      res.writeHead(404, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ error: "not found" }))
+      return
+    }
+    const { readFile } = await import("node:fs/promises")
+    const data = await readFile(pathJoin(imgDir, name))
+    const type = /\.png$/i.test(name) ? "image/png" : "image/jpeg"
+    res.writeHead(200, { "Content-Type": type, "Cache-Control": "public, max-age=86400" })
+    res.end(data)
+  } catch {
+    res.writeHead(404, { "Content-Type": "application/json" })
+    res.end(JSON.stringify({ error: "not found" }))
+  }
+}
+
+/** Serve one docs page by exact filename (*.md only, same whitelist
+ *  discipline as images). Renders as markdown text — readable anywhere,
+ *  including the npm README links. Never throws. */
+async function serveDocsFile(
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+  docsDir: string,
+  pathname: string,
+): Promise<void> {
+  try {
+    const name = pathname.slice("/docs/".length)
+    if (!/^[A-Za-z0-9_-]+\.md$/i.test(name)) {
+      res.writeHead(404, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ error: "not found" }))
+      return
+    }
+    const { readFile } = await import("node:fs/promises")
+    const data = await readFile(pathJoin(docsDir, name))
+    res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "public, max-age=3600" })
+    res.end(data)
+  } catch {
+    res.writeHead(404, { "Content-Type": "application/json" })
+    res.end(JSON.stringify({ error: "not found" }))
+  }
+}
+
 /** Machine identity guard for licensing routes: non-empty short string.
  *  Returns "" when missing/invalid (callers answer 400). */
 function licenseMachineId(value: unknown): string {
@@ -1163,18 +1600,29 @@ function licenseMachineId(value: unknown): string {
 }
 
 /** GitHub REST call with a user token. Never throws — transport failure is
- *  `{status: 0, json: null}` so routes answer 502 instead of crashing. */
-async function githubApi(path: string, token: string, timeoutMs = 20_000): Promise<{ status: number; json: unknown }> {
+ *  `{status: 0, json: null}` so routes answer 502 instead of crashing.
+ *  Reads are GET by default; `write` switches to POST/PUT/PATCH with a JSON
+ *  body (VPS-routed agent writes ride this — the token never leaves). */
+async function githubApi(
+  path: string,
+  token: string,
+  timeoutMs = 20_000,
+  write?: { method: "POST" | "PUT" | "PATCH"; body: unknown },
+): Promise<{ status: number; json: unknown }> {
   try {
-    const res = await fetch(`https://api.github.com${path}`, {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "trayambak",
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    })
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "trayambak",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    }
+    const init: RequestInit = { headers, signal: AbortSignal.timeout(timeoutMs) }
+    if (write) {
+      headers["Content-Type"] = "application/json"
+      init.method = write.method
+      init.body = JSON.stringify(write.body)
+    }
+    const res = await fetch(`https://api.github.com${path}`, init)
     let json: unknown = null
     try {
       json = await res.json()
@@ -1185,6 +1633,24 @@ async function githubApi(path: string, token: string, timeoutMs = 20_000): Promi
   } catch {
     return { status: 0, json: null }
   }
+}
+
+/** Best-effort `message` from a GitHub error body ("" when unparseable). */
+function githubErrorMessage(json: unknown, status: number): string {
+  if (json && typeof json === "object" && typeof (json as { message?: unknown }).message === "string") {
+    return (json as { message: string }).message
+  }
+  return `HTTP ${status}`
+}
+
+/** Encode a contents-API path segment by segment: encodeURIComponent() over
+ *  the whole path turns `src/x.ts` into `src%2Fx.ts`, which the contents API
+ *  resolves as a single literal segment and 404s on every nested file. */
+function encodeContentPath(p: string): string {
+  return p
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/")
 }
 
 /** Best-effort client IP behind nginx + Cloudflare: CF-Connecting-IP first

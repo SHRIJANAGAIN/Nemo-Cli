@@ -40,9 +40,12 @@ call npm --prefix "%TRAYAMBAK_HOME%" run build >nul
 if errorlevel 1 ( echo [trayambak] build failed. & endlocal & exit /b 1 )
 
 :exec
+REM Propagate the CLI's exit code: without this, `endlocal` resets ERRORLEVEL
+REM to 0, so a refusal (e.g. the retired --dump-system-prompt, exit 2) looked
+REM like success to every script and CI step driving the shim.
 node "%TRAYAMBAK_HOME%\dist\apps\cli\src\index.js" %*
-endlocal
-goto :eof
+set "RC=%ERRORLEVEL%"
+endlocal & exit /b %RC%
 
 :notfound
 echo [trayambak] Could not locate trayambak project root.

@@ -11,6 +11,7 @@ import {
   flagAliasMap,
   flagTypeMap,
   knownFlagNames,
+  refuseSystemPromptDump,
   renderRootHelp,
   renderCommandHelp,
   completionScript,
@@ -218,20 +219,19 @@ async function main(): Promise<void> {
     process.stdout.write(renderCommandHelp(findCommand(command)!, BIN_NAME))
     return
   }
-  // DUMP_SYSTEM_PROMPT port (ccb --dump-system-prompt): print the exact
-  // prompt the model sees (tools + memory + mode blocks) and exit. Offline,
-  // no key needed — Agent construction builds the prompt without calling
-  // any endpoint. Accepts the same --provider/--model/--base-url/--cwd
-  // overrides as run/chat.
-  if (process.argv.includes("--dump-system-prompt")) {
-    const { flags } = parseFlags(process.argv.slice(2))
-    const dumpOverrides: Partial<TrayambakConfig> = {}
-    if (flags["base-url"]) dumpOverrides.baseUrl = flags["base-url"]
-    if (flags.model) dumpOverrides.model = flags.model
-    if (flags.provider) dumpOverrides.provider = flags.provider as TrayambakConfig["provider"]
-    if (flags.cwd) dumpOverrides.cwd = flags.cwd
-    const agent = new Agent({ config: loadConfig(dumpOverrides) })
-    process.stdout.write(agent.session.systemContext + "\n")
+  // NOTE: there is deliberately no `--dump-system-prompt` flag. The system
+  // prompt (tools + memory + rules + mode blocks) is the agent's most valuable
+  // secret: printing it turns any local shell, CI log, crash artifact or
+  // screenshot into a full spec of the agent's capabilities. It used to be
+  // printed verbatim here and advertised in the flag registry + three docs.
+  // To inspect prompt construction, read `buildSystemPrompt()` from a test —
+  // never add a CLI port that writes it to stdout.
+  //
+  // Refused loudly rather than silently: an unrecognised flag in the command
+  // position falls through to `case undefined:` and starts an empty chat, so
+  // without this an old script would exit 0 having printed nothing and having
+  // quietly opened an interactive session.
+  if (refuseSystemPromptDump(process.argv, BIN_NAME)) {
     return
   }
 

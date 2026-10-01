@@ -8,6 +8,13 @@ import https from "https"
 import http from "http"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext } from "../types.js"
+import {
+  copyGithubFileViaServer,
+  createGithubBranchViaServer,
+  createGithubPrViaServer,
+  listGithubRepos,
+  writeGithubFileViaServer,
+} from "../../github-auth.js"
 
 const GH_API = "https://api.github.com"
 
@@ -363,7 +370,7 @@ const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "github",
   description:
-    "Interact with GitHub repositories: read an issue/PR, list files, read/write files, copy files, compare branches. Use this for GitHub-related tasks.",
+    "Interact with GitHub repositories: read an issue/PR, list files, read/write files, copy files, compare branches, list your own repos. Reads work unauthenticated for public repos (a token extends them to private ones); writes ride your /github login through the VPS automatically when no GITHUB_TOKEN is set — never ask the user to paste a token.",
   parameters: {
     type: "object",
     required: ["repo", "action"],
@@ -381,6 +388,7 @@ const definition: ToolDefinition = {
           "create_pr",
           "copy_files",
           "compare",
+          "list_repos",
         ],
       },
       issue_number: { type: "string", description: "Issue/PR number for read_issue" },
@@ -410,6 +418,11 @@ export function createGithubTool(token?: string): Tool {
     async execute(_id, args, _signal, _update, context: ToolContext) {
       const ctx = context as ToolContext & { githubToken?: string }
       const ghToken = ctx.githubToken ?? token ?? process.env.GITHUB_TOKEN
+      // VPS-routed writes: the CLI never holds the OAuth token, so when no
+      // local token exists the write actions ride the stored /github login
+      // through the license server (machine-bound, token never leaves the
+      // VPS). serverUrl comes from the agent config (boot loadConfig).
+      const serverOpts = { serverUrl: ctx?.config?.licenseServerUrl }
       const repoInput = String(args.repo ?? "")
       const action = String(args.action ?? "")
       const parsed = parseRepo(repoInput)
@@ -430,24 +443,36 @@ export function createGithubTool(token?: string): Tool {
           const content = typeof args.content === "string" ? args.content : ""
           if (!filePath) return textResult("github: path is required for write_file.", /*isError*/ true)
           if (!content) return textResult("github: content is required for write_file.", /*isError*/ true)
-          if (!ghToken)
-            return textResult(
-              "github: write_file needs a write token (set GITHUB_TOKEN or pass githubToken).",
-              /*isError*/ true,
-            )
           const msg = typeof args.message === "string" ? args.message : ""
           const wbranch = typeof args.branch === "string" && args.branch.trim() ? args.branch.trim() : undefined
+          if (!ghToken) {
+            const r = await writeGithubFileViaServer(repoInput, filePath, content, msg, wbranch, serverOpts)
+            if (!r.ok)
+              return textResult(
+                `github: write_file via your GitHub login failed — ${r.reason} (or set GITHUB_TOKEN).`,
+                /*isError*/ true,
+              )
+            return textResult(
+              `github: wrote ${filePath} in ${owner}/${repo}${r.commit ? ` (commit ${r.commit})` : ""} (via your GitHub login)`,
+            )
+          }
           return textResult(await githubWriteFile(owner, repo, filePath, content, msg, ghToken, wbranch))
         }
         case "create_branch": {
           const branch = String(args.branch ?? "").trim()
           if (!branch) return textResult("github: branch is required for create_branch.", /*isError*/ true)
-          if (!ghToken)
-            return textResult(
-              "github: create_branch needs a write token (set GITHUB_TOKEN or pass githubToken).",
-              /*isError*/ true,
-            )
           const base = typeof args.base === "string" ? args.base : undefined
+          if (!ghToken) {
+            const r = await createGithubBranchViaServer(repoInput, branch, base, serverOpts)
+            if (!r.ok)
+              return textResult(
+                `github: create_branch via your GitHub login failed — ${r.reason} (or set GITHUB_TOKEN).`,
+                /*isError*/ true,
+              )
+            return textResult(
+              `github: created branch ${branch} off ${r.base ?? "default"} in ${owner}/${repo} (via your GitHub login)`,
+            )
+          }
           return textResult(await githubCreateBranch(owner, repo, branch, base, ghToken))
         }
         case "create_pr": {
@@ -455,13 +480,17 @@ export function createGithubTool(token?: string): Tool {
           const title = typeof args.title === "string" ? args.title : ""
           if (!head || !title)
             return textResult("github: branch (head) and title are required for create_pr.", /*isError*/ true)
-          if (!ghToken)
-            return textResult(
-              "github: create_pr needs a write token (set GITHUB_TOKEN or pass githubToken).",
-              /*isError*/ true,
-            )
           const base = typeof args.base === "string" ? args.base : undefined
           const body = typeof args.body === "string" ? args.body : ""
+          if (!ghToken) {
+            const r = await createGithubPrViaServer(repoInput, head, base, title, body, serverOpts)
+            if (!r.ok)
+              return textResult(
+                `github: create_pr via your GitHub login failed — ${r.reason} (or set GITHUB_TOKEN).`,
+                /*isError*/ true,
+              )
+            return textResult(`github: opened PR #${r.number ?? "?"} ${r.url ?? ""} (via your GitHub login)`)
+          }
           return textResult(await githubCreatePr(owner, repo, head, base, title, body, ghToken))
         }
         case "get_tree":
@@ -479,12 +508,51 @@ export function createGithubTool(token?: string): Tool {
           const dest = String(args.dest_path ?? "")
           if (!source || !dest)
             return textResult("github: source_path and dest_path are required for copy_files.", /*isError*/ true)
-          if (!ghToken)
+          if (!ghToken) {
+            const r = await copyGithubFileViaServer(repoInput, source, dest, serverOpts)
+            if (!r.ok)
+              return textResult(
+                `github: copy_files via your GitHub login failed — ${r.reason} (or set GITHUB_TOKEN).`,
+                /*isError*/ true,
+              )
             return textResult(
-              "github: copy_files needs a write token (set GITHUB_TOKEN or pass githubToken).",
-              /*isError*/ true,
+              `github: copied ${source} -> ${dest} in ${owner}/${repo}${r.commit ? ` (commit ${r.commit})` : ""} (via your GitHub login)`,
             )
+          }
           return textResult(await githubCopyFiles(owner, repo, source, dest, ghToken))
+        }
+        case "list_repos": {
+          // Your repos, by your handle: direct API when a token exists,
+          // otherwise the VPS rides the stored /github login.
+          if (ghToken) {
+            const reply = await ghRequest(`/user/repos?per_page=100&sort=updated`, ghToken)
+            if (reply.status < 200 || reply.status >= 300)
+              return textResult(`github: failed to list repos: ${describeFailure("repos", reply)}`)
+            try {
+              const data = JSON.parse(reply.body) as Array<{
+                full_name?: string
+                private?: boolean
+                default_branch?: string
+                updated_at?: string
+              }>
+              const lines = data
+                .filter((r) => typeof r.full_name === "string")
+                .map(
+                  (r) =>
+                    `  ${r.private === true ? "🔒" : "🌐"} ${r.full_name} (default: ${r.default_branch ?? "main"})`,
+                )
+              return textResult(`github repos (${lines.length}):\n${lines.join("\n") || "  (none)"}`)
+            } catch {
+              return textResult("github: invalid repo-list response")
+            }
+          }
+          const r = await listGithubRepos(serverOpts)
+          if (!r.ok)
+            return textResult(`github: list_repos failed — ${r.reason} (or set GITHUB_TOKEN).`, /*isError*/ true)
+          const lines = (r.repos ?? []).map(
+            (x) => `  ${x.private ? "🔒" : "🌐"} ${x.fullName} (default: ${x.defaultBranch || "main"})`,
+          )
+          return textResult(`github repos for @${r.login ?? "?"} (${lines.length}):\n${lines.join("\n") || "  (none)"}`)
         }
         case "compare": {
           const base = String(args.base ?? "main")
@@ -513,7 +581,7 @@ export function createGithubTool(token?: string): Tool {
         }
         default:
           return textResult(
-            `github: unknown action "${action}". Use read_issue, get_tree, read_files, write_file, create_branch, create_pr, copy_files, or compare.`,
+            `github: unknown action "${action}". Use read_issue, get_tree, read_files, write_file, create_branch, create_pr, copy_files, compare, or list_repos.`,
             /*isError*/ true,
           )
       }

@@ -82,6 +82,9 @@ export function createTranscript(workDir: string, id?: string): { id: string } {
 
 export function appendContext(id: string, record: unknown): void {
   try {
+    // Fail-closed: a system-role record must never reach disk, even if a
+    // future caller passes session-shaped rows here (mirrors Session.save).
+    if (record !== null && typeof record === "object" && (record as { role?: unknown }).role === "system") return
     fs.mkdirSync(sessionDir(id), { recursive: true })
     fs.appendFileSync(contextFile(id), JSON.stringify(record) + "\n", "utf8")
     touchState(id)

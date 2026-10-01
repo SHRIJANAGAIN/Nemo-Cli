@@ -41,9 +41,11 @@ if errorlevel 1 ( echo [skt] build failed. & endlocal & exit /b 1 )
 
 :exec
 set "TRAYAMBAK_BIN_NAME=skt"
+REM Propagate the CLI's exit code (see trayambak.cmd): `endlocal` resets
+REM ERRORLEVEL, so refusals used to reach scripts as success.
 node "%TRAYAMBAK_HOME%\dist\apps\cli\src\index.js" %*
-endlocal
-goto :eof
+set "RC=%ERRORLEVEL%"
+endlocal & exit /b %RC%
 
 :notfound
 echo [skt] Could not locate trayambak project root.

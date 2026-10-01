@@ -30,8 +30,20 @@
   `sdk` (TypeScript SDK), `coding-agent` (high-level coding task
   orchestrator), `harness` (runtime plugin/facts harness),
   `checkpoints`, `mcp-server`, `modes`.
-- `packages/core` holds the agent loop, approvals, hook runtime, budget,
-  and sandbox internals.
+- `packages/core` holds the shared primitives: `approval.ts` (the single
+  tool-approval decision point), `hook_runtime.ts`, `rollout_budget.ts`,
+  `token_budget.ts`, `plan_mode.ts`, `process.ts` (output caps, process-group
+  kill, cancellation), `secrets.ts` (redaction + secure dirs),
+  `state_db.ts` (state + hash-chained `audit_log`), `auth.ts`,
+  `subagents.ts`, `analytics.ts`, `env_filter.ts`, `feature_flags.ts`,
+  `session_store.ts`, plus `context/`, `cron/`, `curator/`, `memory/`,
+  `providers/`, `toolsets/` subdirectories.
+  **The agent loop itself is `apps/runtime/src/agent/agent-loop.ts`, not
+  `packages/core`.**
+- `packages/sandbox` holds the OS-level sandbox: `gate.ts` is the single
+  decision point for whether a run is `policy-only` or `os-sandbox`,
+  `spawn.ts` implements the seatbelt/bubblewrap spawners, and
+  `execpolicy` implements the deny-first command policy.
 - `skt/` numbered internal subsystems (mistake memory, evals, memory, control,
   healing, hooks).
 - `assets/agents/*`: bundled specialist subagent personas for architecture,
@@ -40,6 +52,33 @@
 - Parallel multi-agent workflows: `trayambak__ParallelReview` (multi-dimension
   parallel review with evidence deduplication & adversarial verification) and
   `trayambak__ParallelExecute` (collaborative parallel execution).
+
+## Security Model
+
+- **One decision point.** `approvalFor()` in `packages/core/src/approval.ts`
+  is the only place a tool call is approved. Its switch is exhaustive and its
+  `default` returns `ask`, so an unknown future action can never silently
+  allow. The `approval-mode-exhaustive` lint rule enforces the `default`.
+- **Destructive actions are gated twice.** `FORCE_ASK_RULES`
+  (`packages/protocol/src/permission-rules.ts`) pattern-matches destructive
+  commands. `IRREVERSIBLE_FORCE_ASK_REASONS` narrows that set to the actions
+  whose damage cannot be undone (deletion, data/infra destruction, evidence
+  erasure, unreviewed remote code execution); those still ask under
+  `auto-approve`. Recoverable or routine operations only ask in the default
+  `ask` mode, so auto-approve does not become a prompt wall.
+- **Enforcement is honest by construction.** `packages/sandbox/src/gate.ts`
+  reports `os-sandbox` only when a real isolator backs the backend, and
+  Windows and unknown platforms stay `policy-only` because no OS isolator
+  exists there. A handle never claims isolation it does not have.
+  `FEATURE_SANDBOXSPAWN=0` forces the policy-only path.
+- **Audit is tamper-evident.** `audit_log` rows are hash-chained
+  (`sha256(prev_hash + canonicalJSON(row))`) in both state backends, with
+  `prev_hash` kept inside the canonical body so reordering breaks linkage.
+  `verifyChain()` reports which link broke and why.
+- **Secrets.** `secrets.ts` centralises redaction before hooks, audit,
+  analytics, and telemetry, and writes credentials `0600` via an atomic
+  temp-file rename. `logout()` clears without unlinking, so it never becomes
+  a path-existence oracle.
 
 ## Commands
 
@@ -59,7 +98,7 @@
   `packages/provider/src/providers.test.ts` patterns (fake server + stub
   responses) for model-free tests.
 - **Coverage**: measured from `npm run test:coverage`. Current ratchets
-  (measured 2026-09-29, must only rise):
+  (floors, defined in `vitest.config.ts`; must only rise):
   - repo floor: **55% statements / 73% branches / 63% functions / 55% lines**
   - `packages/core/src/**`: **79% statements / 85% branches / 83% functions / 79% lines**
 - All new code must land with tests or CI goes red.

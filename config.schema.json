@@ -7,6 +7,7 @@
     "model": { "type": "string" },
     "small_model": { "type": "string" },
     "subagent_model": { "type": "string" },
+    "judge_model": { "type": "string" },
     "apiKey": { "type": "string" },
     "provider": {
       "type": "string",
@@ -39,7 +40,7 @@
     "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
     "maxTokens": { "type": "number" },
     "timeoutMs": { "type": "number" },
-    "maxTurns": { "type": "number" },
+    "maxTurns": { "type": "integer", "minimum": 1, "maximum": 10000 },
     "maxToolCalls": { "type": "number" }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "trayambak",
-  "version": "0.6.0",
+  "version": "0.6.6",
   "private": true,
   "type": "commonjs",
   "description": "Trayambak is a CLI coding agent designed for autonomous software development. It is developed and maintained by **SKT AI LABS PRIVATE LIMITED** and licensed under the **Trayambak CLI Proprietary License**.",

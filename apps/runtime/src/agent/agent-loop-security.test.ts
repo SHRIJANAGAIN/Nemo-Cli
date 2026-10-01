@@ -199,3 +199,29 @@ describe("per-tool timeout ceiling", () => {
     assertProviderCalls(scripted.calls(), 2, "definition-timeout turns")
   })
 })
+
+describe("tool context provider", () => {
+  it("passes the run provider through to tool context", async () => {
+    let seen: unknown = "unset"
+    const spy: Tool = {
+      definition: {
+        name: "probe",
+        description: "context spy",
+        parameters: { type: "object", properties: {}, required: [] },
+        timeoutMs: 5_000,
+      },
+      execute: async (_id, _args, _signal, _update, context) => {
+        seen = context?.provider
+        return textResult("ok")
+      },
+    }
+    const scripted = makeScriptedProvider([toolReply("c1", "probe", { n: 1 }), textReply("done")])
+    const config = testBaseConfig({
+      permissions: { mode: "default", rules: [], askByDefault: true, uiMode: "full-access" },
+    })
+    await runTestLoop("go", config, scripted, { tools: [spy] })
+    // runTestLoop feeds the scripted provider as the run provider.
+    expect(seen).toBe(scripted.provider)
+    assertProviderCalls(scripted.calls(), 2, "context-provider turns")
+  })
+})

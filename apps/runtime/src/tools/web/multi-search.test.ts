@@ -20,7 +20,7 @@ import os from "node:os"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { TrayambakConfig } from "../../config.js"
 import type { ToolContext, ToolResult } from "../types.js"
-import { createWebSearchTool, multiSearch } from "./multi-search.js"
+import { createWebSearchTool, multiSearch, resolveDuckDuckGoHref } from "./multi-search.js"
 
 /** Route table shared with the http(s) mocks (vi.hoisted → exists before the
  *  hoisted vi.mock factories and the imported tool module run). */
@@ -234,6 +234,31 @@ describe("provider failover and parsing", () => {
     // The first provider filled the quota → hsearch/POST must never run.
     expect(net.requests).toHaveLength(1)
     expect(net.requests[0]).toContain("html.duckduckgo.com")
+  })
+
+  it("resolves DuckDuckGo redirect links to real destinations", () => {
+    expect(resolveDuckDuckGoHref("//duckduckgo.com/l/?uddg=https%3A%2F%2Fa.example%2Fx&rut=abc")).toBe(
+      "https://a.example/x",
+    )
+    expect(resolveDuckDuckGoHref("//duckduckgo.com/l/?uddg=http%3A%2F%2Fb.example%2Fy")).toBe("http://b.example/y")
+    expect(resolveDuckDuckGoHref("https://plain.example/z")).toBe("https://plain.example/z")
+    expect(resolveDuckDuckGoHref("//duckduckgo.com/l/?rut=nouddg")).toBe("https://duckduckgo.com/l/?rut=nouddg")
+  })
+
+  it("serves real destination URLs (not DDG redirect links) to the model", async () => {
+    const html =
+      `<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fa.example%2Falpha&amp;rut=1">Alpha</a>` +
+      `<a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fa.example%2Falpha&amp;rut=1">about alpha</a>` +
+      `<a class="result__a" href="https://b.example/beta">Beta</a>` +
+      `<a class="result__snippet">about beta</a>`
+    net.routes.set("html.duckduckgo.com", html)
+    const tool = createWebSearchTool()
+    const res = await tool.execute("t1", { query: "alpha", provider: "duckduckgo" }, undefined, undefined, makeCtx())
+    const text = firstText(res)
+    expect(res.isError).toBe(false)
+    expect(text).toContain("https://a.example/alpha")
+    expect(text).toContain("https://b.example/beta")
+    expect(text).not.toContain("duckduckgo.com/l/")
   })
 
   it("honours a max_results floor of 1", async () => {

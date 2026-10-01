@@ -51,6 +51,8 @@ import {
   type TrayambakAppProps,
 } from "./app-bootstrap.js"
 import { createSessionPickerActions } from "./session-picker-actions.js"
+import { runDevmode } from "./devmode-command.js"
+import { runMcp } from "./mcp-command.js"
 export { type TrayambakAppProps } from "./app-bootstrap.js"
 import { useAppInput } from "./useAppInput.js"
 import { onMouseScroll } from "./mouse-input.js"
@@ -63,6 +65,7 @@ import type { PaletteEntry } from "./command-palette.js"
 import { ModelPicker } from "./ModelPicker.js"
 import { ProviderPicker } from "./ProviderPicker.js"
 import { SplashScreen } from "./SplashScreen.js"
+import { BootCine } from "./BootCine.js"
 import { SandboxSetup } from "./SandboxSetup.js"
 import { pushRecent, toggleFavorite } from "./model-picker.js"
 import { Sidebar } from "./Sidebar.js"
@@ -239,18 +242,9 @@ export const TrayambakApp = ({
     setScrollBack((s) => scrollOffsetAfterGrowth(prev, messages.length, s))
     scrollLenRef.current = messages.length
   }, [messages.length])
-  // Snap to live when a turn STARTS — the user just submitted (or a queued
-  // prompt fired), so the new exchange must be in-frame. The position now
-  // SURVIVES turn end (it used to force scrollBack→0 the moment the turn
-  // ended — "scroll karke chhodo to turn khatam hote hi wapas bottom pe
-  // snap ho jata tha"): wheel reporting is on for the TUI's lifetime, so a
-  // parked offset stays wheel-usable at idle and only moves away when the
-  // user scrolls/pages back down to live (0). Wholesale history replaces
-  // (/clear, restore, new chat → epoch bump) still reset: those swap in
-  // different rows entirely.
-  useEffect(() => {
-    if (turnActive) setScrollBack(0)
-  }, [turnActive])
+  // Snap to live ONLY at submit (runSlash + handleInput's runAgent call):
+  // the old turnActive effect yanked mid-turn wheel-ups back to live.
+  // The growth anchor above keeps a parked window stable while rows append.
   useEffect(() => {
     setScrollBack(0)
   }, [staticEpoch])
@@ -286,6 +280,10 @@ export const TrayambakApp = ({
    *  timer (single Ctrl-C never exits — see resolveCtrlCPress). */
   const lastCtrlCRef = useRef(0)
   const ctrlCTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** /github login wait guard: blocks stacked ~60s pollers from a
+   *  double-fired slash (chooser pick + Enter) — the stale poller wrote a
+   *  competing outcome row (blink). While true, re-login parks. */
+  const githubLoginBusyRef = useRef(/*initial*/ false)
   const bgRunningCount = Array.from(backgroundSubagents.values()).filter((j) => j.status === "running").length
   /** Boot ALWAYS lands on the first screen — never the session picker.
    *  The old init auto-opened the picker whenever sessions existed without
@@ -312,6 +310,10 @@ export const TrayambakApp = ({
   const [splashDone, setSplashDone] = useState(/*initial*/ false)
   const [sandboxDone, setSandboxDone] = useState(/*initial*/ false)
   const showSplash = isFirstRun && !splashDone
+  /** Boot cinematic for returning users (first-run keeps its own splash):
+   *  skipped when a prompt was passed in (never delay real work). */
+  const [bootCineDone, setBootCineDone] = useState(/*initial*/ false)
+  const showBootCine = !isFirstRun && !bootCineDone && !initialPrompt
   const showSandboxSetup = isFirstRun && splashDone && !showThemePicker && !sandboxDone
   const [showSidebar, setShowSidebar] = useState(/*initial*/ false)
   const [modelFavorites, setModelFavorites] = useState<string[]>(() => loadConfig().modelFavorites ?? [])
@@ -374,19 +376,97 @@ export const TrayambakApp = ({
   const modeStackRef = useRef<PermissionMode[]>([])
 
   /** Startup update check (SKT AI LABS auto-update port): fire-and-forget so boot
-   *  never blocks; only "update-available" surfaces a transcript notice. */
+   *  never blocks; "update-available" surfaces a notice, "updated" (a patch
+   *  auto-applied under autoupdate:true) says restart — the running process
+   *  is still the old code. Errors stay silent: a failing npm install must
+   *  nag nobody on every boot. */
   useEffect(() => {
     let cancelled = false
     void checkForUpdate({ config: bootConfig, env: process.env })
       .then((outcome) => {
-        if (cancelled || outcome.kind !== "update-available") return
-        addSystemMessage(
-          `Update available: ${outcome.current} → ${outcome.latest} (${outcome.releaseType}). Run \`trayambak upgrade\` to update.`,
-        )
+        if (cancelled) return
+        if (outcome.kind === "update-available") {
+          addSystemMessage(
+            `Update available: ${outcome.current} → ${outcome.latest} (${outcome.releaseType}). Run \`trayambak upgrade\` to update.`,
+          )
+        } else if (outcome.kind === "updated") {
+          addSystemMessage(
+            `Auto-updated in background: ${outcome.previous} → ${outcome.latest}. Restart the TUI to run it (this session is still ${outcome.previous}).`,
+          )
+        }
       })
       .catch(() => {
         /* an update check must never break boot */
       })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /** First boot with no key anywhere: open the provider connect
+   *  automatically (kimi-style: model selection up front, no /provider
+   *  hunting). Esc drops back to the welcome screen; configured users never
+   *  see this. Boot must never break on a connect nudge. */
+  useEffect(() => {
+    try {
+      const cfg = loadConfig()
+      const activeId = (cfg.provider ?? "nvidia").toLowerCase()
+      const entry = getCatalogEntry(activeId)
+      const hasKey = readStoredKey(activeId).apiKey !== "" || (cfg.apiKey ?? "") !== ""
+      if (entry?.needsApiKey && !hasKey && !loginFlowRef.current) {
+        startLogin()
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  /** Boot GitHub reconnect: a saved login stays the assistant's connection
+   *  across restarts — verified once against the VPS. Live → seed the agent
+   *  config so the FIRST turn already knows its operator; dead (revoked /
+   *  server reset) → drop the stale saved login and say so once, instead of
+   *  failing mid-task at the first write. Silent when never logged in. */
+  useEffect(() => {
+    let cancelled = false
+    let saved: string | undefined
+    let serverUrl: string | undefined
+    try {
+      const cfg = loadConfig()
+      saved = cfg.githubLogin
+      serverUrl = cfg.licenseServerUrl
+    } catch {
+      /* ignore */
+    }
+    if (saved) {
+      void githubLoginStatus({ serverUrl })
+        .then((st) => {
+          if (cancelled) return
+          if (st.authorized) {
+            const login = st.login ?? saved
+            agentConfigRef.current = {
+              ...(agentConfigRef.current ?? createAgentConfig(config ?? {})),
+              githubLogin: login,
+            }
+            agentRef.current = null // rebuild next turn with the operator block
+            addSystemMessage(`GitHub: connected as @${login} — writes ride your login, no token needed.`, {
+              persist: false,
+            })
+          } else {
+            saveConfig({ githubLogin: undefined })
+            if (agentConfigRef.current) {
+              const next = { ...agentConfigRef.current }
+              delete next.githubLogin
+              agentConfigRef.current = next
+            }
+            addSystemMessage("GitHub session expired (revoked or server reset) — /github login to reconnect.", {
+              persist: false,
+            })
+          }
+        })
+        .catch(() => {
+          /* offline boot stays quiet — the first write surfaces it */
+        })
+    }
     return () => {
       cancelled = true
     }
@@ -1367,6 +1447,8 @@ export const TrayambakApp = ({
             `Runs automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears`,
         )
       } else {
+        // Submit-time snap (the only one — nothing re-zeroes mid-turn).
+        setScrollBack(0)
         void runAgent(v).catch(reportTurnError)
       }
     }
@@ -1791,21 +1873,38 @@ export const TrayambakApp = ({
         const gsub = (gparts[0] ?? "").toLowerCase()
         const serverUrl = loadConfig().licenseServerUrl
         if (gsub === "login") {
-          addSystemMessage("Asking the server for a GitHub authorize URL…")
+          // Stacked pollers wrote competing outcome rows (blink): one login
+          // at a time; a retype while waiting parks with a notice.
+          if (githubLoginBusyRef.current) {
+            addSystemMessage("GitHub login already in progress — approve in the browser, or wait for it to time out.", {
+              persist: false,
+            })
+            break
+          }
+          githubLoginBusyRef.current = true
+          // Progress rows PINNED (ttlMs 0): the default 10s TTL collapsed
+          // each row mid-wait and reflowed the frame under the 60s poll.
+          // Only the final Authorized/Failed outcome fades.
+          addSystemMessage("Asking the server for a GitHub authorize URL…", { persist: false, ttlMs: 0 })
           void startGithubLogin({ serverUrl }).then((s) => {
             if (!s.ok || !s.url) {
+              githubLoginBusyRef.current = false
               addSystemMessage(`GitHub login unavailable — ${s.reason ?? "unknown error"}.`)
               return
             }
             // Browser first (seconds, no copy-paste): fall back to the
             // printed URL only where no browser can open (SSH/headless).
             if (openBrowser(s.url)) {
-              addSystemMessage("Browser me GitHub authorize page khol di — Approve dabao, CLI khud pakad lega…")
+              addSystemMessage("Browser me GitHub authorize page khol di — Approve dabao, CLI khud pakad lega…", {
+                persist: false,
+                ttlMs: 0,
+              })
             } else {
-              addSystemMessage(`Open this URL in your browser to authorize:\n${s.url}`)
+              addSystemMessage(`Open this URL in your browser to authorize:\n${s.url}`, { persist: false, ttlMs: 0 })
             }
-            addSystemMessage("Waiting up to ~60s for approval…", { persist: false })
+            addSystemMessage("Waiting up to ~60s for approval…", { persist: false, ttlMs: 0 })
             void pollGithubLogin({ serverUrl }).then((p) => {
+              githubLoginBusyRef.current = false
               if (p.authorized) {
                 // Persist the login so the system prompt names its operator
                 // (and /github status stays truthful across restarts).
@@ -2416,269 +2515,34 @@ export const TrayambakApp = ({
         break
       }
       case "mcp": {
-        const mcpCmd = args[0] ?? "list"
-        if (mcpCmd === "list") addSystemMessage("MCP servers: configured via .trayambak/config.json")
-        else if (mcpCmd === "add") addSystemMessage("Add an MCP server: /mcp add <name> <url>")
-        else if (mcpCmd === "remove") addSystemMessage("Remove an MCP server: /mcp remove <name>")
-        else addSystemMessage("MCP servers: configured via .trayambak/config.json")
+        // Implemented in mcp-command.ts: list/search/install/add/remove/test
+        // against the connector registry + live servers. Every accepted
+        // change persists and rebuilds the agent — no restart needed.
+        runMcp(args, {
+          addSystemMessage,
+          agentConfigRef,
+          agentRef,
+          config: config ?? null,
+        })
         break
       }
       case "devmode": {
         // Bare /devmode toggles ON<->OFF; turning ON opens the pentest
         // enable/disable menu (the "gate" line in it is the /gate state).
-        // Both writes persist to config AND patch agentConfigRef + null
+        // Every write persists to config AND patches agentConfigRef + null
         // agentRef, so the next message rebuilds the agent with the new
         // toolsets/engine flags — no restart needed.
-        const darg = args.trim().toLowerCase()
-        const devSnapshot = (): { enabled: boolean; gate: boolean; pentest: boolean } => {
-          const c = loadConfig()
-          return {
-            enabled: c.developerMode?.enabled === true,
-            gate: c.developerMode?.gateEnabled === true,
-            pentest: !(c.toolsets?.disabled ?? []).includes("pentest"),
-          }
-        }
-        const syncAgentConfig = (patch: Partial<TrayambakConfig>): void => {
-          agentConfigRef.current = { ...(agentConfigRef.current ?? createAgentConfig(config ?? {})), ...patch }
-          agentRef.current = null // rebuild on the next run (same pattern as a model switch)
-        }
-        const setDevEnabled = (enabled: boolean): void => {
-          const developerMode = { ...loadConfig().developerMode, enabled }
-          saveConfig({ developerMode })
-          syncAgentConfig({ developerMode })
-        }
-        const applyPentest = async (wantOn: boolean): Promise<void> => {
-          // License gate (server-side): enabling pentest needs a LIVE-valid
-          // license on this machine. Disabling always works. The tool
-          // assembly (createDefaultTools) enforces the same gate per
-          // execution, so this menu can never promise what the loop withholds.
-          if (wantOn) {
-            const cfg = loadConfig()
-            const v = await serverCanUsePentest(cfg.licenseKey, { serverUrl: cfg.licenseServerUrl })
-            if (v.valid !== true) {
-              addSystemMessage(
-                `Pentest tools stay DISABLED — ${v.reason ?? "no valid license"}. Bind a key: /devmode on 1102-XXXX-XXXX-XXXX.`,
-              )
-              return
-            }
-          }
-          const c = loadConfig()
-          const defaults = c.toolsets?.defaults?.length
-            ? c.toolsets.defaults
-            : ["core", "agentic", "ops", "tasks", "mcp", "skills"]
-          const cur = c.toolsets?.disabled ?? []
-          const disabled = wantOn
-            ? cur.filter((t) => t !== "pentest")
-            : cur.includes("pentest")
-              ? cur
-              : [...cur, "pentest"]
-          const toolsets = {
-            defaults,
-            disabled,
-            ...(c.toolsets?.platform ? { platform: c.toolsets.platform } : {}),
-          }
-          saveConfig({ toolsets })
-          syncAgentConfig({ toolsets })
-          addSystemMessage(
-            wantOn
-              ? `${g("ok")} Pentest tools ENABLED — the model gets trayambak__Pentest* + the 83-tool catalog from its next message (defensive guard for infrastructure, never exploitation).`
-              : `${g("ok")} Pentest tools DISABLED — the pentest toolset no longer reaches the model.`,
-            { ttlMs: 10_000 },
-          )
-        }
-        const openPentestMenu = (): void => {
-          const s = devSnapshot()
-          const qid =
-            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-              ? crypto.randomUUID()
-              : `devmode-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-          const request: QuestionRequest = {
-            id: qid,
-            header: "Devmode · Pentest",
-            question:
-              `Pentest tools: ${s.pentest ? "ENABLED" : "DISABLED"} · Gate: ${s.gate ? "ON" : "OFF"} (/gate on|off). ` +
-              "Defensive guard for infrastructure only — never exploitation. Enable or disable the pentest suite?",
-            options: [
-              {
-                label: "Enable pentest tools",
-                description: "Model sees trayambak__Pentest* (83-tool security catalog)",
-              },
-              { label: "Disable pentest tools", description: "Hide the pentest toolset from the model" },
-              { label: "Cancel", description: "Keep the current setting" },
-            ],
-            multiSelect: false,
-          }
-          questionResolverRef.current = (answers: string[]): void => {
-            const choice = (answers[0] ?? "").trim().toLowerCase()
-            if (choice === "1" || choice.startsWith("enable")) {
-              void applyPentest(/*wantOn*/ true)
-            } else if (choice === "2" || choice.startsWith("disable")) {
-              void applyPentest(/*wantOn*/ false)
-            } else {
-              addSystemMessage(
-                `Pentest menu closed — pentest tools remain ${devSnapshot().pentest ? "ENABLED" : "DISABLED"}.`,
-                {
-                  ttlMs: 10_000,
-                },
-              )
-            }
-          }
-          setPendingQuestion(request)
-        }
-        const s = devSnapshot()
-        // License-key unlock: `/devmode on 1102-XXXX-XXXX-XXXX` ACTIVATES the
-        // code on this machine (server binds key→machine, 1-machine limit)
-        // and enables devmode with it in one step (key persists to config,
-        // agent rebuilds). Always-online: the server answers live, a forged
-        // or elsewhere-bound key refuses with its reason. No valid
-        // activation anywhere = stays OFF, period.
-        const unlockWithKey = async (rawKey: string): Promise<boolean> => {
-          const cfg = loadConfig()
-          const a = await serverActivateLicenseKey(rawKey, { serverUrl: cfg.licenseServerUrl })
-          if (a.ok !== true) {
-            // State-accurate refusal: a failed attempt never flips existing
-            // state, so report what IS, not what the attempt wanted.
-            const stillOn = loadConfig().developerMode?.enabled === true
-            addSystemMessage(
-              `Activation failed (${a.reason ?? "unknown"}) — developer mode remains ${stillOn ? "ON (unchanged)" : "OFF"}. Usage: /devmode on 1102-XXXX-XXXX-XXXX`,
-            )
-            return false
-          }
-          const developerMode = { ...loadConfig().developerMode, enabled: true }
-          saveConfig({ developerMode, licenseKey: rawKey.trim() })
-          syncAgentConfig({ developerMode, licenseKey: rawKey.trim() })
-          return true
-        }
-        const configuredUnlock = async (): Promise<boolean> => {
-          const cfg = loadConfig()
-          const v = await serverVerifyLicenseKey(cfg.licenseKey, { serverUrl: cfg.licenseServerUrl })
-          if (v.valid !== true) {
-            const stillOn = loadConfig().developerMode?.enabled === true
-            addSystemMessage(
-              `Developer mode remains ${stillOn ? "ON (unchanged)" : "OFF"} — ${v.reason ?? "no license configured"}. Usage: /devmode on 1102-XXXX-XXXX-XXXX`,
-            )
-            return false
-          }
-          return true
-        }
-        const devmodeOnSuccess = (): void => {
-          addSystemMessage(`Developer mode: ON — pentest menu open below (1 enable · 2 disable · Esc cancels).`)
-          openPentestMenu()
-        }
-        const onParts = darg.split(/\s+/)
-        if (onParts[0] === "on" && onParts.length > 1) {
-          addSystemMessage("Activating license on this machine…")
-          void unlockWithKey(onParts.slice(1).join(" ")).then((ok) => {
-            if (ok) devmodeOnSuccess()
-          })
-          return
-        } else if (darg === "") {
-          // Bare /devmode: ON/OFF chooser. Choosing ON chains straight
-          // into a license prompt (no separate step to remember).
-          const cur = devSnapshot()
-          const cqid =
-            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-              ? crypto.randomUUID()
-              : `devmode-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-          questionResolverRef.current = (answers: string[]): void => {
-            const choice = (answers[0] ?? "").trim().toLowerCase()
-            if (choice === "1" || choice.startsWith("turn on") || choice.startsWith("on")) {
-              const lqid =
-                typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-                  ? crypto.randomUUID()
-                  : `devmode-key-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-              const keyRequest: QuestionRequest = {
-                id: lqid,
-                header: "Devmode · License",
-                question: "Paste license key (1102-XXXX-XXXX-XXXX). Esc cancels.",
-                options: [{ label: "Cancel", description: "Keep developer mode OFF" }],
-                multiSelect: false,
-              }
-              questionResolverRef.current = (keyAnswers: string[]): void => {
-                const raw = (keyAnswers[0] ?? "").trim()
-                // "Cancel" (label or number) aborts; anything else is a key
-                // attempt — a real key is 16+ chars so it can never equal it.
-                if (!raw || raw.toLowerCase() === "cancel") {
-                  addSystemMessage("Developer mode stays OFF.")
-                  return
-                }
-                addSystemMessage("Activating license on this machine…")
-                void unlockWithKey(raw).then((ok) => {
-                  if (ok) devmodeOnSuccess()
-                })
-              }
-              setPendingQuestion(keyRequest)
-            } else if (choice === "2" || choice.startsWith("turn off") || choice.startsWith("off")) {
-              if (cur.enabled) setDevEnabled(/*enabled*/ false)
-              addSystemMessage("Developer mode: OFF.")
-            } else {
-              addSystemMessage(`Developer mode stays ${cur.enabled ? "ON" : "OFF"}.`)
-            }
-          }
-          setPendingQuestion({
-            id: cqid,
-            header: "Devmode",
-            question: `Developer mode is currently ${cur.enabled ? "ON" : "OFF"}. Turn it ON (license key follows) or OFF?`,
-            options: [
-              { label: "Turn ON", description: "Asks for the license key next" },
-              { label: "Turn OFF", description: "Disable developer mode" },
-              { label: "Cancel", description: "Keep the current setting" },
-            ],
-            multiSelect: false,
-          })
-        } else if (darg === "on") {
-          addSystemMessage("Checking license with the server…")
-          void configuredUnlock().then((ok) => {
-            if (!ok) return
-            if (!s.enabled) setDevEnabled(/*enabled*/ true)
-            devmodeOnSuccess()
-          })
-        } else if (darg === "off" || (darg === "" && s.enabled)) {
-          if (s.enabled) setDevEnabled(/*enabled*/ false)
-          addSystemMessage(
-            `Developer mode: OFF — pentest tools stay ${s.pentest ? "ENABLED" : "DISABLED"} (manage via /devmode on).`,
-          )
-        } else if (darg === "trial") {
-          // Self-service trial: the server mints a short pentest key BORN
-          // BOUND to this machine (1 live trial per machine). No paste, no
-          // reseller — key saves straight into config like a typed one.
-          const cfgTrial = loadConfig()
-          addSystemMessage("Requesting a trial license for this machine…")
-          void serverMintTrial({ serverUrl: cfgTrial.licenseServerUrl }).then((t) => {
-            if (t.ok !== true || !t.key) {
-              addSystemMessage(`Trial unavailable — ${t.reason ?? "unknown error"}.`)
-              return
-            }
-            const developerMode = { ...loadConfig().developerMode, enabled: true }
-            saveConfig({ developerMode, licenseKey: t.key })
-            syncAgentConfig({ developerMode, licenseKey: t.key })
-            addSystemMessage(
-              `Trial license active (${t.days ?? "?"} days, this machine only, key ${t.key}) — pentest menu open below (1 enable · 2 disable · Esc cancels).`,
-            )
-            openPentestMenu()
-          })
-        } else if (darg === "status") {
-          const st = devSnapshot()
-          const cfgStatus = loadConfig()
-          addSystemMessage("Checking license with the server…", { persist: false })
-          void serverVerifyLicenseKey(cfgStatus.licenseKey, { serverUrl: cfgStatus.licenseServerUrl }).then((lic) => {
-            const licText =
-              lic.valid === true
-                ? `live-valid (${lic.plan}, exp ${lic.exp ? new Date(lic.exp * 1000).toISOString().slice(0, 10) : "?"})`
-                : `invalid (${lic.reason ?? "no license"})`
-            addSystemMessage(
-              `Developer mode: ${st.enabled ? "ON" : "OFF"} · Pentest tools: ${st.pentest ? "ENABLED" : "DISABLED"} · Gate: ${st.gate ? "ON" : "OFF"} (/gate on|off) · License: ${licText}`,
-              { persist: false },
-            )
-          })
-        } else if (darg === "pentest") {
-          if (s.enabled) openPentestMenu()
-          else addSystemMessage("Developer mode is OFF — /devmode on to open the pentest tools menu.")
-        } else {
-          addSystemMessage(
-            "Usage: /devmode [on 1102-XXXX-XXXX-XXXX|trial|off|status|pentest] — bare /devmode opens the ON/OFF chooser (ON asks for the license key); trial self-serves a short key for this machine.",
-          )
-        }
+        //
+        // Implemented in devmode-command.ts: this file was over the
+        // max-file-size cap and the handler is self-contained.
+        runDevmode(args, {
+          addSystemMessage,
+          setPendingQuestion,
+          questionResolverRef,
+          agentConfigRef,
+          agentRef,
+          config: config ?? null,
+        })
         break
       }
       case "commands": {
@@ -3046,6 +2910,7 @@ export const TrayambakApp = ({
     // input — global chords would fire side effects behind the overlay.
     // Ctrl+D stays unguarded: aborting a turn is an emergency action.
     const overlayOpen =
+      showBootCine ||
       showSplash ||
       showSandboxSetup ||
       showThemePicker ||
@@ -3734,7 +3599,13 @@ export const TrayambakApp = ({
   // for the six basic overlays; the persistent chrome (background runner,
   // footer, composer) stands down for every overlay including the panels.
   const pickerOverlayOpen =
-    showThemePicker || showPalette || showModelPicker || showProviderPicker || showSplash || showSandboxSetup
+    showThemePicker ||
+    showPalette ||
+    showModelPicker ||
+    showProviderPicker ||
+    showSplash ||
+    showSandboxSetup ||
+    showBootCine
   const chromeHidden = pickerOverlayOpen || showWhichKey || showSubagentPanel || showAgentPicker
 
   return (
@@ -3758,7 +3629,9 @@ export const TrayambakApp = ({
       // must hide). Fresh sessions (no prefix) keep the ╭ cap.
       borderTop={hasStaticPrefix ? false : undefined}
     >
-      {showSplash ? (
+      {showBootCine ? (
+        <BootCine onDone={() => setBootCineDone(/*bootCineDone*/ true)} />
+      ) : showSplash ? (
         <SplashScreen onDone={() => setSplashDone(/*splashDone*/ true)} />
       ) : showPalette ? (
         <CommandPalette
@@ -3870,9 +3743,13 @@ export const TrayambakApp = ({
       ) : (
         <Box flexDirection="row" flexGrow={1}>
           <Box flexDirection="column" flexGrow={1}>
-            {messages.length === 0 ? (
-              <WelcomeScreen />
-            ) : (
+            {/* Welcome lives until the first real exchange — not until the
+              first row. Boot notices (GitHub reconnect, update check,
+              sandbox ready) are system rows: the old messages.length === 0
+              check let any one of them kill the WelcomeScreen forever
+              (observed live: logging in hid the logo on every boot). */}
+            {!messages.some((m) => m.role !== "system") ? <WelcomeScreen /> : null}
+            {messages.length === 0 ? null : (
               <Box flexDirection="column" flexGrow={1}>
                 {/* No TRAYAMBAK header row inside the frame: the compact logo
                   (+ its padding row) claimed 2 of the frame's rows on every
@@ -3885,7 +3762,10 @@ export const TrayambakApp = ({
                   isStreaming={isStreaming}
                   scrollBack={scrollBack}
                   phase={status}
-                  extraBottomRows={pendingQuestion ? 9 : 0}
+                  // PermissionOverlay stole ~12 rows from the message frame
+                  // unbudgeted, clipping the reading window at approval
+                  // time (snap-back look). Budget it like pendingQuestion.
+                  extraBottomRows={(pendingQuestion ? 9 : 0) + (pendingPermissions.length > 0 ? 12 : 0)}
                   staticEpoch={staticEpoch}
                   onHasPrefix={setHasStaticPrefix}
                   expandOutput={expandOutput}

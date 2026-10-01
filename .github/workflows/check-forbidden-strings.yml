@@ -51,6 +51,22 @@ jobs:
             exit 1
           fi
           echo "CODEX_SANDBOX markers ok (owners and tests only)"
+      # The system prompt is the agent's core secret: the literal
+      # `dump-system-prompt` may appear ONLY in the refusal (index.ts), the
+      # registry that must never contain the flag (command-registry.ts), the
+      # security trail that audits exfil attempts (security-log.ts), and the
+      # tests that pin all three. Anywhere else — a new flag, command,
+      # or doc advertising a dump port — fails the build.
+      - name: dump-system-prompt literal only in the refusal, trail, and pins
+        run: |
+          ALLOWED="apps/cli/src/index\.ts:|apps/cli/src/command-registry\.ts:|apps/cli/src/command-registry\.test\.ts:|apps/cli/src/system-prompt-lock\.test\.ts:|apps/runtime/src/security-log\.ts:|apps/runtime/src/security-log\.test\.ts:"
+          VIOLATIONS=$(grep -rn "dump-system-prompt\|dumpSystemPrompt\|dump_system_prompt" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --include="*.md" --exclude-dir=node_modules --exclude-dir=dist apps packages skt docs 2>/dev/null | grep -vE "$ALLOWED" || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::dump-system-prompt port outside the refusal allowlist (apps/cli/src/index.ts, command-registry.ts, security-log.ts + pin tests):"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "dump-system-prompt lock ok (refusal + trail + pins only)"
       - name: No console.* in packages/core (except tests)
         run: |
           VIOLATIONS=$(grep -rn "console\." --include="*.ts" packages/core/src 2>/dev/null | grep -v "\.test\.ts" || true)
@@ -98,3 +114,58 @@ jobs:
           grep -q "export function approvalFor" packages/core/src/approval.ts \
             || { echo "::error::approvalFor() single decision point missing from packages/core/src/approval.ts"; exit 1; }
           echo "approval exhaustiveness guard armed (AST rule @ error, behavior tested, approvalFor present)"
+      # The system prompt (tools + memory + rules + mode blocks) is the agent's
+      # core secret. It used to be printable via `trayambak --dump-system-prompt`
+      # and was persisted verbatim into every session file. Both are gone; this
+      # tripwire keeps them gone.
+      # The system prompt (tools + memory + rules + mode blocks) is the agent's
+      # core secret. It used to be printable via `trayambak --dump-system-prompt`
+      # and was persisted verbatim into every session file. Both are gone; this
+      # keeps them gone. Comments and doc text MAY still name the retired flag
+      # (they must, to explain why it is gone) — what must never return is
+      # *executable* code that prints or persists the prompt.
+      - name: System prompt is never printed or persisted
+        run: |
+          # 1) No executable reference to the retired flag. `refuseSystemPromptDump`
+          #    is the single legitimate one (it is the refusal).
+          REFS=$(find apps packages -type f \( -name "*.ts" -o -name "*.tsx" \) \
+            -not -path "*/node_modules/*" -not -path "*/dist/*" \
+            -exec awk '
+              /\*\// { incomment = 0; next }
+              /^\/\*/ { incomment = 1; next }
+              incomment { next }
+              /^[[:space:]]*(\/\/|#|\*)/ { next }
+              /dump-system-prompt/ { print FILENAME ":" FNR ": " $0 }
+            ' {} + 2>/dev/null || true)
+          BAD=$(echo "$REFS" | grep -v "refuseSystemPromptDump\|argv.includes" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::executable reference to the retired --dump-system-prompt outside the refusal:"
+            echo "$BAD"
+            exit 1
+          fi
+          # 2) Docs must not advertise it as a feature.
+          if grep -n "dump-system-prompt" docs/*.md README.md 2>/dev/null | grep -v "was removed"; then
+            echo "::error::docs still advertise --dump-system-prompt as a feature"
+            exit 1
+          fi
+          # 3) Session files must not carry the prompt: Agent rebuilds it via
+          #    setSystemPrompt() right after load, so a stored copy is pure leak.
+          if grep -n "system: this.systemPrompt" apps/runtime/src/session/session.ts; then
+            echo "::error::Session.save() persists the system prompt again — messages only"
+            exit 1
+          fi
+          # 4) Any stdout/stderr write of the prompt is a leak by definition.
+          LEAK=$(grep -rn "\(stdout\|stderr\)\.write.*\(systemContext\|systemPrompt\)" --include="*.ts" --include="*.tsx" --exclude-dir=node_modules --exclude-dir=dist apps packages 2>/dev/null || true)
+          if [ -n "$LEAK" ]; then
+            echo "::error::the system prompt is written to stdout/stderr somewhere:"
+            echo "$LEAK"
+            exit 1
+          fi
+          # 5) The refusal + both guard tests must stay in place.
+          grep -q "was removed — the system prompt is never printed" apps/cli/src/command-registry.ts \
+            || { echo "::error::the --dump-system-prompt refusal is gone from command-registry.ts"; exit 1; }
+          grep -q "registers no flag that prints or dumps the system prompt" apps/cli/src/command-registry.test.ts \
+            || { echo "::error::the system-prompt registry guard test was removed"; exit 1; }
+          grep -q "never writes the system prompt to disk" apps/runtime/src/session/session.test.ts \
+            || { echo "::error::the session no-persist test was removed"; exit 1; }
+          echo "system prompt: no CLI dump, no persistence, refusal + guards armed"
