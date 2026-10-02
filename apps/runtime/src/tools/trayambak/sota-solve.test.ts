@@ -7,20 +7,23 @@
 /**
  * sota_solve — the CoT engine is mocked (the real one appends cot.json /
  * COT-REPORT.md under cwd — never touch the repo from tests). Injected
- * generate/execute/runTests stubs, no processes.
+ * generate/execute/runTests stubs; the only real processes are
+ * boundedRun's short-lived `node -e` children.
  *
  * Pins the fixes:
  *  - mode=sota performs a REAL re-solve + verification (the old code only
  *    appended a claim sentence while running zero extra calls)
  *  - invalid mode is rejected instead of silently running cot
  *  - model-generated code spawns with a filtered env (sotaChildEnv)
+ *  - boundedRun enforces the three bounds every child needs: deadline,
+ *    output cap, abort kill (the old spawns had none of them)
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { ToolContext, ToolResult } from "../types.js"
 import type { CotEngineDeps } from "../../../../../skt/5-eval/cot.js"
 import type { Provider } from "../../../../../packages/provider/src/index.js"
-import { createSotaSolveTool, sotaChildEnv, type SotaSolveOptions } from "./sota-solve.js"
+import { boundedRun, createSotaSolveTool, sotaChildEnv, type SotaSolveOptions } from "./sota-solve.js"
 
 type Best = { id: number; approach: string; code: string }
 
@@ -408,5 +411,74 @@ describe("context provider wiring (production liveness)", () => {
     await run({ input: "add one", mode: "cot" }, bare())
     const out = await ctl.deps!.generate("make fenced js code")
     expect(out).toContain("generated candidate")
+  })
+})
+
+/**
+ * Regression (#111): the three exec sites in sota-solve spawned
+ * model-generated code with NO deadline, NO output cap, and no link to
+ * the tool's abort signal — `while (true) {}` orphaned a spinning child
+ * past the tool timeout and a forever-printing loop could OOM the
+ * process. boundedRun is the same ceiling hook/git children run under.
+ */
+describe("boundedRun (model-code execution bounds)", () => {
+  const env = sotaChildEnv()
+
+  it("kills a hung child at the deadline instead of orphaning it", async () => {
+    const started = Date.now()
+    const res = await boundedRun(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      cwd: process.cwd(),
+      env,
+      timeoutMs: 300,
+    })
+    expect(res.exitCode).toBe(1)
+    expect(res.stderr).toContain("timed out after 300ms")
+    expect(Date.now() - started).toBeLessThan(5000)
+  })
+
+  it("kills a runaway writer when the output cap is hit", async () => {
+    const res = await boundedRun(
+      process.execPath,
+      ["-e", "for (let i = 0; i < 1000; i++) process.stdout.write('x'.repeat(4096))"],
+      { cwd: process.cwd(), env, capBytes: 4096, timeoutMs: 10_000 },
+    )
+    expect(res.exitCode).toBe(1)
+    expect(res.stderr).toContain("output cap")
+  })
+
+  it("kills the child when the caller signal aborts", async () => {
+    const ac = new AbortController()
+    setTimeout(() => ac.abort(), 150)
+    const res = await boundedRun(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      cwd: process.cwd(),
+      env,
+      signal: ac.signal,
+      timeoutMs: 30_000,
+    })
+    expect(res.exitCode).toBe(1)
+    expect(res.stderr).toContain("aborted by caller signal")
+  })
+
+  it("refuses to run when the signal is already aborted", async () => {
+    const ac = new AbortController()
+    ac.abort()
+    const res = await boundedRun(process.execPath, ["-e", "process.stdout.write('nope')"], {
+      cwd: process.cwd(),
+      env,
+      signal: ac.signal,
+      timeoutMs: 30_000,
+    })
+    expect(res.exitCode).toBe(1)
+    expect(res.stderr).toContain("aborted by caller signal")
+  })
+
+  it("lets a fast, quiet child through untouched", async () => {
+    const res = await boundedRun(process.execPath, ["-e", "process.stdout.write('ok')"], {
+      cwd: process.cwd(),
+      env,
+    })
+    expect(res.exitCode).toBe(0)
+    expect(res.stdout).toBe("ok")
+    expect(res.stderr).not.toContain("[boundedRun]")
   })
 })

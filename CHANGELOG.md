@@ -5,6 +5,21 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Model-generated code ran unbounded in `sota_solve`** (audit, #111):
+  - **#111** — all three exec sites in `trayambak__SotaSolve` (the CoT
+    executor plus both test runners) spawned `node`/`python` children for
+    model-generated code with no deadline, no output cap, and no link to
+    the tool's abort signal: `while (true) {}` outlived the 30s tool
+    timeout as an orphaned CPU spinner, a forever-printing loop drove
+    `stdout +=` until the process wedged or OOM'd, and cancelling the
+    tool left children running. The tool description also advertised
+    "Sandbox Execution" while the child ran as a plain process (the
+    filtered env was the only boundary). Fix: `boundedRun` — 15s kill +
+    256KB cap + abort kill, the ceilings hook/git children already run
+    under; `signal` threaded through both runners; description now says
+    "Bounded Code Execution ... NOT OS-isolated". Proof: 5 bounds tests
+    red on old code, green after.
+
 - **Model-input path traversal in three file-writing tools** (audit, #110):
   - **#110** — three tools joined raw model input into filesystem paths
     with no segment guard, so `path.join` normalized `..` right out of

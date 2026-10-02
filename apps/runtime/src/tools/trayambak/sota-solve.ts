@@ -42,7 +42,7 @@ const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "sota_solve",
   description:
-    "Run the CoT-4 parallel code-generation pipeline (User Input -> Parallel 4-Code Generation -> Sandbox Execution -> Test Cases Check -> Error(Penalty)/Pass(Reward) -> Pick Best Code). Generates up to 4 distinct candidates, executes each in a sandbox, checks tests, applies reward/penalty, picks the best, and records the run to skt/5-eval/COT-REPORT.md. Pass 'tests' to grade candidates; pass 'mode=sota' for full inference-time search (branching, assumption-attack, independent verification) driven by the local llama.cpp/Ollama model — no remote provider is ever connected.",
+    "Run the CoT-4 parallel code-generation pipeline (User Input -> Parallel 4-Code Generation -> Bounded Code Execution -> Test Cases Check -> Error(Penalty)/Pass(Reward) -> Pick Best Code). Generates up to 4 distinct candidates, executes each as a bounded child process (filtered env, 15s kill, 256KB output cap; NOT OS-isolated), checks tests, applies reward/penalty, picks the best, and records the run to skt/5-eval/COT-REPORT.md. Pass 'tests' to grade candidates; pass 'mode=sota' for full inference-time search (branching, assumption-attack, independent verification) driven by the local llama.cpp/Ollama model — no remote provider is ever connected.",
   parameters: {
     type: "object",
     required: ["input"],
@@ -83,8 +83,8 @@ export function createSotaSolveTool(options: SotaSolveOptions = {}): Tool {
         }
         const deps: CotEngineDeps = {
           generate: buildCotGenerate(options, context),
-          execute: options.execute ?? makeExecutor(cwd),
-          runTests: options.runTests ?? makeTestRunner(cwd),
+          execute: options.execute ?? makeExecutor(cwd, signal),
+          runTests: options.runTests ?? makeTestRunner(cwd, signal),
         }
         const record = await runCotPipeline(input, deps, tests)
         return textResult(summarizeCot(record))
@@ -110,6 +110,74 @@ function seedFromInput(input: string): string {
  *  wholesale (same boundary as hook/MCP children). Exported for tests. */
 export function sotaChildEnv(extra?: Record<string, string>): Record<string, string> {
   return { ...getSafeEnv(process.env), ...(extra ?? {}) }
+}
+
+/** Bounds for model-generated code execution — the same ceilings every
+ *  other child boundary in this repo runs under (hook children, gitExec):
+ *  a deadline, a 256KB output cap, and abort kill. Without them a
+ *  prompt-injected candidate (`while (true) {}`, a forever-printing loop)
+ *  outlives the tool timeout as an orphan spinning on CPU or wedging the
+ *  process against an unbounded stdout buffer. Exported for tests. */
+export const SOTA_EXEC_TIMEOUT_MS = 15_000
+export const SOTA_OUTPUT_CAP_BYTES = 256 * 1024
+
+export function boundedRun(
+  cmd: string,
+  args: string[],
+  opts: {
+    cwd: string
+    env: Record<string, string>
+    signal?: AbortSignal
+    timeoutMs?: number
+    capBytes?: number
+  },
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    const cap = opts.capBytes ?? SOTA_OUTPUT_CAP_BYTES
+    const timeoutMs = opts.timeoutMs ?? SOTA_EXEC_TIMEOUT_MS
+    let stdout = ""
+    let stderr = ""
+    let settled = false
+    let killReason: string | null = null
+
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, windowsHide: true })
+
+    const finish = (exitCode: number): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      opts.signal?.removeEventListener("abort", onAbort)
+      resolve({ stdout, stderr, exitCode })
+    }
+    const killChild = (reason: string): void => {
+      if (settled || killReason) return
+      killReason = reason
+      stderr += (stderr ? "\n" : "") + `[boundedRun] ${reason}`
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        /* already gone */
+      }
+    }
+    const timer = setTimeout(() => killChild(`timed out after ${timeoutMs}ms`), timeoutMs)
+    const onAbort = (): void => killChild("aborted by caller signal")
+    if (opts.signal?.aborted) onAbort()
+    else opts.signal?.addEventListener("abort", onAbort, { once: true })
+
+    child.stdout?.on("data", (d: Buffer) => {
+      stdout += d.toString("utf8")
+      if (stdout.length + stderr.length > cap) killChild(`output cap of ${cap} bytes exceeded`)
+    })
+    child.stderr?.on("data", (d: Buffer) => {
+      stderr += d.toString("utf8")
+      if (stdout.length + stderr.length > cap) killChild(`output cap of ${cap} bytes exceeded`)
+    })
+    child.on("error", (e) => {
+      stderr += (stderr ? "\n" : "") + e.message
+      finish(1)
+    })
+    child.on("close", (code) => finish(killReason ? 1 : (code ?? 0)))
+  })
 }
 
 /** Model source for generation, shared by both modes. Explicit
@@ -301,13 +369,13 @@ async function runSotaSearch(
     return lines.join("\n")
   }
   try {
-    const exec = await (options.execute ?? makeExecutor(cwd))(code)
+    const exec = await (options.execute ?? makeExecutor(cwd, signal))(code)
     const execBits = [`exit=${exec.exitCode}`]
     if (exec.stdout) execBits.push(`stdout=${exec.stdout.slice(0, 300)}`)
     if (exec.stderr) execBits.push(`stderr=${exec.stderr.slice(0, 300)}`)
     lines.push(`execute: ${execBits.join(" ")}`)
     if (tests) {
-      const t = await (options.runTests ?? makeTestRunner(cwd))(code, tests)
+      const t = await (options.runTests ?? makeTestRunner(cwd, signal))(code, tests)
       lines.push(`tests: ${t.passed ? "PASS" : `FAIL: ${t.output.slice(0, 500)}`}`)
     } else {
       lines.push("tests: skipped (no tests provided)")
@@ -325,18 +393,13 @@ function detectLang(code: string): "js" | "python" | "unknown" {
   return "unknown"
 }
 
-function makeExecutor(cwd: string): (code: string) => Promise<{ stdout: string; stderr: string; exitCode: number }> {
+function makeExecutor(
+  cwd: string,
+  signal?: AbortSignal,
+): (code: string) => Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return (code: string) => {
     const execPair = (cmd: string, args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> =>
-      new Promise((resolve) => {
-        let stdout = ""
-        let stderr = ""
-        const child = spawn(cmd, args, { cwd, env: sotaChildEnv(), windowsHide: true })
-        child.stdout?.on("data", (d) => (stdout += d.toString("utf8")))
-        child.stderr?.on("data", (d) => (stderr += d.toString("utf8")))
-        child.on("error", (e) => resolve({ stdout, stderr: stderr || e.message, exitCode: 1 }))
-        child.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 0 }))
-      })
+      boundedRun(cmd, args, { cwd, env: sotaChildEnv(), signal })
     const lang = detectLang(code)
     const scratch = path.join(cwd, ".scratchpad")
     try {
@@ -366,7 +429,10 @@ function makeExecutor(cwd: string): (code: string) => Promise<{ stdout: string; 
     return Promise.resolve({ stdout: "", stderr: `unsupported language '${lang}'`, exitCode: 1 })
   }
 }
-function makeTestRunner(cwd: string): (code: string, tests: string) => Promise<{ passed: boolean; output: string }> {
+function makeTestRunner(
+  cwd: string,
+  signal?: AbortSignal,
+): (code: string, tests: string) => Promise<{ passed: boolean; output: string }> {
   return async (code: string, tests: string) => {
     const scratch = path.join(cwd, ".scratchpad")
     try {
@@ -384,15 +450,7 @@ function makeTestRunner(cwd: string): (code: string, tests: string) => Promise<{
       } catch (e) {
         return { passed: false, output: `write error: ${e}` }
       }
-      const res = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
-        let stdout = ""
-        let stderr = ""
-        const child = spawn("python", [file], { cwd, env: sotaChildEnv(), windowsHide: true })
-        child.stdout?.on("data", (d) => (stdout += d.toString("utf8")))
-        child.stderr?.on("data", (d) => (stderr += d.toString("utf8")))
-        child.on("error", (e) => resolve({ stdout, stderr: e.message, exitCode: 1 }))
-        child.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 0 }))
-      })
+      const res = await boundedRun("python", [file], { cwd, env: sotaChildEnv(), signal })
       const failed = res.exitCode !== 0 || /assertionerror|traceback/i.test(res.stderr)
       return { passed: !failed, output: (res.stdout + res.stderr).slice(0, 2000) }
     }
@@ -419,15 +477,7 @@ function makeTestRunner(cwd: string): (code: string, tests: string) => Promise<{
     } catch (e) {
       return { passed: false, output: `write error: ${e}` }
     }
-    const res = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
-      let stdout = ""
-      let stderr = ""
-      const child = spawn("node", [file], { cwd, env: sotaChildEnv(), windowsHide: true })
-      child.stdout?.on("data", (d) => (stdout += d.toString("utf8")))
-      child.stderr?.on("data", (d) => (stderr += d.toString("utf8")))
-      child.on("error", (e) => resolve({ stdout, stderr: e.message, exitCode: 1 }))
-      child.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 0 }))
-    })
+    const res = await boundedRun("node", [file], { cwd, env: sotaChildEnv(), signal })
     const passed = res.exitCode === 0 && /TESTS_PASSED/.test(res.stdout)
     return { passed, output: (res.stdout + res.stderr).slice(0, 2000) }
   }
