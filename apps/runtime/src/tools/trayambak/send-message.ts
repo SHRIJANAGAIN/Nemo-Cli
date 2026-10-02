@@ -9,6 +9,7 @@ import * as os from "os"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool } from "../types.js"
+import { safePathSegment } from "./safe-path.js"
 
 const INBOX_DIR = path.join(os.homedir(), ".trayambak", "inbox")
 
@@ -22,7 +23,12 @@ export interface InboxMessage {
 }
 
 function inboxFile(agentId: string): string {
-  return path.join(INBOX_DIR, `${agentId}.jsonl`)
+  // Choke point: every inbox path in this module funnels through here, so a
+  // caller that skips the tool-level check still cannot escape the inbox
+  // directory with a ".." or separator-bearing id.
+  const safe = safePathSegment(agentId)
+  if (safe === null) throw new Error(`invalid inbox agent id: ${JSON.stringify(String(agentId).slice(0, 64))}`)
+  return path.join(INBOX_DIR, `${safe}.jsonl`)
 }
 
 export function inboxPath(agentId: string): string {
@@ -114,6 +120,13 @@ export function createSendMessageTool(
       const to = String(args.to ?? "")
       const content = String(args.content ?? "")
       if (!to || !content) return textResult("Missing 'to' or 'content'.", /*isError*/ true)
+      // `to` lands in a path join below: a traversal value would write the
+      // inbox file outside the inbox directory. Refuse it before touching disk.
+      if (safePathSegment(to) === null)
+        return textResult(
+          `Invalid 'to': '${to.slice(0, 64)}' is not a plain agent name or id (no path separators or '..').`,
+          /*isError*/ true,
+        )
       const from = String(args.from ?? context?.sessionId ?? "trayambak")
 
       // Persist to durable inbox file

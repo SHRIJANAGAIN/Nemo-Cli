@@ -96,4 +96,23 @@ describe("trayambak__SendMessage", () => {
     const res = await tool.execute("e4", { to: "", content: "" }, undefined, undefined, ctx())
     expect(outText(res)).toContain("Missing")
   })
+
+  it("refuses traversal recipients and never writes outside the inbox", async () => {
+    const evil = `..\\..\\t-esc-${tag}`
+    const tool = createSendMessageTool(undefined, { resolveTarget: lookup })
+    const res = await tool.execute("e5", { to: evil, content: "escape attempt" }, undefined, undefined, ctx())
+    expect(outText(res)).toContain("Invalid 'to'")
+    expect(outText(res)).toContain("[isError]")
+    // Pre-fix, inboxFile() would have normalized to exactly this path:
+    const escapedTarget = path.join(os.homedir(), `t-esc-${tag}.jsonl`)
+    expect(fs.existsSync(escapedTarget)).toBe(false)
+    // The choke point protects direct callers of the inbox helpers too.
+    expect(() => sendToInbox(evil, "tester", "escape")).toThrow(/invalid inbox agent id/)
+    expect(() => sendToInbox(`nested/dir-${tag}`, "tester", "escape")).toThrow(/invalid inbox agent id/)
+    try {
+      fs.rmSync(escapedTarget, { force: true })
+    } catch {
+      /* best-effort cleanup */
+    }
+  })
 })

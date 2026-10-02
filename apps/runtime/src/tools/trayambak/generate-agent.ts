@@ -10,6 +10,7 @@ import * as http from "http"
 import * as https from "https"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool } from "../types.js"
+import { safePathSegment } from "./safe-path.js"
 
 export interface GeneratedAgent {
   identifier: string
@@ -139,14 +140,19 @@ async function callProvider(
   })
 }
 
-function saveAgentProfile(agent: GeneratedAgent, cwd: string): string {
+export function saveAgentProfile(agent: GeneratedAgent, cwd: string): string {
+  // Choke point: the identifier is embedded in a file name AND the YAML
+  // frontmatter, so an unsafe segment must throw before anything is written.
+  const safeIdentifier = safePathSegment(agent.identifier)
+  if (safeIdentifier === null)
+    throw new Error(`invalid agent identifier: ${JSON.stringify(String(agent.identifier).slice(0, 64))}`)
   const agentsDir = path.join(cwd, ".trayambak", "agents")
   fs.mkdirSync(agentsDir, { recursive: true })
-  const filePath = path.join(agentsDir, `${agent.identifier}.md`)
+  const filePath = path.join(agentsDir, `${safeIdentifier}.md`)
 
   const frontmatter: string[] = []
   frontmatter.push("---")
-  frontmatter.push(`name: ${agent.identifier}`)
+  frontmatter.push(`name: ${safeIdentifier}`)
   frontmatter.push(`description: ${agent.whenToUse.replace(/\n/g, " ").slice(0, 200)}`)
   if (agent.model) frontmatter.push(`model: ${agent.model}`)
   if (agent.tools && agent.tools.length > 0) frontmatter.push(`tools: ${agent.tools.join(", ")}`)
@@ -169,6 +175,14 @@ export function createGenerateAgentTool(): Tool {
       const cwd = context?.cwd ?? process.cwd()
 
       if (!description) return textResult("Missing 'description'.", /*isError*/ true)
+      // An explicit name bypasses slugify and lands in a path join when the
+      // profile is saved: reject separators and ".." before spending a
+      // provider call, not after.
+      if (explicitName && safePathSegment(explicitName) === null)
+        return textResult(
+          `Invalid 'name': '${explicitName.slice(0, 64)}' is not a plain agent name (no path separators or '..').`,
+          /*isError*/ true,
+        )
 
       const baseUrl = process.env.TRAYAMBAK_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "http://localhost:8080"
       const apiKey = process.env.TRAYAMBAK_API_KEY ?? process.env.OPENAI_API_KEY ?? ""

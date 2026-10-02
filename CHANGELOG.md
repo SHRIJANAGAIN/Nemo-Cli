@@ -5,6 +5,25 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Model-input path traversal in three file-writing tools** (audit, #110):
+  - **#110** — three tools joined raw model input into filesystem paths
+    with no segment guard, so `path.join` normalized `..` right out of
+    the intended directory: `trayambak__Rules` (`write`) did
+    `path.join(targetDir, name)` — arbitrary-path write with full
+    content control and any extension (startup scripts, source files);
+    `trayambak__SendMessage` built `~/.trayambak/inbox/<to>.jsonl` from
+    the raw recipient, then `mkdirSync(recursive)` +
+    `appendFileSync` anywhere the traversal pointed;
+    `trayambak__GenerateAgent` saved
+    `.trayambak/agents/<identifier>.md` where the explicit `name`
+    argument bypassed `slugify` — the same values also landed verbatim
+    in the YAML frontmatter. Fix: shared guard `safe-path.ts`
+    (`safePathSegment` — path separators, `..`, control characters,
+    128-char cap, trailing dot/space, Windows device names) applied at
+    tool level plus choke points inside `inboxFile()` and
+    `saveAgentProfile()`. Proof: traversal regression tests red on old
+    code (write lands / guard throw missing), green after.
+
 - **RunTeam single-call fan-out bounded** (audit, #109):
   - **#109** — `trayambak__RunTeam` accepted any non-empty `tasks`
     array: the runner batches foreground concurrency but walks every

@@ -9,6 +9,7 @@ import * as path from "path"
 import * as os from "os"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool } from "../types.js"
+import { safePathSegment } from "./safe-path.js"
 
 const RULE_FILENAMES = ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"]
 
@@ -143,6 +144,15 @@ export function createRulesTool(): Tool {
         case "write": {
           const content = String(args.content ?? "")
           if (!content) return textResult("Missing 'content' for write action.", /*isError*/ true)
+          // `name` is model input and lands in a path join: a segment with
+          // a separator or ".." escapes targetDir and writes arbitrary bytes
+          // anywhere the process can write. Refuse it before touching disk.
+          const safeName = safePathSegment(name)
+          if (safeName === null)
+            return textResult(
+              `Invalid rule file name '${name}': use a plain file name (letters, digits, '.', '-', '_', spaces; no path separators or '..').`,
+              /*isError*/ true,
+            )
           const scope = (args.scope as string) === "global" ? "global" : "project"
           let targetDir: string
           if (scope === "global") {
@@ -151,7 +161,7 @@ export function createRulesTool(): Tool {
             targetDir = cwd
           }
           fs.mkdirSync(targetDir, { recursive: true })
-          const filePath = path.join(targetDir, name)
+          const filePath = path.join(targetDir, safeName)
           fs.writeFileSync(filePath, content, "utf8")
           return textResult(`Rule written to: ${filePath}`)
         }
