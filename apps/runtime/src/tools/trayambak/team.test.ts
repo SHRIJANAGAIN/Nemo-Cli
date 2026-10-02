@@ -30,6 +30,25 @@ describe("createTeamTool", () => {
     ).toBe(true)
   })
 
+  it("skips null and primitive task items instead of crashing", async () => {
+    const seen: Array<{ name: string }> = []
+    const run = vi.fn(async (tasks: Array<{ name: string }>) => {
+      seen.push(...tasks)
+      return tasks.map((t) => ({ name: t.name, text: "ok" }))
+    })
+    const tool = createTeamTool(run)
+    const r = await tool.execute(
+      "t1",
+      { tasks: [null, 42, "nope", { name: "a", prompt: "do x" }] },
+      undefined,
+      undefined,
+      undefined as never,
+    )
+
+    expect(r.isError).toBe(false)
+    expect(seen.map((t) => t.name)).toEqual(["a"])
+  })
+
   it("aggregates results and surfaces errors and background starts", async () => {
     const run = vi.fn(async () => [
       { name: "a", text: "done a" },

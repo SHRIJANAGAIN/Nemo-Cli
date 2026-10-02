@@ -136,8 +136,14 @@ trayambak execpolicy check "npm test"    # "allow" (no rule matched)
 directory. `execpolicy check` runs the ordered glob rule list
 (`DEFAULT_EXEC_RULES`: `rm -rf /*`, `rm -rf ~*`, `format`, `shutdown`,
 `reboot*`, `poweroff*`, `mkfs*`, `sudo *`, `dd *of=*`, `reg delete *`,
-`vssadmin *`, pipe-to-shell `* | sh` / `* | bash` variants) — first match
-wins, and **commands matching no rule are allowed**.
+`vssadmin *`, pipe-to-shell `* | sh` / `* | bash` variants, PLUS the full
+protocol force-ask corpus derived live from `FORCE_ASK_RULES` — `git push
+--force`, `del /s /q`, `Remove-Item -Recurse -Force`, `iex`,
+`eval(`, … — so the display gate can never disagree with the approval
+ladder) — first match wins, and **commands matching no rule are allowed**.
+Chained commands are split on `;`, `&&`, `||`, `&` and newlines first (lone
+`|` is never a split point — pipe-to-shell patterns need it), so `echo ok;
+mkfs /dev/sda` is judged by its `mkfs` segment, not its `echo` wrapper.
 
 ### User `.rules` files (discovery + merge precedence)
 

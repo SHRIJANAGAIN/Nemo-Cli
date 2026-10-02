@@ -45,6 +45,8 @@ export interface CommandSpec {
 export const EXIT_OK = 0
 export const EXIT_ERROR = 1
 export const EXIT_USAGE = 2
+/** Policy denial: the check ran fine, the answer is no (CI-gatable). */
+export const EXIT_DENIED = 3
 
 /** Global flags accepted by every command that parses flags. */
 export const GLOBAL_FLAGS: CommandFlag[] = [

@@ -209,7 +209,7 @@ export const PromptInput = ({
   onChoose,
   onHistoryScroll,
   onEnhance,
-  placeholder = "Type a message...",
+  placeholder = "Ask Trayambak to do anything...",
   isLoading = false,
   disabled = false,
   questionHint = null,

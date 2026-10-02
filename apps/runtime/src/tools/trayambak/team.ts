@@ -51,8 +51,8 @@ export function createTeamTool(
       if (!Array.isArray(raw) || raw.length === 0)
         return textResult("Missing non-empty 'tasks' array.", /*isError*/ true)
       const tasks: TeamTask[] = raw
-        .map((item) => {
-          const value = item as Record<string, unknown>
+        .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+        .map((value) => {
           return {
             name: String(value.name ?? "specialist"),
             prompt: String(value.prompt ?? ""),

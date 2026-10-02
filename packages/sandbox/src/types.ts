@@ -1,6 +1,8 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 import { existsSync } from "fs"
 
+import { windowsAcCapable } from "./windows-ac.js"
+
 /**
  * Enhanced sandbox types — OS-level enforcement model.
  *
@@ -294,13 +296,14 @@ function detectAvailableSandbox(): SandboxType {
     if (platform === "linux" && existsSync("/usr/bin/bwrap")) {
       return SandboxType.LinuxSeccomp
     }
-    // Windows: the restricted-token spawn path (`spawnUnderWindowsRestrictedToken`)
-    // currently delegates to the unsandboxed path and reports `None` /
-    // `isSandboxed: false`. Detection must not claim an enforcement that is
-    // never applied — the stamp feeds `CODEX_SANDBOX` in child envs, and a
-    // marker that lies is worse than no marker (policy-first rule). Return
-    // `WindowsRestrictedToken` here once restricted-token spawn is actually
-    // wired end-to-end.
+    // Windows: AppContainer via the PowerShell shim (windows-ac.ts). The
+    // probe answers infrastructure-only — if the helper cannot run,
+    // spawnUnderWindowsAppContainer falls back to an honest unsandboxed
+    // spawn, and returning None here keeps the CODEX_SANDBOX stamp truthful
+    // before anything has even spawned.
+    if (platform === "win32" && windowsAcCapable()) {
+      return SandboxType.WindowsRestrictedToken
+    }
   } catch {
     /* ignore */
   }

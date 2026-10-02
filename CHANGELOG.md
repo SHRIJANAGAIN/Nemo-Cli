@@ -5,6 +5,18 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Mouse scroll, direct like Codex**: the wheel drives the in-app history
+  window itself (lifetime mouse reporting + anchored reading position), so
+  generation never yanks a parked window back to live — no arrow-key
+  middleman, no mode to enter. PageUp/PageDown still page for terminals
+  whose mouse reports never arrive.
+
+- **Chat render guards**: composer placeholder pinned to Trayambak's own
+  ("Type a message…", stale Codex line can never return), chooser arrows
+  proven end-to-end (Down+Enter picks the neighbour, not the top hit),
+  transcript rows carry zero background colour, and the fixed 42-col
+  sidebar stands down below 90 columns instead of squeezing the chat into
+  wrapped slivers.
 - **Out-of-range temperature falls back to default, not the wild edge**:
   a misconfigured 2.7 used to clamp to 2.0 (still near-gibberish, and an
   NVIDIA 400 on older builds) — now it lands on the safe deterministic
@@ -32,6 +44,42 @@ All notable changes to trayambak are documented here. The format is based on kee
 - **Web search serves real links**: DuckDuckGo redirect URLs
   (`//duckduckgo.com/l/?uddg=…`) are resolved to destinations at parse
   time and printed in results, so the model can fetch pages directly.
+- **Wiby joins the failover chain**: a keyless bot-friendly JSON search
+  API behind DuckDuckGo — when DDG challenges, Wiby still answers.
+- **Windows reaches real OS-level sandboxing** (AppContainer, backend
+  `windows-restricted` / `SandboxType.WindowsRestrictedToken`): the
+  spawn runs through a short-lived PowerShell shim + compiled helper that
+  calls `CreateProcessW` with
+  `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES` — the child gets a
+  dedicated AppContainer profile, Low integrity, no user SID, and a
+  default-deny NTFS ACL; writable roots / cwd / scratch are granted `F`,
+  profile reads `R`, deny paths explicit deny ACEs (deny beats allow),
+  and network follows the policy through spawn-time capability SIDs
+  (`internetClient` / `internetClientServer` /
+  `privateNetworkClientServer`; no caps = kernel-dropped outbound). No
+  admin rights required. stdio flows over inherited handles
+  (`STARTF_USESTDHANDLES` crashes AC children with 0xC0000142, a custom
+  `lpEnvironment` dies with error 203 — both verified), and exit codes
+  survive child death because the spawn-time `hProcess` is held until
+  read (a handle-less exited process object is destroyed instantly and
+  the old post-mortem `OpenProcess` reported 1 for every command).
+  Honesty is enforced: `windowsAcCapable()` claims only infrastructure,
+  the per-spawn `status.json` handshake is the real gate, and any
+  failure falls back to an unsandboxed spawn with `isSandboxed: false`
+  instead of faking isolation. Windows stays truthful on the foreground
+  marker: `[sandbox: os (windows_sandbox)]` only when the handshake
+  proved it.
+- **Windows sandbox grants are bounded, journaled, and fail closed**:
+  security-descriptor writes are not uniformly fast — fresh directories
+  answer in ~25ms, profile children take 0.1s–18s, and a directory whose
+  write was killed mid-flight can wedge so that no writer (icacls or
+  .NET) ever completes again until reboot. Every grant therefore runs
+  under a per-path deadline inside a per-spawn budget, results are
+  journaled for 24h so a converged machine does zero grant work, wedged
+  branches expand into their children (one ungrantable directory never
+  starves its subtree), and a skipped grant fails closed — the sandboxed
+  child simply cannot touch that path, never a stalled handshake or a
+  silently unsandboxed fallback.
 
 ## [0.6.5]
 
@@ -112,6 +160,15 @@ All notable changes to trayambak are documented here. The format is based on kee
   otherwise). 0.6.0 stays on npm for history; use 0.6.1+.
 
 ## [Unreleased]
+
+### Changed — the terminal tab now says `Trayambak` and animates while working
+
+- **The tab/window title is claimed on startup.** The shell keeps reporting its cwd as the title, so a trayambak tab read `engli` (or whatever folder) and gave no hint what was running. On mount the TUI now sets the title to the product name via OSC 0, then keeps an activity-aware title (`Trayambak - working`, `! Trayambak - approval needed`, …) as state changes — the existing `terminal-notify` port, now wired to claim the title instead of only reacting to activity.
+- **Live animation while a turn runs**: the title cycles an ASCII spinner (`| / - \`) every 120 ms during load/streaming, showing background-subagent count and phase, then settles back to the static title when the turn ends, when an approval/error/input needs attention, and on unmount. Restart-safe (each start clears the previous timer) and `unref`'d so a cosmetic animation can never hold the process open.
+- **ASCII-only frames on purpose**, matching the existing activity marks: a braille spinner renders as mojibake on non-UTF8 conhost tabs.
+- **Never touches a pipe.** Writes stay gated on `stdout.isTTY` and `TRAYAMBAK_NO_NOTIFY=1`, and remain synchronous (`fs.writeSync`) so a title change cannot interleave with an Ink frame. Verified by driving the _shipped_ `dist` module with piped stdout: **0 bytes** emitted, no escape sequences at all.
+- Title writes are deduplicated, and every emitted title is asserted free of control characters (a BEL/ESC inside the payload would terminate the OSC sequence early and spill raw bytes into the terminal).
+- Tests: `terminal-notify.test.ts` extended (product name, animated-title builder, animation lifecycle, restart-without-leak, kill-switch, no-TTY), plus a new byte-level `terminal-title-bytes.test.ts` that captures the exact OSC 0 bytes and asserts the frame order `| / - \ |` and that nothing arrives after `stop()`. A pty-level check (`terminal-title-pty.test.ts`) is Unix-only and explicitly **skips** on Windows rather than silently passing without a pty.
 
 ### Fixed — the leak was still live in the _installed_ CLI, and the shims hid it
 

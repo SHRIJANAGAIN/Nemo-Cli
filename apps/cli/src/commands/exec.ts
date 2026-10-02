@@ -33,10 +33,17 @@ export function combinePromptWithStdin(prompt: string, piped: string): string {
 }
 
 /** Headless exec: run one prompt, stream JSON events to stdout (Codex exec parity). */
-export async function execCommand(prompt: string, opts: { model?: string } = {}): Promise<void> {
-  const full = combinePromptWithStdin(prompt, readPipedStdin(process.stdin.isTTY))
+export async function execCommand(
+  prompt: string,
+  opts: { model?: string; sessionFile?: string } = {},
+  deps: { readStdin?: () => string } = {},
+): Promise<void> {
+  // deps.readStdin is the test seam: unit tests must never touch real fd 0
+  // (a worker with an open-but-quiet stdin blocks forever on read).
+  const piped = deps.readStdin ? deps.readStdin() : readPipedStdin(process.stdin.isTTY)
+  const full = combinePromptWithStdin(prompt, piped)
   const config = loadConfig(opts.model ? { model: opts.model } : {})
-  const agent = new Agent({ config })
+  const agent = new Agent({ config, sessionFile: opts.sessionFile })
   await agent.run(full, (event) => {
     process.stdout.write(JSON.stringify(event) + "\n")
   })

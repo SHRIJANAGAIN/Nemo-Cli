@@ -18,10 +18,11 @@
  *
  * Two input paths share one clamp: the WHEEL moves 3 messages per notch
  * (mouse-input bus), PageUp/PageDown jumps 10 (PromptInput's onHistoryScroll
- * — "easy scrollable": one keypress pages through history instead of
- * notching). The offset persists across turn end (App only snaps to live on
- * the NEXT turn), so a parked reading position stays parked and stays
- * scrollable.
+ * — "easy scrollable": one keypress pages through history instead of a
+ * wheel marathon). The offset persists across turn end (App only snaps to
+ * live on the NEXT turn), so a parked reading position stays parked and
+ * stays scrollable — including mid-turn, when generation keeps appending
+ * behind the parked window.
  *
  * Pure functions (unit-tested in scroll-math.test.ts); App owns the state.
  */

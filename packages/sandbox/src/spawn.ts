@@ -23,6 +23,7 @@ import {
 } from "../../core/src/process.js"
 
 import { SandboxType, NetworkSandboxPolicy, SpawnRequest, SpawnedProcess } from "./types.js"
+import { spawnWindowsAcShim, taskkillTree } from "./windows-ac.js"
 
 /**
  * Output/timeout limits live once, in core's process.ts — this module
@@ -56,7 +57,7 @@ export async function spawnProcess(request: SpawnRequest): Promise<SpawnedProces
       proc = await spawnUnderLandlock(command, cwd, env, networkPolicy, outputCap, signal)
       break
     case SandboxType.WindowsRestrictedToken:
-      proc = await spawnUnderWindowsRestrictedToken(command, cwd, env, outputCap, signal)
+      proc = await spawnUnderWindowsAppContainer(request)
       break
     case SandboxType.None:
     default:
@@ -211,23 +212,50 @@ export function landlockArgs(command: string[], cwd: string, networkPolicy: Netw
 }
 
 /**
- * Windows restricted-token sandbox.
+ * Windows AppContainer OS sandbox (windows-ac.ts has the verified recipe).
  *
- * CreateRestrictedToken is a native API this port cannot call, so the old
- * code ran the command completely unsandboxed while reporting
- * `isSandboxed: true` — callers could mistake a plain spawn for isolation.
- * Delegating to the unsandboxed path reports what actually happened
- * (applied type None, isSandboxed false), matching the project's
- * policy-first rule of never claiming enforcement that is not there.
+ * Spawns the PowerShell shim, waits for the status handshake that proves an
+ * AppContainer child is genuinely running, then reports `isSandboxed: true`
+ * backed by kernel enforcement: default-deny NTFS ACLs, Low integrity, no
+ * user SID, spawn-time network capability SIDs. The child inherits the
+ * shim's pipe handles, so `readAll`/`waitForExit` stream bytes exactly like
+ * every other backend. Kill escalates to `taskkill /T` so the sandboxed
+ * command dies with its shim. Any infrastructure failure falls back to an
+ * honest unsandboxed spawn (`isSandboxed: false`) instead of claiming
+ * isolation that was not applied.
  */
-async function spawnUnderWindowsRestrictedToken(
-  command: string[],
-  cwd: string,
-  env: Record<string, string>,
-  outputCap: number,
-  signal?: AbortSignal,
-): Promise<SpawnedProcess> {
-  return spawnUnsandboxed(command, cwd, env, outputCap, signal)
+async function spawnUnderWindowsAppContainer(request: SpawnRequest): Promise<SpawnedProcess> {
+  const { command, cwd, env, networkPolicy, filesystemPolicy, outputCap, signal } = request
+  try {
+    const shim = await spawnWindowsAcShim({
+      command,
+      cwd,
+      env,
+      networkDisabled: networkPolicy.disableNetwork,
+      writableRoots: filesystemPolicy.writableRoots,
+      denyReadPaths: filesystemPolicy.denyReadPaths,
+      denyWritePaths: filesystemPolicy.denyWritePaths,
+      signal,
+    })
+    const handle = createSpawnedProcess(
+      shim.child,
+      /*isSandboxed*/ true,
+      SandboxType.WindowsRestrictedToken,
+      0,
+      outputCap,
+    )
+    const killDirect = handle.kill
+    handle.kill = async (sig: string = "SIGKILL") => {
+      // taskkill /T reaches the AppContainer child through the shim; a bare
+      // TerminateProcess on the shim would leave the command running.
+      await taskkillTree(shim.pid)
+      await killDirect(sig)
+    }
+    return handle
+  } catch {
+    // The handshake failed — no isolation exists, so report none.
+    return spawnUnsandboxed(command, cwd, env, outputCap, signal)
+  }
 }
 
 /**
@@ -301,8 +329,28 @@ function createSpawnedProcess(
         let output = ""
         let byteCount = 0
         let deltaCount = 0
+        let settled = false
+        let exited = child.exitCode !== null || child.signalCode !== null
+        let drainTimer: ReturnType<typeof setTimeout> | undefined
 
-        const onData = (chunk: Buffer) => {
+        const finish = (error?: Error): void => {
+          if (settled) return
+          settled = true
+          if (drainTimer) clearTimeout(drainTimer)
+          child.stdout?.off("data", onData)
+          child.stdout?.off("end", checkSettle)
+          child.stdout?.off("close", checkSettle)
+          child.stderr?.off("data", onData)
+          child.stderr?.off("end", checkSettle)
+          child.stderr?.off("close", checkSettle)
+          child.off("exit", onExit)
+          child.off("close", onClose)
+          child.off("error", onError)
+          if (error) reject(error)
+          else resolve(output)
+        }
+
+        function onData(chunk: Buffer): void {
           if (byteCount >= maxBytes) {
             output += `\n\n[output capped at ${maxBytes} bytes]`
             ;(child.stdout as unknown as { destroy?: () => void })?.destroy?.()
@@ -320,18 +368,44 @@ function createSpawnedProcess(
           }
         }
 
+        function checkSettle(): void {
+          // Streams finished after exit: everything is buffered into output.
+          if (exited && drained(child.stdout) && drained(child.stderr)) finish()
+        }
+
+        function onClose(): void {
+          finish()
+        }
+
+        function onExit(): void {
+          exited = true
+          if (drained(child.stdout) && drained(child.stderr)) {
+            finish()
+            return
+          }
+          // The child ended but a grandchild can hold the pipe open. Give
+          // the streams a bounded window to flush, then settle with what we
+          // have — partial output beats losing the run. (This timer used to
+          // arm at readAll() call time, rejecting every command longer than
+          // IO_DRAIN_TIMEOUT_MS.)
+          if (drainTimer) return
+          drainTimer = setTimeout(() => finish(), IO_DRAIN_TIMEOUT_MS)
+        }
+
+        function onError(error: Error): void {
+          finish(error)
+        }
+
         child.stdout?.on("data", onData)
+        child.stdout?.on("end", checkSettle)
+        child.stdout?.on("close", checkSettle)
         child.stderr?.on("data", onData)
-
-        const timeout = setTimeout(() => {
-          reject(new Error(`IO drain timeout after ${IO_DRAIN_TIMEOUT_MS}ms`))
-        }, IO_DRAIN_TIMEOUT_MS)
-
-        child.on("close", () => {
-          clearTimeout(timeout)
-          resolve(output)
-        })
-        child.on("error", reject)
+        child.stderr?.on("end", checkSettle)
+        child.stderr?.on("close", checkSettle)
+        child.on("exit", onExit)
+        child.on("close", onClose)
+        child.on("error", onError)
+        if (exited) onExit()
       })
     },
 

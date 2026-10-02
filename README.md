@@ -136,44 +136,44 @@ _For a **first-time user**, the following is all you need to know:_
 
 Run `trayambak help` for the authoritative list:
 
-| Command                                           | Description                                                   |
-| ------------------------------------------------- | ------------------------------------------------------------- |
-| `trayambak`                                       | Start an interactive session (alias: `skt`)                   |
-| `run "prompt"`                                    | Interactive session that runs that prompt immediately         |
-| `exec "prompt"`                                   | Headless run — newline-delimited JSON events on stdout        |
-| `git diff \| trayambak exec "review"`             | Piped stdin becomes model context (capped, instruction first) |
-| `review [target]`                                 | Review code/changes for bugs, security issues, style          |
-| `commit [--staged\|--all]`                        | Draft a conventional-commit message for the diff              |
-| `stats`                                           | Show usage stats (sessions, events, violations)               |
-| `pr <checkout\|link\|unlink\|status>`             | Pull-request helpers via `gh`                                 |
-| `db <path\|summary\|threads\|violations>`         | Inspect the local state store                                 |
-| `uninstall`                                       | Remove launcher shims (keeps config/sessions/state)           |
-| `config get [key]` / `config set <k> <v>`         | Show / persist configuration                                  |
-| `doctor`                                          | Diagnose the local environment                                |
-| `info`                                            | Runtime & config summary                                      |
-| `agent [list\|info\|run]`                         | Manage agent profiles                                         |
-| `task [list\|create]`                             | Manage trayambak tasks                                        |
-| `todo [list\|add\|update]`                        | Manage session todos                                          |
-| `plan [create\|list\|show]`                       | Manage multi-step plans                                       |
-| `manager [status\|summary]`                       | Show manager status                                           |
-| `compact [config\|estimate\|run\|reset]`          | Configure/run session compaction                              |
-| `mode [list\|current\|set]`                       | Switch operating modes                                        |
-| `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                     |
-| `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                    |
-| `marketplace <list\|search\|install\|remove>`     | Browse/install shareable skills & agents                      |
-| `upgrade [version]`                               | Update trayambak (git/npm) and rebuild                        |
-| `serve [--port 8080]`                             | Start a local llama.cpp server                                |
-| `download <org/model>`                            | Download a GGUF model                                         |
-| `acp`                                             | Run as an ACP agent server (stdio JSON-RPC)                   |
-| `web [--port 8787]`                               | HTTP agent API + `/api/sessions` + `/openapi.json`            |
-| `login [--with-api-key K\|status]` / `logout`     | Store or delete credentials                                   |
-| `archive <id>` / `unarchive <id>` / `delete <id>` | Manage saved sessions                                         |
-| `mcp-server`                                      | Run an MCP server (tools over stdio)                          |
-| `sandbox check <file>`                            | Check the sandbox policy for a file                           |
-| `execpolicy check <cmd>`                          | Check the exec policy for a command                           |
-| `resume <id>`                                     | Resume a stored session                                       |
-| `export [id] [--format markdown\|json\|text]`     | Export a session transcript (default `markdown`)              |
-| `completion <bash\|zsh\|fish\|powershell>`        | Print a shell completion script to source from your profile   |
+| Command                                           | Description                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `trayambak`                                       | Start an interactive session (alias: `skt`)                                                       |
+| `run "prompt"`                                    | Interactive session that runs that prompt immediately (headless JSON events when stdout is piped) |
+| `exec "prompt"`                                   | Headless run — newline-delimited JSON events on stdout                                            |
+| `git diff \| trayambak exec "review"`             | Piped stdin becomes model context (capped, instruction first)                                     |
+| `review [target]`                                 | Review code/changes for bugs, security issues, style                                              |
+| `commit [--staged\|--all]`                        | Draft a conventional-commit message for the diff                                                  |
+| `stats`                                           | Show usage stats (sessions, events, violations)                                                   |
+| `pr <checkout\|link\|unlink\|status>`             | Pull-request helpers via `gh`                                                                     |
+| `db <path\|summary\|threads\|violations>`         | Inspect the local state store                                                                     |
+| `uninstall`                                       | Remove launcher shims (keeps config/sessions/state)                                               |
+| `config get [key]` / `config set <k> <v>`         | Show / persist configuration                                                                      |
+| `doctor`                                          | Diagnose the local environment                                                                    |
+| `info`                                            | Runtime & config summary                                                                          |
+| `agent [list\|info\|run]`                         | Manage agent profiles                                                                             |
+| `task [list\|create]`                             | Manage trayambak tasks                                                                            |
+| `todo [list\|add\|update]`                        | Manage session todos                                                                              |
+| `plan [create\|list\|show]`                       | Manage multi-step plans                                                                           |
+| `manager [status\|summary]`                       | Show manager status                                                                               |
+| `compact [config\|estimate\|run\|reset]`          | Configure/run session compaction                                                                  |
+| `mode [list\|current\|set]`                       | Switch operating modes                                                                            |
+| `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                                                         |
+| `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                                                        |
+| `marketplace <list\|search\|install\|remove>`     | Browse/install shareable skills & agents                                                          |
+| `upgrade [version]`                               | Update trayambak (git/npm) and rebuild                                                            |
+| `serve [--port 8080]`                             | Start a local llama.cpp server                                                                    |
+| `download <org/model>`                            | Download a GGUF model                                                                             |
+| `acp`                                             | Run as an ACP agent server (stdio JSON-RPC)                                                       |
+| `web [--port 8787]`                               | HTTP agent API + `/api/sessions` + `/openapi.json`                                                |
+| `login [--with-api-key K\|status]` / `logout`     | Store or delete credentials                                                                       |
+| `archive <id>` / `unarchive <id>` / `delete <id>` | Manage saved sessions                                                                             |
+| `mcp-server`                                      | Run an MCP server (tools over stdio)                                                              |
+| `sandbox check <file>`                            | Check the sandbox policy for a file                                                               |
+| `execpolicy check <cmd>`                          | Check the exec policy for a command                                                               |
+| `resume <id>`                                     | Resume a stored session                                                                           |
+| `export [id] [--format markdown\|json\|text]`     | Export a session transcript (default `markdown`)                                                  |
+| `completion <bash\|zsh\|fish\|powershell>`        | Print a shell completion script to source from your profile                                       |
 
 **Global flags:** `--base-url <url>`, `--model <name>`, `--provider <name>`
 (`llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `xai`, `huggingface`,
@@ -233,9 +233,10 @@ trayambak config set provider openai
 | `0`  | Success — including `--help`, `--version`, and `config` usage output                                                                                                |
 | `1`  | Failure — unhandled exception (logged to the mistake journal first), failed `doctor` checks, MCP CLI errors                                                         |
 | `2`  | Usage error — unknown command, unknown `help` target, missing argument (e.g. `resume <id>`), unknown/missing flag, invalid `--port`, `--format`, or `--shell` value |
+| `3`  | Policy denial — `execpolicy check <command>` matched a deny rule (CI-gatable: non-zero means blocked)                                                               |
 
 The constants live in [`apps/cli/src/command-registry.ts`](apps/cli/src/command-registry.ts)
-as `EXIT_OK` / `EXIT_ERROR` / `EXIT_USAGE`; usage failures are raised as
+as `EXIT_OK` / `EXIT_ERROR` / `EXIT_USAGE` / `EXIT_DENIED` (3 = policy denial); usage failures are raised as
 `EarlyExit(2)` from `usageAbort()` in [`apps/cli/src/index.ts`](apps/cli/src/index.ts).
 The `mcp` subcommand follows the same scheme: usage failures (unknown
 action, missing server name) exit `2`; operational failures (OAuth flow

@@ -51,17 +51,24 @@ export interface TrayambakCommand {
 /**
  * Extract `/trayambak <task>` (or `@trayambak <task>`) from a comment body.
  * Returns null for empty tasks, bare mentions, and non-command chatter.
+ * The prefix match is case-insensitive (`/TRAYAMBAK`, `@SkT`, …) but the
+ * task is sliced from the ORIGINAL body — its case is the user's content.
  */
 export function parseTrayambakCommand(body: string): TrayambakCommand | null {
   if (!body) return null
   for (const prefix of COMMAND_PREFIXES) {
-    const idx = body.indexOf(prefix)
+    const idx = body.search(new RegExp(escapeRegExp(prefix), "i"))
     if (idx < 0) continue
     const task = body.slice(idx + prefix.length).trim()
     if (!task) return null
     return { task }
   }
   return null
+}
+
+/** Escape a literal for RegExp construction (prefixes carry / and @). */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 export type GithubEventName =
@@ -100,6 +107,15 @@ export function routeGithubEvent(event: GithubEventName, payload: unknown): Gith
     // Act only on creation — edits would double-fire jobs.
     if (action !== "" && action !== "created") {
       return { kind: "ignored", reason: `action=${action}` }
+    }
+    // Never answer our own (or any bot's) comments: agent replies echo the
+    // triggering "/trayambak …" text, and without this guard each reply
+    // re-triggers a full job — an infinite self-spam loop (observed live:
+    // back-to-back bot comments the user had to delete by hand).
+    const commentUser = (body.comment as { user?: { type?: unknown } } | undefined)?.user
+    const senderType = (body.sender as { type?: unknown } | undefined)?.type
+    if (commentUser?.type === "Bot" || senderType === "Bot") {
+      return { kind: "ignored", reason: "bot comment (self-trigger guard)" }
     }
     const comment = body.comment as { body?: unknown } | undefined
     const command = parseTrayambakCommand(typeof comment?.body === "string" ? comment.body : "")

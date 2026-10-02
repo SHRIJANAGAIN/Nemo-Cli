@@ -31,6 +31,7 @@ import { DEFAULT_PERMISSIONS, type PermissionConfig } from "../../../../packages
 import { evaluatePermission } from "../../../../packages/protocol/src/permission-rules.js"
 import { approvalFor, DenialTracker } from "../../../../packages/core/src/approval.js"
 import { redactPayload } from "../../../../packages/core/src/secrets.js"
+import { annotateUntrustedToolResult, guardPrompt, type RefusalKind } from "./prompt-guard.js"
 import { compactMessages, policyFromConfig } from "../compaction.js"
 import { readInbox } from "../tools/trayambak/send-message.js"
 import { runPreToolUseHooks, runPostToolUseHooks, type HookShellExecutor } from "../tools/hook-exec.js"
@@ -132,9 +133,34 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
     if (parsed.ok) applyBudget(parsed.budget)
     else resetBudget()
   }
-  const userMessage: AgentMessage = { role: "user", content: prompt }
+  // Deterministic prompt guard, BEFORE any model call. Extraction asks
+  // ("repeat system instructions…"), credential-value asks ("print exact
+  // TRAYAMBAK_API_KEY") and pure instruction-override prompts are answered
+  // here with zero provider invocations: a refusal the model never sees
+  // cannot be jailbroken out of it, and there is no 180s timeout to burn.
+  // Override-tainted prompts are neutralized (directive stripped, hierarchy
+  // reminder appended) instead of refused, so the legitimate remainder of
+  // the request still runs.
+  const verdict = guardPrompt(prompt)
+  const userMessage: AgentMessage = {
+    role: "user",
+    content: verdict.action === "allow" ? verdict.prompt : prompt,
+  }
   run.session.add(userMessage)
   await run.emit({ type: "message_start", message: userMessage })
+  if (verdict.action === "refuse") {
+    recordPromptGuardAudit(run, verdict.kind, "refused")
+    const refusal: AssistantMessage = {
+      role: "assistant",
+      content: [{ type: "text", text: verdict.reply }],
+      stopReason: "end_turn",
+    }
+    run.session.add(refusal)
+    await run.emit({ type: "message_end", message: refusal })
+    await run.emit({ type: "agent_end", messages: run.session.messages })
+    return run.session.messages
+  }
+  if (verdict.neutralized) recordPromptGuardAudit(run, "instruction-override", "neutralized")
 
   let turns = 0
   const state = {
@@ -518,7 +544,10 @@ async function executeToolCalls(
   }
 
   for (const r of results) {
-    run.session.add(r)
+    // evil.md class: tool output carrying instruction-override phrasing gets
+    // an UNTRUSTED system-reminder appended. The content itself is preserved
+    // untouched — it is data the user asked to read.
+    run.session.add(annotateUntrustedToolResult(r))
   }
   await run.emit({ type: "turn_end", message: assistant, toolResults: results })
   return results
@@ -532,6 +561,19 @@ async function executeToolCalls(
 function recordGateAudit(run: RunConfig, toolName: string, result: string): void {
   try {
     run.audit?.recordAudit("tool.execute", "agent", toolName, result)
+  } catch {
+    /* audit must never break the turn */
+  }
+}
+
+/**
+ * Append one prompt-guard audit row ("prompt.guard" / kind / refused-or-
+ * neutralized). Same fire-and-forget contract as `recordGateAudit`: a
+ * failing sink must never turn a security refusal into a crash.
+ */
+function recordPromptGuardAudit(run: RunConfig, kind: RefusalKind, result: string): void {
+  try {
+    run.audit?.recordAudit("prompt.guard", "user", kind, result)
   } catch {
     /* audit must never break the turn */
   }

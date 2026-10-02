@@ -15,6 +15,9 @@
 import * as fs from "fs"
 import * as path from "path"
 import { enforcementForBackend } from "./gate.js"
+import { windowsAcCapable } from "./windows-ac.js"
+import { FORCE_ASK_RULES } from "../../protocol/src/permission-rules.js"
+import { segmentCommand } from "../../execpolicy/src/segments.js"
 
 // ─── Original Policy Engine ───
 
@@ -32,6 +35,10 @@ export function detectBackend(): SandboxBackend {
   try {
     if (process.platform === "darwin" && fs.existsSync("/usr/bin/sandbox-exec")) return "seatbelt"
     if (process.platform === "linux" && fs.existsSync("/usr/bin/bwrap")) return "bwrap"
+    // Windows: AppContainer helper present → the real isolator is available.
+    // Probe is infrastructure-only; a per-spawn handshake failure still
+    // falls back to an unsandboxed spawn inside spawnProcess.
+    if (process.platform === "win32" && windowsAcCapable()) return "windows-restricted"
   } catch {
     /* ignore */
   }
@@ -53,8 +60,22 @@ export interface SandboxCheck {
   enforcement: EnforcementMode
 }
 
+/** realpath with a resolve fallback: missing paths (checked before they
+ *  exist, e.g. a write target) still get a lexical answer instead of a throw. */
+function realpathOrResolve(p: string): string {
+  try {
+    return fs.realpathSync(p)
+  } catch {
+    return path.resolve(p)
+  }
+}
+
 export function isPathInside(file: string, root: string): boolean {
-  const rel = path.relative(path.resolve(root), path.resolve(file))
+  // Resolve symlinks/junctions FIRST: a junction pointing at C:\Windows
+  // inside a writable root must not pass as "inside" (audit #36). Both
+  // sides go through realpath so pre-resolved roots (e.g. macOS /private
+  // aliasing under /tmp) compare consistently.
+  const rel = path.relative(realpathOrResolve(root), realpathOrResolve(file))
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))
 }
 
@@ -123,6 +144,21 @@ export function checkExecPolicy(command: string, rules: ExecRule[]): { allowed: 
   return { allowed: true }
 }
 
+/**
+ * Display/CLI variant that evaluates EVERY sub-command, not just the outer
+ * string — the same segmentation the enforcement path uses, so `trayambak
+ * execpolicy check` can never report `allowed` for a command the loop would
+ * gate (or vice versa). A single denying segment denies the whole line and
+ * the matched rule is reported, so the operator sees WHY it was refused.
+ */
+export function checkExecPolicyAll(command: string, rules: ExecRule[]): { allowed: boolean; rule?: ExecRule } {
+  for (const segment of segmentCommand(command)) {
+    const verdict = checkExecPolicy(segment, rules)
+    if (!verdict.allowed) return verdict
+  }
+  return { allowed: true }
+}
+
 export const DEFAULT_EXEC_RULES: ExecRule[] = [
   { pattern: "rm -rf /*", allow: false },
   { pattern: "rm -rf ~*", allow: false },
@@ -141,6 +177,20 @@ export const DEFAULT_EXEC_RULES: ExecRule[] = [
   { pattern: "* | sh *", allow: false },
   { pattern: "* | bash", allow: false },
   { pattern: "* | bash *", allow: false },
+  // Unified force-ask corpus: everything the approval ladder would gate
+  // (protocol FORCE_ASK_RULES — git push --force, del /s /q, Remove-Item,
+  // iex/Invoke-Expression, eval(, terraform destroy, …) also reads as deny
+  // here, so `execpolicy check` can never disagree with the loop. DERIVED,
+  // not duplicated: ladder additions flow in automatically, no second list
+  // to maintain. Mapping notes: ladder `ask` renders as display `deny`
+  // (this surface is binary; fail-closed for anything the loop would gate),
+  // and `*pattern*` wrapping reproduces the ladder's unanchored substring
+  // semantics exactly under this file's anchored matcher (verified: the
+  // corpus contains no `*?[]{}`, so no glob-compiler divergence).
+  ...FORCE_ASK_RULES.filter((r) => r.action === "ask").map((r) => ({
+    pattern: `*${r.pattern}*`,
+    allow: false,
+  })),
 ]
 
 // ─── New OS-Level Enforcement Types ───
@@ -163,6 +213,17 @@ export {
   DEFAULT_EXEC_COMMAND_TIMEOUT_MS,
   MAX_EXEC_OUTPUT_DELTAS_PER_CALL,
 } from "./spawn.js"
+export {
+  WINDOWS_AC_PROFILE_NAME,
+  WINDOWS_AC_SHIM_SCRIPT,
+  quoteWindowsArg,
+  quoteWindowsArgv,
+  acCapabilitySids,
+  windowsAcCapable,
+  setWindowsAcProbeForTests,
+  spawnWindowsAcShim,
+  taskkillTree,
+} from "./windows-ac.js"
 export {
   recordFilesystemViolation,
   recordNetworkViolation,

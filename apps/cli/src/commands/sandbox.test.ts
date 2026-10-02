@@ -9,10 +9,12 @@ import { execpolicyCommand, sandboxCommand } from "./sandbox.js"
 
 const FLAG = "FEATURE_SANDBOXSPAWN"
 const saved = process.env[FLAG]
+const savedExitCode = process.exitCode
 
 afterEach(() => {
   if (saved === undefined) delete process.env[FLAG]
   else process.env[FLAG] = saved
+  process.exitCode = savedExitCode
 })
 
 describe("sandboxCommand", () => {
@@ -52,5 +54,24 @@ describe("execpolicyCommand", () => {
 
   it("prints usage without a command", () => {
     expect(execpolicyCommand([])).toContain("Usage:")
+  })
+
+  it("denies chained destructive payloads through the CLI surface", () => {
+    expect(execpolicyCommand(["check", "echo ok; mkfs.ext4 /dev/sda"])).toContain("deny")
+    expect(execpolicyCommand(["check", "true && shutdown -h now"])).toContain("deny")
+    expect(execpolicyCommand(["check", "git push --force"])).toContain("deny")
+    expect(execpolicyCommand(["check", "echo hi"])).toBe("allow")
+  })
+
+  it("exits 3 on deny, 2 on usage, leaves 0 on allow (CI-gatable)", () => {
+    process.exitCode = undefined
+    expect(execpolicyCommand(["check", "rm -rf /"])).toContain("deny")
+    expect(process.exitCode).toBe(3)
+    process.exitCode = undefined
+    expect(execpolicyCommand(["check", "echo hi"])).toBe("allow")
+    expect(process.exitCode).toBeUndefined()
+    process.exitCode = undefined
+    expect(execpolicyCommand([])).toContain("Usage:")
+    expect(process.exitCode).toBe(2)
   })
 })

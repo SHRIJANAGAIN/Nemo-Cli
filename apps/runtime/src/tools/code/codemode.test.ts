@@ -71,6 +71,15 @@ describe("runCodemode", () => {
     expect(outcome.result).toContain("[truncated]")
     expect(outcome.result.length).toBeLessThan(5000)
   })
+
+  it("caps console retention on log-spam loops and says what was dropped", () => {
+    const outcome = runCodemode('for (let i = 0; i < 5000; i++) console.log("line", i)')
+
+    expect(outcome.ok).toBe(true)
+    expect(outcome.logs.length).toBe(201) // 200 kept + overflow note
+    expect(outcome.logs[0]).toBe("line 0")
+    expect(outcome.logs[outcome.logs.length - 1]).toContain("more log lines dropped")
+  })
 })
 
 describe("createCodemodeTool", () => {

@@ -46,6 +46,14 @@ describe("parseTrayambakCommand", () => {
     expect(parseTrayambakCommand("/skt")).toBeNull()
   })
 
+  it("matches prefixes case-insensitively but keeps the task's own case", () => {
+    expect(parseTrayambakCommand("/TRAYAMBAK ADD LINKS OF FOLDER AND VIDEO'S")).toEqual({
+      task: "ADD LINKS OF FOLDER AND VIDEO'S",
+    })
+    expect(parseTrayambakCommand("please @SkT review this PR")).toEqual({ task: "review this PR" })
+    expect(parseTrayambakCommand("/TRAYAMBAK")).toBeNull()
+  })
+
   it("rejects bare mentions, empty tasks, and chatter", () => {
     expect(parseTrayambakCommand("/trayambak")).toBeNull()
     expect(parseTrayambakCommand("/trayambak   ")).toBeNull()
@@ -65,13 +73,38 @@ describe("routeGithubEvent", () => {
     const out = routeGithubEvent("issue_comment", {
       action: "created",
       repository: repo,
-      comment: { body: "/trayambak add retries" },
+      comment: { body: "/trayambak add retries", user: { login: "human", type: "User" } },
       issue: { number: 42 },
     })
     expect(out).toEqual({
       kind: "job",
       job: { repoFullName: "acme/app", issueNumber: 42, task: "add retries", isPullRequest: false },
     })
+  })
+
+  it("never answers bot comments, even when the text carries a trigger", () => {
+    // The agent echoes the triggering "/trayambak …" line in its replies —
+    // without this guard every reply re-triggers a full job (live spam loop).
+    const ownReply = routeGithubEvent("issue_comment", {
+      action: "created",
+      repository: repo,
+      sender: { login: "trayambak-cli[bot]", type: "Bot" },
+      comment: {
+        body: "## Trayambak result\n\nI ran /trayambak add retries and it is done.",
+        user: { login: "trayambak-cli[bot]", type: "Bot" },
+      },
+      issue: { number: 42 },
+    })
+    expect(ownReply).toEqual({ kind: "ignored", reason: "bot comment (self-trigger guard)" })
+    // Sender-only shape (some events slim the comment user down).
+    const senderOnly = routeGithubEvent("issue_comment", {
+      action: "created",
+      repository: repo,
+      sender: { login: "trayambak-cli[bot]", type: "Bot" },
+      comment: { body: "/trayambak add retries" },
+      issue: { number: 42 },
+    })
+    expect(senderOnly).toEqual({ kind: "ignored", reason: "bot comment (self-trigger guard)" })
   })
 
   it("marks PR review comments as pull requests", () => {

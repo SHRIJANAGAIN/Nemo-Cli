@@ -34,6 +34,7 @@ import { getRulesContextBlock } from "../prompt/rules.js"
 import { DeveloperModeEngine, DEFAULT_DEVELOPER_MODE_CONFIG, isLocalProvider } from "../developer-mode/index.js"
 import { SotaDevMode } from "../developer-mode/sota-mode.js"
 import { runAgentLoop } from "./agent-loop.js"
+import { guardPrompt } from "./prompt-guard.js"
 import type { GoalStore } from "../goals.js"
 import type { SelfImprovementStore } from "../self-improvement.js"
 import { HarnessRuntime, type HarnessPlugin } from "../../../../packages/harness/src/index.js"
@@ -503,14 +504,22 @@ export class Agent {
       this.refreshSystemPrompt()
     }
 
+    // Pre-model prompt guard (agent/prompt-guard.ts): extraction and
+    // credential-value prompts must reach ZERO provider calls on every path.
+    // The SOTA branch below calls a model WITHOUT going through runAgentLoop,
+    // so it is gated on the same verdict; runAgentLoop re-runs the guard on
+    // entry (idempotent on an already-neutralized prompt) as the canonical
+    // refusal path, so a refused prompt still exits with the standard
+    // refusal message even when SOTA is enabled.
+    const promptVerdict = guardPrompt(prompt)
     const isComplex =
       prompt.length > 100 || /\b(code|function|implement|debug|fix|build|create|design|plan|analyze)\b/i.test(prompt)
-    if (this.sotaMode?.isEnabled() && isComplex) {
+    if (this.sotaMode?.isEnabled() && isComplex && promptVerdict.action === "allow") {
       this.sotaMode.setSignal(signal)
-      const userMessage: AgentMessage = { role: "user", content: prompt }
+      const userMessage: AgentMessage = { role: "user", content: promptVerdict.prompt }
       this.session.add(userMessage)
       try {
-        const result = await this.sotaMode.runSotaReasoning(prompt)
+        const result = await this.sotaMode.runSotaReasoning(promptVerdict.prompt)
         const assistant: AssistantMessage = {
           role: "assistant",
           content: [{ type: "text", text: result.solution }],

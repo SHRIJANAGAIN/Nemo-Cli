@@ -55,9 +55,17 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "rm -rf", action: "ask", reason: "recursive force delete" },
   { tool: "*", pattern: "rm -fr", action: "ask", reason: "recursive force delete" },
   { tool: "*", pattern: "del /s /q", action: "ask", reason: "recursive delete (Windows)" },
+  // Flag ORDER variants: `del /f /s /q` is the same destructive operation as
+  // `del /s /q`, but substring matching is order-sensitive, so the canonical
+  // entry alone let the common Windows form through unnoticed (audit #24).
+  { tool: "*", pattern: "del /f /s /q", action: "ask", reason: "recursive delete (Windows)" },
+  { tool: "*", pattern: "del /s /f /q", action: "ask", reason: "recursive delete (Windows)" },
+  { tool: "*", pattern: "del /q /s", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "Remove-Item -Recurse -Force", action: "ask", reason: "recursive delete (PowerShell)" },
+  { tool: "*", pattern: "Remove-Item -Force -Recurse", action: "ask", reason: "recursive delete (PowerShell)" },
   { tool: "*", pattern: "rmdir /s", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "rd /s /q", action: "ask", reason: "recursive delete (Windows)" },
+  { tool: "*", pattern: "rd /q /s", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "find / -delete", action: "ask", reason: "recursive delete" },
   { tool: "*", pattern: "git clean -fdx", action: "ask", reason: "recursive delete" },
   { tool: "*", pattern: "git clean -fd", action: "ask", reason: "recursive delete" },

@@ -10,6 +10,7 @@
 import { readFileSync, watch, existsSync } from "fs"
 import * as os from "os"
 import * as path from "path"
+import { segmentCommand } from "./segments.js"
 
 /** Network protocol types for rules. */
 export enum NetworkRuleProtocol {
@@ -222,10 +223,30 @@ export class PolicyManager {
 
   /**
    * Evaluate a command against the policy.
+   *
+   * The whole line AND every sub-command it will execute are evaluated, and the
+   * strictest verdict wins (Deny > Ask > Allow). Evaluating only the outer
+   * string was the bypass: `ls $(rm -rf /tmp/x)` and `eval "rm -rf /"` matched
+   * no deny rule, so the hidden payload reached the user as a bare "ask" on a
+   * harmless-looking wrapper and ran unchecked once approved.
    */
   evaluate(command: string): ExecDecision {
     const policy = this.getPolicy()
+    const segments = segmentCommand(command)
 
+    // Strictest-wins accumulation, seeded at Allow so an all-Allow policy
+    // still returns Allow (seeding at Ask would mask it).
+    let worst: ExecDecision = ExecDecision.Allow
+    for (const segment of segments) {
+      const verdict = this.evaluateSingle(segment, policy)
+      if (verdict === ExecDecision.Deny) return ExecDecision.Deny
+      if (verdict === ExecDecision.Ask) worst = ExecDecision.Ask
+    }
+    return worst
+  }
+
+  /** Single-pass verdict for one already-split segment. */
+  private evaluateSingle(command: string, policy: ExecPolicy): ExecDecision {
     // Check deny rules first (hard veto)
     for (const rule of policy.rules) {
       if (this.matchPattern(rule.pattern, command) && rule.action === ExecDecision.Deny) {

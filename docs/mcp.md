@@ -132,9 +132,15 @@ Speaks JSON-RPC 2.0 over stdio (protocol `2024-11-05`) and answers
 (`packages/mcp-server/src/index.ts`).
 
 `tools/list` advertises five tools — `bash`, `read_file`, `write_file`,
-`grep`, `glob`. **Current limitation:** `tools/call` only acknowledges the
-call (`"<name> accepted (headless stub)"`) — it does not execute the tool yet.
-Use [ACP](acp.md), the [Web API](web.md), or the SDK for real execution.
+`grep`, `glob`. Executing tools (`bash`, `read_file`) pass the same gate
+as the agent loop, in order: PreToolUse hooks → `approvalFor()` →
+exec-policy (`bash`) / allowed-root check (`read_file`) → bounded execution
+→ PostToolUse hooks. There is no interactive approver over stdio, so an
+`ask` verdict refuses instead of prompting; only explicit allows (and
+full-access) proceed. `bash` takes an optional `timeoutMs` (1s–5min,
+default 10s); `read_file` is confined to the configured `cwd` (symlinks
+and junctions resolved first). `write_file`/`grep`/`glob` are advertised
+but refuse execution — use the CLI tools instead.
 
 ## Related
 

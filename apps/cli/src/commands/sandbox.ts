@@ -3,9 +3,10 @@ import {
   detectBackend,
   describeEnforcement,
   checkFileOp,
-  checkExecPolicy,
+  checkExecPolicyAll,
   DEFAULT_EXEC_RULES,
 } from "../../../../packages/sandbox/src/index.js"
+import { EXIT_DENIED, EXIT_USAGE } from "../command-registry.js"
 
 export function sandboxCommand(args: string[]): string {
   const backend = detectBackend()
@@ -26,8 +27,12 @@ export function sandboxCommand(args: string[]): string {
 export function execpolicyCommand(args: string[]): string {
   if (args[0] === "check" && args[1]) {
     const cmd = args.slice(1).join(" ")
-    const r = checkExecPolicy(cmd, DEFAULT_EXEC_RULES)
+    const r = checkExecPolicyAll(cmd, DEFAULT_EXEC_RULES)
+    // CI-gatable outcomes (mcp.ts precedent: commands own their exit code):
+    // deny → 3 (the check ran, the answer is no), allow leaves 0.
+    if (!r.allowed) process.exitCode = EXIT_DENIED
     return r.allowed ? "allow" : `deny (${r.rule?.pattern})`
   }
+  process.exitCode = EXIT_USAGE
   return "Usage: trayambak execpolicy check <command>"
 }

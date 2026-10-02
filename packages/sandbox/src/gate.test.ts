@@ -17,24 +17,24 @@ describe("osCapableBackend", () => {
     expect(osCapableBackend("seatbelt")).toBe(true)
     expect(osCapableBackend("landlock")).toBe(true)
     expect(osCapableBackend("bwrap")).toBe(true)
-    expect(osCapableBackend("windows-restricted")).toBe(false)
+    expect(osCapableBackend("windows-restricted")).toBe(true)
     expect(osCapableBackend("fallback")).toBe(false)
     expect(osCapableBackend("")).toBe(false)
   })
 })
 
 describe("shouldUseOsSandbox", () => {
-  it("engages seatbelt/landlock out of the box now that the flag is stable-on", () => {
+  it("engages seatbelt/landlock/windows-restricted out of the box now that the flag is stable-on", () => {
     delete process.env[FLAG]
 
     expect(shouldUseOsSandbox(SandboxType.MacosSeatbelt)).toBe(true)
     expect(shouldUseOsSandbox(SandboxType.LinuxSeccomp)).toBe(true)
+    expect(shouldUseOsSandbox(SandboxType.WindowsRestrictedToken)).toBe(true)
   })
 
-  it("never engages for backends with no OS isolator", () => {
+  it("never engages for platforms with no OS isolator", () => {
     delete process.env[FLAG]
 
-    expect(shouldUseOsSandbox(SandboxType.WindowsRestrictedToken)).toBe(false)
     expect(shouldUseOsSandbox(SandboxType.None)).toBe(false)
   })
 
@@ -43,6 +43,7 @@ describe("shouldUseOsSandbox", () => {
 
     expect(shouldUseOsSandbox(SandboxType.MacosSeatbelt)).toBe(false)
     expect(shouldUseOsSandbox(SandboxType.LinuxSeccomp)).toBe(false)
+    expect(shouldUseOsSandbox(SandboxType.WindowsRestrictedToken)).toBe(false)
   })
 
   it("still honours an explicit opt-in on any host", () => {
@@ -50,6 +51,7 @@ describe("shouldUseOsSandbox", () => {
 
     expect(shouldUseOsSandbox(SandboxType.MacosSeatbelt)).toBe(true)
     expect(shouldUseOsSandbox(SandboxType.LinuxSeccomp)).toBe(true)
+    expect(shouldUseOsSandbox(SandboxType.WindowsRestrictedToken)).toBe(true)
   })
 })
 
@@ -59,12 +61,12 @@ describe("describeEnforcement", () => {
 
     expect(describeEnforcement("seatbelt")).toBe("os-sandbox")
     expect(describeEnforcement("bwrap")).toBe("os-sandbox")
+    expect(describeEnforcement("windows-restricted")).toBe("os-sandbox")
   })
 
   it("never claims os-sandbox where no isolator exists", () => {
     delete process.env[FLAG]
 
-    expect(describeEnforcement("windows-restricted")).toBe("policy-only")
     expect(describeEnforcement("fallback")).toBe("policy-only")
   })
 
@@ -73,5 +75,6 @@ describe("describeEnforcement", () => {
 
     expect(describeEnforcement("seatbelt")).toBe("policy-only")
     expect(describeEnforcement("bwrap")).toBe("policy-only")
+    expect(describeEnforcement("windows-restricted")).toBe("policy-only")
   })
 })

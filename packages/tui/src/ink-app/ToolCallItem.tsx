@@ -7,6 +7,7 @@
 import React, { type ReactNode } from "react"
 import { Box, Text, useStdout } from "ink"
 import { ToolUseLoader } from "./ToolUseLoader.js"
+import { MarkdownInline } from "./Markdown.js"
 import { MCPToolCallItem } from "./MCPToolCallItem.js"
 import { ExecToolCallItem } from "./ExecToolCallItem.js"
 import { SwarmToolCallItem } from "./SwarmToolCallItem.js"
@@ -227,8 +228,9 @@ export const ToolCallItem = ({
               const cap = Math.max(40, (termWidth - 12) * 3)
               const shownLine = clean.length > cap ? `${clean.slice(0, cap)}…` : clean
               return (
-                <Text key={i} color={theme.textMuted}>
-                  {`${i === 0 ? "  + " : "    "}${shownLine || " "}`}
+                <Text key={i}>
+                  <Text color={theme.textMuted}>{i === 0 ? "  + " : "    "}</Text>
+                  <MarkdownInline text={shownLine || " "} color={theme.textMuted} />
                 </Text>
               )
             })

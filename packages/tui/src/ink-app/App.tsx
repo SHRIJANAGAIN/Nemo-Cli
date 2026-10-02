@@ -68,7 +68,7 @@ import { SplashScreen } from "./SplashScreen.js"
 import { BootCine } from "./BootCine.js"
 import { SandboxSetup } from "./SandboxSetup.js"
 import { pushRecent, toggleFavorite } from "./model-picker.js"
-import { Sidebar } from "./Sidebar.js"
+import { Sidebar, shouldShowSidebar } from "./Sidebar.js"
 import type { SidebarTodo } from "./sidebar-data.js"
 import { saveConfig, loadConfig, cleanApiKey } from "../../../../apps/runtime/src/config.js"
 import {
@@ -115,7 +115,13 @@ import { SLASH_COMMANDS, formatSubagentTitle } from "./types.js"
 import { copyTextToClipboard, formatTranscript } from "./clipboard.js"
 
 import { createSubagentCard, finalizeSubagentCard, applyChildToolEvent, type SubagentRouting } from "./subagent-view.js"
-import { notifyTerminalActivity } from "./terminal-notify.js"
+import {
+  buildTerminalTitle,
+  notifyTerminalActivity,
+  setTerminalTitle,
+  startTitleAnimation,
+  stopTitleAnimation,
+} from "./terminal-notify.js"
 import { slashCommandService } from "../../../../apps/cli/src/commands/slash-command.js"
 import {
   loadPromptCommands,
@@ -474,6 +480,10 @@ export const TrayambakApp = ({
 
   useEffect(() => {
     const cleanup = enableBracketedPaste()
+    // Claim the tab/window title on mount. The shell (PowerShell/cmd) keeps
+    // reporting its cwd as the title, so without this the tab reads "engli" (or
+    // whatever folder) and gives no hint that Trayambak is the thing running.
+    setTerminalTitle(buildTerminalTitle({ activity: "idle" }))
     const themeName = config?.themeName
     if (themeName) {
       const matched = applyTrayambakTheme(themeName)
@@ -3068,20 +3078,28 @@ export const TrayambakApp = ({
     setSidebarTodos(todoListForSession(sessionIdRef.current ?? undefined))
   }, [showSidebar, messages.length])
 
-  // Terminal activity notifications (OSC 0 title + bell + OSC 9 OSD).
+  // Terminal activity notifications (OSC 0 title + bell + OSC 9 OSD) and the
+  // live title animation. While a turn is running the tab spins so several
+  // terminals are told apart at a glance; when it settles the title returns to
+  // the static activity form (approval/error/input still override it).
   const lastActivityRef = useRef(0)
   useEffect(() => {
     if (isLoading || isStreaming) {
       void notifyTerminalActivity({ activity: "working" })
+      startTitleAnimation({ backgroundCount: bgRunningCount })
       return
     }
+    stopTitleAnimation()
     const last = messages[messages.length - 1]
     if (!last || last.role !== "assistant") return
     const now = Date.now()
     if (now - lastActivityRef.current < 3000) return
     lastActivityRef.current = now
     void notifyTerminalActivity({ activity: "idle" })
-  }, [messages, isLoading, isStreaming])
+  }, [messages, isLoading, isStreaming, bgRunningCount])
+
+  // Never leave a spinner running past unmount (exit path / hot reload).
+  useEffect(() => () => stopTitleAnimation(), [])
 
   const prevBgRunningRef = useRef(bgRunningCount > 0)
   useEffect(() => {
@@ -3773,7 +3791,7 @@ export const TrayambakApp = ({
               </Box>
             )}
           </Box>
-          {showSidebar ? (
+          {shouldShowSidebar(showSidebar, stdout.columns) ? (
             <Sidebar
               title={currentSessionRef.current?.sessionName ?? "New chat"}
               workspace={config?.cwd ?? bootConfig.cwd}

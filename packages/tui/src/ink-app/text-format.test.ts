@@ -4,64 +4,34 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
+/** hardWrapLongRuns: only over-long unbroken runs are touched. */
+
 import { describe, expect, it } from "vitest"
-import { normalizeStairIndent } from "./text-format.js"
+import { hardWrapLongRuns, MAX_UNBROKEN_RUN } from "./text-format.js"
 
-describe("normalizeStairIndent", () => {
-  it("strips exactly one leading space from hard-broken prose lines (model echo)", () => {
-    const stair =
-      'We are in plan mode. The user said "HI". We need to respond appropriately.\n' +
-      " Since we are in plan mode, we cannot make changes.\n" +
-      " However the user just said HI."
-    expect(normalizeStairIndent(stair)).toBe(
-      'We are in plan mode. The user said "HI". We need to respond appropriately.\n' +
-        "Since we are in plan mode, we cannot make changes.\n" +
-        "However the user just said HI.",
-    )
+describe("hardWrapLongRuns", () => {
+  it("passes ordinary prose byte-identical", () => {
+    const prose = "Hi! What proof modify checkbox UDP html? buz repair user capturing overlapping interpreted"
+    expect(hardWrapLongRuns(prose)).toBe(prose)
+    expect(hardWrapLongRuns("line one\nline two\nline three")).toBe("line one\nline two\nline three")
+    expect(hardWrapLongRuns("")).toBe("")
   })
 
-  it("keeps first line, deeper indents, tabs, and single-line text untouched", () => {
-    const text = "  leading-two-spaces-first-line\n    code block line\n\t tabbed line\n last line"
-    expect(normalizeStairIndent(text)).toBe(
-      "  leading-two-spaces-first-line\n    code block line\n\t tabbed line\nlast line",
-    )
-    const single = " no newline at all"
-    expect(normalizeStairIndent(single)).toBe(single)
+  it("splits runs longer than the bound with real newlines", () => {
+    const out = hardWrapLongRuns("A".repeat(2500), 1000)
+    expect(out).toBe(`${"A".repeat(1000)}\n${"A".repeat(1000)}\n${"A".repeat(500)}`)
+    // Longest measured run is now within the bound.
+    for (const run of out.split("\n")) expect(run.length).toBeLessThanOrEqual(1000)
   })
 
-  it("leaves empty and whitespace-only continuation lines alone", () => {
-    const text = "para\n\n \nnext"
-    expect(normalizeStairIndent(text)).toBe("para\n\n\nnext")
+  it("never splits surrogate pairs", () => {
+    const out = hardWrapLongRuns("😀".repeat(2500), 1000)
+    expect([...out.replace(/\n/g, "")].length).toBe(2500)
+    for (const run of out.split("\n")) expect([...run].length).toBeLessThanOrEqual(1000)
   })
 
-  it("leaves fenced code blocks (diffs, diagrams) byte-identical", () => {
-    const text =
-      "here is the diff:\n" +
-      "```diff\n" +
-      "--- a\n" +
-      "+++ b\n" +
-      "@@ -1 +1 @@\n" +
-      " context\n" +
-      "-gone\n" +
-      "+here\n" +
-      "```\n" +
-      " trailing prose still fixed"
-    expect(normalizeStairIndent(text)).toBe(
-      "here is the diff:\n" +
-        "```diff\n" +
-        "--- a\n" +
-        "+++ b\n" +
-        "@@ -1 +1 @@\n" +
-        " context\n" +
-        "-gone\n" +
-        "+here\n" +
-        "```\n" +
-        "trailing prose still fixed",
-    )
-  })
-
-  it("treats an unclosed fence as code to the end (preservation wins)", () => {
-    const text = "intro:\n```\n code\n more"
-    expect(normalizeStairIndent(text)).toBe(text)
+  it("leaves runs at exactly the bound untouched", () => {
+    const exact = "B".repeat(MAX_UNBROKEN_RUN)
+    expect(hardWrapLongRuns(exact)).toBe(exact)
   })
 })

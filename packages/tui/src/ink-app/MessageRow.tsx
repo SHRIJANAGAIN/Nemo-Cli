@@ -7,11 +7,12 @@
 import React, { type ReactNode } from "react"
 import { Box, Text } from "ink"
 import { ToolCallItem } from "./ToolCallItem.js"
+import { MarkdownBlock, MarkdownInline } from "./Markdown.js"
 import { Spinner } from "./Spinner.js"
 import { SubagentRow } from "./SubagentRow.js"
 import type { TrayambakMessage, ToolCallStatus, MessagePart, AppStatus } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
-import { normalizeStairIndent } from "./text-format.js"
+import { hardWrapLongRuns, normalizeStairIndent } from "./text-format.js"
 import { g } from "./glyphs.js"
 
 export interface MessageRowProps {
@@ -115,9 +116,9 @@ export const MessageRow = ({
             {message.parts.map((part: MessagePart, idx: number) => {
               if (part.text) {
                 return (
-                  <Text key={`text-${idx}`} color={theme.markdownText}>
-                    {normalizeStairIndent(part.text.text)}
-                  </Text>
+                  <Box key={`text-${idx}`} flexDirection="column">
+                    <MarkdownBlock text={hardWrapLongRuns(normalizeStairIndent(part.text.text))} />
+                  </Box>
                 )
               }
               if (part.thinking) {
@@ -127,7 +128,7 @@ export const MessageRow = ({
                       <Spinner color={theme.warning}>Thought</Spinner>
                     </Box>
                     <Box marginLeft={2}>
-                      <Text color={theme.textMuted}>{normalizeStairIndent(part.thinking.text)}</Text>
+                      <Text color={theme.textMuted}>{hardWrapLongRuns(normalizeStairIndent(part.thinking.text))}</Text>
                     </Box>
                   </Box>
                 )
@@ -154,7 +155,7 @@ export const MessageRow = ({
           // differently from the column-stretched parts-path Text above —
           // one-col wrap jumps between the two.
           <Box marginLeft={1} flexDirection="column">
-            <Text color={theme.markdownText}>{normalizeStairIndent(message.content)}</Text>
+            <MarkdownBlock text={hardWrapLongRuns(normalizeStairIndent(message.content))} />
           </Box>
         ) : null}
       </Box>
@@ -187,7 +188,10 @@ export const MessageRow = ({
     const preview = raw.length > 120 ? `${raw.slice(0, 120)}…` : raw
     // Ctrl+O: full text (20k-char cap with a marker past it) instead of
     // the one-line preview. Collapsed default is unchanged behavior.
-    const shown = expandOutput ? raw.slice(0, 20000) : preview
+    // Unbroken runs are hard-wrapped first: yoga measures the displayed
+    // string, and a 20k single-line measurement is what crashed the
+    // renderer (wasm OOB) — wrapping only adds visual line breaks.
+    const shown = hardWrapLongRuns(expandOutput ? raw.slice(0, 20000) : preview)
     const overflowNote =
       expandOutput && raw.length > shown.length ? ` … +${raw.length - shown.length} chars (truncated)` : ""
 
@@ -206,8 +210,8 @@ export const MessageRow = ({
           {preview ? (
             <Text color={theme.textMuted}>
               {" — "}
-              {shown}
               {overflowNote}
+              <MarkdownInline text={shown} color={theme.textMuted} />
             </Text>
           ) : null}
         </Text>

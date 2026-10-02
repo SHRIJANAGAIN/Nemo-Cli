@@ -1267,7 +1267,143 @@
     "sessionName": "HI",
     "sessionDescription": "",
     "startedAt": "2026-10-01T10:26:33.652Z",
+    "messageCount": 7,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T12:13:13.700Z"
+  },
+  {
+    "sessionId": "sess_mupeqc4e",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T10:44:37.982Z",
+    "messageCount": 1,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T10:44:44.953Z"
+  },
+  {
+    "sessionId": "sess_muphwl8g",
+    "sessionName": "hi",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T12:13:28.576Z",
+    "messageCount": 11,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T12:43:01.114Z"
+  },
+  {
+    "sessionId": "sess_mupkr8of",
+    "sessionName": "assistant introduces itself",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T13:33:17.871Z",
+    "messageCount": 2,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T14:25:24.468Z"
+  },
+  {
+    "sessionId": "sess_mupmx2q4",
+    "sessionName": "Build a privacy-first analytics website",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T14:33:49.324Z",
+    "messageCount": 9,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_mupnb0va",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T14:44:40.102Z",
+    "messageCount": 11,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T14:47:27.360Z"
+  },
+  {
+    "sessionId": "sess_mupnfbqw",
+    "sessionName": "Build Privacy-First Analytics Dashboard",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T14:48:00.824Z",
+    "messageCount": 175,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T15:05:09.914Z"
+  },
+  {
+    "sessionId": "sess_mupoa0ye",
+    "sessionName": "Build Privacy-First Analytics Site",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T15:11:53.174Z",
+    "messageCount": 143,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T16:45:25.916Z"
+  },
+  {
+    "sessionId": "sess_mupoaxgk",
+    "sessionName": "Friendly Greeting Exchange",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T15:12:35.300Z",
+    "messageCount": 9,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T16:08:18.259Z"
+  },
+  {
+    "sessionId": "sess_muppoezt",
+    "sessionName": "List Project Root",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T15:51:04.169Z",
     "messageCount": 5,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_muprrnsc",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T16:49:34.764Z",
+    "messageCount": 1,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T16:49:50.564Z"
+  },
+  {
+    "sessionId": "sess_muprxnpi",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T16:54:14.598Z",
+    "messageCount": 65,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_muprzdgd",
+    "sessionName": "Friendly Greeting Exchange",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T16:55:34.621Z",
+    "messageCount": 7,
+    "totalTokens": 0,
+    "status": "active"
+  },
+  {
+    "sessionId": "sess_mupshnkj",
+    "sessionName": "snake game repo introduction",
+    "sessionDescription": "",
+    "startedAt": "2026-10-01T17:09:47.539Z",
+    "messageCount": 79,
+    "totalTokens": 0,
+    "status": "completed",
+    "endedAt": "2026-10-01T17:51:41.959Z"
+  },
+  {
+    "sessionId": "sess_muqbphbb",
+    "sessionName": "New conversation",
+    "sessionDescription": "",
+    "startedAt": "2026-10-02T02:07:45.383Z",
+    "messageCount": 1,
     "totalTokens": 0,
     "status": "active"
   }

@@ -33,8 +33,8 @@ export interface SwarmWorker {
 function normalizeTasks(raw: unknown): SwarmTask[] {
   if (!Array.isArray(raw)) return []
   return raw
-    .map((item) => {
-      const value = item as Record<string, unknown>
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((value) => {
       return {
         name: String(value.name ?? "swarm-worker"),
         prompt: String(value.prompt ?? ""),
@@ -61,7 +61,8 @@ export function buildSwarmWorkers(
   subagentType: string,
 ): SwarmWorker[] {
   if (strategy === "vote") {
-    const count = Math.max(SWARM_MIN_VOTERS, Math.min(SWARM_MAX_VOTERS, Math.floor(workers)))
+    const asked = Number.isFinite(workers) ? Math.floor(workers) : 3
+    const count = Math.max(SWARM_MIN_VOTERS, Math.min(SWARM_MAX_VOTERS, asked))
     return Array.from({ length: count }, (_, i) => ({
       name: `swarm-voter-${i + 1}`,
       prompt:
@@ -72,11 +73,13 @@ export function buildSwarmWorkers(
       subagentType,
     }))
   }
-  return tasks.map((task, i) => ({
-    name: task.name || `swarm-worker-${i + 1}`,
-    prompt: task.prompt,
-    subagentType: task.subagentType ?? subagentType,
-  }))
+  return tasks
+    .filter((task): task is SwarmTask => typeof task === "object" && task !== null)
+    .map((task, i) => ({
+      name: task.name || `swarm-worker-${i + 1}`,
+      prompt: task.prompt,
+      subagentType: task.subagentType ?? subagentType,
+    }))
 }
 
 /** Assemble worker outputs into a synthesis-ready report. Pure. */

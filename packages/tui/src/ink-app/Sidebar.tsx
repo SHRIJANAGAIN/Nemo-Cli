@@ -14,6 +14,20 @@ import { buildMcpRows, capItems, contextUsage, formatTodoLine, hasOpenTodos, typ
 const MAX_MCP_ROWS = 8
 const MAX_TODO_ROWS = 6
 
+/**
+ * Minimum terminal width for the fixed 42-col pane. Below it the pane
+ * (flexShrink={0}) squeezes the transcript into unreadable wrapped slivers
+ * beside a dark strip (observed live: 2-char fragments with the panel
+ * background hogging the frame) — so the pane stands down and the chat
+ * takes the full width instead.
+ */
+export const SIDEBAR_MIN_COLS = 90
+
+/** Whether the sidebar may render: open AND enough room to share. */
+export function shouldShowSidebar(open: boolean, columns: number | undefined): boolean {
+  return open && (columns ?? 80) >= SIDEBAR_MIN_COLS
+}
+
 export interface SidebarProps {
   /** SKT AI LABS's sidebar_title slot: session title. */
   title: string

@@ -64,6 +64,15 @@ describe("extractSymbols", () => {
 
     expect(symbols).toEqual([])
   })
+
+  it("survives minified single-line monsters without hanging", () => {
+    const monster = `export function found() {${"x();".repeat(3000)}}`
+    const started = Date.now()
+    const symbols = extractSymbols(monster, "ts")
+
+    expect(Date.now() - started).toBeLessThan(5000)
+    expect(symbols.map((s) => s.name)).toContain("found")
+  })
 })
 
 describe("searchSymbols", () => {

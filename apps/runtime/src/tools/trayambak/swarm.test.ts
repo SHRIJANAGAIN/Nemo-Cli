@@ -50,6 +50,22 @@ describe("buildSwarmWorkers", () => {
     expect(buildSwarmWorkers("g", "vote", [], 99, "general")).toHaveLength(SWARM_MAX_VOTERS)
     expect(buildSwarmWorkers("g", "vote", [], 0, "general")).toHaveLength(2)
   })
+
+  it("survives null task items and NaN voter counts", () => {
+    expect(buildSwarmWorkers("g", "vote", [], Number.NaN, "general")).toHaveLength(3)
+    const workers = buildSwarmWorkers(
+      "g",
+      "fanout",
+      [null, "nope", 42, { name: "w", prompt: "do it" }] as unknown as Array<{
+        name: string
+        prompt: string
+      }>,
+      0,
+      "general",
+    )
+
+    expect(workers.map((w) => w.name)).toEqual(["w"])
+  })
 })
 
 describe("synthesizeSwarm", () => {

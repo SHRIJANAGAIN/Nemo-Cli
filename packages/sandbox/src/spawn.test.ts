@@ -8,12 +8,15 @@
  * process-level cases spawn real children via process.execPath. Each case
  * targets a defect the module used to ship: ignored timeoutMs, ignored
  * outputCap, JSON-in-a-.sbpl-file, invalid bwrap flags, a dead mount pair,
- * a lying Windows handle, and a processGroupId that pointed at a group the
+ * a lying Windows handle (now the AppContainer shim with an honest
+ * fallback), a drain timer that rejected any command outliving
+ * IO_DRAIN_TIMEOUT_MS, and a processGroupId that pointed at a group the
  * child did not lead.
  */
 import { describe, expect, it } from "vitest"
 import { landlockArgs, seatbeltProfile, spawnProcess } from "./spawn.js"
 import { FileSystemSandboxPolicy, NetworkSandboxPolicy, SandboxType, SpawnRequest } from "./types.js"
+import { setWindowsAcProbeForTests } from "./windows-ac.js"
 
 const node = process.execPath
 const posixOnly = process.platform === "win32" ? it.skip : it
@@ -144,13 +147,53 @@ describe("spawnProcess", () => {
     expect(await proc.waitForExit()).toBe(0)
   })
 
-  it("WindowsRestrictedToken reports the applied truth: nothing was sandboxed", async () => {
+  it("WindowsRestrictedToken falls back to an honest unsandboxed spawn when the helper probe is off", async () => {
     const proc = await spawnProcess(
       request({ sandboxType: SandboxType.WindowsRestrictedToken, command: [node, "-e", ""] }),
     )
     expect(proc.isSandboxed).toBe(false)
     expect(proc.sandboxType).toBe(SandboxType.None)
     await proc.waitForExit()
+  })
+
+  it.runIf(process.platform === "win32")(
+    "WindowsRestrictedToken spawns a real AppContainer child when the probe passes",
+    async () => {
+      setWindowsAcProbeForTests(() => true)
+      try {
+        const proc = await spawnProcess(
+          request({
+            sandboxType: SandboxType.WindowsRestrictedToken,
+            command: [node, "-e", "console.log('ac-child-out')"],
+          }),
+        )
+        expect(proc.isSandboxed).toBe(true)
+        expect(proc.sandboxType).toBe(SandboxType.WindowsRestrictedToken)
+        // The AppContainer child inherits the shim's pipes: bytes stream
+        // through readAll exactly like every other backend.
+        const out = await proc.readAll()
+        expect(out).toContain("ac-child-out")
+        expect(await proc.waitForExit()).toBe(0)
+      } finally {
+        setWindowsAcProbeForTests(null)
+      }
+    },
+    60_000,
+  )
+
+  it("readAll survives commands longer than the IO drain window instead of rejecting", async () => {
+    const proc = await spawnProcess(
+      request({
+        // 2500ms > IO_DRAIN_TIMEOUT_MS (2000): the old drain timer armed at
+        // readAll() call time, so every OS-sandboxed command outliving the
+        // window rejected with "IO drain timeout" and lost its output.
+        command: [node, "-e", "setTimeout(() => process.stdout.write('late-output'), 2500)"],
+        timeoutMs: 15_000,
+      }),
+    )
+    const out = await proc.readAll()
+    expect(out).toContain("late-output")
+    expect(await proc.waitForExit()).toBe(0)
   })
 
   it("escalates an aborted signal to a kill", async () => {

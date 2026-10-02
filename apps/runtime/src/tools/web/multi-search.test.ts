@@ -261,6 +261,36 @@ describe("provider failover and parsing", () => {
     expect(text).not.toContain("duckduckgo.com/l/")
   })
 
+  it("queries the keyless Wiby JSON API and prints its results", async () => {
+    net.routes.set(
+      "wiby.me",
+      JSON.stringify([{ URL: "https://w.example/retro", Title: "Retro Page", Snippet: "old web snip" }]),
+    )
+    const tool = createWebSearchTool()
+    const res = await tool.execute("t1", { query: "retro web", provider: "wiby" }, undefined, undefined, makeCtx())
+    const text = firstText(res)
+    expect(res.isError).toBe(false)
+    expect(net.requests[0]).toContain("wiby.me/json?q=retro%20web")
+    expect(text).toContain("[WIBY]")
+    expect(text).toContain("Retro Page")
+    expect(text).toContain("https://w.example/retro")
+    expect(text).toContain("old web snip")
+  })
+
+  it("falls back from a challenged DuckDuckGo to Wiby", async () => {
+    net.routes.set("html.duckduckgo.com", "")
+    net.routes.set(
+      "wiby.me",
+      JSON.stringify([{ URL: "https://w.example/fallback", Title: "Fallback", Snippet: "via wiby" }]),
+    )
+    const tool = createWebSearchTool()
+    const res = await tool.execute("t1", { query: "obscure thing" }, undefined, undefined, makeCtx())
+    const text = firstText(res)
+    expect(res.isError).toBe(false)
+    expect(text).toContain("[WIBY]")
+    expect(text).toContain("https://w.example/fallback")
+  })
+
   it("honours a max_results floor of 1", async () => {
     const items = Array.from({ length: 5 }, (_, i) => ({
       title: `Result ${i}`,

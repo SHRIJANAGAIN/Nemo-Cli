@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { detectSandboxType, SandboxType } from "./types.js"
+import { setWindowsAcProbeForTests } from "./windows-ac.js"
 
 /**
  * `detectSandboxType` decides the sandbox marker that `getSafeEnv` stamps
@@ -9,9 +10,12 @@ import { detectSandboxType, SandboxType } from "./types.js"
  *
  *  - mode/uiMode short-circuits report `None` (no OS sandbox is wired for
  *    them today);
- *  - detection NEVER reports `WindowsRestrictedToken` — the restricted-token
- *    spawn path delegates to unsandboxed and reports `None`/`isSandboxed:
- *    false`, so detection must not contradict it (audit finding P2#11).
+ *  - win32 reports `WindowsRestrictedToken` ONLY when the helper probe
+ *    passes (injected in tests — the real default answers false under
+ *    NODE_ENV=test); spawnProcess backs the claim with a per-spawn status
+ *    handshake and falls back to an honest `isSandboxed: false` spawn if
+ *    the AppContainer child never comes up;
+ *  - non-windows platforms never report `WindowsRestrictedToken`.
  */
 describe("detectSandboxType", () => {
   it("yolo mode gets no sandbox", () => {
@@ -30,20 +34,44 @@ describe("detectSandboxType", () => {
     expect(detectSandboxType({ uiMode: "plan" })).toBe(SandboxType.None)
   })
 
-  it("win32 detection returns None — never a restricted token that is not applied", () => {
-    withPlatform("win32", () => {
-      // Pre-fix behavior returned WindowsRestrictedToken here while
-      // spawnUnderWindowsRestrictedToken delegated to unsandboxed — the
-      // exact detection/spawn contradiction this test pins closed.
-      expect(detectSandboxType({})).toBe(SandboxType.None)
-    })
+  it("win32 without helper infrastructure reports None — never an unapplied token", () => {
+    setWindowsAcProbeForTests(() => false)
+    try {
+      withPlatform("win32", () => {
+        expect(detectSandboxType({})).toBe(SandboxType.None)
+      })
+    } finally {
+      setWindowsAcProbeForTests(null)
+    }
   })
 
-  it("detection never reports WindowsRestrictedToken on any platform", () => {
-    for (const platform of ["win32", "darwin", "linux"] as const) {
-      const detected = withPlatform(platform, () => detectSandboxType({}))
-      expect(detected).not.toBe(SandboxType.WindowsRestrictedToken)
+  it("win32 with helper infrastructure reports WindowsRestrictedToken", () => {
+    setWindowsAcProbeForTests(() => true)
+    try {
+      withPlatform("win32", () => {
+        expect(detectSandboxType({})).toBe(SandboxType.WindowsRestrictedToken)
+      })
+    } finally {
+      setWindowsAcProbeForTests(null)
     }
+  })
+
+  it("non-windows platforms never report WindowsRestrictedToken, even with a passing probe", () => {
+    setWindowsAcProbeForTests(() => true)
+    try {
+      for (const platform of ["darwin", "linux"] as const) {
+        const detected = withPlatform(platform, () => detectSandboxType({}))
+        expect(detected).not.toBe(SandboxType.WindowsRestrictedToken)
+      }
+    } finally {
+      setWindowsAcProbeForTests(null)
+    }
+  })
+
+  it("win32 without an injected probe stays None in unit tests (NODE_ENV=test)", () => {
+    withPlatform("win32", () => {
+      expect(detectSandboxType({})).toBe(SandboxType.None)
+    })
   })
 })
 

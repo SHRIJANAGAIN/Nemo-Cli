@@ -22,6 +22,8 @@ import { textResult, type Tool } from "../types.js"
 const DEFAULT_TIMEOUT_MS = 2_000
 const MAX_TIMEOUT_MS = 10_000
 const MAX_OUTPUT_CHARS = 4_000
+/** Console lines retained per run — a log-spam loop must not OOM the host before the timeout lands. */
+const MAX_LOG_LINES = 200
 
 export interface CodemodeOutcome {
   ok: boolean
@@ -43,10 +45,21 @@ function formatArg(value: unknown): string {
   }
 }
 
+/** Cap console retention; note what was dropped so the model is never misled. */
+function finalizeLogs(logs: string[], dropped: number): string[] {
+  if (dropped <= 0) return logs
+  return [...logs, `…[${dropped} more log lines dropped (cap ${MAX_LOG_LINES})]`]
+}
+
 /** Evaluate `code` in confinement. Pure apart from the clock. */
 export function runCodemode(code: string, opts: { input?: string; timeoutMs?: number } = {}): CodemodeOutcome {
   const logs: string[] = []
+  let droppedLogs = 0
   const pushLog = (...args: unknown[]): void => {
+    if (logs.length >= MAX_LOG_LINES) {
+      droppedLogs += 1
+      return
+    }
     logs.push(args.map(formatArg).join(" "))
   }
   const sandbox: Record<string, unknown> = {
@@ -82,12 +95,17 @@ export function runCodemode(code: string, opts: { input?: string; timeoutMs?: nu
     completion = vm.runInContext(code, context, { timeout, displayErrors: false })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, logs, result: "", error: message }
+    return { ok: false, logs: finalizeLogs(logs, droppedLogs), result: "", error: message }
   }
   if (completion !== null && (typeof completion === "object" || typeof completion === "function")) {
     const thenable = (completion as { then?: unknown }).then
     if (typeof thenable === "function") {
-      return { ok: false, logs, result: "", error: "async results are not supported — return a plain value" }
+      return {
+        ok: false,
+        logs: finalizeLogs(logs, droppedLogs),
+        result: "",
+        error: "async results are not supported — return a plain value",
+      }
     }
   }
   let rendered: string
@@ -98,7 +116,7 @@ export function runCodemode(code: string, opts: { input?: string; timeoutMs?: nu
     rendered = String(completion)
   }
   if (rendered.length > MAX_OUTPUT_CHARS) rendered = rendered.slice(0, MAX_OUTPUT_CHARS) + "…[truncated]"
-  return { ok: true, logs, result: rendered, error: "" }
+  return { ok: true, logs: finalizeLogs(logs, droppedLogs), result: rendered, error: "" }
 }
 
 const definition: ToolDefinition = {

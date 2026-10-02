@@ -13,7 +13,7 @@ const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "web_search",
   description:
-    "Search the web using multiple providers (hsearch, DuckDuckGo, Mojeek, Bing, Brave, Qwant) with automatic failover. Returns ranked results with URLs, titles, snippets, and relevance scores. Use this BEFORE answering factual questions to ensure accuracy. IMPORTANT: always include the CURRENT year in your query (e.g. 'X latest updates " +
+    "Search the web using multiple providers (hsearch, DuckDuckGo, Wiby, Mojeek, Bing, Brave, Qwant) with automatic failover. Returns ranked results with URLs, titles, snippets, and relevance scores. Use this BEFORE answering factual questions to ensure accuracy. IMPORTANT: always include the CURRENT year in your query (e.g. 'X latest updates " +
     new Date().getFullYear() +
     "'). Stale years are automatically corrected to the current year.",
   parameters: {
@@ -24,8 +24,8 @@ const definition: ToolDefinition = {
       max_results: { type: "integer", description: "Max results to return. Default 10. Max 10." },
       provider: {
         type: "string",
-        description: "Preferred provider: auto, hsearch, duckduckgo, mojeek, bing, brave, qwant. Default auto.",
-        enum: ["auto", "hsearch", "duckduckgo", "mojeek", "bing", "brave", "qwant"],
+        description: "Preferred provider: auto, hsearch, duckduckgo, wiby, mojeek, bing, brave, qwant. Default auto.",
+        enum: ["auto", "hsearch", "duckduckgo", "wiby", "mojeek", "bing", "brave", "qwant"],
       },
       context_max_characters: {
         type: "integer",
@@ -542,6 +542,29 @@ async function searchGitHub(query: string, maxResults: number): Promise<SearchRe
   }
 }
 
+/**
+ * Wiby (wiby.me) — tiny index of classic/bot-friendly pages, but a REAL
+ * keyless JSON API (`[{URL, Title, Snippet}]`), no scraping, no key, no
+ * challenge pages. Proven live. Sits right behind DuckDuckGo: general
+ * queries usually fill from DDG; when DDG challenges, Wiby still answers.
+ */
+async function searchWiby(query: string, maxResults: number): Promise<SearchResult[]> {
+  try {
+    const raw = await fetchHtml(`https://wiby.me/json?q=${encodeURIComponent(query)}`)
+    if (!raw) return []
+    const data = JSON.parse(raw) as Array<Record<string, unknown>>
+    if (!Array.isArray(data)) return []
+    return data.slice(0, maxResults).map((r) => ({
+      title: String(r.Title ?? r.title ?? "(untitled)"),
+      url: String(r.URL ?? r.url ?? ""),
+      snippet: String(r.Snippet ?? r.snippet ?? r.Description ?? "").slice(0, 220),
+      source: "wiby",
+    }))
+  } catch {
+    return []
+  }
+}
+
 async function searchStackOverflow(query: string, maxResults: number): Promise<SearchResult[]> {
   try {
     const encoded = encodeURIComponent(query)
@@ -566,6 +589,7 @@ async function searchStackOverflow(query: string, maxResults: number): Promise<S
 const PROVIDERS: Record<string, (query: string, maxResults: number) => Promise<SearchResult[]>> = {
   hsearch: searchHsearch,
   duckduckgo: searchDuckDuckGo,
+  wiby: searchWiby,
   mojeek: searchMojeek,
   bing: searchBing,
   brave: searchBrave,
@@ -584,6 +608,7 @@ const PROVIDERS: Record<string, (query: string, maxResults: number) => Promise<S
 const DEFAULT_ORDER = [
   "hsearch",
   "duckduckgo",
+  "wiby",
   "bing",
   "brave",
   "qwant",

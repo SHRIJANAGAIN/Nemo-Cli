@@ -172,10 +172,16 @@ async function startBackgroundJob(opts: {
     }
     job.pid = proc.pid
     job.kill = proc.kill
+    // Attach readAll BEFORE waiting: calling it after waitForExit resolves
+    // can miss bytes already delivered (streams drained → ""), silently
+    // truncating job.output. With the fixed drain-on-exit readAll, calling
+    // it while the child runs waits for exit internally instead of timing
+    // out after IO_DRAIN_TIMEOUT_MS.
+    const outputPromise = proc.readAll().catch(() => "")
     void proc
       .waitForExit()
       .then(async (exitCode) => {
-        job.output = await proc.readAll().catch(() => "")
+        job.output = await outputPromise
         job.exitCode = exitCode
         job.settledAt = Date.now()
         job.state = "done"

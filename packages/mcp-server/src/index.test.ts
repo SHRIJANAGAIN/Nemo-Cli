@@ -1,9 +1,333 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
-import { describe, expect, it } from "vitest"
-import { dispatchMcpServer } from "./index.js"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import { dispatchMcpServer, clampMcpTimeout, type McpServerDeps } from "./index.js"
+import type { TrayambakConfig } from "../../../apps/runtime/src/config.js"
+import type { HookShellExecutor } from "../../../apps/runtime/src/tools/hook-exec.js"
+import { ExecDecision } from "../../../packages/execpolicy/src/policy.js"
+
+/**
+ * MCP server gate tests (#32-35): every executing tool passes PreToolUse
+ * hooks → approvalFor → execpolicy → roots, mirroring the agent loop (all
+ * four were raw syscalls before). Deterministic: config is always injected
+ * (never the machine's), hook executors are stubbed, policy decisions are
+ * injected except where the real default is the assertion, and the only
+ * real processes spawned are `echo`-class trivialities plus one 3s
+ * sleeper proving the timeout kills.
+ */
+
+const writes: string[] = []
+
+function listen(): void {
+  writes.length = 0
+  vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+    writes.push(String(chunk))
+    return true
+  }) as typeof process.stdout.write)
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  while (dirs.length > 0) {
+    const dir = dirs.pop()
+    if (dir) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true })
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+})
+
+const dirs: string[] = []
+
+function freshDir(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+  dirs.push(dir)
+  return dir
+}
+
+interface McpResult {
+  content?: Array<{ type?: string; text?: string }>
+  isError?: boolean
+}
+
+function replyFor(id: unknown): { result?: McpResult; error?: { code?: number; message?: string } } {
+  for (const chunk of writes.join("").split("\n")) {
+    const line = chunk.trim()
+    if (!line.startsWith("{")) continue
+    try {
+      const parsed = JSON.parse(line) as {
+        id?: unknown
+        result?: McpResult
+        error?: { code?: number; message?: string }
+      }
+      if (parsed.id === id) return parsed
+    } catch {
+      /* non-JSON stdout */
+    }
+  }
+  throw new Error(`no MCP response for id ${String(id)}`)
+}
+
+function textOf(id: unknown): { text: string; isError: boolean } {
+  const res = replyFor(id)
+  return {
+    text: (res.result?.content ?? []).map((c) => c.text ?? "").join("\n"),
+    isError: res.result?.isError === true,
+  }
+}
+
+function testConfig(cwd: string, extra?: Record<string, unknown>): TrayambakConfig {
+  return { cwd, ...(extra ?? {}) } as unknown as TrayambakConfig
+}
+
+function denyExecutor(reason: string): HookShellExecutor {
+  return {
+    run: async () => ({
+      exitCode: 0,
+      stdout: {
+        text: JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: reason,
+          },
+        }),
+      },
+      stderr: { text: "" },
+    }),
+  }
+}
+
+const neverPolicy = (): never => {
+  throw new Error("must not reach execpolicy after an earlier refusal")
+}
 
 describe("mcp-server dispatch", () => {
   it("handles tools/list without throwing", async () => {
     await expect(dispatchMcpServer({ method: "tools/list" })).resolves.toBeUndefined()
+  })
+
+  it("advertises timeoutMs on the bash schema (#34 schema half)", async () => {
+    listen()
+    await dispatchMcpServer({ id: "schema", method: "tools/list" }, { config: testConfig(os.tmpdir()) })
+    const parsed = replyFor("schema")
+    const tools = (parsed.result as { tools?: Array<{ name?: string; inputSchema?: unknown }> })?.tools ?? []
+    const bash = tools.find((t) => t.name === "bash")
+    const props = (bash?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {}
+    expect(props).toHaveProperty("timeoutMs")
+  })
+})
+
+describe("clampMcpTimeout", () => {
+  it("bounds finite input and falls back otherwise", () => {
+    expect(clampMcpTimeout(undefined)).toBe(10_000)
+    expect(clampMcpTimeout(Number.NaN)).toBe(10_000)
+    expect(clampMcpTimeout(500)).toBe(1000)
+    expect(clampMcpTimeout(-5)).toBe(1000)
+    expect(clampMcpTimeout(5000)).toBe(5000)
+    expect(clampMcpTimeout(999_999_999)).toBe(300_000)
+  })
+})
+
+describe("bash gate (#32): deny rules are enforced without spawning", () => {
+  it("refuses a legacy deny-listed command (audit repro shape)", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-deny-")
+    const cfg = testConfig(cwd, {
+      permissions: { uiMode: "ask", rules: [{ tool: "bash", pattern: "rm -rf /", allow: false }] },
+    })
+    const deps: McpServerDeps = {
+      config: cfg,
+      policyDecide: neverPolicy,
+    }
+    await dispatchMcpServer(
+      { id: "d1", method: "tools/call", params: { name: "bash", arguments: { command: "rm -rf /" } } },
+      deps,
+    )
+    const { text, isError } = textOf("d1")
+    expect(isError).toBe(true)
+    expect(text).toContain("denied")
+  })
+})
+
+describe("bash gate: ask without an approver refuses", () => {
+  it("refuses before execpolicy for an ask-gated command", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-ask-")
+    const cfg = testConfig(cwd, { permissions: { uiMode: "ask" } })
+    const deps: McpServerDeps = {
+      config: cfg,
+      policyDecide: neverPolicy,
+    }
+    await dispatchMcpServer(
+      { id: "a1", method: "tools/call", params: { name: "bash", arguments: { command: "echo hi" } } },
+      deps,
+    )
+    const { text, isError } = textOf("a1")
+    expect(isError).toBe(true)
+    expect(text).toContain("requires approval")
+  })
+})
+
+describe("bash gate: execpolicy layer", () => {
+  const allowCfg = (cwd: string): TrayambakConfig =>
+    testConfig(cwd, {
+      permissions: { uiMode: "ask", rulesV2: [{ tool: "bash", pattern: "*", action: "allow" }] },
+    })
+
+  it("refuses on execpolicy Deny after an approval allow", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-pol-")
+    const deps: McpServerDeps = {
+      config: allowCfg(cwd),
+      policyDecide: () => ExecDecision.Deny,
+    }
+    await dispatchMcpServer(
+      { id: "p1", method: "tools/call", params: { name: "bash", arguments: { command: "sudo whoami" } } },
+      deps,
+    )
+    const { text, isError } = textOf("p1")
+    expect(isError).toBe(true)
+    expect(text).toContain("exec policy")
+  })
+
+  it("refuses on execpolicy Ask (no interactive approver over MCP)", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-polask-")
+    const deps: McpServerDeps = {
+      config: allowCfg(cwd),
+      policyDecide: () => ExecDecision.Ask,
+    }
+    await dispatchMcpServer(
+      { id: "p2", method: "tools/call", params: { name: "bash", arguments: { command: "echo hi" } } },
+      deps,
+    )
+    const { text, isError } = textOf("p2")
+    expect(isError).toBe(true)
+    expect(text).toContain("exec policy requires approval")
+  })
+
+  it("enforces the timeout it advertises", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-timeout-")
+    const sleep = process.platform === "win32" ? "timeout /t 3 /nobreak" : "sleep 3"
+    const deps: McpServerDeps = {
+      config: allowCfg(cwd),
+      policyDecide: () => ExecDecision.Allow,
+    }
+    await dispatchMcpServer(
+      { id: "p3", method: "tools/call", params: { name: "bash", arguments: { command: sleep, timeoutMs: 1200 } } },
+      deps,
+    )
+    const { text, isError } = textOf("p3")
+    expect(isError).toBe(true)
+    expect(text).toMatch(/timeout|ETIMEDOUT|kill|SIGTERM/i)
+  }, 15000)
+})
+
+describe("bash gate: PreToolUse hooks run first", () => {
+  it("a hook deny blocks before approval and execpolicy", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-hook-")
+    const cfg = testConfig(cwd, {
+      permissions: { uiMode: "ask", rulesV2: [{ tool: "bash", pattern: "*", action: "allow" }] },
+      hooks: { preToolUse: [{ hooks: [{ command: "gate.sh" }] }] },
+    })
+    const deps: McpServerDeps = {
+      config: cfg,
+      hookExecutor: denyExecutor("nope"),
+      policyDecide: neverPolicy,
+    }
+    await dispatchMcpServer(
+      { id: "h1", method: "tools/call", params: { name: "bash", arguments: { command: "echo hi" } } },
+      deps,
+    )
+    const { text, isError } = textOf("h1")
+    expect(isError).toBe(true)
+    expect(text).toContain("Hook blocked")
+    expect(text).toContain("nope")
+  })
+})
+
+describe("read_file gate (#35): approval + roots", () => {
+  const readCfg = (cwd: string): TrayambakConfig =>
+    testConfig(cwd, {
+      permissions: { uiMode: "ask", rulesV2: [{ tool: "read_file", pattern: "*", action: "allow" }] },
+    })
+
+  it("reads inside the root", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-read-")
+    fs.writeFileSync(path.join(cwd, "notes.txt"), "hello-root")
+    await dispatchMcpServer(
+      { id: "r1", method: "tools/call", params: { name: "read_file", arguments: { path: "notes.txt" } } },
+      { config: readCfg(cwd) },
+    )
+    const { text, isError } = textOf("r1")
+    expect(isError).toBe(false)
+    expect(text).toContain("hello-root")
+  })
+
+  it("refuses outside the root without reading", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-readout-")
+    const outside = freshDir("trayambak-mcp-outside-")
+    fs.writeFileSync(path.join(outside, "secret.txt"), "shh")
+    await dispatchMcpServer(
+      {
+        id: "r2",
+        method: "tools/call",
+        params: { name: "read_file", arguments: { path: path.join(outside, "secret.txt") } },
+      },
+      { config: readCfg(cwd) },
+    )
+    const { text, isError } = textOf("r2")
+    expect(isError).toBe(true)
+    expect(text).toContain("outside the allowed root")
+  })
+
+  it("denies by approval rule before reaching the filesystem", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-readdeny-")
+    fs.writeFileSync(path.join(cwd, "secret.txt"), "shh")
+    const cfg = testConfig(cwd, {
+      permissions: { uiMode: "ask", rulesV2: [{ tool: "read_file", pattern: "secret", action: "deny" }] },
+    })
+    await dispatchMcpServer(
+      { id: "r3", method: "tools/call", params: { name: "read_file", arguments: { path: "secret.txt" } } },
+      { config: cfg },
+    )
+    const { text, isError } = textOf("r3")
+    expect(isError).toBe(true)
+    expect(text).toContain("denied")
+  })
+})
+
+describe("refused tools stay refused", () => {
+  it("write_file is never executed by mcp-server", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-write-")
+    // Allowlisted at approval so the refusal comes from the tool contract
+    // itself (not the gate): the shape of the refusal is what's pinned.
+    const cfg = testConfig(cwd, {
+      permissions: { uiMode: "ask", rulesV2: [{ tool: "write_file", pattern: "*", action: "allow" }] },
+    })
+    await dispatchMcpServer(
+      {
+        id: "w1",
+        method: "tools/call",
+        params: { name: "write_file", arguments: { path: path.join(cwd, "x.txt"), content: "x" } },
+      },
+      { config: cfg },
+    )
+    const { text, isError } = textOf("w1")
+    expect(isError).toBe(true)
+    expect(text).toContain("not executed by mcp-server")
+    expect(fs.existsSync(path.join(cwd, "x.txt"))).toBe(false)
   })
 })

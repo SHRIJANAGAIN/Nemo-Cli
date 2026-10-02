@@ -21,6 +21,9 @@ import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
 
 export type SymbolKind = "function" | "class" | "interface" | "method" | "variable" | "type"
 
+/** Longest source line the definition regexes ever examine (ReDoS guard). */
+export const MAX_SYMBOL_LINE = 2000
+
 export interface SymbolHit {
   file: string
   line: number
@@ -125,7 +128,10 @@ export function extractSymbols(
   const out: Array<{ line: number; kind: SymbolKind; name: string; signature: string }> = []
   const lines = content.split("\n")
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!
+    // Minified single-line monsters would feed megabytes to the definition
+    // regexes (nested quantifiers) — examine a prefix instead of hanging.
+    const raw = lines[i]!
+    const line = raw.length > MAX_SYMBOL_LINE ? raw.slice(0, MAX_SYMBOL_LINE) : raw
     for (const pattern of PATTERNS[lang]) {
       const match = pattern.re.exec(line)
       if (!match) continue

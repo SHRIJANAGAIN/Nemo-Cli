@@ -24,6 +24,8 @@ import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 export const TERMINAL_MAX_SESSIONS = 4
 export const TERMINAL_OUTPUT_CAP = 64 * 1024
 export const TERMINAL_INPUT_CAP = 8 * 1024
+/** Total registry ceiling (live + dead): dead sessions must not accumulate forever. */
+export const TERMINAL_MAX_STORED = 20
 
 export interface TerminalSession {
   id: string
@@ -138,6 +140,27 @@ export function createTerminalSession(shell: string, cwd: string, env: Record<st
     session.exitCode = session.exitCode ?? 1
   })
   sessions.set(session.id, session)
+  // Dead sessions are kept for post-mortem reads, but the registry itself
+  // must stay bounded — drop the oldest dead past the ceiling.
+  if (sessions.size > TERMINAL_MAX_STORED) {
+    let oldestDead: string | null = null
+    let oldestAt = Infinity
+    for (const [id, existing] of sessions) {
+      if (!existing.live && existing.startedAt < oldestAt) {
+        oldestDead = id
+        oldestAt = existing.startedAt
+      }
+    }
+    if (oldestDead !== null) {
+      const dropped = sessions.get(oldestDead)
+      sessions.delete(oldestDead)
+      try {
+        if (dropped) killTree(dropped)
+      } catch {
+        /* already gone */
+      }
+    }
+  }
   return publicView(session)
 }
 

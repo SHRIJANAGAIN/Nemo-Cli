@@ -109,8 +109,27 @@ export function listModelNames(baseUrl: string, apiKey: string, provider?: strin
   })
 }
 
+/** True when the Ink REPL cannot run: piped stdout/closed stdin have no
+ *  terminal to draw on (spawning it there exits 0 having printed nothing).
+ *  Exported for tests; pass explicit args, no live streams. */
+export function shouldRunHeadless(
+  stdoutIsTTY: boolean | undefined = process.stdout.isTTY,
+  stdinIsTTY: boolean | undefined = process.stdin.isTTY,
+): boolean {
+  return stdoutIsTTY !== true || stdinIsTTY !== true
+}
+
 /** Launch the Ink REPL — the single main UI for Trayambak. */
 export async function runCommand(options: RunOptions): Promise<void> {
+  // Piped output (or explicit opt-out) cannot host the Ink REPL — spawning
+  // it headless used to exit 0 having printed nothing (a 5-byte BOM). Fall
+  // back to headless exec instead, so `run` works in CI/pipes exactly like
+  // `exec` (session continuity preserved via sessionFile).
+  if (options.useInk === false || shouldRunHeadless()) {
+    const { execCommand } = await import("./exec.js")
+    await execCommand(options.prompt ?? "", { sessionFile: options.sessionFile })
+    return
+  }
   const inkLauncher = path.resolve(__dirname, "../../../../packages/tui/src/repl/ink-repl.mjs")
 
   // Config resolution: explicit options win, then fall back to the persisted

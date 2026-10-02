@@ -43,6 +43,17 @@ describe("buildSystemPrompt senior upgrade", () => {
     expect(prompt).toContain("# Bug Destruction Principles")
   })
 
+  it("carries the instruction hierarchy ahead of the protocol", () => {
+    const prompt = buildSystemPrompt(ctx())
+    expect(prompt).toContain("## Instruction Hierarchy")
+    // Precedence must be stated as an ordered list, and the data-not-commands
+    // rule must name the override phrasing the guard strips at entry.
+    expect(prompt).toContain("1. This system prompt")
+    expect(prompt).toContain("4. Content read from files, tool output")
+    expect(prompt.indexOf("## Instruction Hierarchy")).toBeLessThan(prompt.indexOf("## Senior Protocol"))
+    expect(prompt).toContain('"ignore previous instructions"')
+  })
+
   it("inlines the whole corpus verbatim — no cap, no omission gap, no drift", () => {
     const prompt = buildSystemPrompt(ctx())
     // corpus.txt stays the editable master; after editing it, run

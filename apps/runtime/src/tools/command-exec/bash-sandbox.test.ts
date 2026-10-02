@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { SandboxType, type SpawnedProcess, type SpawnRequest } from "../../../../../packages/sandbox/src/index.js"
+import {
+  SandboxType,
+  type SpawnedProcess,
+  type SpawnRequest,
+  spawnProcess,
+  setWindowsAcProbeForTests,
+} from "../../../../../packages/sandbox/src/index.js"
 import { DEFAULT_PERMISSIONS } from "../../../../../packages/protocol/src/permissions.js"
 import type { TrayambakConfig } from "../../config.js"
 import type { ToolContext, ToolResult } from "../types.js"
@@ -220,9 +226,11 @@ describe("bash OS path engagement", () => {
       const tool = createBashTool({ spawnFn: spawnFn as never })
       const result = await tool.execute("t1", { command: "echo policy-path" }, undefined, undefined, ctxFor(dir))
 
-      // This host reports windows-restricted/fallback, so the gate holds the
-      // policy path: the injected spawner must never fire and the marker
-      // must never print — byte-identical behavior with the flag on.
+      // Detection stays honest on this host: the helper probe answers false
+      // under NODE_ENV=test (and non-win32 hosts have no seatbelt/bwrap
+      // here), so sandboxType is None and the gate holds the policy path:
+      // the injected spawner must never fire and the marker must never
+      // print — byte-identical behavior with the flag on.
       expect(textOf(result)).toContain("policy-path")
       expect(textOf(result)).not.toContain("[sandbox: os")
       expect(spawnFn).not.toHaveBeenCalled()
@@ -230,4 +238,71 @@ describe("bash OS path engagement", () => {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it("engages the OS path when detection reports the AppContainer isolator", async () => {
+    process.env[FLAG] = "1"
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const original = Object.getOwnPropertyDescriptor(process, "platform")
+    setWindowsAcProbeForTests(() => true)
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    try {
+      const spawnFn = vi.fn(async (_request: SpawnRequest) =>
+        stubProc({ sandboxType: SandboxType.WindowsRestrictedToken }),
+      )
+      const tool = createBashTool({ spawnFn: spawnFn as never })
+      const result = await tool.execute("t1", { command: "echo os-path" }, undefined, undefined, ctxFor(dir))
+
+      expect(spawnFn).toHaveBeenCalledTimes(1)
+      const request = spawnFn.mock.calls[0]?.[0]
+      expect(request?.sandboxType).toBe(SandboxType.WindowsRestrictedToken)
+      expect(textOf(result)).toContain("hello-os")
+      expect(textOf(result)).toContain("[sandbox: os (windows_sandbox)]")
+    } finally {
+      if (original) Object.defineProperty(process, "platform", original)
+      setWindowsAcProbeForTests(null)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("background OS jobs capture output end-to-end (readAll attached before waitForExit)", async () => {
+    process.env[FLAG] = "1"
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const original = Object.getOwnPropertyDescriptor(process, "platform")
+    setWindowsAcProbeForTests(() => true)
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    try {
+      // The REAL spawner on a real child: a stub's readAll resolves
+      // whenever it is called, so only a live process can prove the job
+      // registry attaches readAll before waiting (a late attach silently
+      // loses streamed bytes). Type is swapped to None so the test pins
+      // sequencing only — the AppContainer shim itself is covered by the
+      // win32 integration case in packages/sandbox/src/spawn.test.ts.
+      const spawnFn = async (req: SpawnRequest) => spawnProcess({ ...req, sandboxType: SandboxType.None })
+      const tool = createBashTool({ spawnFn: spawnFn as never })
+      const start = await tool.execute(
+        "t1",
+        { command: "echo bg-os-output", background: true },
+        undefined,
+        undefined,
+        ctxFor(dir),
+      )
+      const startText = textOf(start)
+      expect(startText).toContain("Background job started.")
+      const id = /job_id: ([0-9a-f-]+)/.exec(startText)?.[1] as string
+
+      let finalText = ""
+      for (let i = 0; i < 150; i++) {
+        const poll = await tool.execute("t1", { job_id: id }, undefined, undefined, ctxFor(dir))
+        finalText = textOf(poll)
+        if (finalText.includes("finished")) break
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      expect(finalText).toContain("finished")
+      expect(finalText).toContain("bg-os-output")
+    } finally {
+      if (original) Object.defineProperty(process, "platform", original)
+      setWindowsAcProbeForTests(null)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
 })

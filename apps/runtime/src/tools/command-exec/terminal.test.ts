@@ -134,6 +134,25 @@ describe("terminal registry", () => {
 
     expect(() => sendTerminalInput(session.id, "x".repeat(9 * 1024))).toThrow("exceeds")
   })
+
+  it("prunes dead sessions so the registry stays bounded", async () => {
+    tempDir()
+    for (let i = 0; i < 25; i++) {
+      const session = createTerminalSession(SHELL, dir, {})
+      killTerminal(session.id)
+      // A kill lands asynchronously — wait for death before the next
+      // create, or the live cap (not the prune path) answers first.
+      const start = Date.now()
+      for (;;) {
+        const current = listTerminals().find((s) => s.id === session.id)
+        if (!current || !current.live) break
+        if (Date.now() - start > 10_000) throw new Error("session never died")
+        await new Promise((r) => setTimeout(r, 50))
+      }
+    }
+
+    expect(listTerminals().length).toBeLessThanOrEqual(20)
+  }, 60000)
 })
 
 describe("createTerminalTool", () => {
