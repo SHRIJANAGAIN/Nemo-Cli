@@ -6,8 +6,6 @@
 
 import * as fs from "fs"
 import * as path from "path"
-import { execFile } from "child_process"
-import { promisify } from "util"
 import type { AgentEventSink, AgentMessage, AssistantMessage } from "../../../../packages/protocol/src/index.js"
 import {
   createLlamaCppProvider,
@@ -43,6 +41,7 @@ import { DEFAULT_PERMISSIONS } from "../../../../packages/protocol/src/permissio
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
 import { getDatabase } from "../../../../packages/core/src/state_db.js"
 import { createReadFileTool } from "../tools/file-edit/read-file.js"
+import { gitExec } from "../git_exec.js"
 import {
   createSubagentTask,
   SubagentEngine,
@@ -52,8 +51,6 @@ import {
   type WorkerResult,
   type WorkerUsage,
 } from "../../../../packages/core/src/subagents.js"
-
-const exec = promisify(execFile)
 
 /**
  * Tools that spawn MORE agents. Withheld from subagent children so fan-out
@@ -856,7 +853,7 @@ export function modeSystemPromptSuffix(mode: string): string {
 export async function createWorktreeIsolation(repoRoot: string): Promise<{ cwd: string; cleanup: () => void }> {
   const fallback = { cwd: repoRoot, cleanup: () => undefined }
   try {
-    await exec("git", ["rev-parse", "--is-inside-work-tree"], { cwd: repoRoot })
+    await gitExec(["rev-parse", "--is-inside-work-tree"], { cwd: repoRoot })
   } catch {
     return fallback
   }
@@ -865,13 +862,13 @@ export async function createWorktreeIsolation(repoRoot: string): Promise<{ cwd: 
   const name = `subagent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   const wtPath = path.join(wtRoot, name)
   try {
-    await exec("git", ["worktree", "add", "--detach", wtPath], { cwd: repoRoot })
+    await gitExec(["worktree", "add", "--detach", wtPath], { cwd: repoRoot })
   } catch {
     return fallback
   }
   const cleanup = (): void => {
     try {
-      execFile("git", ["worktree", "remove", "--force", wtPath], { cwd: repoRoot }, () => undefined)
+      gitExec(["worktree", "remove", "--force", wtPath], { cwd: repoRoot }).catch(() => undefined)
     } catch {
       /* best-effort cleanup */
     }

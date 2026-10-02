@@ -5,6 +5,31 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Git/update/extract children bounded and env-filtered** (audit, #78–#80):
+  - **#78** — every direct git child (`worktree` tool ×4, subagent
+    `createWorktreeIsolation` ×3) ran with raw `process.env` and no
+    timeout: `git worktree add` executes the repository's `post-checkout`
+    hook (verified — a planted hook received the ambient secret), so a
+    planted or prompt-injected `.git/hooks/*` saw every secret that the
+    same command typed into `bash` would not get; a credential prompt
+    could also hang the child past the caller's lifetime. New `gitExec`
+    boundary (`apps/runtime/src/git_exec.ts`): `getSafeEnv`, 30s
+    timeout, 256KB cap. Proof: hook observes the filtered env + hang
+    killed at the deadline; worktree-tool e2e — new tests red on old
+    code.
+  - **#79** — `auto-update`'s `runCapture` spawned `npm install -g
+    <pkg>@<latest>` (postinstall scripts of the update and every
+    transitive dependency) with raw `process.env`; now `getSafeEnv` —
+    the same boundary `mcp-install` got in #77. Proof: test red on old
+    code.
+  - **#80** — `llama-cpp-bin`'s `extractZip` interpolated paths into
+    PowerShell `-Command` source (a `'` in the profile path — the GPU
+    dir derives from `os.homedir()` — closes the string early and
+    becomes executable PowerShell), used wildcard `-Path`, and had no
+    timeout. Now `-LiteralPath` with PowerShell-quoted (`''`) literals,
+    `-NonInteractive`, 120s kill. Proof: extraction from an `it's-dir`
+    path succeeds (test red on old code).
+
 - **Windows shell quoting restored + model-steered child env hygiene**
   (audit, #75–#77):
   - **#75** — `ProcessManager.spawn` CRT-quoted the

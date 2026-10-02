@@ -221,11 +221,27 @@ function downloadFile(url: string, dest: string): Promise<void> {
   })
 }
 
-function extractZip(zipPath: string, destDir: string): Promise<void> {
+/** PowerShell single-quoted literal: inside `'…'` the only special character
+ *  is `'` itself, escaped by doubling. These paths interpolate into
+ *  `-Command` source (#80) — `GPU_BIN_DIR` derives from `os.homedir()`, so
+ *  an unescaped `'` in the profile path would break out of the string into
+ *  executable PowerShell. */
+const psLiteral = (value: string): string => `'${value.replace(/'/g, "''")}'`
+
+/** Extract the downloaded llama.cpp release zip. Exported for tests.
+ *  Runs non-interactively with a hard timeout so a wedged Expand-Archive
+ *  cannot hang ensureLlamaCpp (and whatever awaits it) forever. */
+export function extractZip(zipPath: string, destDir: string): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(
       "powershell",
-      ["-NoProfile", "-Command", `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`],
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `Expand-Archive -Force -LiteralPath ${psLiteral(zipPath)} -DestinationPath ${psLiteral(destDir)}`,
+      ],
+      { timeout: 120_000, windowsHide: true },
       (err) => (err ? reject(err) : resolve()),
     )
   })

@@ -4,14 +4,11 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { execFile } from "child_process"
-import { promisify } from "util"
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
+import { gitExec } from "../../git_exec.js"
 import { textResult, type Tool, type ToolContext } from "../types.js"
-
-const exec = promisify(execFile)
 
 export interface WorktreeEntry {
   path: string
@@ -21,7 +18,7 @@ export interface WorktreeEntry {
 
 export async function listWorktrees(cwd: string): Promise<WorktreeEntry[]> {
   try {
-    const { stdout } = await exec("git", ["worktree", "list", "--porcelain"], { cwd })
+    const { stdout } = await gitExec(["worktree", "list", "--porcelain"], { cwd })
     const entries: WorktreeEntry[] = []
     let current: Partial<WorktreeEntry> = {}
     for (const line of stdout.split("\n")) {
@@ -66,7 +63,7 @@ export function createEnterWorktreeTool(): Tool {
       const name = args.name ? String(args.name) : `wt-${Date.now().toString(36)}`
       const branch = args.branch ? String(args.branch) : "HEAD"
       try {
-        await exec("git", ["worktree", "add", "-b", name, branch], { cwd: ctx.cwd })
+        await gitExec(["worktree", "add", "-b", name, branch], { cwd: ctx.cwd })
         const entries = await listWorktrees(ctx.cwd)
         const entry = entries.find((e) => e.branch === name)
         const worktreePath = entry?.path ?? path.join(ctx.cwd, name)
@@ -109,11 +106,11 @@ export function createExitWorktreeTool(): Tool {
 
       try {
         if (action === "remove") {
-          await exec("git", ["worktree", "remove", targetPath], { cwd: ctx.cwd })
+          await gitExec(["worktree", "remove", targetPath], { cwd: ctx.cwd })
           return textResult(`Worktree removed at ${targetPath}.`)
         }
         // keep: just prune stale entries
-        await exec("git", ["worktree", "prune"], { cwd: ctx.cwd })
+        await gitExec(["worktree", "prune"], { cwd: ctx.cwd })
         return textResult(`Worktree kept. Current context: ${ctx.cwd}`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

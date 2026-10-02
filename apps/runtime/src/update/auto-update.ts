@@ -27,6 +27,7 @@
 import { spawn } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
+import { getSafeEnv } from "../../../../packages/core/src/env_filter.js"
 
 export type UpdateMethod = "npm" | "git" | "source" | "unknown"
 export type ReleaseType = "major" | "minor" | "patch" | "unknown"
@@ -194,12 +195,26 @@ interface CaptureResult {
   code: number | null
 }
 
-/** Spawn with captured stdout/stderr and a hard timeout (kill on expiry). */
-function runCapture(cmd: string, args: string[], opts: { cwd?: string; timeoutMs: number }): Promise<CaptureResult> {
+/** Spawn with captured stdout/stderr and a hard timeout (kill on expiry).
+ *
+ *  Exported for tests. Runs with the filtered env (#79): the npm path runs
+ *  `npm install -g <pkg>@<latest>`, i.e. postinstall scripts of the update
+ *  and every transitive dependency — package code that must not inherit the
+ *  CLI's raw secret-bearing env (same boundary as mcp-install, #77). */
+export function runCapture(
+  cmd: string,
+  args: string[],
+  opts: { cwd?: string; timeoutMs: number },
+): Promise<CaptureResult> {
   return new Promise<CaptureResult>((resolve) => {
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(cmd, args, { cwd: opts.cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] })
+      child = spawn(cmd, args, {
+        cwd: opts.cwd,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: getSafeEnv(process.env),
+      })
     } catch (error) {
       resolve({ ok: false, out: "", err: String(error), code: null })
       return

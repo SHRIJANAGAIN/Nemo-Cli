@@ -7,7 +7,7 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   checkForUpdate,
@@ -20,6 +20,7 @@ import {
   npmCommand,
   parseMaxTagVersion,
   parseVersion,
+  runCapture,
   type UpdateMethod,
   type UpdateOutcome,
 } from "./auto-update.js"
@@ -187,6 +188,22 @@ describe("findInstallRoot / getInstalledVersion", () => {
     expect(npmCommand("win32")).toBe("npm.cmd")
     expect(npmCommand("darwin")).toBe("npm")
     expect(npmCommand("linux")).toBe("npm")
+  })
+})
+
+describe("runCapture (#79)", () => {
+  it("runs update children with the filtered env, never raw secrets", async () => {
+    // The npm path runs `npm install -g pkg@latest` — postinstall scripts of
+    // the update and every transitive dependency. Package code must not see
+    // the CLI's raw env (same boundary as mcp-install, #77).
+    vi.stubEnv("ZZ_AUTOUPDATE_SECRET", "raw-env-leaked")
+    const res = await runCapture(
+      process.execPath,
+      ["-e", "process.stdout.write(process.env.ZZ_AUTOUPDATE_SECRET ?? 'absent')"],
+      { timeoutMs: 10_000 },
+    )
+    expect(res.ok).toBe(true)
+    expect(res.out).toBe("absent")
   })
 })
 
