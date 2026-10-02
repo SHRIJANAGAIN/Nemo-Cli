@@ -16,11 +16,18 @@
  * `audit_log` entries are hash-chained in both backends (`prev_hash` +
  * `hash`) so in-place edits become detectable; see `verifyAuditChain` for
  * exactly what the chain does and does not prove.
+ *
+ * Concurrency (#65): the JSON backend (the default) serializes every
+ * operation behind a cross-process claim file next to the store and reloads
+ * disk state *inside* the lock, so concurrent handles and processes append
+ * instead of overwriting each other; the claim waits are bounded (fail-open)
+ * so a wedged lock can never hang the CLI, and an unparseable store is
+ * quarantined with its bytes intact instead of being silently replaced.
  */
 
 import { join, dirname } from "path"
 import { homedir } from "os"
-import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, chmodSync } from "fs"
+import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, chmodSync, unlinkSync } from "fs"
 import { createHash } from "crypto"
 import { isEnabled } from "./feature_flags.js"
 
@@ -203,28 +210,179 @@ export function stateFilePath(codexHome?: string): string {
 }
 
 function loadStore(file: string): StoreShape {
+  if (!existsSync(file)) return emptyStore()
+  let text: string
   try {
-    if (!existsSync(file)) return emptyStore()
-    const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<StoreShape>
-    return { ...emptyStore(), ...parsed }
+    text = readFileSync(file, "utf8")
   } catch {
+    // Unreadable (EACCES/EBUSY): treat as empty — but do NOT destroy the
+    // bytes; the next save either fails on the same OS refusal or replaces
+    // a file the OS let us read after all.
     return emptyStore()
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    quarantineCorrupt(file)
+    return emptyStore()
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    quarantineCorrupt(file)
+    return emptyStore()
+  }
+  return { ...emptyStore(), ...(parsed as Partial<StoreShape>) }
+}
+
+/**
+ * Move an unparseable store aside instead of letting the next save overwrite
+ * it. The store carries the hash-chained audit trail — losing it to a torn
+ * write or a bit flip would silently destroy the security record. The
+ * quarantine name keeps the original bytes for forensics; a later run starts
+ * from a fresh store and cannot corrupt what was preserved.
+ */
+function quarantineCorrupt(file: string): void {
+  try {
+    renameSync(file, `${file}.corrupt-${Date.now()}`)
+  } catch {
+    /* best-effort: an OS refusal leaves the corrupt file in place */
   }
 }
 
+/** Synchronous sleep — this module's IO is fully synchronous. */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+function readClaim(lock: string): { pid: number; at: number } | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(lock, "utf8"))
+    if (parsed === null || typeof parsed !== "object") return null
+    const claim = parsed as { pid?: unknown; at?: unknown }
+    if (typeof claim.pid !== "number" || typeof claim.at !== "number") return null
+    return { pid: claim.pid, at: claim.at }
+  } catch {
+    return null
+  }
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    // EPERM = alive but owned by someone else; anything else (ESRCH) = gone.
+    return (err as { code?: string }).code === "EPERM"
+  }
+}
+
+/** A claim is stealable when its bytes are unreadable, its owner is gone
+ *  (or is a leaked claim from this very process), or it is ancient. */
+function claimIsStale(lock: string): boolean {
+  const claim = readClaim(lock)
+  if (claim === null) return true
+  if (claim.pid === process.pid) return true // leaked: this thread holds no lock now
+  if (!pidAlive(claim.pid)) return true
+  return Date.now() - claim.at > 30_000
+}
+
+/** How long an op waits for a live foreign claim before proceeding anyway. */
+const LOCK_WAIT_MS = 2_000
+
+/**
+ * Cross-process critical section for the JSON backend (#65).
+ *
+ * The claim is an exclusive-create lock file next to the store carrying
+ * `{pid, at}`. A dead or leaked owner is stolen outright; a live owner is
+ * waited out for at most `LOCK_WAIT_MS`, after which the op proceeds
+ * unlocked — a wedged lock must never hang the CLI (state is best-effort;
+ * the atomic tmp+rename write still keeps the file valid). Same-thread
+ * re-entry skips the claim entirely: sync code on one thread cannot
+ * interleave with itself, so only other *processes* need the mutual
+ * exclusion.
+ */
+function withStateLock<T>(file: string, fn: () => T): T {
+  if (inProcessLockHeld) return fn()
+  const lock = `${file}.lock`
+  let owned = false
+  try {
+    mkdirSync(dirname(file), { recursive: true })
+  } catch {
+    /* saveStore reports the real failure if the dir is unwritable */
+  }
+  const deadline = Date.now() + LOCK_WAIT_MS
+  for (;;) {
+    try {
+      writeFileSync(lock, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx", mode: 0o600 })
+      owned = true
+      break
+    } catch (err) {
+      if ((err as { code?: string }).code !== "EEXIST") break // fail open
+      if (claimIsStale(lock)) {
+        try {
+          unlinkSync(lock)
+        } catch {
+          /* another process stole it first */
+        }
+        continue
+      }
+      if (Date.now() >= deadline) break // fail open: bounded wait beats blocking
+      sleepSync(20)
+    }
+  }
+  inProcessLockHeld = true
+  try {
+    return fn()
+  } finally {
+    inProcessLockHeld = false
+    if (owned) {
+      try {
+        unlinkSync(lock)
+      } catch {
+        /* already stolen as stale or removed — nothing to leak */
+      }
+    }
+  }
+}
+
+/** True while this thread is inside `withStateLock` (re-entrancy guard). */
+let inProcessLockHeld = false
+
 function saveStore(file: string, store: StoreShape): void {
   mkdirSync(dirname(file), { recursive: true })
+  const json = JSON.stringify(store)
   const tmp = `${file}.tmp-${process.pid}`
-  writeFileSync(tmp, JSON.stringify(store), { encoding: "utf8", mode: 0o600 })
-  try {
-    renameSync(tmp, file)
+  writeFileSync(tmp, json, { encoding: "utf8", mode: 0o600 })
+  // rename over an existing file can fail transiently on Windows (EPERM
+  // while the destination is held open by a reader or AV scan) — retry
+  // before falling back, so the common case stays atomic (#65).
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      chmodSync(file, 0o600)
+      renameSync(tmp, file)
+      try {
+        chmodSync(file, 0o600)
+      } catch {
+        /* non-POSIX */
+      }
+      return
     } catch {
-      /* non-POSIX */
+      /* retry, then fall through */
     }
-  } catch {
-    writeFileSync(file, JSON.stringify(store), "utf8")
+  }
+  try {
+    writeFileSync(file, json, { encoding: "utf8", mode: 0o600 })
+    try {
+      unlinkSync(tmp)
+    } catch {
+      /* tmp already gone */
+    }
+  } catch (err) {
+    try {
+      unlinkSync(tmp)
+    } catch {
+      /* leave no stray tmp behind on the way out */
+    }
+    throw err
   }
 }
 
@@ -417,83 +575,117 @@ class JsonBackend implements StateBackend {
 
   constructor(file: string) {
     this.file = file
-    this.store = loadStore(this.file)
+    this.store = withStateLock(file, () => loadStore(file))
   }
 
-  private persist(): void {
-    try {
-      saveStore(this.file, this.store)
-    } catch {
-      /* state must never break the CLI */
-    }
+  /**
+   * Mutation under the cross-process lock: reload the CURRENT disk state,
+   * apply the change, persist. The reload is the fix for lost updates (#65):
+   * the old code mutated a snapshot taken at construction and overwrote the
+   * whole file, silently erasing rows another handle/process had written
+   * since — including audit entries, whose chain would also fork off a
+   * stale tail.
+   */
+  private mutate(fn: (store: StoreShape) => void): void {
+    withStateLock(this.file, () => {
+      try {
+        this.store = loadStore(this.file)
+        fn(this.store)
+        saveStore(this.file, this.store)
+      } catch {
+        /* state must never break the CLI */
+      }
+    })
+  }
+
+  /** Reads take the lock too: same snapshot guarantees as `mutate`. */
+  private read<T>(fn: (store: StoreShape) => T): T {
+    return withStateLock(this.file, () => {
+      this.store = loadStore(this.file)
+      return fn(this.store)
+    })
   }
 
   saveThread(id: string, metadata: Record<string, unknown>): void {
     const now = Date.now()
-    const prev = this.store.threads[id]
-    this.store.threads[id] = {
-      id,
-      created_at: prev?.created_at ?? now,
-      updated_at: now,
-      metadata: JSON.stringify(metadata),
-    }
-    this.persist()
+    this.mutate((store) => {
+      const prev = store.threads[id]
+      store.threads[id] = {
+        id,
+        created_at: prev?.created_at ?? now,
+        updated_at: now,
+        metadata: JSON.stringify(metadata),
+      }
+    })
   }
 
   getThread(id: string): Record<string, unknown> | null {
-    const row = this.store.threads[id]
-    if (!row) return null
-    return { ...row, metadata: JSON.parse(row.metadata as string) }
+    return this.read((store) => {
+      const row = store.threads[id]
+      if (!row) return null
+      return { ...row, metadata: JSON.parse(row.metadata as string) }
+    })
   }
 
   getAllThreads(): Record<string, unknown>[] {
-    return Object.values(this.store.threads)
-      .sort((a, b) => b.updated_at - a.updated_at)
-      .map((r) => ({ ...r, metadata: JSON.parse(r.metadata as string) }))
+    return this.read((store) =>
+      Object.values(store.threads)
+        .sort((a, b) => b.updated_at - a.updated_at)
+        .map((r) => ({ ...r, metadata: JSON.parse(r.metadata as string) })),
+    )
   }
 
   appendEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
-    this.store.events.push({
-      id: this.store.seq++,
-      session_id: sessionId,
-      type,
-      payload: JSON.stringify(payload),
-      timestamp: Date.now(),
+    this.mutate((store) => {
+      store.events.push({
+        id: store.seq++,
+        session_id: sessionId,
+        type,
+        payload: JSON.stringify(payload),
+        timestamp: Date.now(),
+      })
     })
-    this.persist()
   }
 
   getEvents(sessionId: string, since?: number): Record<string, unknown>[] {
-    return this.store.events
-      .filter((e) => e.session_id === sessionId && (since === undefined || e.timestamp >= since))
-      .sort((a, b) => a.timestamp - b.timestamp)
+    return this.read((store) =>
+      store.events
+        .filter((e) => e.session_id === sessionId && (since === undefined || e.timestamp >= since))
+        .sort((a, b) => a.timestamp - b.timestamp),
+    )
   }
 
   recordViolation(type: string, path: string | null, operation: string, pid: number): void {
-    this.store.violations.push({ id: this.store.seq++, type, path, operation, pid, timestamp: Date.now() })
-    this.persist()
+    this.mutate((store) => {
+      store.violations.push({ id: store.seq++, type, path, operation, pid, timestamp: Date.now() })
+    })
   }
 
   getViolations(since?: number): Record<string, unknown>[] {
-    return this.store.violations
-      .filter((v) => since === undefined || v.timestamp >= since)
-      .sort((a, b) => (b.timestamp as number) - (a.timestamp as number))
+    return this.read((store) =>
+      store.violations
+        .filter((v) => since === undefined || v.timestamp >= since)
+        .sort((a, b) => (b.timestamp as number) - (a.timestamp as number)),
+    )
   }
 
   /** Tail hash for the next entry: `""` when empty or pre-chain. */
-  private lastAuditHash(): string {
-    const last = this.store.audit_log[this.store.audit_log.length - 1]
+  private static lastAuditHash(store: StoreShape): string {
+    const last = store.audit_log[store.audit_log.length - 1]
     return typeof last?.hash === "string" ? last.hash : GENESIS_PREV_HASH
   }
 
   recordAudit(action: string, actor: string, target: string, result: string): void {
-    const fields = auditChainEntry(action, actor, target, result, this.lastAuditHash())
-    this.store.audit_log.push({ id: this.store.seq++, ...fields, hash: computeAuditHash(fields) })
-    this.persist()
+    // Reload-then-chain inside the lock: the tail comes from disk, never
+    // from a snapshot another process has advanced (#65).
+    this.mutate((store) => {
+      const fields = auditChainEntry(action, actor, target, result, JsonBackend.lastAuditHash(store))
+      store.audit_log.push({ id: store.seq++, ...fields, hash: computeAuditHash(fields) })
+    })
   }
 
   verifyAuditChain(): AuditChainResult {
-    return verifyChainRows(this.store.audit_log)
+    return this.read((store) => verifyChainRows(store.audit_log))
   }
 
   searchThreads(query: string): Record<string, unknown>[] {
@@ -504,11 +696,9 @@ class JsonBackend implements StateBackend {
   }
 
   close(): void {
-    try {
-      this.persist()
-    } catch {
-      /* ignore */
-    }
+    // Deliberately does NOT flush: every mutation already persisted under
+    // the lock, and an exit-time rewrite from a stale snapshot would erase
+    // rows appended by another process since our last op (#65).
   }
 }
 
@@ -595,21 +785,30 @@ class SqliteBackend implements StateBackend {
       .all(since)
   }
 
-  /** Tail hash for the next entry: `""` when empty or pre-chain. */
-  private lastAuditHash(): string {
-    const row = this.db.prepare("SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1").get()
-    const hash = row?.hash
-    return typeof hash === "string" ? hash : GENESIS_PREV_HASH
-  }
-
   recordAudit(action: string, actor: string, target: string, result: string): void {
-    const fields = auditChainEntry(action, actor, target, result, this.lastAuditHash())
-    const hash = computeAuditHash(fields)
-    this.db
-      .prepare(
-        "INSERT INTO audit_log(action, actor, target, timestamp, result, prev_hash, hash) VALUES(?, ?, ?, ?, ?, ?, ?)",
-      )
-      .run(fields.action, fields.actor, fields.target, fields.timestamp, fields.result, fields.prev_hash, hash)
+    // Tail read + insert must share one write lock (#65): WAL serializes
+    // single statements, not statement pairs — two processes reading the
+    // same tail before either inserts would fork the hash chain.
+    this.db.exec("BEGIN IMMEDIATE")
+    try {
+      const tail = this.db.prepare("SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1").get()
+      const prevHash = typeof tail?.hash === "string" ? tail.hash : GENESIS_PREV_HASH
+      const fields = auditChainEntry(action, actor, target, result, prevHash)
+      const hash = computeAuditHash(fields)
+      this.db
+        .prepare(
+          "INSERT INTO audit_log(action, actor, target, timestamp, result, prev_hash, hash) VALUES(?, ?, ?, ?, ?, ?, ?)",
+        )
+        .run(fields.action, fields.actor, fields.target, fields.timestamp, fields.result, fields.prev_hash, hash)
+      this.db.exec("COMMIT")
+    } catch (err) {
+      try {
+        this.db.exec("ROLLBACK")
+      } catch {
+        /* transaction already closed */
+      }
+      throw err
+    }
   }
 
   verifyAuditChain(): AuditChainResult {

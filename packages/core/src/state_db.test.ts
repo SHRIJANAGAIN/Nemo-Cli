@@ -9,7 +9,8 @@
  * developer's real state — which is exactly how a thread named `test-1`
  * reached production. The last case guards that isolation.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs"
+import { spawn } from "child_process"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -210,6 +211,120 @@ describe("persistence and recovery", () => {
     open().saveThread("perms", {})
     expect(statSync(storeFile).mode & 0o777).toBe(0o600)
   })
+})
+
+/**
+ * Multi-handle and multi-process safety (#65): every mutation reloads disk
+ * state under a cross-process claim, so a second writer can never erase what
+ * the first appended — and the hash-chained audit trail survives both
+ * interleaved handles and real concurrent processes.
+ */
+describe("cross-handle and cross-process safety (#65)", () => {
+  it("a second handle does not erase rows the first wrote (no lost update)", () => {
+    const a = open()
+    const b = open() // same shape as a second process: its own instance, one file
+    a.saveThread("from-a", { who: "a" })
+    b.saveThread("from-b", { who: "b" })
+    expect(b.getThread("from-a")?.metadata).toEqual({ who: "a" }) // b reloaded, not clobbered
+    expect(a.getThread("from-b")?.metadata).toEqual({ who: "b" })
+    expect(open().getThread("from-a")).not.toBeNull()
+    expect(open().getThread("from-b")).not.toBeNull()
+  })
+
+  it("interleaved handles append to ONE valid chain instead of forking or losing entries", () => {
+    const a = open()
+    const b = open()
+    a.recordAudit("one", "a", "t1", "ok")
+    b.recordAudit("two", "b", "t2", "ok") // old code: chains off a stale tail AND overwrites "one"
+    a.recordAudit("three", "a", "t3", "ok")
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 3 })
+  })
+
+  it("closing one handle does not erase rows another handle wrote after it", () => {
+    const a = open()
+    a.recordAudit("first", "a", "t1", "ok")
+    const b = open()
+    b.recordAudit("later", "b", "t2", "ok")
+    a.close() // old code: exit-time flush from a's stale snapshot wiped "later"
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 2 })
+  })
+
+  it("quarantines a corrupt store instead of letting the next save destroy it", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    writeFileSync(storeFile, "{ this is not json", "utf8")
+    const db = open()
+    expect(db.getAllThreads()).toEqual([]) // still recovers without throwing
+    db.saveThread("after-corrupt", { ok: true })
+    const stateDir = dirname(storeFile)
+    const backups = readdirSync(stateDir).filter((f) => f.startsWith("state_1.json.corrupt"))
+    expect(backups).toHaveLength(1)
+    expect(readFileSync(join(stateDir, backups[0]!), "utf8")).toBe("{ this is not json")
+  })
+
+  it("steals a claim whose owner process is gone", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    const lock = `${storeFile}.lock`
+    writeFileSync(lock, JSON.stringify({ pid: 999_999_999, at: Date.now() }), "utf8")
+    const db = open() // must not hang: dead owner → stolen on sight
+    db.recordAudit("proceeds", "a", "t", "ok")
+    expect(verifyAuditChain(open())).toEqual({ ok: true, count: 1 })
+    expect(existsSync(lock)).toBe(false)
+  }, 10_000)
+
+  it("gives up on a live foreign claim after the bounded wait instead of blocking the CLI", () => {
+    mkdirSync(dirname(storeFile), { recursive: true })
+    // The test runner's parent process is alive for the whole test.
+    writeFileSync(`${storeFile}.lock`, JSON.stringify({ pid: process.ppid, at: Date.now() }), "utf8")
+    const db = open()
+    db.recordAudit("fail-open", "a", "t", "ok") // waits ≤2s, then writes anyway
+    const raw = JSON.parse(readFileSync(storeFile, "utf8")) as { audit_log: unknown[] }
+    expect(raw.audit_log).toHaveLength(1)
+  }, 15_000)
+
+  it("two real processes appending concurrently lose nothing and keep one valid chain", async () => {
+    // vitest runs from the repo root (its config root), same convention the
+    // other tests rely on via process.cwd().
+    const repoRoot = process.cwd()
+    const viteNode = join(repoRoot, "node_modules", "vite-node", "vite-node.mjs")
+    const stateDbPath = join(repoRoot, "packages", "core", "src", "state_db.ts")
+    expect(existsSync(viteNode)).toBe(true)
+    const worker = join(home, "crossproc-worker.ts")
+    writeFileSync(
+      worker,
+      [
+        "const { DatabaseDatabase } = await import(process.env.STATE_DB)",
+        "const n = Number(process.env.WORKER_N)",
+        "const db = new DatabaseDatabase(process.env.STATE_FILE)",
+        "for (let i = 0; i < n; i++) db.recordAudit(`worker.${i}`, 'proc', `pid-${process.pid}`, 'ok')",
+        "db.close()",
+      ].join("\n"),
+      "utf8",
+    )
+    const runWorker = (n: number): Promise<{ code: number | null; err: string }> =>
+      new Promise((resolve) => {
+        const child = spawn(process.execPath, [viteNode, worker], {
+          env: { ...process.env, STATE_DB: stateDbPath, STATE_FILE: storeFile, WORKER_N: String(n) },
+          cwd: repoRoot,
+          stdio: ["ignore", "ignore", "pipe"],
+        })
+        let err = ""
+        child.stderr?.on("data", (chunk: Buffer) => {
+          err += String(chunk)
+        })
+        child.on("close", (code) => resolve({ code, err }))
+      })
+
+    const [a, b] = await Promise.all([runWorker(25), runWorker(25)])
+    if (a.code !== 0) throw new Error(`worker a failed (${a.code}): ${a.err}`)
+    if (b.code !== 0) throw new Error(`worker b failed (${b.code}): ${b.err}`)
+
+    const raw = JSON.parse(readFileSync(storeFile, "utf8")) as { audit_log: Array<{ id: number }> }
+    expect(raw.audit_log).toHaveLength(50) // none of the 50 appends was clobbered
+    expect(new Set(raw.audit_log.map((r) => r.id)).size).toBe(50) // seq never double-allocated
+    const db = new DatabaseDatabase(storeFile)
+    expect(db.verifyAuditChain()).toEqual({ ok: true, count: 50 })
+    db.close()
+  }, 60_000)
 })
 
 describe("singleton lifecycle", () => {

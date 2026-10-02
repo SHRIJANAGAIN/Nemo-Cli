@@ -5,6 +5,24 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **State store survives concurrent writers** (new finding, #65): the JSON
+  backend (default) kept its store in memory from construction and
+  overwrote the whole file on every mutation — a second handle or process
+  silently erased the first one's rows, including hash-chained audit
+  entries (TUI + CLI + server all append an audit row per tool call).
+  Every operation now runs behind a cross-process claim file (stale-owner
+  steal, bounded 2s fail-open so a wedged lock never hangs the CLI) and
+  reloads disk state inside the lock, so writers append instead of
+  clobbering; `close()` no longer flushes a stale snapshot on exit. A
+  corrupt store is quarantined as `state_1.json.corrupt-<ts>` with its
+  bytes intact instead of being silently replaced (the audit trail was
+  destroyed on the next save before), the rename-failure fallback retries
+  atomically three times and keeps mode 0600, and SQLite's tail-read +
+  insert now share one `BEGIN IMMEDIATE` transaction so WAL serializes the
+  pair, not just the statements. Proof: 7 new tests, 6 red against the old
+  code — including two real `vite-node` child processes appending 25 rows
+  each concurrently (50/50 kept, unique ids, one valid chain).
+
 - **MCP servers actually connect in headless, gated** (round-5 audit, #62):
   only `Agent.create()` loaded config-driven tools — ACP, exec, server, and
   SDK all built agents with the bare constructor, so configured MCP servers
