@@ -5,6 +5,34 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Windows shell quoting restored + model-steered child env hygiene**
+  (audit, #75–#77):
+  - **#75** — `ProcessManager.spawn` CRT-quoted the
+    `[shell, /c, <raw command>]` pattern and handed cmd.exe escaped `\"`
+    quotes it does not understand: `echo "hi"` printed `\"hi\"`,
+    `node -e "..."` silently became a string literal (exit 0, no
+    output), `cd "C:\Path"` failed — every quoted command through the
+    default (policy-only) `bash` tool was mangled on Windows. New
+    opt-in `windowsVerbatimArguments` (bash foreground + background +
+    monitor) passes the command exactly as typed; direct
+    `[exe, ...args]` spawns keep CRT quoting (verbatim breaks spaced
+    exe paths — both shapes probed). Proof: 2 new tests (bash tool
+    itself + ProcessManager integration), both red on the old code.
+  - **#76** — `trayambak__Monitor` ran model-supplied commands with raw
+    `process.env` (a `set` poll dumps every secret into context — `bash`
+    cannot), buffered child output unbounded (repo 256KB rule), had no
+    spawn `error` listener (missing shell → process crash), never killed
+    the child on abort/timeout (orphans), and was Windows-only (`cmd`
+    hardcoded → posix crash). It now runs through `ProcessManager`
+    (filtered env, process-tree kill, caps, abort) with a
+    platform-correct shell. Proof: 3 tests — env + abort red on the old
+    code; smoke pins behaviour.
+  - **#77** — `mcp-install`'s `execAsync` runs npm/pip package code
+    (postinstall scripts) yet inherited raw secret-bearing env, while
+    bash/skills/pentest/the MCP runner all use `getSafeEnv`. Now
+    filtered the same way (PATH/HOME intact — file-based registry auth
+    unaffected). Proof: test red on the old code.
+
 - **Web tools: write-capable `web_fetch` off the approval-free read-only
   list, link-local refusal on every hop, redirect crash parity**
   (audit, #72–#74):
@@ -175,10 +203,10 @@ red against the old code. (`planPath` was already traversal-safe via
   generation never yanks a parked window back to live — no arrow-key
   middleman, no mode to enter. PageUp/PageDown still page for terminals
   whose mouse reports never arrive.
-- **Parked-tail strip**: a scrolled window now pins the live end
-  (`─ ● live ─` + bottom-anchored tail rows) under the history slice, so
-  one wheel notch never makes the response vanish — the whole window
-  scrolls, nothing hides.
+- **Parked-tail strip**: while generating, a scrolled window pins the
+  live end (`─ ● live ─` + bottom-anchored tail rows) under the history
+  slice — one wheel notch never makes the response vanish. Idle parked
+  windows stay pure history, Codex-exact.
 
 - **Chat render guards**: composer placeholder pinned to Trayambak's own
   ("Type a message…", stale Codex line can never return), chooser arrows

@@ -214,6 +214,28 @@ describe("mcp__install execution", () => {
     )
   })
 
+  it("execAsync strips secret-bearing env from installer children (#75)", async () => {
+    // Installers run arbitrary package code (postinstall scripts) — they get
+    // the same filtered env as bash, never raw process.env. PATH must survive
+    // so npm/pip keep working.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mcp-env-"))
+    const outFile = path.join(dir, "child-env.json")
+    process.env.ZZ_TRAYAMBAK_INSTALL_PROBE_SECRET = "s3cr3t-probe"
+    try {
+      await execAsync(
+        process.execPath,
+        ["-e", `require("fs").writeFileSync(${JSON.stringify(outFile)}, JSON.stringify(process.env))`],
+        process.cwd(),
+      )
+      const childEnv = JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<string, string>
+      expect(childEnv.ZZ_TRAYAMBAK_INSTALL_PROBE_SECRET).toBeUndefined()
+      expect(childEnv.PATH).toBeTruthy()
+    } finally {
+      delete process.env.ZZ_TRAYAMBAK_INSTALL_PROBE_SECRET
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it("install reports registry misses as errors without spawning anything", async () => {
     const tool = createMcpInstallTool()
     const res = await tool.execute("t", { action: "install", query: "no-such-server-xyz" }, undefined, undefined)

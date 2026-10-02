@@ -72,6 +72,14 @@ export class ProcessManager {
     outputCap?: number
     processGroup?: boolean
     signal?: AbortSignal
+    /** Windows: join argv into the command line exactly as given, no CRT
+     *  quoting/escaping. Required for the `[shell, /c, <raw command>]`
+     *  pattern: CRT-escaping turns the user's own quotes into `\"`, which
+     *  cmd.exe does not understand (it mangles `echo "hi"` into `\"hi\"`
+     *  and silently no-ops `node -e "code"`, #75). Leave unset for direct
+     *  argv (`[exe, ...args]`) — CRT quoting is what makes spaced exe
+     *  paths work there. Ignored on Unix. */
+    windowsVerbatimArguments?: boolean
   }): Promise<{
     pid: number
     exitCode: Promise<number>
@@ -86,6 +94,7 @@ export class ProcessManager {
       outputCap = EXEC_OUTPUT_MAX_BYTES,
       processGroup,
       signal,
+      windowsVerbatimArguments,
     } = options
 
     return new Promise((resolve, reject) => {
@@ -107,6 +116,7 @@ export class ProcessManager {
         env,
         windowsHide: true,
         detached: ownProcessGroup,
+        windowsVerbatimArguments,
       })
 
       const pid = child.pid ?? 0

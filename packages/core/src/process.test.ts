@@ -232,3 +232,25 @@ describe("cancellation tokens", () => {
     expect(combined.signal.aborted).toBe(true)
   })
 })
+
+describe("shell-pattern argv quoting (#75)", () => {
+  it("keeps the user's quotes intact through [shell, -c, <command>]", async () => {
+    // The [shell, -c, rawText] pattern must reach the shell exactly as
+    // typed. Without windowsVerbatimArguments, CRT-escaping turns the
+    // quotes into `\"` on Windows and cmd.exe echoes them back literally
+    // (`\"quoted-ok\"`).
+    const pm = new ProcessManager()
+    const shell = process.platform === "win32" ? ["cmd", "/c"] : ["/bin/sh", "-c"]
+    const handle = await pm.spawn({
+      command: [...shell, `echo "quoted-ok"`],
+      cwd: process.cwd(),
+      env: childEnv(),
+      windowsVerbatimArguments: true,
+    })
+    const out = await handle.output
+    const code = await handle.exitCode.catch(() => 1)
+    expect(code).toBe(0)
+    expect(out).toContain("quoted-ok")
+    expect(out).not.toContain('\\"')
+  })
+})

@@ -12,6 +12,7 @@ import { textResult, type Tool, type ToolContext } from "../types.js"
 import { getConnectorRegistry, type ConnectorEntry } from "./registry.js"
 import { saveConfig, type TrayambakConfig } from "../../../src/config.js"
 import { canSpawnDirectly, resolveExecutable, resolveNpmCliJs } from "../../../../../packages/mcp/src/spawn-resolve.js"
+import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 
 // Re-exported so existing importers (tests, CLI) keep working — the
 // implementation lives in packages/mcp (one copy, no drift).
@@ -264,6 +265,11 @@ export function execAsync(command: string, args: string[], cwd: string, timeoutM
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
       windowsHide: true,
+      // Installers run arbitrary package code (postinstall scripts), so they
+      // get the same filtered env as bash — never the raw secret-bearing
+      // process.env (#75). PATH/HOME stay intact: npm and pip keep working
+      // (file-based .npmrc/pip.conf auth is unaffected).
+      env: getSafeEnv(process.env),
     })
     let stdout = ""
     let stderr = ""

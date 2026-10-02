@@ -69,6 +69,15 @@ describe("bash tool", () => {
     expect(textOf(res)).toContain("[exit code 3]")
   })
 
+  it("passes quoted command text through the shell unmangled (#75)", async () => {
+    // Windows CRT-escaping used to turn `node -e "..."` into a string
+    // literal: exit 0, silently no output — and `echo "hi"` printed
+    // `\"hi\"`. The raw command must reach the shell exactly as typed.
+    const res = await run({ command: `node -e "process.stdout.write('q-ok')"` })
+    expect(res.isError).toBeFalsy()
+    expect(textOf(res)).toContain("q-ok")
+  })
+
   it("rejects a missing command", async () => {
     const res = await run({})
     expect(res.isError).toBe(true)

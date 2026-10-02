@@ -208,6 +208,8 @@ async function startBackgroundJob(opts: {
       timeoutMs: opts.timeoutMs,
       outputCap: OUTPUT_MAX_BYTES,
       processGroup: true,
+      // Shell pattern needs cmd.exe to see the raw command text (#75).
+      windowsVerbatimArguments: true,
     })
   } catch (e) {
     backgroundJobs.delete(id)
@@ -572,6 +574,11 @@ export function createBashTool(deps?: BashToolDeps): Tool {
               outputCap: OUTPUT_MAX_BYTES,
               processGroup: true,
               signal,
+              // [shell, /c, <raw command>] must reach cmd.exe exactly as
+              // typed: CRT-quoting escapes the user's quotes into `\"` and
+              // cmd mangles them (`echo "hi"` → `\"hi\"`, `node -e "..."`
+              // silently no-ops).
+              windowsVerbatimArguments: true,
             })
             .then(async ({ exitCode, output }) => {
               // Wait for output with capping
