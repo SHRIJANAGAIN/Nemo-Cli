@@ -31,7 +31,29 @@ export async function withFileLock<T>(file: string, fn: () => T | Promise<T>): P
   }
 }
 
-const SECRET_KEYS = ["apiKey", "api_key", "apikey", "token", "secret", "authorization"]
+/** Key-name markers for secret material, substring-matched case-insensitively
+ *  (so `db_password`, `privateKey`, `connectionString` all mask). The password/
+ *  credential family exists because connector configs (database, webhooks) hold
+ *  exactly these names — masking only `token`/`secret` let them ride into
+ *  hook payloads, analytics and the on-disk log verbatim (#52). None of the
+ *  added markers is a token-counter shape, so isSecretKey's counter exemption
+ *  never applies to them. */
+const SECRET_KEYS = [
+  "apiKey",
+  "api_key",
+  "apikey",
+  "token",
+  "secret",
+  "authorization",
+  "password",
+  "passwd",
+  "passphrase",
+  "credential",
+  "cookie",
+  "privatekey",
+  "private_key",
+  "connectionstring",
+]
 
 /**
  * Token COUNTER keys — the only shapes exempt from the "token" substring rule.
@@ -66,19 +88,43 @@ export function isSecretKey(key: string): boolean {
   return !TOKEN_COUNTER.test(lower)
 }
 
-const EMBEDDED_KEY_PATTERNS: RegExp[] = [
-  /nvapi-[A-Za-z0-9_-]{8,}/g,
-  /\bsk-[A-Za-z0-9_-]{8,}\b/g,
-  /\bhf_[A-Za-z0-9]+\b/g,
-  /\bxai-[A-Za-z0-9_-]{8,}\b/g,
-  /\bAIza[0-9A-Za-z_-]{10,}\b/g,
+/** Credential shapes embedded in prose (URLs, pasted tokens, headers).
+ *  Each entry carries its own replacement so a pattern can keep the harmless
+ *  surroundings — the URL case preserves scheme+host and masks only the
+ *  userinfo. Beyond the provider/GitHub/Bearer set this covers the shapes
+ *  that routinely appear in command output and hook payloads and previously
+ *  sailed through every sink verbatim (#53): JWTs (`eyJ….…`), AWS access
+ *  key ids (AKIA/ASIA), Stripe secret/restricted keys (`sk_live_…`),
+ *  Slack tokens (`xox…`), npm tokens (`npm_…`), PEM private-key blocks
+ *  (whole block — the base64 body is the key), and `scheme://user:pass@`
+ *  connection-string passwords. */
+const EMBEDDED_KEY_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /nvapi-[A-Za-z0-9_-]{8,}/g, replacement: "[REDACTED]" },
+  { pattern: /\bsk-[A-Za-z0-9_-]{8,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bhf_[A-Za-z0-9]+\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bxai-[A-Za-z0-9_-]{8,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bAIza[0-9A-Za-z_-]{10,}\b/g, replacement: "[REDACTED]" },
   // GitHub token shapes: CREDENTIAL_PREFIX already masks them at the head of
   // a string, so mid-string copies (pasted into prose, a curl command, a hook
   // payload) must not be the one hole in the pattern set.
-  /\bghp_[A-Za-z0-9_]{10,}/g,
-  /\bgho_[A-Za-z0-9_]{10,}/g,
-  /\bgithub_pat_[A-Za-z0-9_]{10,}/g,
-  /\bBearer\s+[A-Za-z0-9._~-]+/gi,
+  { pattern: /\bghp_[A-Za-z0-9_]{10,}/g, replacement: "[REDACTED]" },
+  { pattern: /\bgho_[A-Za-z0-9_]{10,}/g, replacement: "[REDACTED]" },
+  { pattern: /\bgithub_pat_[A-Za-z0-9_]{10,}/g, replacement: "[REDACTED]" },
+  { pattern: /\bBearer\s+[A-Za-z0-9._~-]+/gi, replacement: "[REDACTED]" },
+  { pattern: /\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}(?:\.[A-Za-z0-9_-]+)?\b/g, replacement: "[REDACTED]" },
+  { pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\b[rs]k_(?:live|test)_[A-Za-z0-9]{8,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bxox[baprs]-[A-Za-z0-9-]{10,}/g, replacement: "[REDACTED]" },
+  { pattern: /\bnpm_[A-Za-z0-9]{20,}\b/g, replacement: "[REDACTED]" },
+  {
+    pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+    replacement: "[REDACTED]",
+  },
+  { pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g, replacement: "[REDACTED]" },
+  // Connection-string passwords: keep scheme and host (useful context), drop
+  // only the userinfo — `postgres://alice:s3cr3t@db:5432/x` must not log the
+  // password, but `http://localhost:8787` has no userinfo and stays intact.
+  { pattern: /\b([a-z][a-z0-9+.-]*:\/\/)[^\s:@/]+:[^\s@/]+@/gi, replacement: "$1[REDACTED]@" },
 ]
 
 /**
@@ -88,9 +134,9 @@ const EMBEDDED_KEY_PATTERNS: RegExp[] = [
  */
 export function redactEmbeddedSecrets(text: string): string {
   let out = text
-  for (const pattern of EMBEDDED_KEY_PATTERNS) {
+  for (const { pattern, replacement } of EMBEDDED_KEY_PATTERNS) {
     pattern.lastIndex = 0
-    out = out.replace(pattern, "[REDACTED]")
+    out = out.replace(pattern, replacement)
   }
   return out
 }

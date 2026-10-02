@@ -70,4 +70,21 @@ describe("logger file sink", () => {
     expect(() => logger.error("nope")).not.toThrow()
     expect(fs.existsSync(logFile)).toBe(false)
   })
+  it("masks credentials embedded mid-string before they reach the disk sink (#51)", () => {
+    // git-style remote URL with the token in the userinfo — the shape that
+    // previously landed raw because redactLogValue has no embedded pass.
+    logger.warn("push failed for https://x-access-token:ghp_abcdefghij0123456789@github.com/o/r.git", {
+      hint: "retry with sk-abcdefghijklmnop0123456789",
+      url: "postgres://alice:s3cr3t@db.internal:5432/app",
+    })
+    const raw = fs.readFileSync(logFile, "utf8")
+    expect(raw).not.toContain("ghp_abcdefghij0123456789")
+    expect(raw).not.toContain("sk-abcdefghijklmnop0123456789")
+    expect(raw).not.toContain("s3cr3t")
+    // …and the useful context survives: repo path and db host stay visible.
+    expect(raw).toContain("github.com/o/r.git")
+    expect(raw).toContain("db.internal:5432/app")
+    const line = readLines()[0]
+    expect(String(line.msg)).toContain("[REDACTED]")
+  })
 })

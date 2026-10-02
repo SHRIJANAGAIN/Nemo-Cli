@@ -63,6 +63,25 @@ describe("isSecretKey", () => {
     }
   })
 
+  it("masks the password/credential family connector configs actually use (#52)", () => {
+    for (const key of [
+      "password",
+      "db_password",
+      "passwd",
+      "passphrase",
+      "credential",
+      "credentials",
+      "cookie",
+      "privateKey",
+      "private_key",
+      "connectionString",
+    ]) {
+      expect(isSecretKey(key), key).toBe(true)
+    }
+    // The counter exemption never swallows them: none is a counter shape.
+    expect(isSecretKey("passwordTokens")).toBe(true)
+  })
+
   it("does not let the counter exemption swallow a second secret marker", () => {
     // "maxToken" would be exempt; "maxTokenSecret" carries "secret" and must
     // stay masked.
@@ -182,6 +201,40 @@ describe("redactEmbeddedSecrets", () => {
     expect(redactEmbeddedSecrets("nothing secret here at all")).toBe("nothing secret here at all")
     expect(redactEmbeddedSecrets("auth: Bearer abc.def.ghi-jkl")).toBe("auth: [REDACTED]")
   })
+
+  it("masks credential shapes outside the provider list (#53)", () => {
+    // JWT
+    expect(redactEmbeddedSecrets("jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.sig-part")).not.toContain(
+      "eyJhbGciOiJIUzI1NiJ9",
+    )
+    // AWS access key id
+    expect(redactEmbeddedSecrets("got AKIAIOSFODNN7EXAMPLE today")).toBe("got [REDACTED] today")
+    // Stripe secret key
+    expect(redactEmbeddedSecrets("retry with REDACTED_STRIPE_FIXTURE")).toContain("[REDACTED]")
+    expect(redactEmbeddedSecrets("retry with REDACTED_STRIPE_FIXTURE")).not.toContain(
+      "nemoFixtureKey0123456789abcd",
+    )
+    // Slack token
+    expect(redactEmbeddedSecrets("SLACK_FIXTURE_TOKEN")).toBe("[REDACTED]")
+    // npm token
+    expect(redactEmbeddedSecrets("npm_abcdefghijklmnopqrstuvwxyz012345")).toContain("[REDACTED]")
+    expect(redactEmbeddedSecrets("npm_abcdefghijklmnopqrstuvwxyz012345")).not.toContain("abcdefghijklmnopqrstuvwxyz")
+    // PEM block — the base64 body is the key, so the WHOLE block goes.
+    // eslint-disable-next-line trayambak/no-hardcoded-secrets -- redaction TEST FIXTURE: this literal exists to prove the scanner REMOVES it (no key material, body is "MIIEpA…" placeholder dots)
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAy...\n-----END RSA PRIVATE KEY-----"
+    const redactedPem = redactEmbeddedSecrets(pem)
+    expect(redactedPem).not.toContain("MIIEpAIBAAKCAQEAy")
+    expect(redactedPem).not.toContain("PRIVATE KEY")
+    // Connection-string password: userinfo masked, scheme+host preserved
+    expect(redactEmbeddedSecrets("connect postgres://alice:s3cr3t@db.internal:5432/app failed")).toBe(
+      "connect postgres://[REDACTED]@db.internal:5432/app failed",
+    )
+    // …while URLs without a password stay intact (no false positives).
+    expect(redactEmbeddedSecrets("GET http://localhost:8787/health")).toBe("GET http://localhost:8787/health")
+    expect(redactEmbeddedSecrets("plain prose with no credentials at all")).toBe(
+      "plain prose with no credentials at all",
+    )
+  })
 })
 
 describe("redactPayload", () => {
@@ -210,6 +263,22 @@ describe("redactPayload", () => {
       apiKey: "****",
       nested: { Authorization: "****", visible: "keep" },
       list: [{ token: "****" }],
+    })
+  })
+
+  it("masks password/credential keys while ordinary prose around them survives (#52)", () => {
+    expect(
+      redactPayload({
+        password: "hunter2",
+        db_password: "hunter3",
+        connectionString: "Server=db;Password=hunter4",
+        note: "retry the migration after the failover",
+      }),
+    ).toEqual({
+      password: "****",
+      db_password: "****",
+      connectionString: "****",
+      note: "retry the migration after the failover",
     })
   })
 

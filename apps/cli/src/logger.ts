@@ -21,7 +21,7 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { redactLogValue } from "../../../packages/core/src/secrets.js"
+import { redactPayload } from "../../../packages/core/src/secrets.js"
 
 export type LogLevel = "debug" | "info" | "warn" | "error" | "silent"
 
@@ -78,8 +78,15 @@ function writeFileLine(level: LogLevel, message: string, fields?: Record<string,
 function emit(level: Exclude<LogLevel, "silent">, message: string, fields?: Record<string, unknown>): void {
   // Redact at the single chokepoint: both the JSONL file and stderr go
   // through here, so no log sink can ever see raw credential material.
-  const safeMessage = redactLogValue(message) as string
-  const safeFields = fields ? (redactLogValue(fields) as Record<string, unknown>) : undefined
+  // redactPayload, not redactLogValue: this is a DISK sink, and log values
+  // like `git push failed for https://x-access-token:ghp_…@github.com/…`
+  // carry credentials mid-string — redactLogValue has no embedded pass
+  // (security-log.ts compensates by redacting the serialized line; this
+  // sink had no such second pass). redactPayload keeps the same prose
+  // guarantees — no truncation, paths byte-for-byte — and adds the
+  // embedded scan plus the password/credential key names (#51).
+  const safeMessage = redactPayload(message) as string
+  const safeFields = fields ? (redactPayload(fields) as Record<string, unknown>) : undefined
   writeFileLine(level, safeMessage, safeFields)
   if (RANK[level] >= RANK[consoleThreshold()]) {
     const suffix = safeFields && Object.keys(safeFields).length ? " " + JSON.stringify(safeFields) : ""

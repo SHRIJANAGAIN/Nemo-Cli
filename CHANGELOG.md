@@ -5,6 +5,19 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Redaction closes the disk-sink gaps** (round-5 audit, #51-54): the CLI
+  log file now runs the embedded-secret pass before anything is appended to
+  `~/.trayambak/logs/trayambak.log` — previously only secret-key names and
+  string heads were masked, so a credential mid-sentence (`ghp_…` in a git
+  remote URL, a JWT, an AWS key id, a Stripe/Slack/npm token, a PEM block,
+  `scheme://user:pass@` connection strings) landed at rest verbatim; the
+  key-name set grows to the password/credential family (`password`,
+  `passwd`, `passphrase`, `credential`, `cookie`, `privateKey`,
+  `connectionString`) across every sink (hook payloads, analytics,
+  telemetry, security trail, logger); and `TRAYAMBAK_TELEMETRY=0` now
+  silences `flush()` as well as `capture()`. Prose, paths, and token
+  counters stay byte-for-byte intact.
+
 - **Mouse scroll, direct like Codex**: the wheel drives the in-app history
   window itself (lifetime mouse reporting + anchored reading position), so
   generation never yanks a parked window back to live — no arrow-key
@@ -160,6 +173,18 @@ All notable changes to trayambak are documented here. The format is based on kee
   otherwise). 0.6.0 stays on npm for history; use 0.6.1+.
 
 ## [Unreleased]
+
+### Fixed — round-4 audit: web auth, agent-run ceiling, CLI exit codes, stale key at rest
+
+- **The web server mints bearer auth on every bind, loopback included** (`packages/server/src/index.ts`). Previously only non-loopback binds auto-generated a token, so a default `skt web` served `/v1/agent` (full agent execution with tools, attacker-controlled `prompt`), `/api/sessions` (session IDs + workDir paths) and the license-admin tooling to any local process with no auth. Now an unset token is always replaced with a 64-hex generated one, printed once at startup and exposed as `effectiveToken`; every route except `/health` and the documented public surface requires it.
+- **`/github/*` is bearer-gated on top of the stored GitHub login.** The public allowlist carried all six `/github/*` routes, so after any GitHub login any local process could read/write repo files and open PRs as the user — even on a token-protected server. `/auth/github/*` stays public (the browser OAuth dance cannot present a bearer token, and those endpoints only move OAuth state).
+- **`/health` answers liveness only** — the configured model name no longer leaks from an unauthenticated endpoint.
+- **`/v1/agent` gets a server-side run ceiling** (`TRAYAMBAK_AGENT_TIMEOUT_MS`, default 120s, clamped 5s–10min): a model call that never settles previously held the socket open forever with zero bytes while the server stayed responsive — one curl per socket toward connection exhaustion. On timeout the run is aborted, an error event is written, and the response ends. Client-abort cancellation already existed and is untouched.
+- **`/v1/agent` only accepts a `sessionFile` inside the transcript store.** The Agent persists its transcript to that path (mkdir + write), so an unconstrained value was an arbitrary-path JSON write primitive. Anything resolving outside `~/.trayambak/sessions/…` is now `400`.
+- **`saveConfig` scrubs a stale file key in env mode (#48).** When `TRAYAMBAK_API_KEY` is set, the effective key comes from the environment and any key in `config.json` is stale by definition — yet it was preserved on every save, parking live-looking key material in plaintext at rest while `login status` reported env mode. Saving now drops `apiKey` from the file in that case (an explicit `config set apiKey` under env mode is a file no-op; env still wins). File writes were and remain atomic + 0600.
+- **`worktree list` outside a repo says so and fails (#49).** git's raw `fatal: not a git repository` dump no longer leaks to stderr (all git stdio is piped now); outside a repo the command returns `Worktree error: not a git repository: <cwd>` with exit 1, and an in-repo listing failure throws instead of printing a false `No worktrees found` with exit 0.
+- **`checkpoint` usage errors exit 2 (#50)**, like the rest of the tree. Usage errors across `worktree` (bad input, unknown action) also exit 2 now; git/runtime failures exit 1 — a bare string on stdout with exit 0 never again means something failed.
+- Tests: server suite extended (always-minted token gates every route; health omits the model; `sessionFile` traversal + absolute-path rejection; timeout clamping; `isAllowedSessionFile` unit tests), new `checkpoint.test.ts`, worktree tests updated to the fail-loud contract, config scrub test. `docs/web.md` rewritten for the new auth default.
 
 ### Changed — the terminal tab now says `Trayambak` and animates while working
 

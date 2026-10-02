@@ -51,6 +51,10 @@ export class ConsoleTelemetry implements TelemetrySink {
     }
   }
   flush(): void {
+    // The kill-switch silences EVERY write, including this summary line:
+    // env can flip to 0 after construction, and TRAYAMBAK_TELEMETRY=0 must
+    // never be followed by output from the telemetry sink (#54).
+    if (isTelemetryDisabled()) return
     process.stderr.write(`[telemetry] captured ${this.count} events\n`)
   }
 }

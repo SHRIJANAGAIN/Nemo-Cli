@@ -89,6 +89,20 @@ describe("ConsoleTelemetry", () => {
     expect(written.some((line) => line.includes("captured 2 events"))).toBe(true)
     expect(written.some((line) => line.includes("[telemetry] turn_start"))).toBe(true)
   })
+
+  it("the kill-switch silences flush too, even on an already-live console sink (#54)", () => {
+    // Env can flip to 0 after construction: capture already checks, and now
+    // flush does too — TRAYAMBAK_TELEMETRY=0 must add zero output from here.
+    process.env.TRAYAMBAK_TELEMETRY = "debug"
+    const telemetry = new ConsoleTelemetry()
+    telemetry.capture(eventWithSecret)
+    expect(written).toHaveLength(1) // the pre-flip debug line
+    process.env.TRAYAMBAK_TELEMETRY = "0"
+    telemetry.capture({ type: "turn_start" })
+    telemetry.flush()
+    expect(written).toHaveLength(1) // neither capture nor flush added anything
+    delete process.env.TRAYAMBAK_TELEMETRY
+  })
 })
 
 describe("NullTelemetry / createTelemetry", () => {
