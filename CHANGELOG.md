@@ -5,6 +5,31 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Upgrade path hardened against a hostile registry** (supply-chain audit,
+  #66): `trayambak upgrade` spawns `npm install -g pkg@<version>` with
+  `shell: true` on Windows, and the version came from the npm registry as
+  an unvalidated string — a poisoned `latest` was shell syntax. Version
+  tokens are now `isSafeVersion()`-checked at the origin
+  (`fetchLatestNpmVersion` returns only plain semver: alphanumerics, `.`,
+  `-`, optional prerelease/build — every cmd.exe/sh metacharacter excluded)
+  and user-supplied `--target` is validated before any branch runs a
+  command. Proof: 2 new tests, both red against the old code.
+
+- **Hugging Face downloads: redirects allowlisted, token scoped, content
+  verified** (supply-chain audit, #67): `download` followed any 3xx to any
+  host **and forwarded `HF_TOKEN` to it** (token exfiltration via a hostile
+  302), never checked what it saved (multi-GB model straight into
+  `modelPath`), interpolated repo/file args raw into URLs, looped forever
+  on redirect cycles, and piped a location-less 3xx body into the model
+  file. Now: every hop must be an allowlisted HF host (`huggingface.co`,
+  `hf.co` + subdomains), https-only (loopback http exists solely for the
+  local-server tests — the production allowlist has no loopback name),
+  redirect cap 5, `Authorization` dropped on cross-host hops, LFS
+  `x-linked-etag`/`etag` sha256 verified after download (mismatch → file
+  removed + error), repo ids/file paths validated before entering a URL,
+  partial files cleaned up on failure. Proof: 12 new tests against real
+  local servers, 14/14 red with the old code.
+
 - **State store survives concurrent writers** (new finding, #65): the JSON
   backend (default) kept its store in memory from construction and
   overwrote the whole file on every mutation — a second handle or process

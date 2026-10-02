@@ -58,6 +58,18 @@ export function parseVersion(raw: string): { major: number; minor: number; patch
   return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
 }
 
+/**
+ * The only shape a version may take before it reaches a shell or a package
+ * specifier (#66): `X.Y.Z` with optional `-prerelease`/`+build`, characters
+ * limited to alphanumerics, `.`, and `-`. The charset excludes every cmd.exe
+ * and sh metacharacter (`& | ; < > ^ " % $ \` ( ) ! space`), so a hostile or
+ * corrupted registry response can never become shell syntax — `upgrade.ts`
+ * spawns `npm install …@<version>` with `shell: true` on Windows.
+ */
+export function isSafeVersion(raw: string): boolean {
+  return /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(raw)
+}
+
 /** SKT AI LABS's Installation.getReleaseType port: how `latest` relates to `current`. */
 export function getReleaseType(current: string, latest: string): ReleaseType {
   const a = parseVersion(current)
@@ -165,7 +177,11 @@ export async function fetchLatestNpmVersion(
     const response = await doFetch(url, { signal: AbortSignal.timeout(NPM_REGISTRY_TIMEOUT_MS) })
     if (!response.ok) return undefined
     const body = (await response.json()) as { version?: unknown }
-    return typeof body.version === "string" ? body.version : undefined
+    // Origin validation (#66): nothing but a plain semver token leaves this
+    // function, so every downstream consumer (shell spawns, npm specifiers,
+    // compare logic) starts from a safe value.
+    if (typeof body.version !== "string" || !isSafeVersion(body.version)) return undefined
+    return body.version
   } catch {
     return undefined
   }

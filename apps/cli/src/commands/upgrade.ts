@@ -26,6 +26,7 @@ import {
   fetchLatestNpmVersion,
   findInstallRoot,
   getInstalledVersion,
+  isSafeVersion,
 } from "../../../runtime/src/update/auto-update.js"
 
 export interface UpgradeOptions {
@@ -100,6 +101,14 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
   }
   const current = getInstalledVersion({ startDir: opts.startDir, env }) ?? "unknown"
   const method = detectMethod(root, opts.argvPath ?? process.argv[1] ?? "")
+  const target = opts.target?.replace(/^v/, "")
+
+  // Input validation (#66): a target flows into `git checkout v<target>` and
+  // `npm install …@<target>` (spawned with shell: true on Windows) — accept
+  // plain semver tokens only, before any branch runs a command.
+  if (target !== undefined && !isSafeVersion(target)) {
+    return `Upgrade failed: invalid target version "${opts.target}" (expected X.Y.Z[-prerelease][+build]).`
+  }
 
   if (method === "source" || method === "unknown") {
     return [
@@ -120,9 +129,10 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
       return "Trayambak"
     }
   })()
-  const target = opts.target?.replace(/^v/, "")
 
   if (method === "npm") {
+    // `latest` is either the already-validated `target` or comes back from
+    // fetchLatestNpmVersion, which only returns isSafeVersion tokens (#66).
     const latest = target ?? (await fetchLatestNpmVersion(pkgName))
     if (!latest) return "Upgrade failed: could not reach the npm registry."
     if (latest === current) return `trayambak ${current} is already the latest version.`

@@ -126,6 +126,18 @@ describe("fetchLatestNpmVersion", () => {
       await fetchLatestNpmVersion("x", async () => ({ ok: true, json: async () => ({ nope: 1 }) })),
     ).toBeUndefined()
   })
+
+  it("refuses a version string that is not a plain semver token (#66)", async () => {
+    // The registry value reaches `npm install -g pkg@<version>` (shell: true
+    // on Windows in upgrade.ts) — metacharacters must never come back.
+    expect(await fetchLatestNpmVersion("x", async () => okBody("1.0.0 & calc"))).toBeUndefined()
+    expect(await fetchLatestNpmVersion("x", async () => okBody("1.0.0; rm -rf ~"))).toBeUndefined()
+    expect(await fetchLatestNpmVersion("x", async () => okBody("latest"))).toBeUndefined()
+    expect(await fetchLatestNpmVersion("x", async () => okBody("1.0.0$(id)"))).toBeUndefined()
+    // Well-formed tokens (including prerelease/build metadata) still pass.
+    expect(await fetchLatestNpmVersion("x", async () => okBody("2.0.0-rc.1"))).toBe("2.0.0-rc.1")
+    expect(await fetchLatestNpmVersion("x", async () => okBody("1.4.0+build.5"))).toBe("1.4.0+build.5")
+  })
 })
 
 describe("findInstallRoot / getInstalledVersion", () => {

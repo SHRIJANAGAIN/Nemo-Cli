@@ -47,6 +47,32 @@ describe("upgradeCommand", () => {
     expect(output).toContain("TRAYAMBAK_HOME")
   })
 
+  it("rejects a target version that could inject shell syntax (#66)", async () => {
+    const root = makeRoot()
+    const output = await upgradeCommand({
+      target: "1.0.0 & calc",
+      startDir: root,
+      argvPath: path.join(root, "dist", "index.js"),
+      env: {},
+    })
+    expect(output).toContain("Upgrade failed")
+    expect(output).toContain("invalid target version")
+    expect(output).toContain("1.0.0 & calc")
+  })
+
+  it("accepts a well-formed prerelease target token (#66)", async () => {
+    const root = makeRoot()
+    // Source installs never execute anything — reaching the manual-guidance
+    // branch proves the token passed validation instead of erroring out.
+    const output = await upgradeCommand({
+      target: "1.2.3-rc.1",
+      startDir: root,
+      argvPath: path.join(root, "dist", "index.js"),
+      env: {},
+    })
+    expect(output).toContain("installed from a source copy without git")
+  })
+
   it("does not confuse a git PROJECT directory with the trayambak install root", async () => {
     // The user's own repo having .git must not flip the method to "git" —
     // detection walks from the install root, not the session cwd.
