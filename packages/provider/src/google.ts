@@ -36,7 +36,8 @@ function parseArgs(v: unknown): Record<string, unknown> {
  * Native Google Gemini client (https://generativelanguage.googleapis.com/v1beta).
  * Uses :generateContent (non-streaming) + emits the full text via callbacks
  * once — satisfies the Provider.chat contract without SSE framing.
- * Auth via ?key= API key query param.
+ * Auth via the x-goog-api-key header — never the URL: query strings land in
+ * proxy/server logs and error echoes (#70).
  */
 export class GoogleProvider implements Provider {
   readonly id = "google"
@@ -122,7 +123,6 @@ export class GoogleProvider implements Provider {
     const data = JSON.stringify(payload)
     const key = this.options.apiKey ?? ""
     const modelPath = `/models/${encodeURIComponent(this.options.model)}:generateContent`
-    const query = key ? `?key=${encodeURIComponent(key)}` : ""
     return new Promise<AssistantMessage>((resolve, reject) => {
       let settled = false
       const settle = (fn: () => void): void => {
@@ -136,11 +136,12 @@ export class GoogleProvider implements Provider {
         method: "POST",
         hostname: base.hostname,
         port: base.port || (isHttps ? 443 : 80),
-        path: (base.pathname && base.pathname !== "/" ? base.pathname.replace(/\/$/, "") : "") + modelPath + query,
+        path: (base.pathname && base.pathname !== "/" ? base.pathname.replace(/\/$/, "") : "") + modelPath,
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(data),
           Connection: "keep-alive",
+          ...(key ? { "x-goog-api-key": key } : {}),
         },
         timeout: this.options.timeoutMs ?? 600_000,
         agent: isHttps ? httpsAgent : httpAgent,

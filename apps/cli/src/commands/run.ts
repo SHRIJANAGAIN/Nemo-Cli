@@ -57,7 +57,10 @@ export function listModelNames(baseUrl: string, apiKey: string, provider?: strin
       // Ollama-native list (VS Code ollamaProvider: GET {url}/api/tags).
       reqPath = "/api/tags"
     } else if (prov === "google") {
-      reqPath = apiKey ? `/models?key=${encodeURIComponent(apiKey)}` : "/models"
+      // Key rides the x-goog-api-key header, never the URL (#70): query
+      // strings land in proxy/server logs and error echoes.
+      reqPath = "/models"
+      if (apiKey) headers["x-goog-api-key"] = apiKey
     } else if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`
     }

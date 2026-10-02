@@ -5,6 +5,16 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Google API key no longer travels in URLs** (supply-chain audit, #70):
+  four call sites sent `?key=<KEY>` in the request target — `listModelNames`
+  in `run.ts`, the catalog's `fetchModelsDetailed`/`verifyProviderKey`, and
+  the main `GoogleProvider` chat path. Query strings end up in proxy and
+  server access logs, error/timeout echoes, and redirect traces; Google
+  accepts the `x-goog-api-key` header on every endpoint. All four now send
+  the header with a clean path (empty key → no header), and
+  `docs/providers.md` is updated. Proof: 4 new tests against local HTTP
+  servers capturing path + header, all red against the old code.
+
 - **Thread store: traversal-proof ids, atomic writes, verified checksums**
   (supply-chain audit, #68/#69): `session_store` (exported from the core
   index) built entry paths as `join(storeDir, ${id}.json)` with zero id

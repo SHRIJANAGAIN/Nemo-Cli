@@ -427,7 +427,8 @@ export async function fetchModelsDetailed(
     if (id === "google") {
       const base = (baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "")
       if (!apiKey) return fail("auth")
-      const json = (await getJson(`${base}/models?key=${encodeURIComponent(apiKey)}`, {})) as {
+      // Key rides the x-goog-api-key header, never the URL (#70).
+      const json = (await getJson(`${base}/models`, { "x-goog-api-key": apiKey })) as {
         models?: Array<{ name?: string }>
       }
       const ids = (json.models ?? []).map((m) => (m.name ?? "").replace(/^models\//, "")).filter((v) => v.length > 0)
@@ -549,9 +550,9 @@ export async function verifyProviderKey(
     if (id === "google") {
       const base = (baseUrl || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "")
       const r = await postRaw(
-        `${base}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        `${base}/models/${encodeURIComponent(model)}:generateContent`,
         "POST",
-        { "Content-Type": "application/json" },
+        { "Content-Type": "application/json", ...(apiKey ? { "x-goog-api-key": apiKey } : {}) },
         JSON.stringify({
           contents: [{ role: "user", parts: [{ text: "hi" }] }],
           generationConfig: { maxOutputTokens: 1 },

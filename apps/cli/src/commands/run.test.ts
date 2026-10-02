@@ -12,7 +12,9 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { runCommand, shouldRunHeadless } from "./run.js"
+import * as http from "http"
+import type { AddressInfo } from "net"
+import { listModelNames, runCommand, shouldRunHeadless } from "./run.js"
 
 const execCtl = vi.hoisted(() => ({
   calls: [] as Array<{ prompt: string; opts: unknown }>,
@@ -55,5 +57,29 @@ describe("runCommand headless fallback", () => {
   it("honours an explicit useInk=false", async () => {
     await runCommand({ config: {} as never, prompt: "hi", useInk: false })
     expect(execCtl.calls).toHaveLength(1)
+  })
+})
+
+describe("listModelNames google auth (#70)", () => {
+  it("sends the key as x-goog-api-key, never in the query string", async () => {
+    let seenUrl = ""
+    let seenKey: string | string[] | undefined
+    const server = http.createServer((req, res) => {
+      seenUrl = req.url ?? ""
+      seenKey = req.headers["x-goog-api-key"]
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }] }))
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const names = await listModelNames(`http://127.0.0.1:${port}/v1beta`, "sekrit", "google")
+      expect(names).toContain("gemini-2.5-flash")
+      expect(seenKey).toBe("sekrit")
+      expect(seenUrl).toBe("/v1beta/models")
+      expect(seenUrl).not.toContain("key=")
+    } finally {
+      server.close()
+    }
   })
 })

@@ -7,30 +7,30 @@ per-backend defaults come from `PROVIDER_CATALOG` in
 
 ## The 22 backends
 
-| Provider id   | Label             | Default base URL                                            | Default model                                | Key          |
-| ------------- | ----------------- | ----------------------------------------------------------- | -------------------------------------------- | ------------ |
-| `nvidia`      | NVIDIA            | `https://integrate.api.nvidia.com`                          | `nvidia/nemotron-3-super-120b-a12b`          | required     |
-| `nvidia-nim`  | NVIDIA NIM        | `https://integrate.api.nvidia.com`                          | `nvidia/nemotron-3-super-120b-a12b`          | required     |
-| `openai`      | OpenAI            | `https://api.openai.com`                                    | `gpt-4o`                                     | required     |
-| `anthropic`   | Anthropic         | `https://api.anthropic.com`                                 | `claude-3-5-sonnet-latest`                   | required     |
-| `google`      | Google            | `https://generativelanguage.googleapis.com/v1beta`          | `gemini-2.5-flash`                           | required     |
-| `xai`         | xAI Grok          | `https://api.x.ai`                                          | `grok-4`                                     | required     |
-| `huggingface` | Hugging Face      | `https://router.huggingface.co/v1`                          | `meta-llama/Llama-3.3-70B-Instruct`          | required     |
-| `ollama`      | Ollama            | `http://localhost:11434`                                    | `llama3.1`                                   | none (local) |
-| `custom`      | Custom endpoint   | `http://localhost:8080`                                     | _(none — you must set one)_                  | optional     |
-| `llamacpp`    | llama.cpp (local) | _no per-provider default — use your `trayambak serve` port_ | _no per-provider default — set your GGUF id_ | none (local) |
-| `groq`        | Groq              | `https://api.groq.com/openai/v1`                            | `llama-3.3-70b-versatile`                    | required     |
-| `mistral`     | Mistral           | `https://api.mistral.ai/v1`                                 | `mistral-large-latest`                       | required     |
-| `cerebras`    | Cerebras          | `https://api.cerebras.ai/v1`                                | `llama3.1-70b`                               | required     |
-| `together`    | Together AI       | `https://api.together.xyz/v1`                               | `meta-llama/Llama-3.3-70B-Instruct-Turbo`    | required     |
-| `deepinfra`   | DeepInfra         | `https://api.deepinfra.com/v1/openai`                       | `meta-llama/Llama-3.3-70B-Instruct`          | required     |
-| `cohere`      | Cohere            | `https://api.cohere.com/compatibility/v1`                   | `command-r-plus`                             | required     |
-| `perplexity`  | Perplexity        | `https://api.perplexity.ai`                                 | `sonar-pro`                                  | required     |
-| `openrouter`  | OpenRouter        | `https://openrouter.ai/api/v1`                              | `anthropic/claude-sonnet-4`                  | required     |
-| `fireworks`   | Fireworks AI      | `https://api.fireworks.ai/inference/v1`                     | `accounts/fireworks/models/llama-v3p3-70b-instruct` | required |
-| `venice`      | Venice AI         | `https://api.venice.ai/api/v1`                              | `llama-3.3-70b`                              | required     |
-| `azure`       | Azure OpenAI      | `https://YOUR-RESOURCE.openai.azure.com/openai/deployments` | `gpt-4o`                                     | required     |
-| `skt-gateway` | SKT Gateway       | `https://gateway.skt-ai-labs.example/v1`                    | `auto`                                       | required     |
+| Provider id   | Label             | Default base URL                                            | Default model                                       | Key          |
+| ------------- | ----------------- | ----------------------------------------------------------- | --------------------------------------------------- | ------------ |
+| `nvidia`      | NVIDIA            | `https://integrate.api.nvidia.com`                          | `nvidia/nemotron-3-super-120b-a12b`                 | required     |
+| `nvidia-nim`  | NVIDIA NIM        | `https://integrate.api.nvidia.com`                          | `nvidia/nemotron-3-super-120b-a12b`                 | required     |
+| `openai`      | OpenAI            | `https://api.openai.com`                                    | `gpt-4o`                                            | required     |
+| `anthropic`   | Anthropic         | `https://api.anthropic.com`                                 | `claude-3-5-sonnet-latest`                          | required     |
+| `google`      | Google            | `https://generativelanguage.googleapis.com/v1beta`          | `gemini-2.5-flash`                                  | required     |
+| `xai`         | xAI Grok          | `https://api.x.ai`                                          | `grok-4`                                            | required     |
+| `huggingface` | Hugging Face      | `https://router.huggingface.co/v1`                          | `meta-llama/Llama-3.3-70B-Instruct`                 | required     |
+| `ollama`      | Ollama            | `http://localhost:11434`                                    | `llama3.1`                                          | none (local) |
+| `custom`      | Custom endpoint   | `http://localhost:8080`                                     | _(none — you must set one)_                         | optional     |
+| `llamacpp`    | llama.cpp (local) | _no per-provider default — use your `trayambak serve` port_ | _no per-provider default — set your GGUF id_        | none (local) |
+| `groq`        | Groq              | `https://api.groq.com/openai/v1`                            | `llama-3.3-70b-versatile`                           | required     |
+| `mistral`     | Mistral           | `https://api.mistral.ai/v1`                                 | `mistral-large-latest`                              | required     |
+| `cerebras`    | Cerebras          | `https://api.cerebras.ai/v1`                                | `llama3.1-70b`                                      | required     |
+| `together`    | Together AI       | `https://api.together.xyz/v1`                               | `meta-llama/Llama-3.3-70B-Instruct-Turbo`           | required     |
+| `deepinfra`   | DeepInfra         | `https://api.deepinfra.com/v1/openai`                       | `meta-llama/Llama-3.3-70B-Instruct`                 | required     |
+| `cohere`      | Cohere            | `https://api.cohere.com/compatibility/v1`                   | `command-r-plus`                                    | required     |
+| `perplexity`  | Perplexity        | `https://api.perplexity.ai`                                 | `sonar-pro`                                         | required     |
+| `openrouter`  | OpenRouter        | `https://openrouter.ai/api/v1`                              | `anthropic/claude-sonnet-4`                         | required     |
+| `fireworks`   | Fireworks AI      | `https://api.fireworks.ai/inference/v1`                     | `accounts/fireworks/models/llama-v3p3-70b-instruct` | required     |
+| `venice`      | Venice AI         | `https://api.venice.ai/api/v1`                              | `llama-3.3-70b`                                     | required     |
+| `azure`       | Azure OpenAI      | `https://YOUR-RESOURCE.openai.azure.com/openai/deployments` | `gpt-4o`                                            | required     |
+| `skt-gateway` | SKT Gateway       | `https://gateway.skt-ai-labs.example/v1`                    | `auto`                                              | required     |
 
 Notes verified in code:
 
@@ -124,12 +124,12 @@ with `max_tokens: 1`. Failures return a human hint, e.g.:
 
 `listModelNames()` (`apps/cli/src/commands/run.ts`) adapts to each backend:
 
-| Provider                                                                 | Request                                                                 |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| OpenAI-compatible (nvidia, nvidia-nim, openai, xai, huggingface, custom) | `GET <base>/v1/models` + `Authorization: Bearer <key>`                  |
-| `anthropic`                                                              | `GET <base>/v1/models` + `x-api-key` + `anthropic-version: 2023-06-01`  |
-| `ollama`                                                                 | `GET <base>/api/tags` (Ollama-native list)                              |
-| `google`                                                                 | `GET <base>/models?key=<key>` (the base URL already contains `/v1beta`) |
+| Provider                                                                 | Request                                                                                                                |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| OpenAI-compatible (nvidia, nvidia-nim, openai, xai, huggingface, custom) | `GET <base>/v1/models` + `Authorization: Bearer <key>`                                                                 |
+| `anthropic`                                                              | `GET <base>/v1/models` + `x-api-key` + `anthropic-version: 2023-06-01`                                                 |
+| `ollama`                                                                 | `GET <base>/api/tags` (Ollama-native list)                                                                             |
+| `google`                                                                 | `GET <base>/models` + `x-goog-api-key` (the base URL already contains `/v1beta`; the key is never a query param — #70) |
 
 Fetches time out after 10s and fall back to the static list.
 

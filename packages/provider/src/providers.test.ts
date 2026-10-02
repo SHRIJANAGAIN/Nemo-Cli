@@ -297,6 +297,75 @@ describe("anthropic/google providers", () => {
     }
   }, 15000)
 
+  it("google authenticates via the x-goog-api-key header, never the URL (#70)", async () => {
+    let seenUrl = ""
+    let seenKey: string | string[] | undefined
+    const server = http.createServer((req, res) => {
+      seenUrl = req.url ?? ""
+      seenKey = req.headers["x-goog-api-key"]
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] }))
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const p = createGoogleProvider({
+        baseUrl: `http://127.0.0.1:${port}`,
+        model: "gemini-2.5-flash",
+        apiKey: "sekrit",
+      })
+      await p.chat({ messages: [{ role: "user", content: "hi" }] })
+      expect(seenKey).toBe("sekrit")
+      expect(seenUrl).not.toContain("key=")
+      expect(seenUrl).toContain(":generateContent")
+    } finally {
+      server.close()
+    }
+  }, 15000)
+
+  it("fetchModelsDetailed sends the Google key as a header, not a query param (#70)", async () => {
+    let seenUrl = ""
+    let seenKey: string | string[] | undefined
+    const server = http.createServer((req, res) => {
+      seenUrl = req.url ?? ""
+      seenKey = req.headers["x-goog-api-key"]
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }, { name: "models/gemini-2.0-flash" }] }))
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const status = await fetchModelsDetailed("google", `http://127.0.0.1:${port}/v1beta`, "sekrit")
+      expect(status.source).toBe("live")
+      expect(status.models).toContain("gemini-2.5-flash")
+      expect(seenKey).toBe("sekrit")
+      expect(seenUrl).not.toContain("key=")
+    } finally {
+      server.close()
+    }
+  }, 15000)
+
+  it("verifyProviderKey sends the Google key as a header, not a query param (#70)", async () => {
+    let seenUrl = ""
+    let seenKey: string | string[] | undefined
+    const server = http.createServer((req, res) => {
+      seenUrl = req.url ?? ""
+      seenKey = req.headers["x-goog-api-key"]
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }))
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const result = await verifyProviderKey("google", `http://127.0.0.1:${port}/v1beta`, "sekrit", "gemini-2.5-flash")
+      expect(result.ok).toBe(true)
+      expect(seenKey).toBe("sekrit")
+      expect(seenUrl).not.toContain("key=")
+    } finally {
+      server.close()
+    }
+  }, 15000)
+
   it("catalog covers all 21 backends with fetch fallback", async () => {
     expect(PROVIDER_CATALOG.length).toBe(21)
     for (const id of [
