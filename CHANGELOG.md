@@ -5,6 +5,20 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **MCP servers actually connect in headless, gated** (round-5 audit, #62):
+  only `Agent.create()` loaded config-driven tools — ACP, exec, server, and
+  SDK all built agents with the bare constructor, so configured MCP servers
+  were never spawned (the env-dump probe stayed silent). ACP now builds
+  through `Agent.create`, and the shared `createMcpTools` chokepoint gains
+  an exec-policy gate: default-deny commands (`sudo`, `rm -rf`, mkfs,
+  pipe-to-shell, …) never spawn and surface as `mcp__<server>__error` with
+  the verdict (a previously-connected server is evicted and its child
+  closed); `Ask` is config-trusted standing approval — the hooks model —
+  so ordinary servers still connect. The client-side spawn env is filtered
+  too (`mcpChildEnv` = `getSafeEnv` + `spec.env`): provider API keys no
+  longer reach configured servers. `exec.ts`'s one-line `Agent.create`
+  switch queues behind the in-flight batch.
+
 - **Budget enforcement closes the denial-loop hole** (round-5 audit, #64):
   every assistant response now charges BOTH sides of the estimate against
   the rollout budget — previously only output tokens were counted
@@ -52,6 +66,10 @@ All notable changes to trayambak are documented here. The format is based on kee
   generation never yanks a parked window back to live — no arrow-key
   middleman, no mode to enter. PageUp/PageDown still page for terminals
   whose mouse reports never arrive.
+- **Parked-tail strip**: a scrolled window now pins the live end
+  (`─ ● live ─` + bottom-anchored tail rows) under the history slice, so
+  one wheel notch never makes the response vanish — the whole window
+  scrolls, nothing hides.
 
 - **Chat render guards**: composer placeholder pinned to Trayambak's own
   ("Type a message…", stale Codex line can never return), chooser arrows

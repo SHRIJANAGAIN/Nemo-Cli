@@ -11,6 +11,7 @@ import * as readline from "readline"
 import * as url from "url"
 import { McpAuthError, authorizeMcpServer, getValidAccessToken, type McpOAuthConfig } from "./oauth.js"
 import { resolveMcpCommand } from "./spawn-resolve.js"
+import { getSafeEnv } from "../../../packages/core/src/env_filter.js"
 
 /** Transport spec for one MCP server: either stdio (`command`+`args`) or HTTP (`url`). */
 export interface McpServerSpec {
@@ -24,6 +25,16 @@ export interface McpServerSpec {
   /** OAuth 2.0 + PKCE for remote (`url`) servers. `false` disables it, an object
    *  tunes clientId/clientSecret/scope/callbackPort/redirectUri, `undefined` = on. */
   oauth?: boolean | McpOAuthConfig
+}
+
+/**
+ * Environment for a spawned stdio server (#62): secret-bearing process env
+ * vars (provider API keys et al.) never reach the child — same filtering as
+ * every other spawn in the repo (hook-exec, mcp-runner, MCP-server bash) —
+ * while `spec.env` (config-declared) still wins for the server's own needs.
+ */
+export function mcpChildEnv(spec: Pick<McpServerSpec, "env">): Record<string, string> {
+  return { ...getSafeEnv(process.env), ...(spec.env ?? {}) }
 }
 
 export interface McpToolInfo {
@@ -446,7 +457,7 @@ export class McpConnection {
     this.stderrTail = []
     this.child = spawn(cmd, args, {
       cwd: spec.cwd,
-      env: { ...process.env, ...(spec.env ?? {}) },
+      env: mcpChildEnv(spec),
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     })

@@ -9,6 +9,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { createMcpConnection } from "../../../../../packages/mcp/src/index.js"
+import { ExecDecision } from "../../../../../packages/execpolicy/src/policy.js"
 import { createMcpTools, resetMcpRegistry, slugify, toToolProperty } from "./mcp.js"
 import {
   createMcpInstallTool,
@@ -115,6 +116,43 @@ describe("createMcpTools exposure fixes", () => {
       const q = alpha?.definition.parameters.properties.q
       expect(q?.type).toBe("string")
       expect(q?.enum).toEqual(["a", "b"])
+      resetMcpRegistry()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("skips a server whose declared command the exec policy denies (#62)", async () => {
+    // Default policy: `sudo *` = Deny. No spawn is attempted — the server
+    // surfaces as its error tool carrying the policy verdict instead.
+    const tools = await createMcpTools({ evil: { command: ["sudo", "rm", "-rf", "/"] } }, 0)
+    expect(tools).toHaveLength(1)
+    expect(tools[0]?.definition.name).toBe("mcp__evil__error")
+    expect(tools[0]?.definition.description).toContain("exec policy denies")
+    resetMcpRegistry()
+  })
+
+  it("treats policy Ask as config-trusted standing approval — the server still connects (#62)", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const tools = await createMcpTools({ fake: { command: [process.execPath, script] } }, 0, () => ExecDecision.Ask)
+      expect(tools.map((t) => t.definition.name)).toContain("mcp__fake__alpha")
+      resetMcpRegistry()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("a deny verdict evicts a previously-connected server (#62)", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const first = await createMcpTools({ flip: { command: [process.execPath, script] } }, 0, () => ExecDecision.Allow)
+      expect(first.map((t) => t.definition.name)).toContain("mcp__flip__alpha")
+      // Same server, now denied (e.g. a stricter policy reload): the stale
+      // tools must disappear and the child must be closed, not linger.
+      const second = await createMcpTools({ flip: { command: [process.execPath, script] } }, 0, () => ExecDecision.Deny)
+      expect(second).toHaveLength(1)
+      expect(second[0]?.definition.name).toBe("mcp__flip__error")
       resetMcpRegistry()
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })

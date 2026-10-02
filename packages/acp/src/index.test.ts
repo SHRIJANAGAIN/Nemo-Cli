@@ -29,6 +29,7 @@ const h = vi.hoisted(() => {
   const state = {
     loadConfigCalls: [] as Array<Record<string, unknown>>,
     runs: [] as Array<{ prompt: string; model: string | undefined; emit: (event: unknown) => void }>,
+    agentCreates: [] as Array<{ config: { model?: string } }>,
     runImpl: defaultRun,
     transcripts: [] as Array<{ id: string; state: Record<string, unknown> }>,
     createCalls: [] as string[],
@@ -37,6 +38,7 @@ const h = vi.hoisted(() => {
     reset(): void {
       state.loadConfigCalls.length = 0
       state.runs.length = 0
+      state.agentCreates.length = 0
       state.transcripts.length = 0
       state.createCalls.length = 0
       state.transcriptSeq = 0
@@ -52,7 +54,14 @@ vi.mock("../../../apps/runtime/src/index.js", () => ({
     h.loadConfigCalls.push(overrides)
     return { model: "default-model", ...overrides }
   },
-  Agent: class {
+  Agent: class MockAgent {
+    // Agent.create is the MCP/skills-loading path: production must call it,
+    // not the bare constructor — the constructor skipped buildOptionalTools
+    // entirely, so ACP never connected configured MCP servers (#62).
+    static async create(options: { config: { model?: string } }): Promise<MockAgent> {
+      h.agentCreates.push(options)
+      return new MockAgent(options)
+    }
     private readonly config: { model?: string }
     constructor(options: { config: { model?: string } }) {
       this.config = options.config
@@ -280,6 +289,9 @@ describe("ACP server prompt and cancel", () => {
     })
 
     expect(h.loadConfigCalls).toContainEqual({ model: "m1" })
+    // The prompt path must build the agent through Agent.create — the
+    // constructor never loads config-driven MCP/skill tools (#62).
+    expect(h.agentCreates).toHaveLength(1)
     expect(h.runs).toHaveLength(1)
     expect(h.runs[0].prompt).toBe("hello")
     expect(h.runs[0].model).toBe("m1")

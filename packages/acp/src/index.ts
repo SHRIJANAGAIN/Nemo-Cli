@@ -60,7 +60,10 @@ async function handlePrompt(id: number | string | undefined, params: Record<stri
   const model = requested || existing?.model || chosenModel
   sessions.set(sessionId, existing ?? { id: sessionId })
   const config = loadConfig(model ? { model } : {})
-  const agent = new Agent({ config })
+  // Agent.create (not the constructor) loads config-driven tools — MCP
+  // servers + skills — so an ACP session actually connects what the config
+  // declares; the constructor path skipped buildOptionalTools entirely (#62).
+  const agent = await Agent.create({ config })
   try {
     await agent.run(prompt, (event) => {
       if (cancelled.has(sessionId)) return

@@ -14,6 +14,7 @@ import {
   McpError,
 } from "../../../../../packages/mcp/src/index.js"
 import type { ToolDefinition, ToolParameterProperty } from "../../../../../packages/protocol/src/index.js"
+import { evaluatePolicy, ExecDecision } from "../../../../../packages/execpolicy/src/policy.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
 
 export interface McpRegistryEntry {
@@ -31,13 +32,32 @@ const registry = new Map<string, McpRegistryEntry>()
  * Build tools exposed by configured MCP (Model Context Protocol) servers.
  * Each remote tool is surfaced as `mcp__<server>__<tool>` so the agent can use
  * it through the normal tool-calling flow.
+ *
+ * Every stdio server command passes the exec-policy gate first (#62): the
+ * default deny rules (sudo, rm -rf, mkfs, pipe-to-shell, …) block the spawn
+ * and surface as `mcp__<server>__error` instead of running it. `Ask` is
+ * treated as config-trusted standing approval — the same model as hook
+ * commands (no approver exists at tool-build time, and skipping every
+ * server the default policy doesn't explicitly name would deaden MCP
+ * entirely); users can still add explicit deny rules to refuse a server.
+ * `decide` is injectable for tests; production uses the default policy.
  */
 export async function createMcpTools(
   mcpServers: Record<string, McpServerSpec> = {},
   cacheTtlMs?: number,
+  decide: (command: string) => ExecDecision = evaluatePolicy,
 ): Promise<Tool[]> {
   const out: Tool[] = []
   for (const [serverName, spec] of Object.entries(mcpServers)) {
+    const cmdLine = (spec.command ?? []).join(" ")
+    if (cmdLine.length > 0 && decide(cmdLine) === ExecDecision.Deny) {
+      // Fail closed even for a previously-connected server: close the stale
+      // connection and drop it from the registry, or the old tools linger.
+      registry.get(serverName)?.conn?.close()
+      registry.delete(serverName)
+      out.push(makeMcpErrorTool(serverName, `exec policy denies: ${cmdLine}`))
+      continue
+    }
     let entry = registry.get(serverName)
     // Recreate the connection when the spec changed (URL/headers/env edits
     // used to require a full restart — the old entry silently survived).
