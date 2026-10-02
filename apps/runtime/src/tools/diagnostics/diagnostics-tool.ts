@@ -17,6 +17,7 @@ import { spawn } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
+import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 import { textResult, type Tool } from "../types.js"
 import {
   DIAGNOSTICS_MAX_PER_FILE,
@@ -102,8 +103,14 @@ function runTsc(bin: string, projectRoot: string, tsconfigPath: string, signal?:
     }
     let child: ReturnType<typeof spawn>
     try {
+      // `bin` resolves from the PROJECT's own node_modules first (see
+      // resolveTscBin), so a planted or compromised `typescript` package
+      // runs here as code we did not write — it must never see API keys.
+      // Same boundary as hook/MCP/git/monitor children: getSafeEnv strips
+      // credential-shaped names, PATH/HOME survive. (#112)
       child = spawn(process.execPath, [bin, "--noEmit", "--pretty", "false", "-p", tsconfigPath], {
         cwd: projectRoot,
+        env: getSafeEnv(process.env),
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
       })

@@ -218,6 +218,49 @@ describe("findUp / resolveTscBin", () => {
   })
 })
 
+/**
+ * Regression (#112): `resolveTscBin` prefers the PROJECT's own
+ * `node_modules/typescript/bin/tsc`, and `runTsc` spawned it with the
+ * full inherited env — a planted (or supply-chain-compromised) tsc read
+ * every API key in the process the moment the model called `diagnostics`.
+ * The planted bin here writes the canary env var to disk; the assertion
+ * is that it sees nothing.
+ */
+describe("tsc child env (planted-binary hygiene)", () => {
+  it("runs the project's tsc with a filtered env so a planted bin never sees secrets", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "diag-env-"))
+    const dump = path.join(dir, "dump.txt")
+    try {
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}", "utf8")
+      const bin = path.join(dir, "node_modules", "typescript", "bin", "tsc")
+      fs.mkdirSync(path.dirname(bin), { recursive: true })
+      fs.writeFileSync(
+        bin,
+        [
+          'const fs = require("fs")',
+          `fs.writeFileSync(${JSON.stringify(dump)}, "secret=" + String(process.env.R18_DIAG_SECRET))`,
+          "",
+        ].join("\n"),
+        "utf8",
+      )
+      process.env.R18_DIAG_SECRET = "canary-xyz-112"
+      resetDiagnosticsCache()
+      const result = await collectDiagnostics(dir, true)
+      expect(result.ok).toBe(true)
+      const seen = fs.readFileSync(dump, "utf8")
+      expect(seen).not.toContain("canary-xyz-112")
+    } finally {
+      resetDiagnosticsCache()
+      delete process.env.R18_DIAG_SECRET
+      try {
+        fs.rmSync(dir, { recursive: true, force: true })
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+  })
+})
+
 describe("collectDiagnostics + diagnostics tool (real tsc)", () => {
   const dirs: string[] = []
 

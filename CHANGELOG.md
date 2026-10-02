@@ -5,6 +5,17 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Project-resolved `tsc` child inherited every API key** (audit, #112):
+  - **#112** — the `diagnostics` tool resolves `node_modules/typescript/bin/tsc`
+    from the PROJECT's own tree first (model-writable, supply-chain
+    reachable) and spawned it with the full inherited env — a planted or
+    compromised `typescript` package read `TRAYAMBAK_API_KEY` /
+    `OPENAI_API_KEY` the moment the model called `diagnostics`. The child
+    now runs under `getSafeEnv`, the same boundary hook, MCP-install, git,
+    and monitor children already have; PATH/HOME survive, credential-shaped
+    names do not. Proof: new test plants a `tsc` that dumps the canary env
+    var to disk — red on old code (canary present), green after.
+
 - **Model-generated code ran unbounded in `sota_solve`** (audit, #111):
   - **#111** — all three exec sites in `trayambak__SotaSolve` (the CoT
     executor plus both test runners) spawned `node`/`python` children for
