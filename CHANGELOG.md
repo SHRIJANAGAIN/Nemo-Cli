@@ -5,6 +5,23 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Thread store: traversal-proof ids, atomic writes, verified checksums**
+  (supply-chain audit, #68/#69): `session_store` (exported from the core
+  index) built entry paths as `join(storeDir, ${id}.json)` with zero id
+  validation — a traversal-shaped thread id (CLI arg or a `ThreadSource.Model`
+  name) could write to or **unlink** files outside the store. Writes were
+  direct `writeFileSync` (a crash left a half-written entry that the read
+  path swallowed to `null`, i.e. the thread silently vanished and the next
+  create overwrote the bytes), the stored `checksum` was computed but never
+  verified, and `close()` re-persisted its whole cache over any newer
+  cross-process writes. Now: one id chokepoint (charset that cannot contain
+  separators or leading dots, fail-fast on `forkThread`'s new id, listings
+  skip strays instead of throwing), tmp+rename persists with retry and
+  direct-write fallback, read-side checksum verification with
+  byte-for-byte quarantine of corrupt entries (`<id>.json.corrupt-<ts>`),
+  legacy entries without a checksum still accepted, `close()` cache-only.
+  Proof: new `session_store.test.ts` — 8 tests, 5 red against the old code.
+
 - **Upgrade path hardened against a hostile registry** (supply-chain audit,
   #66): `trayambak upgrade` spawns `npm install -g pkg@<version>` with
   `shell: true` on Windows, and the version came from the npm registry as

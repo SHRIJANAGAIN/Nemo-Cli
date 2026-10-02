@@ -5,11 +5,39 @@
  *
  * Mirrors codex-thread-store in Rust (codex_thread_store crate).
  * Provides full lifecycle management of conversation threads.
+ *
+ * Integrity rules (#68, #69):
+ *   - Thread ids are validated at the single path chokepoint: an id can
+ *     never contain a path separator or start with a dot, so `join(storeDir,
+ *     id + ".json")` stays inside the store — no caller (CLI arg, model-
+ *     generated name) can read, write, or unlink outside it. Directory
+ *     listings only surface ids that pass the same rule, so a stray file
+ *     can never break listing.
+ *   - Entries are written via tmp + rename (crash can't leave a half JSON
+ *     behind; the direct-write fallback keeps the last-resort behaviour of
+ *     the old code). On read the stored messages checksum is verified —
+ *     a mismatch or unparseable file is quarantined as `<id>.json.corrupt-
+ *     <ts>` with its bytes intact instead of silently vanishing (and being
+ *     overwritten by the next create with the same id).
+ *   - `close()` only drops the cache: every mutation already persisted, and
+ *     an exit-time rewrite from a stale cache would clobber rows another
+ *     process wrote since.
+ *   - Single writer per thread by design (one session owns its thread file,
+ *     as in the Rust crate); whole-file last-writer-wins across processes
+ *     is expected, not a race to solve here.
  */
 
 import { join, dirname } from "path"
 import { homedir } from "os"
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "fs"
+
+/**
+ * The only shape a thread id may take before it enters a path (#68):
+ * leading alphanumerics, then alphanumerics / `.` / `_` / `-`. No `/`, no
+ * `\`, no leading dot — traversal (`../../x`), separators, and dotfiles are
+ * all unreachable, on every platform, at the one chokepoint below.
+ */
+const SAFE_THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 /** Thread status states. */
 export enum ThreadStatus {
@@ -220,6 +248,9 @@ export class ThreadStore {
    * Fork a thread into a new thread.
    */
   forkThread(id: string, newId: string, model?: string): StoredThread | null {
+    // Reject a traversal-shaped target up front (#68) — validating only at
+    // persist time would let a missing source id hide the bad newId.
+    this.assertSafeThreadId(newId)
     const thread = this.readThread(id)
     if (!thread) return null
 
@@ -324,12 +355,11 @@ export class ThreadStore {
   }
 
   /**
-   * Close the store and persist all cached threads.
+   * Close the store: drop the cache without rewriting it. Every mutation
+   * already persisted at call time — re-persisting here would clobber
+   * threads another process updated since we cached them (#69).
    */
   close(): void {
-    for (const thread of this.threadCache.values()) {
-      this.persistThread(thread)
-    }
     this.threadCache.clear()
   }
 
@@ -350,17 +380,63 @@ export class ThreadStore {
 
   // --- Internal methods ---
 
+  private assertSafeThreadId(id: string): void {
+    if (!SAFE_THREAD_ID.test(id)) {
+      throw new Error(
+        `Invalid thread id "${id}" — ids may contain only letters, digits, ".", "_", "-" and must start with a letter or digit.`,
+      )
+    }
+  }
+
   private getEntryPath(id: string): string {
+    this.assertSafeThreadId(id)
     return join(this.storeDir, `${id}.json`)
   }
 
   private readEntry(id: string): ThreadStoreEntry | null {
     const path = this.getEntryPath(id)
     if (!existsSync(path)) return null
+    let raw: string
     try {
-      return JSON.parse(readFileSync(path, "utf8")) as ThreadStoreEntry
+      raw = readFileSync(path, "utf8")
     } catch {
       return null
+    }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      this.quarantineCorrupt(path)
+      return null
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      this.quarantineCorrupt(path)
+      return null
+    }
+    const entry = parsed as ThreadStoreEntry
+    if (!entry.metadata || typeof entry.metadata !== "object" || !Array.isArray(entry.messages)) {
+      this.quarantineCorrupt(path)
+      return null
+    }
+    // The stored checksum proves the messages survived intact (#69): verify
+    // when present. Entries without one (legacy) keep parse-and-trust — a
+    // stricter rule would quarantine every pre-checksum thread on upgrade.
+    if (typeof entry.checksum === "string" && entry.checksum.startsWith("checksum_")) {
+      if (entry.checksum !== this.computeChecksum(entry.messages)) {
+        this.quarantineCorrupt(path)
+        return null
+      }
+    }
+    return entry
+  }
+
+  /** Move an unreadable entry aside with its bytes intact (#69) — the
+   *  next `createThread` with the same id must never overwrite evidence. */
+  private quarantineCorrupt(path: string): void {
+    try {
+      renameSync(path, `${path}.corrupt-${Date.now()}`)
+    } catch {
+      /* best-effort: an OS refusal leaves the corrupt file in place */
     }
   }
 
@@ -369,14 +445,39 @@ export class ThreadStore {
     const entry: ThreadStoreEntry = {
       metadata: thread.metadata,
       messages: thread.messages,
-      checksum: this.computeChecksum(thread),
+      checksum: this.computeChecksum(thread.messages),
     }
     mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, JSON.stringify(entry), { encoding: "utf8" })
+    const json = JSON.stringify(entry)
+    // tmp + rename: a crash mid-write can never leave a half-written entry
+    // for readEntry to quarantine (#69). Retry before the direct-write
+    // fallback (Windows EPERM while the destination is held open).
+    const tmp = `${path}.tmp-${process.pid}`
+    writeFileSync(tmp, json, { encoding: "utf8" })
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        renameSync(tmp, path)
+        return
+      } catch {
+        /* retry, then fall through */
+      }
+    }
+    try {
+      writeFileSync(path, json, { encoding: "utf8" })
+    } finally {
+      try {
+        unlinkSync(tmp)
+      } catch {
+        /* tmp already renamed or gone */
+      }
+    }
   }
 
-  private computeChecksum(thread: StoredThread): string {
-    const data = JSON.stringify({ messages: thread.messages })
+  private computeChecksum(messages: StoredMessage[]): string {
+    // Formula unchanged on purpose: entries written by older versions
+    // verify against it — altering it would quarantine every existing
+    // thread as "corrupt" on upgrade.
+    const data = JSON.stringify({ messages })
     let hash = 0
     for (let i = 0; i < data.length; i++) {
       const char = data.charCodeAt(i)
@@ -397,9 +498,14 @@ export class ThreadStore {
    */
   private listFiles(): string[] {
     try {
-      return readdirSync(this.storeDir)
-        .filter((f) => f.endsWith(".json"))
-        .map((f) => f.slice(0, -".json".length))
+      return (
+        readdirSync(this.storeDir)
+          .filter((f) => f.endsWith(".json"))
+          .map((f) => f.slice(0, -".json".length))
+          // Strays that fail the id rule were never written by this store —
+          // skip them instead of letting getEntryPath throw during listing (#68).
+          .filter((id) => SAFE_THREAD_ID.test(id))
+      )
     } catch {
       return []
     }
