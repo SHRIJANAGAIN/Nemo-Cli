@@ -252,6 +252,23 @@ describe("web_browse guards (empty session)", () => {
     expect(firstText(res)).toContain('Refusing to load plain-HTTP URL to untrusted host "evil.example"')
     expect(net.requests).toEqual([])
   })
+
+  it("refuses a cloud-metadata URL before any request (#73)", async () => {
+    const tool = createWebBrowseTool()
+    const res = await tool.execute("t1", { url: "https://169.254.169.254/latest/meta-data/" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("link-local")
+    expect(net.requests).toEqual([])
+  })
+
+  it("refuses a redirect that pivots into link-local space (#73)", async () => {
+    net.routes.set("/pivot", { status: 302, headers: { location: "http://169.254.169.254/steal" }, body: "" })
+    const tool = createWebBrowseTool()
+    const res = await tool.execute("t1", { url: "https://site.test/pivot" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("Redirect blocked")
+    expect(net.requests).toHaveLength(1)
+  })
 })
 
 describe("web_browse session journey", () => {

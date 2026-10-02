@@ -54,7 +54,12 @@ export const DEFAULT_PERMISSIONS: PermissionConfig = {
   askByDefault: true,
 }
 
-/** Read-only tools never need approval — they cannot mutate anything. */
+/** Read-only tools never need approval — they cannot mutate anything.
+ *  `web_fetch` is deliberately NOT in this set (#72): its method/body/headers
+ *  args perform write operations (POST/PUT/DELETE to arbitrary URLs), so it
+ *  takes the approval ladder in ask mode and is denied outright in
+ *  plan/read-only mode — while the GET-only web_search/web_browse research
+ *  tools stay free. */
 export const READ_ONLY_TOOLS = new Set<string>([
   "read_file",
   "list_dir",
@@ -63,7 +68,6 @@ export const READ_ONLY_TOOLS = new Set<string>([
   "code_search",
   "read_manifest",
   "web_search",
-  "web_fetch",
   "web_browse",
   "memory",
   "todo",

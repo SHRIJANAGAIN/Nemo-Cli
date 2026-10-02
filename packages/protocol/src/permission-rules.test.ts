@@ -113,6 +113,21 @@ describe("read-only tools", () => {
   })
 })
 
+describe("web_fetch needs approval (#72)", () => {
+  it("denies write-capable web_fetch in plan/read-only mode", () => {
+    const config = cfg()
+    const post = { url: "https://x.dev/api", method: "POST", body: "{}" }
+    expect(evaluatePermission("web_fetch", post, config, { uiMode: "plan" }).action).toBe("deny")
+    expect(evaluatePermission("web_fetch", post, config, { uiMode: "read-only" }).action).toBe("deny")
+  })
+
+  it("asks instead of auto-allowing in ask mode; GET-only research tools stay free", () => {
+    expect(evaluatePermission("web_fetch", { url: "https://x.dev/" }, cfg(), { uiMode: "ask" }).action).toBe("ask")
+    expect(evaluatePermission("web_browse", { url: "https://x.dev/" }, cfg(), { uiMode: "plan" }).action).toBe("allow")
+    expect(evaluatePermission("web_search", { query: "docs" }, cfg(), { uiMode: "plan" }).action).toBe("allow")
+  })
+})
+
 describe("force-ask (sensitive operations)", () => {
   // Isolate the force-ask layer from the default deny rules (sudo/rm -rf…).
   const bare = () => cfg({ rules: [] })

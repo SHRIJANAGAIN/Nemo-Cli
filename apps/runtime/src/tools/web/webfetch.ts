@@ -9,6 +9,7 @@ import * as http from "http"
 import * as url from "url"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
+import { guardedLookup, urlBlockReason } from "./net-guard.js"
 
 type CacheEntry = { status: number; body: string; headers: Record<string, string>; timestamp: number }
 
@@ -114,6 +115,10 @@ export function createWebFetchTool(): Tool {
       if (!parsed.protocol.startsWith("http")) {
         return textResult(`URL must start with http:// or https://`, /*isError*/ true)
       }
+      // Link-local / cloud-metadata refusal before any socket (#73); also
+      // catches schemes like `httpfoo:` that pass the startsWith check.
+      const block = urlBlockReason(parsed)
+      if (block) return textResult(`Blocked URL: ${block}`, /*isError*/ true)
 
       const method = typeof args.method === "string" ? args.method.toUpperCase() : "GET"
       const maxBytes = Math.min(
@@ -303,6 +308,8 @@ function fetchWithRedirect(
         ...extraHeaders,
       },
       timeout: timeoutMs,
+      // DNS-rebinding guard: refuse resolutions into link-local space (#73).
+      lookup: guardedLookup,
     },
     (res) => {
       const status = res.statusCode ?? 0
@@ -316,9 +323,24 @@ function fetchWithRedirect(
         try {
           redirectUrl = new URL(location, parsed.toString()).toString()
         } catch {
-          redirectUrl = location
+          redirectUrl = String(location)
         }
-        const redirectParsed = new URL(redirectUrl)
+        // A malformed location must not throw inside the response callback
+        // (an uncaught throw here takes the whole process down — same guard
+        // web_browse already had; #74), and every hop re-runs the URL policy
+        // so a redirect can't pivot into link-local space (#73).
+        let redirectParsed: URL
+        try {
+          redirectParsed = new URL(redirectUrl)
+        } catch {
+          callback(new Error(`Invalid redirect location: ${String(location)}`), "", null, {}, null)
+          return
+        }
+        const hopBlock = urlBlockReason(redirectParsed)
+        if (hopBlock) {
+          callback(new Error(`Redirect blocked: ${hopBlock}`), "", null, {}, null)
+          return
+        }
         let redirectBody: string | undefined
         const chunks: Buffer[] = []
         res.on("data", (c) => chunks.push(c))

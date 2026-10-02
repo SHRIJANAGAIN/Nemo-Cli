@@ -8,6 +8,7 @@ import * as https from "https"
 import * as http from "http"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
+import { guardedLookup, urlBlockReason } from "./net-guard.js"
 
 const TRUSTED_HOSTS = new Set<string>([
   "localhost",
@@ -364,6 +365,10 @@ function executeNavigate(
       textResult(`web_browse only supports http/https URLs (got "${parsed.protocol}").`, /*isError*/ true),
     )
   }
+  // Link-local / cloud-metadata refusal before any socket (#73) — applies
+  // to https hops too, which the plain-HTTP policy below never covers.
+  const block = urlBlockReason(parsed)
+  if (block) return Promise.resolve(textResult(`Blocked URL: ${block}`, /*isError*/ true))
 
   const trusted = TRUSTED_HOSTS.has(parsed.hostname.toLowerCase())
   const insecureRemote = parsed.protocol === "http:" && !trusted
@@ -401,6 +406,8 @@ function navigateWithRedirect(
       path: parsed.pathname + parsed.search,
       headers,
       timeout: 20_000,
+      // DNS-rebinding guard: refuse resolutions into link-local space (#73).
+      lookup: guardedLookup,
     },
     (res) => {
       const status = res.statusCode ?? 0
@@ -436,6 +443,27 @@ function navigateWithRedirect(
         } catch {
           resolve({
             content: [{ type: "text", text: `Invalid redirect location: ${location}` }],
+            isError: true,
+          })
+          return
+        }
+        // Every hop re-runs the URL policy (#73): link-local targets are
+        // refused, and the plain-HTTP trusted-host rule from the initial
+        // load applies here too — an https page must not 302 into plain
+        // http on an untrusted host.
+        const hopBlock = urlBlockReason(redirectParsed)
+        if (hopBlock) {
+          resolve({ content: [{ type: "text", text: `Redirect blocked: ${hopBlock}` }], isError: true })
+          return
+        }
+        if (redirectParsed.protocol === "http:" && !TRUSTED_HOSTS.has(redirectParsed.hostname.toLowerCase())) {
+          resolve({
+            content: [
+              {
+                type: "text",
+                text: `Refusing redirect to plain-HTTP URL to untrusted host "${redirectParsed.hostname}".`,
+              },
+            ],
             isError: true,
           })
           return

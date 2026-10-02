@@ -205,6 +205,33 @@ describe("web_fetch guards", () => {
   })
 })
 
+describe("web_fetch link-local and redirect policy (#73/#74)", () => {
+  it("refuses a cloud-metadata URL before touching the transport", async () => {
+    const tool = createWebFetchTool()
+    const res = await tool.execute("t1", { url: "http://169.254.169.254/latest/meta-data/" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("link-local")
+    expect(net.requests).toEqual([])
+  })
+
+  it("refuses a redirect that pivots into link-local space", async () => {
+    net.routes.set("/pivot", { status: 302, headers: { location: "http://169.254.169.254/steal" }, body: "" })
+    const tool = createWebFetchTool()
+    const res = await tool.execute("t1", { url: "http://site.test/pivot" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("Redirect blocked")
+    expect(net.requests).toHaveLength(1)
+  })
+
+  it("fails cleanly on a malformed redirect location instead of crashing", async () => {
+    net.routes.set("/bad", { status: 302, headers: { location: "http://[" }, body: "" })
+    const tool = createWebFetchTool()
+    const res = await tool.execute("t1", { url: "http://site.test/bad" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("Invalid redirect location")
+  })
+})
+
 describe("web_fetch response handling", () => {
   it("sanitizes an HTML page and formats it as markdown text", async () => {
     net.routes.set("/page", {

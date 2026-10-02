@@ -5,6 +5,34 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Web tools: write-capable `web_fetch` off the approval-free read-only
+  list, link-local refusal on every hop, redirect crash parity**
+  (audit, #72–#74):
+  - **#72** — `web_fetch` advertised `method=POST`/`body`/custom-header
+    writes yet sat in protocol's `READ_ONLY_TOOLS`, so it ran with no
+    approval in ask mode and _inside plan/read-only mode_ — the one mode
+    that promises the agent can never modify anything. It now takes the
+    approval ladder (ask → ask; plan/read-only → deny) while the GET-only
+    `web_search`/`web_browse` research tools stay free.
+  - **#73** — nothing stopped a fetch (or a redirect, or a DNS rebind)
+    from reaching link-local space: the 169.254.169.254 cloud metadata
+    service, IPv6 `fe80::/10`, and IPv4-mapped forms. New `net-guard`
+    refuses them at three layers: `urlBlockReason` on the initial URL and
+    every redirect hop (both tools), plus a `guardedLookup` wired into
+    `RequestOptions.lookup` that rejects resolutions into link-local
+    space (defeats hostname rebinding). Loopback/private stay allowed —
+    browsing the local dev server is the core use case.
+  - **#74** — `webfetch`'s malformed-`Location` handling called
+    `new URL(...)` unguarded inside the response callback; a hostile 302
+    (`Location: http://[`) threw uncaught and took the process down.
+    `web_browse` already had this guard; `web_fetch` now matches (error
+    result instead of crash). `web_browse` redirect hops also re-apply
+    the plain-HTTP trusted-host policy — an https page could previously
+    302 into plain http on an untrusted host.
+  - Proof: 11 new tests (2 permission, 3 webfetch, 2 webbrowse, 4
+    net-guard); **7/7 red against the old code** — the #74 crash showed
+    up as a caught unhandled error during red-proof.
+
 - **Plan-mode approved commands: prefix match can no longer smuggle shell
   operators** (audit, #71): `isApprovedCommand` approved anything starting
   with `<rule> ` — so a user blessing `npm test` also "approved"
