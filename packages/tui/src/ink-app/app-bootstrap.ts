@@ -28,6 +28,25 @@ export const debugInputLog = (line: string): void => {
   }
 }
 
+/**
+ * True when the mouse wheel almost certainly cannot reach the app: legacy
+ * Windows consoles swallow wheel input instead of emitting SGR reports, so
+ * the in-app history window never moves AND the terminal's own native
+ * scroll smears the live frame out of view. Modern terminals (Windows
+ * Terminal/WT_SESSION, VS Code, WezTerm, Alacritty, mintty) pass reports
+ * through. Pure: platform + env in, boolean out.
+ */
+export function mouseLikelyDead(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  if (platform !== "win32") return false
+  if (env.WT_SESSION) return false
+  const term = (env.TERM_PROGRAM ?? "").toLowerCase()
+  if (term === "vscode" || term === "wezterm" || term === "alacritty" || term === "mintty") return false
+  return true
+}
+
 export function enableBracketedPaste(): () => void {
   if (process.stdout.isTTY) {
     process.stdout.write("\x1b[?2004h")
@@ -68,6 +87,10 @@ export function createAgentConfig(partial: Partial<TrayambakConfig>): TrayambakC
     maxOutputLines: partial.maxOutputLines ?? 2000,
     maxOutputBytes: partial.maxOutputBytes ?? 256 * 1024,
     maxTurns: partial.maxTurns ?? 64,
+    // Session budget must survive the rebuild: dropping it here deactivated
+    // every configured/env budget in TUI sessions — the loop only applies
+    // run.config.budget, so a set cap went silently unenforced (#64).
+    ...(partial.budget !== undefined ? { budget: partial.budget } : {}),
     maxToolCalls: partial.maxToolCalls ?? 100,
     maxDistinctToolCalls: partial.maxDistinctToolCalls ?? 1000,
     toolCallRate: partial.toolCallRate ?? 2,

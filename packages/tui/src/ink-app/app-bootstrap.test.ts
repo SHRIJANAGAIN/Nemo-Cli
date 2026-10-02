@@ -4,9 +4,9 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { describe, expect, test } from "vitest"
+import { describe, expect, it, test } from "vitest"
 
-import { convertToAgentMessages, createAgentConfig } from "./app-bootstrap.js"
+import { convertToAgentMessages, createAgentConfig, mouseLikelyDead } from "./app-bootstrap.js"
 import type { TrayambakMessage } from "./types.js"
 
 /**
@@ -23,6 +23,13 @@ describe("createAgentConfig passthrough", () => {
   test("provider survives the rebuild when present, is not forced when absent", () => {
     expect(createAgentConfig({ provider: "huggingface" }).provider).toBe("huggingface")
     expect(createAgentConfig({}).provider).toBeUndefined()
+  })
+
+  test("session budget survives the rebuild (absent stays absent) (#64)", () => {
+    // Dropping budget here silently deactivated every configured/env cap in
+    // TUI sessions — the loop only applies run.config.budget.
+    expect(createAgentConfig({ budget: "6k" }).budget).toBe("6k")
+    expect(createAgentConfig({}).budget).toBeUndefined()
   })
 
   test("reasoningEffort / permissions / developerMode pass through unchanged", () => {
@@ -165,5 +172,18 @@ describe("convertToAgentMessages", () => {
       content: [{ type: "text", text: "ok" }],
       isError: true,
     })
+  })
+})
+
+describe("mouseLikelyDead", () => {
+  it("flags legacy Windows consoles and clears modern terminals", () => {
+    expect(mouseLikelyDead({}, "win32")).toBe(true)
+    expect(mouseLikelyDead({ WT_SESSION: "abc123" }, "win32")).toBe(false)
+    expect(mouseLikelyDead({ TERM_PROGRAM: "vscode" }, "win32")).toBe(false)
+    expect(mouseLikelyDead({ TERM_PROGRAM: "WezTerm" }, "win32")).toBe(false)
+    expect(mouseLikelyDead({ TERM_PROGRAM: "alacritty" }, "win32")).toBe(false)
+    expect(mouseLikelyDead({ TERM_PROGRAM: "mintty" }, "win32")).toBe(false)
+    expect(mouseLikelyDead({}, "linux")).toBe(false)
+    expect(mouseLikelyDead({}, "darwin")).toBe(false)
   })
 })

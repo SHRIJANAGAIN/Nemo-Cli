@@ -199,6 +199,39 @@ describe("ACP server session lifecycle", () => {
     expect(msgs[1].result).toEqual({ ok: true, model: null })
   })
 
+  it("set_model's reply is backed by state the next prompt actually reads (#60)", async () => {
+    runAcpServer()
+    // Session-scoped choice…
+    await sendLine({ jsonrpc: "2.0", id: 20, method: "set_model", params: { sessionId: "sm1", model: "stored-model" } })
+    await sendLine({ jsonrpc: "2.0", id: 21, method: "prompt", params: { sessionId: "sm1", prompt: "hi" } })
+    // …an explicit per-prompt model still wins…
+    await sendLine({
+      jsonrpc: "2.0",
+      id: 22,
+      method: "prompt",
+      params: { sessionId: "sm1", prompt: "again", model: "override-model" },
+    })
+    // …and a process-wide choice covers sessions that never got one.
+    await sendLine({ jsonrpc: "2.0", id: 23, method: "set_model", params: { model: "default-choice" } })
+    await sendLine({ jsonrpc: "2.0", id: 24, method: "prompt", params: { sessionId: "sm2", prompt: "third" } })
+
+    // notifications (session/update) interleave with responses — pick by id
+    const msgs = messages()
+    const reply = (id: number): { result?: unknown; error?: unknown } => msgs.find((m) => m.id === id) ?? {}
+    expect(reply(20).result).toEqual({ ok: true, model: "stored-model" })
+    expect(h.runs[0].model).toBe("stored-model")
+    expect(h.runs[1].model).toBe("override-model")
+    expect(h.runs[2].model).toBe("default-choice")
+    expect(reply(23).result).toEqual({ ok: true, model: "default-choice" })
+  })
+
+  it("rejects a non-string, non-null model with -32602 instead of echoing it", async () => {
+    runAcpServer()
+    await sendLine({ jsonrpc: "2.0", id: 25, method: "set_model", params: { model: 42 } })
+
+    expect(messages()[0].error).toEqual({ code: -32602, message: "'model' must be a string or null" })
+  })
+
   it("rejects unknown methods with -32601", async () => {
     runAcpServer()
     await sendLine({ jsonrpc: "2.0", id: 9, method: "definitely_not_a_method" })

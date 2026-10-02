@@ -254,6 +254,41 @@ describe("bash gate: PreToolUse hooks run first", () => {
   })
 })
 
+describe("bash child env is filtered (#63)", () => {
+  it("strips secret-bearing vars from the spawned child but keeps ordinary env", async () => {
+    listen()
+    const cwd = freshDir("trayambak-mcp-env-")
+    process.env.TRAYAMBAK_MCP_ENV_KEEP = "visible-thing"
+    process.env.TRAYAMBAK_MCP_ENV_SECRET = "leaked-credential"
+    try {
+      const deps: McpServerDeps = {
+        config: testConfig(cwd, {
+          permissions: { uiMode: "ask", rulesV2: [{ tool: "bash", pattern: "*", action: "allow" }] },
+        }),
+        policyDecide: () => ExecDecision.Allow,
+      }
+      const probe =
+        process.platform === "win32"
+          ? "echo %TRAYAMBAK_MCP_ENV_KEEP% %TRAYAMBAK_MCP_ENV_SECRET%"
+          : "echo $TRAYAMBAK_MCP_ENV_KEEP $TRAYAMBAK_MCP_ENV_SECRET"
+      await dispatchMcpServer(
+        { id: "e1", method: "tools/call", params: { name: "bash", arguments: { command: probe } } },
+        deps,
+      )
+      const { text, isError } = textOf("e1")
+      expect(isError).toBe(false)
+      // Ordinary env survives (shells still need PATH, HOME, …)…
+      expect(text).toContain("visible-thing")
+      // …the SECRET-family var never reaches the child (was: full process
+      // env inherited verbatim — API keys included).
+      expect(text).not.toContain("leaked-credential")
+    } finally {
+      delete process.env.TRAYAMBAK_MCP_ENV_KEEP
+      delete process.env.TRAYAMBAK_MCP_ENV_SECRET
+    }
+  }, 15000)
+})
+
 describe("read_file gate (#35): approval + roots", () => {
   const readCfg = (cwd: string): TrayambakConfig =>
     testConfig(cwd, {

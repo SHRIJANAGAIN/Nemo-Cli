@@ -23,8 +23,13 @@ interface RpcRequest {
   params?: Record<string, unknown>
 }
 
-const sessions = new Map<string, { id: string }>()
+const sessions = new Map<string, { id: string; model?: string }>()
 const cancelled = new Set<string>()
+/** Model chosen via `set_model` without a sessionId — the fallback for later
+ *  prompts that don't name one. Session-scoped choices live on the session
+ *  entry above. Previously `set_model` echoed `{ok:true}` and stored NOTHING
+ *  (#60) — every reply here is now backed by state `prompt` actually reads. */
+let chosenModel: string | undefined
 
 function send(id: number | string | undefined, result: unknown): void {
   if (id === undefined) return
@@ -43,12 +48,17 @@ function notify(method: string, params: unknown): void {
 async function handlePrompt(id: number | string | undefined, params: Record<string, unknown>): Promise<void> {
   const sessionId = typeof params.sessionId === "string" ? params.sessionId : createTranscript(process.cwd()).id
   const prompt = typeof params.prompt === "string" ? params.prompt : ""
-  const model = typeof params.model === "string" ? params.model : undefined
   if (!prompt) {
     sendError(id, -32602, "missing 'prompt'")
     return
   }
-  sessions.set(sessionId, { id: sessionId })
+  const existing = sessions.get(sessionId)
+  // Explicit per-prompt model wins; otherwise the model `set_model` stored
+  // for this session, then the process-wide choice — never silently default
+  // while replying ok to set_model (#60).
+  const requested = typeof params.model === "string" ? params.model : undefined
+  const model = requested || existing?.model || chosenModel
+  sessions.set(sessionId, existing ?? { id: sessionId })
   const config = loadConfig(model ? { model } : {})
   const agent = new Agent({ config })
   try {
@@ -85,7 +95,7 @@ async function dispatch(req: RpcRequest): Promise<void> {
       {
         const workDir = typeof params.workDir === "string" ? params.workDir : process.cwd()
         const { id } = createTranscript(workDir)
-        sessions.set(id, { id })
+        sessions.set(id, sessions.get(id) ?? { id })
         send(req.id, { sessionId: id })
       }
       break
@@ -96,7 +106,9 @@ async function dispatch(req: RpcRequest): Promise<void> {
         const st = readState(sid)
         if (!st) sendError(req.id, -32001, `session not found: ${sid}`)
         else {
-          sessions.set(sid, { id: sid })
+          // Preserve a model stored by an earlier set_model for this id —
+          // overwriting the entry would silently drop it (#60).
+          sessions.set(sid, sessions.get(sid) ?? { id: sid })
           send(req.id, { sessionId: sid, state: st })
         }
       }
@@ -108,7 +120,23 @@ async function dispatch(req: RpcRequest): Promise<void> {
       )
       break
     case "set_model":
-      send(req.id, { ok: true, model: params.model ?? null })
+      {
+        const raw = params.model
+        if (raw !== undefined && raw !== null && typeof raw !== "string") {
+          sendError(req.id, -32602, "'model' must be a string or null")
+          break
+        }
+        const model = typeof raw === "string" && raw.length > 0 ? raw : undefined
+        const sid = typeof params.sessionId === "string" ? params.sessionId : undefined
+        if (sid) {
+          const entry = sessions.get(sid) ?? { id: sid }
+          entry.model = model
+          sessions.set(sid, entry)
+        } else {
+          chosenModel = model
+        }
+        send(req.id, { ok: true, model: model ?? null })
+      }
       break
     case "prompt":
       await handlePrompt(req.id, params)

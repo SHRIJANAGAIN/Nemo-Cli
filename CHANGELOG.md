@@ -5,6 +5,35 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **Budget enforcement closes the denial-loop hole** (round-5 audit, #64):
+  every assistant response now charges BOTH sides of the estimate against
+  the rollout budget — previously only output tokens were counted
+  (`input_tokens` was accepted and ignored), so a denial loop could re-send
+  a growing context turn after turn while emitting tiny outputs and never
+  trip a token cap (6k/3k budgets ran 18 turns with zero budget events).
+  The runtime passes `codex_rollout_budget_units` (the sanctioned
+  caller-side override), so the protected core accounting in
+  `packages/core/rollout_budget.ts` stays byte-identical. The TUI session
+  rebuild (`createAgentConfig`) also passes `budget` through now — it was
+  silently dropped on every rebuild, deactivating configured/env caps. A
+  new harness test pins the exact doom-loop shape: permission-denied
+  retries trip `budget_exhausted` before `maxTurns`.
+
+- **ACP `set_model` now stores what it acknowledges** (round-5 audit, #60):
+  `set_model` replied `{ok:true, model}` without persisting anything — the
+  choice was never read back, so models were only honored when repeated
+  per `prompt`. It now stores the model session-scoped when `sessionId` is
+  supplied (process-wide otherwise), `prompt` reads it (an explicit
+  per-prompt model still wins), `load_session`/`new_session` preserve a
+  stored choice instead of overwriting it, and a non-string/non-null model
+  gets `-32602` instead of an echoed success.
+
+- **MCP bash child env is filtered** (round-5 audit, #63): the stdio
+  server's `bash` tool spawned `execFileSync` without `env`, handing the
+  FULL process environment — provider API keys included — to any command
+  the gate allows. It now uses `getSafeEnv(process.env)` like every other
+  child spawn (hook-exec, mcp-runner).
+
 - **Redaction closes the disk-sink gaps** (round-5 audit, #51-54): the CLI
   log file now runs the embedded-secret pass before anything is appended to
   `~/.trayambak/logs/trayambak.log` — previously only secret-key names and

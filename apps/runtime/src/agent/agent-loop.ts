@@ -301,9 +301,16 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
  * fields anywhere (`Provider.chat` returns a bare `AssistantMessage`), so
  * both sides use the repo-wide `ceil(chars / 4)` convention — output = the
  * response's text/thinking/tool-argument chars, input = the wire messages
- * actually sent this turn. The budget's accounting weights `output_tokens`
- * (`samplingTokenWeight`), so the input estimate is reported only. Recording
- * is best-effort: budget bookkeeping must never break a turn.
+ * actually sent this turn. Recording is best-effort: budget bookkeeping must
+ * never break a turn.
+ *
+ * BOTH sides are charged (#64): the core accounting weights `output_tokens`
+ * only, which made a token cap blind to the denial-loop burn — each retry
+ * turn re-pays the whole (growing) context as input while emitting a tiny
+ * output, so the loop could run away to maxTurns with the budget silent.
+ * `codex_rollout_budget_units` is the sanctioned caller-side override
+ * (DEFAULT_ROLLOUT_BUDGET.samplingTokenWeight = 1 ⇒ 1 estimated token = 1
+ * unit on both sides); the protected packages/core accounting is untouched.
  */
 function recordAssistantUsage(run: RunConfig, assistant: AssistantMessage): void {
   try {
@@ -311,9 +318,12 @@ function recordAssistantUsage(run: RunConfig, assistant: AssistantMessage): void
       .map((part) => (part.type === "toolCall" ? JSON.stringify(part.arguments ?? {}) : part.text))
       .join("\n")
     const inputText = JSON.stringify(run.session.toWireMessages())
+    const inputTokens = estimateTokens(inputText)
+    const outputTokens = estimateTokens(outputText)
     getRolloutBudget().recordUsage({
-      input_tokens: estimateTokens(inputText),
-      output_tokens: estimateTokens(outputText),
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      codex_rollout_budget_units: inputTokens + outputTokens,
     })
   } catch {
     /* budget accounting is best-effort — never break a turn over it */

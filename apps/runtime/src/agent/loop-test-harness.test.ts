@@ -113,12 +113,14 @@ describe("loop-test-harness: budget exhaustion", () => {
       scripted,
     )
 
-    // Two turns x PER_TURN charged >= 6 tokens, so the third turn never starts.
-    assertProviderCalls(providerCalls(), 2)
+    // Turn 1 charges 8 input tokens (wire for "go" → 32 chars → ceil/4) +
+    // PER_TURN output = 13 ≥ 6, so the second turn never starts (#64:
+    // input is charged too).
+    assertProviderCalls(providerCalls(), 1)
     const exhausted = events.filter((e) => e.type === "budget_exhausted")
     expect(exhausted).toHaveLength(1)
     const payload = exhausted[0] as Extract<AgentEvent, { type: "budget_exhausted" }>
-    expect(payload.used).toBe(2 * PER_TURN)
+    expect(payload.used).toBe(8 + PER_TURN)
     expect(payload.max).toBe(6)
     const idx = events.indexOf(exhausted[0]!)
     expect(events.slice(idx).map((e) => e.type)).toEqual(["budget_exhausted", "agent_end"])

@@ -12,6 +12,7 @@ import * as path from "path"
 import { execFileSync } from "child_process"
 import { loadConfig, type TrayambakConfig } from "../../../apps/runtime/src/config.js"
 import { approvalFor } from "../../../packages/core/src/approval.js"
+import { getSafeEnv } from "../../../packages/core/src/env_filter.js"
 import {
   runPreToolUseHooks,
   runPostToolUseHooks,
@@ -198,6 +199,10 @@ async function executeLocalTool(
       timeout: timeoutMs,
       maxBuffer: 32_768,
       windowsHide: true,
+      // Filtered env, like every other child spawn in the repo (hook-exec,
+      // mcp-runner): omitting `env` handed the FULL process environment —
+      // provider API keys included — to any command the gate allows (#63).
+      env: getSafeEnv(process.env),
     } as never)
     const text = String(out).slice(0, 32_000)
     const extra = await postHookContext(deps, config, name, { command: cmd }, cwd)
