@@ -12,11 +12,11 @@ repository, it is marked `evidence pending` rather than guessed.
 
 ## 1. Read this first: three trees hold the work
 
-| Tree                                                                                              | State                                                                                            | What lives there                                                                                                    |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `C:\Users\engli\trayambak` (git, v0.6.6 → 0.6.7)                                                  | rounds 1–6 committed in history; a **92-file working batch is uncommitted** (concurrent session) | My findings **#51–#54, #60, #62–#80, #109** (committed) + their **#58, #84, #85, #87, #88, #90, #93** (uncommitted) |
-| `C:\Users\engli\OneDrive\Documents\Default Project` (**no git**, v0.5.0, different module layout) | **not in git, not in this repo**                                                                 | Rounds 13–14: **#94–#108** regression tests (written 2026-10-02 15:26–15:46)                                        |
-| npm dist `@skt-ai-labs/trayambak-cli`                                                             | latest known **0.6.5** at the time of the round-6 changelog entry                                | Rounds 1–6 audited the published package; source fixes are committed here                                           |
+| Tree                                                                                              | State                                                                                              | What lives there                                                                                                         |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `C:\Users\engli\trayambak` (git, v0.6.6 → 0.6.7)                                                  | rounds 1–6 committed in history; a **100+-file working batch is uncommitted** (concurrent session) | My findings **#51-#54, #60, #62-#80, #109-#111** (committed) + their **#58, #84, #85, #87, #88, #90, #93** (uncommitted) |
+| `C:\Users\engli\OneDrive\Documents\Default Project` (**no git**, v0.5.0, different module layout) | **not in git, not in this repo**                                                                   | Rounds 13–14: **#94–#108** regression tests (written 2026-10-02 15:26–15:46)                                             |
+| npm dist `@skt-ai-labs/trayambak-cli`                                                             | latest known **0.6.5** at the time of the round-6 changelog entry                                  | Rounds 1–6 audited the published package; source fixes are committed here                                                |
 
 **The load-bearing fact**: the round-14 fixes (#103–#108) and round-13 fixes
 (#94–#102) exist **only in the non-git `Default Project` tree**. Until they are
@@ -33,7 +33,7 @@ integrity/usability issues with security nudge · `Info` hardening/cleanup.
 
 ---
 
-## 3. Fixed & verified — committed in this repository (26 findings)
+## 3. Fixed & verified — committed in this repository (27 findings)
 
 | ID      | Severity | Finding                                                                                                                                                                                                                                                                                                                                                                  | Proof                                                              |
 | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
@@ -59,6 +59,7 @@ integrity/usability issues with security nudge · `Info` hardening/cleanup.
 | #80     | High     | `llama-cpp-bin` PowerShell `-Command` string interpolation (apostrophe in path ⇒ executable PS), wildcard `-Path`, no timeout                                                                                                                                                                                                                                            | `2c6d203`                                                          |
 | #109    | Medium   | `trayambak__RunTeam` accepted an unbounded `tasks` array — single-call fan-out unbounded (runner walks every task; background tasks detach)                                                                                                                                                                                                                              | **`fc9fd17`** (Round 15); test red on old code                     |
 | #110    | High     | Three file-writing tools joined raw model input into fs paths with no segment guard, so `path.join` normalized `..` out of the intended dir: Rules `write` = arbitrary-path write (full content control, any extension); SendMessage inbox = `mkdirSync` + append outside `~/.trayambak/inbox`; GenerateAgent = `.md` write outside project + YAML frontmatter injection | **`973bbae`** (Round 16); traversal tests red on old source        |
+| #111    | High     | All three `sota_solve` exec sites spawned model-generated code with no deadline, no output cap, no abort-kill (orphaned CPU spinners, OOM via unbounded stdout, cancelled tool left children running); description claimed "Sandbox Execution" with zero isolation beyond a filtered env                                                                                 | **`b364ca0`** (Round 17); 5 bounds tests red on old source         |
 | —       | High     | Windows OS-level AppContainer sandbox (child isolation; no false `isSandboxed` claims)                                                                                                                                                                                                                                                                                   | `11017d1` (unnumbered, pre-ledger)                                 |
 
 Committed-history security rounds from the other track (rounds 1–6, also in this
@@ -154,11 +155,11 @@ only), test-only scaffolding (`extension_api`/`agent_registry` wiring demos).
 
 ---
 
-## 8. Fixed-vs-documented reconciliation → 108 claimed + #109 + #110 = **110**
+## 8. Fixed-vs-documented reconciliation → 108 claimed + #109 + #110 + #111 = **111**
 
 | Bucket                                          | Count                                                                       | State                                  |
 | ----------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------- |
-| My findings committed here                      | 26 (#51–54, 60, 62–80, 109, 110)                                            | **fixed + verified + published-ready** |
+| My findings committed here                      | 27 (#51–54, 60, 62–80, 109–111)                                             | **fixed + verified + published-ready** |
 | Other track, committed history (rounds 1–6 era) | documented by CHANGELOG section; individual refs preserved only for #48–#50 | **fixed + committed**                  |
 | Other track, working batch (this repo)          | 7 numbered (#58, 84, 85, 87, 88, 90, 93) + 3 section groups                 | **fixed + uncommitted**                |
 | Other track, audit tree only                    | 13 numbered (#94–#100, 102–104, 106–108)                                    | **fixed, wrong tree — port required**  |
@@ -192,15 +193,15 @@ lands, merge their per-row ledger into §5.
 
 ## 10. Gate snapshot at this review
 
-| Gate                                   | Result                                                                                                                                                                                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npx tsc --noEmitOnError`              | **exit 0**                                                                                                                                                                                                               |
-| `npm run lint`                         | **0 errors** (126 warnings, pre-existing baseline)                                                                                                                                                                       |
-| `npx prettier --check` (changed files) | **clean**                                                                                                                                                                                                                |
-| `npx vitest run`                       | **290/290 files, 3,260 passed / 5 skipped** (~60 s; excludes the other track's in-flight untracked `artifact-readonly.test.ts`, written mid-run and failing on their own read-only feature — zero imports of my modules) |
-| Red-proof (rounds 15–16)               | #109 test fails on old source (`1 failed \| 4 passed`); #110 — 5 tests across 3 files red on stashed sources (+1 import error), green after                                                                              |
+| Gate                                   | Result                                                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npx tsc --noEmitOnError`              | **exit 0**                                                                                                                                             |
+| `npm run lint`                         | **0 errors** (126 warnings, pre-existing baseline)                                                                                                     |
+| `npx prettier --check` (changed files) | **clean**                                                                                                                                              |
+| `npx vitest run`                       | **299/299 files, 3,362 passed / 5 skipped** (~60 s, no exclusions — the other track's in-flight `artifact-readonly.test.ts` was fixed in the meantime) |
+| Red-proof (rounds 15–17)               | #109 (`1 failed \| 4 passed`); #110 — 5 tests + import error red on stashed sources; #111 — 5 bounds tests red on stashed source; all green after      |
 
 Ledger history: #51–54 `c243d78` · P1 batch `7b63be2` · #62 `682286f` · #65
 `2a1d1f4` · #66/67 `5ad0520` · #68/69 `1346689` · #70 `a9028e0` · #71
 `e91dad3` · #72–74 `8ea5917` · #75–77 `dfcf159` · #78–80 `2c6d203` · #109
-`fc9fd17` · #110 `973bbae` · Windows AppContainer `11017d1`.
+`fc9fd17` · #110 `973bbae` · #111 `b364ca0` · Windows AppContainer `11017d1`.
