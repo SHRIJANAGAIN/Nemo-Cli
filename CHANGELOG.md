@@ -5,6 +5,18 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **RunTeam single-call fan-out bounded** (audit, #109):
+  - **#109** — `trayambak__RunTeam` accepted any non-empty `tasks`
+    array: the runner batches foreground concurrency but walks every
+    task, and each `background: true` task is detached as it starts —
+    so a single model-authored (or prompt-injected) call could queue
+    unbounded nested agent runs. Its sibling fan-out tools already
+    bound themselves (`SWARM_MAX_WORKERS` = 8, `DEBATE_MAX_TEAMS` =
+    5); RunTeam was the outlier. Now capped at 32 per call — the
+    schema description advertises the limit to the model, and the
+    runtime rejects over-cap before the runner is invoked. Proof:
+    new test red on old code (runner never called).
+
 - **Git/update/extract children bounded and env-filtered** (audit, #78–#80):
   - **#78** — every direct git child (`worktree` tool ×4, subagent
     `createWorktreeIsolation` ×3) ran with raw `process.env` and no

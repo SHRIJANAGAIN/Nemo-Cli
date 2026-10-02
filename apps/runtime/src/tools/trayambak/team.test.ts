@@ -49,6 +49,15 @@ describe("createTeamTool", () => {
     expect(seen.map((t) => t.name)).toEqual(["a"])
   })
 
+  it("rejects a fan-out beyond MAX_TEAM_TASKS without invoking the runner", async () => {
+    const run = vi.fn(async (tasks: Array<{ name: string }>) => tasks.map((t) => ({ name: t.name, text: "ok" })))
+    const tool = createTeamTool(run)
+    const tasks = Array.from({ length: 33 }, (_, i) => ({ name: `t${i}`, prompt: "do x" }))
+    const r = await tool.execute("t1", { tasks }, undefined, undefined, undefined as never)
+    expect(r.isError).toBe(true)
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it("aggregates results and surfaces errors and background starts", async () => {
     const run = vi.fn(async () => [
       { name: "a", text: "done a" },

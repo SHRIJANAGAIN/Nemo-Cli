@@ -16,6 +16,16 @@ export interface TeamTask {
   background?: boolean
 }
 
+/**
+ * Hard ceiling on one call's task fan-out (#109). The runner batches
+ * foreground concurrency but walks every task, and each `background`
+ * task is detached as it starts — so without a cap a single
+ * model-authored (or prompt-injected) call could queue unbounded
+ * nested agent runs. Sibling fan-out tools already bound themselves
+ * (`SWARM_MAX_WORKERS`, `DEBATE_MAX_TEAMS`); this was the outlier.
+ */
+const MAX_TEAM_TASKS = 32
+
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "trayambak__RunTeam",
@@ -27,7 +37,7 @@ const definition: ToolDefinition = {
     properties: {
       tasks: {
         type: "array",
-        description: "Specialist subagent tasks to execute in parallel.",
+        description: `Specialist subagent tasks to execute in parallel (at most ${MAX_TEAM_TASKS} per call).`,
         items: {
           type: "object",
           description:
@@ -50,6 +60,8 @@ export function createTeamTool(
       const raw = args.tasks
       if (!Array.isArray(raw) || raw.length === 0)
         return textResult("Missing non-empty 'tasks' array.", /*isError*/ true)
+      if (raw.length > MAX_TEAM_TASKS)
+        return textResult(`RunTeam accepts at most ${MAX_TEAM_TASKS} tasks per call.`, /*isError*/ true)
       const tasks: TeamTask[] = raw
         .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
         .map((value) => {
