@@ -143,6 +143,17 @@ function parseFindingsFromText(text: string, dimension: string): ReviewFinding[]
   return findings
 }
 
+/**
+ * Adversarial-verify ceiling (#113): findings come from model-generated
+ * reviewer output (steerable by the reviewed diff), and `parseFindingsFromText`
+ * is deliberately unbounded — so the fan-out had to be bounded at the wave.
+ * Sibling fan-outs are all bounded (RunTeam 32, SWARM_MAX_WORKERS 8,
+ * DEBATE_MAX_TEAMS 5); this was the only uncapped one. Findings past the
+ * cap get no `verifyResults[i]` and land in the fail-closed unverified
+ * branch below, so nothing is silently dropped or auto-approved.
+ */
+const MAX_VERIFY_TASKS = 16
+
 export function createParallelReviewTool(
   onRunSubagents?: (
     tasks: Array<{ name: string; prompt: string; subagentType?: string }>,
@@ -274,7 +285,10 @@ ${diff}
       const confirmedBlocking: ReviewFinding[] = []
 
       if (blockingCandidates.length > 0 && onRunSubagents) {
-        const verifyTasks = blockingCandidates.map((f, idx) => ({
+        // Bounded like every sibling fan-out — a single tool call must not
+        // queue unbounded nested runs (#113). Loop below walks ALL
+        // candidates; capped ones see undefined results → unverified + blocking.
+        const verifyTasks = blockingCandidates.slice(0, MAX_VERIFY_TASKS).map((f, idx) => ({
           name: `verify_${idx}_${f.severity}`,
           subagentType: "code-reviewer",
           prompt: `You are an independent adversarial skeptic verifier.
@@ -327,6 +341,9 @@ TASK:
       summary += `- **Dimensions Reviewed (${reviewerProfiles.length})**: ${reviewerProfiles.map((p) => p.name).join(", ")}\n`
       summary += `- **Raw Findings**: ${rawFindings.length} → **Unique after Dedup**: ${uniqueFindings.length}\n`
       summary += `- **Blocking**: ${confirmedBlocking.length} (Confirmed: ${confirmedCount}, Unverified: ${unverifiedCount})\n`
+      if (blockingCandidates.length > MAX_VERIFY_TASKS) {
+        summary += `- **Verification capped**: ${MAX_VERIFY_TASKS} of ${blockingCandidates.length} blockers adversarially verified; ${blockingCandidates.length - MAX_VERIFY_TASKS} remain unverified-blocking (#113)\n`
+      }
       summary += `- **Advisory / Refuted**: ${advisoryFindings.length} (Refuted: ${refutedCount})\n`
 
       if (failedDimensions.length > 0) {

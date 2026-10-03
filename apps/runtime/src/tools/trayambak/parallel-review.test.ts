@@ -125,3 +125,37 @@ describe("verification barrier (fail closed)", () => {
     expect(text).toContain("runner exploded")
   })
 })
+
+describe("verify wave bound (#113)", () => {
+  it("caps adversarial verifiers at 16 and leaves the rest unverified-blocking", async () => {
+    // A reviewer's model output is steerable by the reviewed diff: flood the
+    // parse with 40 unique CRITICAL findings and the verify wave must NOT
+    // spawn 40 nested runs from one tool call. Old code: seen = [40].
+    const flood = JSON.stringify({
+      findings: Array.from({ length: 40 }, (_, i) => ({
+        title: `blocker ${i}`,
+        severity: "CRITICAL",
+        file: `f${i}.ts`,
+        evidence: `evidence ${i}`,
+      })),
+    })
+    const seen: number[] = []
+    const runner = async (tasks: Task[]): Promise<TaskResult[]> => {
+      if (tasks[0]?.name.startsWith("verify_")) {
+        seen.push(tasks.length)
+        return tasks.map((t) => ({ name: t.name, text: "CONFIRMED: real" }))
+      }
+      return [{ name: "security-reviewer", text: flood }]
+    }
+    const res = await run({ diff: DIFF, files: ["db.ts"] }, runner)
+    expect(res.isError).toBe(false)
+    // Bounded fan-out…
+    expect(seen).toEqual([16])
+    // …and the 24 skipped blockers stay blocking (fail closed), surfaced in
+    // the report rather than silently dropped.
+    const text = firstText(res)
+    expect(text).toContain("Verification capped")
+    expect(text).toContain("Unverified: 24")
+    expect(text).toContain("Verdict: **CHANGES_REQUESTED**")
+  })
+})

@@ -5,6 +5,18 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [0.6.6]
 
+- **`parallel_review` verify wave was the last uncapped fan-out** (audit, #113):
+  - **#113** — one `trayambak__ParallelReview` call parsed reviewer output
+    with no finding cap (JSON arrays and the regex loop are both
+    unbounded) and spawned ONE adversarial verifier subagent per
+    CRITICAL/HIGH finding: a diff-steered reviewer emitting 40 blockers
+    queued 40 nested runs in a single tool call, while every sibling
+    fan-out is bounded (RunTeam 32, SWARM_MAX_WORKERS 8, DEBATE_MAX_TEAMS
+    5). Now capped at 16 verifiers per call; findings past the cap take
+    the existing fail-closed branch (unverified + blocking) and the
+    report says so. Proof: new test floods with 40 CRITICAL findings —
+    red on old code (`[40]` verifiers), green at 16.
+
 - **Project-resolved `tsc` child inherited every API key** (audit, #112):
   - **#112** — the `diagnostics` tool resolves `node_modules/typescript/bin/tsc`
     from the PROJECT's own tree first (model-writable, supply-chain
