@@ -2,7 +2,7 @@
 
 **Scope**: rounds 1–15 of the Trayambak security audit, reconciled across every
 tree that holds findings. **Generated**: 2026-10-02 (Round 15 — dormant-API
-wiring review + final sweep). **HEAD at generation**: `f9a5440`.
+wiring review + final sweep). **HEAD at generation**: `b571f22`.
 
 Every row below is evidence-backed: a commit, a file path, a CHANGELOG section,
 or a regression-test comment. Where a claimed finding has no artifact in this
@@ -33,7 +33,7 @@ integrity/usability issues with security nudge · `Info` hardening/cleanup.
 
 ---
 
-## 3. Fixed & verified — committed in this repository (28 findings)
+## 3. Fixed & verified — committed in this repository (29 findings)
 
 | ID      | Severity | Finding                                                                                                                                                                                                                                                                                                                                                                  | Proof                                                              |
 | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
@@ -61,6 +61,7 @@ integrity/usability issues with security nudge · `Info` hardening/cleanup.
 | #110    | High     | Three file-writing tools joined raw model input into fs paths with no segment guard, so `path.join` normalized `..` out of the intended dir: Rules `write` = arbitrary-path write (full content control, any extension); SendMessage inbox = `mkdirSync` + append outside `~/.trayambak/inbox`; GenerateAgent = `.md` write outside project + YAML frontmatter injection | **`973bbae`** (Round 16); traversal tests red on old source        |
 | #111    | High     | All three `sota_solve` exec sites spawned model-generated code with no deadline, no output cap, no abort-kill (orphaned CPU spinners, OOM via unbounded stdout, cancelled tool left children running); description claimed "Sandbox Execution" with zero isolation beyond a filtered env                                                                                 | **`b364ca0`** (Round 17); 5 bounds tests red on old source         |
 | #112    | High     | `diagnostics` spawned the PROJECT's own `node_modules/typescript/bin/tsc` — a model-writable, supply-chain-reachable script — with the full inherited env, so a planted or compromised `typescript` package read `TRAYAMBAK_API_KEY`/`OPENAI_API_KEY` the moment the model called the tool; no boundary (hook/MCP/git/monitor children all get `getSafeEnv`)             | **`f9a5440`** (Round 18); canary-leak test red on old source       |
+| #113    | Medium   | `parallel_review` was the last uncapped fan-out: reviewer output parsed with no finding cap (JSON array + regex loop both unbounded) and ONE adversarial verifier subagent spawned per CRITICAL/HIGH finding — a diff-steered reviewer queued 40 nested runs from a single call while RunTeam(32)/swarm(8)/debate(5) are all bounded                                     | **`b571f22`** (Round 19); flood test red on old source (`[40]`)    |
 | —       | High     | Windows OS-level AppContainer sandbox (child isolation; no false `isSandboxed` claims)                                                                                                                                                                                                                                                                                   | `11017d1` (unnumbered, pre-ledger)                                 |
 
 Committed-history security rounds from the other track (rounds 1–6, also in this
@@ -80,6 +81,14 @@ HTTP-only; `terminal.createTerminalSession` has zero production callers
 (dormant); `diagnostics` already had the 45 s kill + abort + 20 MB cap —
 env filtering was the only gap (#112); the remaining `trayambak/*` tools
 spawn no child processes (monitor/git/sota exec covered by #76/#78/#111).
+
+Round-19 sweep — attacked and cleared: `parallel-execute` fans out a fixed
+1–2 tasks per `taskType` (its `concurrency` schema param is dead, cosmetic
+only); `multi-search` fetches only fixed provider hosts with
+`encodeURIComponent(query)` (no URL injection); `webbrowse` shares the #73
+`net-guard` (`guardedLookup` + protocol gate); `parallel_review`'s first
+wave is bounded by the fixed specialist roster (Set-deduped) — only the
+verify wave was open (#113).
 
 ---
 
@@ -166,11 +175,11 @@ only), test-only scaffolding (`extension_api`/`agent_registry` wiring demos).
 
 ---
 
-## 8. Fixed-vs-documented reconciliation → 108 claimed + #109 + #110 + #111 + #112 = **112**
+## 8. Fixed-vs-documented reconciliation → 108 claimed + #109 + #110 + #111 + #112 + #113 = **113**
 
 | Bucket                                          | Count                                                                       | State                                  |
 | ----------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------- |
-| My findings committed here                      | 28 (#51–54, 60, 62–80, 109–112)                                             | **fixed + verified + published-ready** |
+| My findings committed here                      | 29 (#51–54, 60, 62–80, 109–113)                                             | **fixed + verified + published-ready** |
 | Other track, committed history (rounds 1–6 era) | documented by CHANGELOG section; individual refs preserved only for #48–#50 | **fixed + committed**                  |
 | Other track, working batch (this repo)          | 7 numbered (#58, 84, 85, 87, 88, 90, 93) + 3 section groups                 | **fixed + uncommitted**                |
 | Other track, audit tree only                    | 13 numbered (#94–#100, 102–104, 106–108)                                    | **fixed, wrong tree — port required**  |
@@ -192,28 +201,31 @@ lands, merge their per-row ledger into §5.
       fixes; CHANGELOG `## [0.6.7]` + `package.json` version bump ride along).
 - [ ] Resolve **#101 / #105** evidence (or drop them from the claim).
 - [ ] Decide **`agent_registry`**: wire it or delete it (§6) — no dead exports.
-- [ ] Rebuild `dist` and verify every fix is present in the built artifacts
-      (round-14's verification ran in the other tree).
+- [x] Rebuild `dist` and verify every fix is present in the built artifacts
+      (round-18 rebuild at v0.6.7: tsc 0 + ink 0 + postbuild OK; 7/7 spot
+      checks green — #112 env filter, #110 safe-path, #111 boundedRun +
+      honest desc, #78 git getSafeEnv, #109 cap).
 - [ ] npm: confirm `@skt-ai-labs/trayambak-cli` is republished past the
       leaky 0.6.5 dist documented in CHANGELOG [Unreleased] ("the leak was
       still live in the _installed_ CLI").
-- [ ] Remove the stray untracked file `{}` from the working tree.
+- [x] Remove the stray untracked file `{}` from the working tree (round 18 —
+      it was 0 bytes).
 - [ ] Sync `docs/security.md` / `SECURITY.md` with the final behavior set.
 - [ ] Run the full gate suite on the final commit (§10) + coverage floors +
       `verify-all-tools` catalog check.
 
 ## 10. Gate snapshot at this review
 
-| Gate                                   | Result                                                                                                                                                                                                                                                                                                                                                  |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npx tsc --noEmitOnError`              | **exit 0**                                                                                                                                                                                                                                                                                                                                              |
-| `npm run lint`                         | **0 errors** (126 warnings, pre-existing baseline)                                                                                                                                                                                                                                                                                                      |
-| `npx prettier --check` (changed files) | **clean**                                                                                                                                                                                                                                                                                                                                               |
-| `npx vitest run`                       | **301 files — Round-18's diagnostics suite 25/25 green; 4 failed files (their new untracked `TrayambakLogo.test.ts`, `llama-cpp-bin`, `healing`, `state_db`) all reproduce with Round-18 changes stashed ⇒ pre-existing, caused by the other track's in-flight batch; clean baseline at `d869c18` was 299/299 · 3,362 passed / 5 skipped, no exclusions |
-| Red-proof (rounds 15–18)               | #109 (`1 failed \| 4 passed`); #110 — 5 tests + import error red on stashed sources; #111 — 5 bounds tests red on stashed source; #112 — canary-leak test red (planted tsc dumped the secret) on stashed source; all green after                                                                                                                        |
+| Gate                                   | Result                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npx tsc --noEmitOnError`              | **0 errors in tracked code** — exit 1 solely from the other track's untracked `keymap.{ts,test}.ts` WIP (mid-round)                                                                                                                                                                                                                   |
+| `npm run lint`                         | **0 errors** (129 warnings; +3 = other track's new TUI files, Round-18 baseline 126; my files 0)                                                                                                                                                                                                                                      |
+| `npx prettier --check` (changed files) | **clean**                                                                                                                                                                                                                                                                                                                             |
+| `npx vitest run`                       | **306 files — 3,502 passed / 1 failed / 5 skipped**; the single failure is their in-flight `message-list-static.test.ts` (their `MessageList.tsx` is `M`); Round-19 suite 8/8 green; Round-18's 4 stashed-attributed failures now green as their batch settled; clean baseline at `d869c18` was 299/299 · 3,362 passed, no exclusions |
+| Red-proof (rounds 15–19)               | #109 (`1 failed \| 4 passed`); #110 — 5 tests + import error red on stashed sources; #111 — 5 bounds tests red on stashed source; #112 — canary-leak test red (planted tsc dumped the secret) on stashed source; #113 — flood test red (`[40]` verifiers vs capped 16); all green after                                               |
 
 Ledger history: #51–54 `c243d78` · P1 batch `7b63be2` · #62 `682286f` · #65
 `2a1d1f4` · #66/67 `5ad0520` · #68/69 `1346689` · #70 `a9028e0` · #71
 `e91dad3` · #72–74 `8ea5917` · #75–77 `dfcf159` · #78–80 `2c6d203` · #109
-`fc9fd17` · #110 `973bbae` · #111 `b364ca0` · #112 `f9a5440` · Windows
-AppContainer `11017d1`.
+`fc9fd17` · #110 `973bbae` · #111 `b364ca0` · #112 `f9a5440` · #113
+`b571f22` · Windows AppContainer `11017d1`.
