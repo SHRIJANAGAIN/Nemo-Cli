@@ -189,7 +189,8 @@ const runWorkflowDef: ToolDefinition = {
   timeoutMs: 30_000,
   name: "trayambak__RunWorkflow",
   description:
-    "Execute a defined multi-step workflow with validation, bounded steps, and per-step result reporting. " +
+    "Validate a workflow definition and print an ordered, resumable step plan: bounded steps, persisted run record, and reuse-on-resume. " +
+    "This tool does NOT execute steps — the caller performs each action from the printed plan. " +
     "Provide a workflow object with name, description, and ordered steps. Each step specifies an action and optional parameters.",
   parameters: {
     type: "object",
@@ -203,7 +204,7 @@ const runWorkflowDef: ToolDefinition = {
       resumeFromRunId: {
         type: "string",
         description:
-          "Optional run id to resume: completed steps with identical id+content are reused, only edited or new steps re-run.",
+          "Optional run id to resume: previously recorded steps with identical id+content are reused, only edited or new steps re-printed.",
       },
     },
   },
@@ -272,8 +273,8 @@ export function createRunWorkflowTool(): Tool {
       }
 
       const summary = result.success
-        ? `Workflow '${workflow.name}' completed successfully (${result.results.length}/${workflow.steps.length} steps, reused ${result.reused} from resume).\n${result.results.map((r) => `${r.stepId}: ${r.output}`).join("\n")}`
-        : `Workflow '${workflow.name}' completed with errors (${result.results.filter((r) => r.error).length} failures):\n${result.results.map((r) => `${r.stepId}: ${r.error ?? r.output}`).join("\n")}`
+        ? `Workflow '${workflow.name}' plan ready: ${result.results.length}/${workflow.steps.length} steps printed (reused ${result.reused} from resume). This tool does not execute steps — run each action from the plan.\n${result.results.map((r) => `${r.stepId}: ${r.output}`).join("\n")}`
+        : `Workflow '${workflow.name}' plan recorded with errors (${result.results.filter((r) => r.error).length} failures):\n${result.results.map((r) => `${r.stepId}: ${r.error ?? r.output}`).join("\n")}`
       return textResult(summary)
     },
   }

@@ -152,4 +152,25 @@ describe("createRunWorkflowTool", () => {
     )
     expect(missing.isError).toBe(true)
   })
+
+  it("labels output as a plan and states steps are not executed", async () => {
+    const cwd = tmpCwd()
+    try {
+      const tool = createRunWorkflowTool()
+      const c = { cwd } as unknown as ToolContext
+      const res = await tool.execute(
+        "t1",
+        { workflow: JSON.stringify({ name: "honest", description: "d", steps: [{ id: "s1", action: "build" }] }) },
+        undefined,
+        undefined,
+        c,
+      )
+      expect(tool.definition.description).toContain("does NOT execute steps")
+      const body = res.content.map((x) => x.text ?? "").join()
+      expect(body).toContain("does not execute steps")
+      expect(body).not.toContain("completed successfully")
+    } finally {
+      fs.rmSync(cwd, { recursive: true, force: true })
+    }
+  })
 })
