@@ -283,3 +283,21 @@ describe("web_search error envelopes", () => {
     expect(firstText(res)).toBe("web_search error: Response error: socket hang up (mock)")
   })
 })
+
+describe("web_search input and body guards", () => {
+  it("rejects endpoint traversal before any request is sent", async () => {
+    const tool = createWebSearchTool()
+    const res = await tool.execute("t1", { query: "x", endpoint: "../admin" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("Invalid 'endpoint'")
+    expect(net.requests).toHaveLength(0)
+  })
+
+  it("stops reading an oversized service response", async () => {
+    net.routes.set("/search", "x".repeat(2_000_001))
+    const tool = createWebSearchTool()
+    const res = await tool.execute("t1", { query: "big" }, undefined)
+    expect(res.isError).toBe(true)
+    expect(firstText(res)).toContain("too large")
+  })
+})

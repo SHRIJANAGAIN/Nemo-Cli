@@ -30,6 +30,20 @@ const definition: ToolDefinition = {
   },
 }
 
+/** Hard cap on the service response: a hostile or broken hsearch endpoint
+ *  streaming gigabytes must not be buffered in full (#117). */
+const MAX_RESPONSE_BYTES = 2_000_000
+
+/** Endpoints are model-supplied and land verbatim in the request path. Allow
+ *  only path/query characters and reject traversal segments so a value like
+ *  "../admin" cannot escape the service's endpoint namespace (#117). */
+const SAFE_ENDPOINT = /^[A-Za-z0-9\-._~/?=&%+!$'()*,;:@]*$/
+
+function isSafeEndpoint(endpoint: string): boolean {
+  if (endpoint.length === 0 || endpoint.length > 200) return false
+  return SAFE_ENDPOINT.test(endpoint) && !endpoint.includes("..")
+}
+
 export function createWebSearchTool(): Tool {
   const baseUrl = (process.env.HSEARCH_BASE_URL ?? "http://localhost:8000").replace(/\/+$/, "")
 
@@ -53,12 +67,32 @@ export function createWebSearchTool(): Tool {
         },
         (res) => {
           const chunks: Buffer[] = []
-          res.on("data", (c) => chunks.push(c))
-          res.on("end", () => {
-            const raw = Buffer.concat(chunks).toString("utf8")
-            resolve(raw)
+          let size = 0
+          let settled = false
+          res.on("data", (c) => {
+            if (settled) return
+            size += c.length
+            if (size > MAX_RESPONSE_BYTES) {
+              settled = true
+              try {
+                req.destroy()
+              } catch {
+                /* transport may not implement destroy (mocks) */
+              }
+              reject(new Error(`Response too large: exceeded ${MAX_RESPONSE_BYTES} bytes`))
+              return
+            }
+            chunks.push(c)
           })
-          res.on("error", (err) => reject(new Error(`Response error: ${err.message}`)))
+          res.on("end", () => {
+            if (settled) return
+            resolve(Buffer.concat(chunks).toString("utf8"))
+          })
+          res.on("error", (err) => {
+            if (settled) return
+            settled = true
+            reject(new Error(`Response error: ${err.message}`))
+          })
         },
       )
       req.on("error", (err) => reject(new Error(`Request failed: ${err.message}`)))
@@ -73,6 +107,8 @@ export function createWebSearchTool(): Tool {
       const query = String(args.query ?? "")
       if (!query) return textResult("Missing 'query'.", /*isError*/ true)
       const endpoint = String(args.endpoint ?? "search")
+      if (!isSafeEndpoint(endpoint))
+        return textResult(`Invalid 'endpoint': path characters only, no ".." traversal.`, /*isError*/ true)
       const maxResults = typeof args.max_results === "number" ? args.max_results : 10
 
       try {
