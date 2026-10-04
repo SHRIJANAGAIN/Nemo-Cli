@@ -286,8 +286,14 @@ function claimIsStale(lock: string): boolean {
   return Date.now() - claim.at > 30_000
 }
 
-/** How long an op waits for a live foreign claim before proceeding anyway. */
-const LOCK_WAIT_MS = 2_000
+/** How long an op waits for a live foreign claim before proceeding anyway.
+ *  #115: was 2s — under full-suite CPU saturation a live holder can be
+ *  descheduled longer than that, the waiter failed open, and the unlocked
+ *  reload-then-chain lost appends (observed 48/50). Realistic holders
+ *  release in milliseconds, so the larger bound costs nothing in practice
+ *  while still being a bound — a wedged (alive but stalled) owner can only
+ *  delay the CLI for this long, never hang it. */
+const LOCK_WAIT_MS = 10_000
 
 /**
  * Cross-process critical section for the JSON backend (#65).
