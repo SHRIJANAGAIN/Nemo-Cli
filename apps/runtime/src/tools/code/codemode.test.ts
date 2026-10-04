@@ -80,6 +80,43 @@ describe("runCodemode", () => {
     expect(outcome.logs[0]).toBe("line 0")
     expect(outcome.logs[outcome.logs.length - 1]).toContain("more log lines dropped")
   })
+
+  it("closes host-realm constructor escapes — no guest→host Function bridge (#114)", () => {
+    // Before #114 the sandbox injected HOST builtins + host console closures:
+    // `Array.constructor("return process")()` returned the host Node version.
+    const vectors = [
+      'Array.constructor("return process")().version',
+      'String.constructor("return process")().version',
+      'parseInt.constructor("return process")().version',
+      'console.log.constructor("return process")().version',
+      '"".constructor.constructor("return process")().version',
+      'Math.random.constructor("return process")().version',
+      'JSON.parse.constructor("return process")().version',
+      'globalThis.constructor.constructor("return process")().version',
+      'Object.getPrototypeOf(globalThis).constructor.constructor("return process")().version',
+      'new Map().constructor.constructor("return process")().version',
+      'encodeURIComponent.constructor("return process")().version',
+    ]
+    for (const code of vectors) {
+      const outcome = runCodemode(code, { timeoutMs: 2000 })
+      expect(outcome.ok, `escape vector survived: ${code}`).toBe(false)
+      expect(outcome.result, `vector leaked host data: ${code}`).not.toMatch(/v\d+\.\d+/)
+      expect(outcome.error.length, `vector died silently: ${code}`).toBeGreaterThan(0)
+    }
+  })
+
+  it("keeps full guest-realm builtins without host injection (#114)", () => {
+    expect(runCodemode("Math.max(1, 5)")).toMatchObject({ ok: true, result: "5" })
+    expect(runCodemode('JSON.parse("[1,2,3]").length')).toMatchObject({ ok: true, result: "3" })
+    expect(runCodemode('parseInt("42", 10) + 1')).toMatchObject({ ok: true, result: "43" })
+    expect(runCodemode("[1,2,3].map((x) => x * 2).join(',')")).toMatchObject({ ok: true, result: '"2,4,6"' })
+    expect(runCodemode('encodeURIComponent("a b")')).toMatchObject({ ok: true, result: '"a%20b"' })
+    expect(runCodemode("new Date(0).getUTCFullYear()")).toMatchObject({ ok: true, result: "1970" })
+    expect(runCodemode('typeof globalThis.setTimeout === "undefined" ? "blocked" : "LEAK"')).toMatchObject({
+      ok: true,
+      result: '"blocked"',
+    })
+  })
 })
 
 describe("createCodemodeTool", () => {
