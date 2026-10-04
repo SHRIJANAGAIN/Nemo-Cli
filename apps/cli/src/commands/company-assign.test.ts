@@ -6,7 +6,13 @@
 
 import { describe, expect, it } from "vitest"
 
-import { assignCompanyWork, planCompanyWork, type AssignDept, type AssignWorker } from "./company-assign.js"
+import {
+  assignCompanyWork,
+  assignmentsToLaunches,
+  planCompanyWork,
+  type AssignDept,
+  type AssignWorker,
+} from "./company-assign.js"
 
 const DEPTS: AssignDept[] = [
   { id: "engineering", label: "Engineering" },
@@ -132,5 +138,26 @@ describe("assignCompanyWork — guards and no-guess reporting", () => {
     const policy = plan.assignments.find((a) => a.worker.name === "Policy Analyst")
     expect(policy).toBeDefined()
     expect(policy?.deptLabel).toBe("policy") // no label registered — id is the honest display
+  })
+})
+
+describe("tie-breaks and fan-out pairs", () => {
+  it("prefers the generalist when scores tie (SEO Strategist over Baidu SEO Specialist)", () => {
+    const seo: AssignWorker[] = [
+      { name: "Baidu SEO Specialist", division: "marketing", description: "Optimizes Baidu search rankings." },
+      { name: "SEO Strategist", division: "marketing", description: "Plans SEO strategies for organic growth." },
+    ]
+    const plan = planCompanyWork("seo campaigns", seo, DEPTS)
+    expect(plan.assignments).toHaveLength(1)
+    expect(plan.assignments[0].worker.name).toBe("SEO Strategist")
+  })
+
+  it("maps assignments to {type, prompt} launch pairs for the TUI fan-out", () => {
+    const plan = planCompanyWork("build the api, design a new logo", WORKERS, DEPTS)
+    expect(assignmentsToLaunches(plan)).toEqual([
+      { type: "Full-Stack Engineer", prompt: "build the api" },
+      { type: "UI Designer", prompt: "design a new logo" },
+    ])
+    expect(assignmentsToLaunches(planCompanyWork("", WORKERS, DEPTS))).toEqual([])
   })
 })

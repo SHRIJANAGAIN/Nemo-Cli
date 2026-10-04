@@ -179,6 +179,10 @@ const STOPWORDS = new Set([
   "than",
   "well",
   "way",
+  "run",
+  "running",
+  "ran",
+  "execute",
 ])
 
 /**
@@ -571,6 +575,12 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+/** Name word count — ties go to the generalist (fewer words = broader
+ *  mandate: "SEO Strategist" over "Baidu SEO Specialist" for a bare match). */
+function nameWords(name: string): number {
+  return name.trim().split(/\s+/).length
+}
+
 /** Substring hits need length ≥ 3 (`search` would swallow `ar`); short
  *  tokens match on word boundaries only, `+`-bearing tokens get escaped. */
 function hits(text: string, token: string): boolean {
@@ -649,7 +659,12 @@ function pickWorker(
 ): { worker: AssignWorker; matched: string[] } | null {
   const scored = pool.map((worker) => ({ worker, ...scoreWorker(worker, toks) })).filter((x) => x.score > 0)
   if (scored.length === 0) return null
-  scored.sort((a, b) => b.score - a.score || a.worker.name.localeCompare(b.worker.name))
+  scored.sort(
+    (a, b) =>
+      b.score - a.score ||
+      nameWords(a.worker.name) - nameWords(b.worker.name) ||
+      a.worker.name.localeCompare(b.worker.name),
+  )
   const fresh = scored.find((x) => !used.has(x.worker.name))
   const chosen = fresh ?? scored[0]
   return { worker: chosen.worker, matched: chosen.matched }
@@ -729,7 +744,7 @@ export function planCompanyWork(
   return note ? { task, assignments, unmatched, note } : { task, assignments, unmatched }
 }
 
-function formatPlan(plan: WorkPlan, deptCount: number, workerCount: number): string {
+export function formatCompanyWork(plan: WorkPlan, deptCount: number, workerCount: number): string {
   const header = `Company formed: ${deptCount} departments · ${workerCount} employees.`
   if (plan.assignments.length === 0 && plan.unmatched.length === 0 && !plan.note) {
     return `${header}\nNothing to divide.`
@@ -756,6 +771,19 @@ function formatPlan(plan: WorkPlan, deptCount: number, workerCount: number): str
   return lines.join("\n")
 }
 
+/** One launchable unit for the TUI fan-out — same `{type, prompt}` shape
+ *  `launchMany` feeds into the bounded-wave subagent runner. */
+export interface AssignLaunch {
+  readonly type: string
+  readonly prompt: string
+}
+
+/** Assignments → launch pairs (employee name, scope prompt). Empty when
+ *  nothing divided — the caller reports instead of launching nothing. */
+export function assignmentsToLaunches(plan: WorkPlan): AssignLaunch[] {
+  return plan.assignments.map((a) => ({ type: a.worker.name, prompt: a.focus }))
+}
+
 /**
  * One-shot entry point for the `/company assign` wiring: usage guard,
  * empty-roster guard, then plan + format.
@@ -768,5 +796,5 @@ export function assignCompanyWork(
   const trimmed = task.trim()
   if (!trimmed) return "Usage: /company assign <task>"
   if (workers.length === 0) return "Company library has no employees to assign."
-  return formatPlan(planCompanyWork(trimmed, workers, depts), depts.length, workers.length)
+  return formatCompanyWork(planCompanyWork(trimmed, workers, depts), depts.length, workers.length)
 }
