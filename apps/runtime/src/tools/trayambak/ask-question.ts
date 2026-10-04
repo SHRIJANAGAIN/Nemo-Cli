@@ -30,6 +30,17 @@ const definition: ToolDefinition = {
   },
 }
 
+/** Fan-out bounds: one AskUserQuestion call must not flood the prompt with an
+ *  unbounded question/option matrix or megabyte-long labels (#116). */
+const MAX_QUESTIONS = 10
+const MAX_OPTIONS = 10
+const MAX_QUESTION_CHARS = 500
+const MAX_HEADER_CHARS = 80
+const MAX_LABEL_CHARS = 200
+const MAX_DESC_CHARS = 300
+
+const clip = (s: string, max: number): string => (s.length > max ? `${s.slice(0, max)}…` : s)
+
 export function createAskUserQuestionTool(
   onAsk?: (
     questions: Array<{
@@ -44,30 +55,38 @@ export function createAskUserQuestionTool(
     definition,
     async execute(_id, args, _signal, _update, _context) {
       const raw = args.questions ?? []
-      const questions = Array.isArray(raw) ? raw : []
+      const source = Array.isArray(raw) ? raw : []
+      const questions = source.slice(0, MAX_QUESTIONS)
+      let optionsTruncated = false
       const normalized = questions.map((q) => {
         const record = typeof q === "object" && q !== null ? q : {}
-        const question = typeof record.question === "string" ? record.question : ""
+        const question = typeof record.question === "string" ? clip(record.question, MAX_QUESTION_CHARS) : ""
+        const header = typeof record.header === "string" ? clip(record.header, MAX_HEADER_CHARS) : ""
         const optionsRaw = Array.isArray(record.options) ? record.options : []
-        const options = optionsRaw.map((o: { label?: unknown; description?: unknown }) => {
+        if (optionsRaw.length > MAX_OPTIONS) optionsTruncated = true
+        const options = optionsRaw.slice(0, MAX_OPTIONS).map((o: { label?: unknown; description?: unknown }) => {
           const entry = typeof o === "object" && o !== null ? o : {}
           return {
-            label: typeof entry.label === "string" ? entry.label : String(entry ?? ""),
-            description: typeof entry.description === "string" ? entry.description : "",
+            label: clip(typeof entry.label === "string" ? entry.label : String(entry.label ?? ""), MAX_LABEL_CHARS),
+            description: clip(typeof entry.description === "string" ? entry.description : "", MAX_DESC_CHARS),
           }
         })
-        return { question, options, multi_select: !!record.multi_select }
+        return { question, header, options, multi_select: !!record.multi_select }
       })
       if (normalized.length === 0) return textResult("Missing 'questions'.", /*isError*/ true)
+      const notes: string[] = []
+      if (source.length > MAX_QUESTIONS) notes.push(`question limit: showing ${MAX_QUESTIONS} of ${source.length}`)
+      if (optionsTruncated) notes.push(`options capped at ${MAX_OPTIONS} per question`)
+      const note = notes.length > 0 ? `\n\n(${notes.join("; ")})` : ""
       if (onAsk) {
         const answers = await onAsk(normalized)
         const out = normalized.map((q, i) => `Q: ${q.question}\nA: ${answers[i] ?? "(skipped)"}`).join("\n\n")
-        return textResult(out)
+        return textResult(out + note)
       }
       const out = normalized
         .map((q) => `Q: ${q.question}\nOptions: ${q.options.map((o: { label: string }) => o.label).join(", ")}`)
         .join("\n\n")
-      return textResult(`[awaiting user input]\n\n${out}`)
+      return textResult(`[awaiting user input]\n\n${out}${note}`)
     },
   }
 }
