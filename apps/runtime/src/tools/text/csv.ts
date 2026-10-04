@@ -6,7 +6,7 @@
 
 import type { Tool } from "../types.js"
 import { textResult, resolveConstrainedPath } from "../types.js"
-import * as fs from "fs"
+import { MAX_TEXT_FILE_BYTES, readFileTextCapped } from "./capped-read.js"
 
 /** Parse CSV treating quoted fields correctly (RFC-4180-ish). */
 export function parseCsv(text: string, delim = ","): string[][] {
@@ -88,11 +88,24 @@ export function createCsvTool(): Tool {
     async execute(_id, args) {
       try {
         const p = resolveConstrainedPath(String(args.file), process.cwd())
-        const text = fs.readFileSync(p, "utf8")
-        const rows = parseCsv(text, String(args.delimiter ?? ","))
-        if (rows.length === 0) return textResult("(empty file)")
+        const capped = readFileTextCapped(p)
+        let src = capped.text
+        if (capped.truncated) {
+          const nl = src.lastIndexOf("\n")
+          src = nl >= 0 ? src.slice(0, nl + 1) : "" // drop the torn tail row
+        }
+        const rows = parseCsv(src, String(args.delimiter ?? ","))
+        const note = capped.truncated
+          ? `\n… source truncated at ${MAX_TEXT_FILE_BYTES} bytes of ${capped.totalBytes}`
+          : ""
+        if (rows.length === 0)
+          return textResult(
+            capped.truncated
+              ? `(no complete rows in the first ${MAX_TEXT_FILE_BYTES} bytes of ${capped.totalBytes})`
+              : "(empty file)",
+          )
         const head = typeof args.head === "number" ? Math.max(1, args.head) : rows.length
-        return textResult(toMarkdownTable(rows.slice(0, head)))
+        return textResult(toMarkdownTable(rows.slice(0, head)) + note)
       } catch (e) {
         return textResult(`csv failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }

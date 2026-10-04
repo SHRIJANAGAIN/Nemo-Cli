@@ -143,3 +143,33 @@ describe("csv tool", () => {
     expect(textOf(res).startsWith("csv failed:")).toBe(true)
   })
 })
+
+describe("csv tool byte cap", () => {
+  let tmp = ""
+  let originalCwd = ""
+
+  beforeEach(() => {
+    originalCwd = process.cwd()
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-csvcap-"))
+    process.chdir(tmp)
+  })
+
+  afterEach(() => {
+    process.chdir(originalCwd)
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  const run = async (args: Record<string, unknown>): Promise<ToolResult> =>
+    createCsvTool().execute("call-1", args, undefined)
+
+  const textOf = (res: ToolResult): string => (res.content[0] as { text: string }).text
+
+  it("reads only a bounded prefix of a huge CSV and says so", async () => {
+    fs.writeFileSync(path.join(tmp, "huge.csv"), "h1,h2\n" + "a,b\n".repeat(1_400_000))
+    const res = await run({ file: "huge.csv" })
+    expect(res.isError).toBe(false)
+    const text = textOf(res)
+    expect(text).toContain("| h1 | h2 |")
+    expect(text).toContain("truncated")
+  })
+})

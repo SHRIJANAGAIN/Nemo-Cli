@@ -6,7 +6,7 @@
 
 import type { Tool } from "../types.js"
 import { textResult, resolveConstrainedPath } from "../types.js"
-import * as fs from "fs"
+import { MAX_TEXT_FILE_BYTES, readFileTextCapped } from "./capped-read.js"
 
 /** Lightweight extractive summarizer: scores sentences by word frequency. */
 export function summarizeText(text: string, maxWords = 60): string {
@@ -61,13 +61,23 @@ export function createSummarizeTool(): Tool {
     async execute(_id, args) {
       try {
         let text: string
+        let truncated = false
+        let totalBytes = 0
         if (typeof args.text === "string") text = args.text
         else if (typeof args.file === "string") {
           const p = resolveConstrainedPath(String(args.file), process.cwd())
-          text = fs.readFileSync(p, "utf8")
+          const capped = readFileTextCapped(p)
+          text = capped.text
+          truncated = capped.truncated
+          totalBytes = capped.totalBytes
         } else return textResult("Provide either a file or inline text.", /*isError*/ true)
         const maxWords = typeof args.max_words === "number" ? Number(args.max_words) : 60
-        return textResult(summarizeText(text, maxWords))
+        const summary = summarizeText(text, maxWords)
+        return textResult(
+          truncated
+            ? `${summary}\n\n[source truncated at ${MAX_TEXT_FILE_BYTES} bytes of ${totalBytes} — the summary covers only the prefix]`
+            : summary,
+        )
       } catch (e) {
         return textResult(`summarize failed: ${e instanceof Error ? e.message : String(e)}`, /*isError*/ true)
       }
@@ -103,11 +113,15 @@ export function createExtractTool(): Tool {
     async execute(_id, args) {
       try {
         const p = resolveConstrainedPath(String(args.file), process.cwd())
-        const text = fs.readFileSync(p, "utf8")
+        const capped = readFileTextCapped(p)
+        const text = capped.text
+        const note = capped.truncated
+          ? `\n\n[searched only the first ${MAX_TEXT_FILE_BYTES} bytes of ${capped.totalBytes} — file truncated]`
+          : ""
         const lines = text.split(/\r?\n/)
         if (Array.isArray(args.lines)) {
           const [s, e] = args.lines as number[]
-          return textResult(lines.slice(Math.max(0, s - 1), Math.min(lines.length, e)).join("\n"))
+          return textResult(lines.slice(Math.max(0, s - 1), Math.min(lines.length, e)).join("\n") + note)
         }
         if (typeof args.heading === "string") {
           const re = new RegExp(`^#{1,3}\\s+${args.heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i")
@@ -117,7 +131,7 @@ export function createExtractTool(): Tool {
               start = i
               break
             }
-          if (start < 0) return textResult("Heading not found.", /*isError*/ true)
+          if (start < 0) return textResult("Heading not found." + note, /*isError*/ true)
           let end = lines.length
           for (let i = start + 1; i < lines.length; i++) {
             if (/^#{1,3}\s+/.test(lines[i])) {
@@ -125,7 +139,7 @@ export function createExtractTool(): Tool {
               break
             }
           }
-          return textResult(lines.slice(start, end).join("\n"))
+          return textResult(lines.slice(start, end).join("\n") + note)
         }
         if (typeof args.pattern === "string") {
           const re = new RegExp(args.pattern, "gmi")
@@ -134,7 +148,7 @@ export function createExtractTool(): Tool {
           while ((m = re.exec(text)) && hits.length < 200) {
             hits.push(m[0].trim().slice(0, 3000))
           }
-          return textResult(hits.length ? hits.join("\n---\n") : "(no matches)")
+          return textResult((hits.length ? hits.join("\n---\n") : "(no matches)") + note)
         }
         return textResult("Provide lines, heading, or pattern.", /*isError*/ true)
       } catch (e) {

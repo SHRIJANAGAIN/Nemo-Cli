@@ -6,13 +6,21 @@
 
 import type { Tool, ToolResult } from "../types.js"
 import { textResult, resolveConstrainedPath } from "../types.js"
+import { readFileTextExact } from "./capped-read.js"
 import * as fs from "fs"
 import * as path from "path"
+
+/** LCS tables are O(n×m) cells — refuse pathological sizes before allocating (#120). */
+export const MAX_DIFF_CELLS = 20_000_000
 
 /** Classic LCS-based line diff producing unified-format hunks. */
 export function diffLines(a: string[], b: string[]): Array<{ op: " " | "-" | "+"; line: string }> {
   const n = a.length
   const m = b.length
+  if ((n + 1) * (m + 1) > MAX_DIFF_CELLS)
+    throw new Error(
+      `diff too large: ${n} × ${m} lines exceeds the ${MAX_DIFF_CELLS}-cell LCS budget — diff smaller ranges or split the files`,
+    )
   const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0))
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
@@ -105,11 +113,11 @@ export function createDiffTool(): Tool {
     async execute(_id, args) {
       try {
         const pa = resolveConstrainedPath(String(args.file_a), process.cwd())
-        const aText = fs.readFileSync(pa, "utf8")
+        const aText = readFileTextExact(pa)
         let bText: string
         if (typeof args.text_b === "string") bText = args.text_b
         else if (typeof args.file_b === "string")
-          bText = fs.readFileSync(resolveConstrainedPath(String(args.file_b), process.cwd()), "utf8")
+          bText = readFileTextExact(resolveConstrainedPath(String(args.file_b), process.cwd()))
         else return textResult("Provide either file_b or text_b to diff against.", /*isError*/ true)
         return textResult(
           unifiedDiff(String(args.file_a), String(args.file_b ?? "<text>"), aText.split(/\r?\n/), bText.split(/\r?\n/)),
@@ -279,7 +287,7 @@ export function createPatchTool(): Tool {
       for (const job of jobs) {
         let oldContent: string
         try {
-          oldContent = fs.readFileSync(job.resolved, "utf8")
+          oldContent = readFileTextExact(job.resolved)
         } catch (e) {
           return failFor(job.file, e)
         }

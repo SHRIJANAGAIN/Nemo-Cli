@@ -343,3 +343,45 @@ describe("multi-file atomic patch", () => {
     expect(fs.readFileSync(bPath, "utf8")).toBe("b1\nb2")
   })
 })
+
+describe("diff size guards", () => {
+  let tmp = ""
+  let originalCwd = ""
+
+  beforeEach(() => {
+    originalCwd = process.cwd()
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-diffcap-"))
+    process.chdir(tmp)
+  })
+
+  afterEach(() => {
+    process.chdir(originalCwd)
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  const runDiff = async (args: Record<string, unknown>): Promise<ToolResult> =>
+    createDiffTool().execute("call-1", args, undefined)
+  const runPatch = async (args: Record<string, unknown>): Promise<ToolResult> =>
+    createPatchTool().execute("call-1", args, undefined)
+  const textOf = (res: ToolResult): string => (res.content[0] as { text: string }).text
+
+  it("refuses LCS work beyond the cell budget instead of allocating it", () => {
+    const a = new Array(4_500).fill("x")
+    const b = new Array(4_500).fill("y")
+    expect(() => diffLines(a, b)).toThrow(/budget/)
+  })
+
+  it("diff refuses files over the byte cap", async () => {
+    fs.writeFileSync(path.join(tmp, "big.txt"), "x\n".repeat(2_700_000))
+    const res = await runDiff({ file_a: "big.txt", text_b: "z" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("exceeds")
+  })
+
+  it("patch refuses files over the byte cap", async () => {
+    fs.writeFileSync(path.join(tmp, "big.txt"), "x\n".repeat(2_700_000))
+    const res = await runPatch({ file: "big.txt", patch: "@@ -1,1 +1,1 @@\n x" })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("exceeds")
+  })
+})
