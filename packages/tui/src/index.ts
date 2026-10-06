@@ -51,6 +51,32 @@ export {
   type KeybindingsConfig,
 } from "./keybindings"
 
+// The runtime keymap that honours `keybindings` config overrides. Until this
+// existed, createKeybindingRegistry had no production caller: every chord was a
+// hand-written `key.ctrl && input === "z"` comparison, so DEFAULT_KEYBINDINGS
+// described bindings the TUI never read.
+export {
+  Keymap,
+  LOCKED_ACTIONS,
+  getKeymap,
+  isChordSequence,
+  normalizeChord,
+  resetKeymap,
+  setKeymap,
+  toKeyId,
+  type KeymapOptions,
+  type RejectedOverride,
+} from "./keymap"
+
+// The approval key map as a pure function, so the "there is always a reachable
+// no" invariant is testable without standing up an Ink stdin.
+export {
+  approvalDecisionFor,
+  approvalNavigationFor,
+  type ApprovalDecision,
+  type ApprovalKeyLike,
+} from "./ink-app/approvalKeys"
+
 export function renderArtifact(
   artifact: { filename: string; language: string; content: string; version?: number },
   ui: TerminalUI,

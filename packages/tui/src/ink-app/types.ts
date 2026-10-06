@@ -128,6 +128,14 @@ export interface StatusBarInfo {
   isStreaming?: boolean
   queuedCount?: number
   backgroundCount?: number
+  /** Messages above the live window — drives the footer's `↑ N` chat-size
+   *  chip ("how big is the chat upside"). Absent/0 at the top: the footer
+   *  stays byte-identical to before. */
+  scrollDepth?: number
+  /** Running build version ("0.6.7") — drives the footer's `vX.Y.Z` chip so
+   *  every screenshot identifies its build (ends "which version is this"
+   *  ambiguity in bug reports). */
+  version?: string
   /** Transient footer hint, e.g. "✓ task finished — Ctrl+B to view". */
   taskHint?: string
 }

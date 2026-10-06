@@ -23,10 +23,13 @@ declare module "ink" {
     escape?: boolean
     backspace?: boolean
     delete?: boolean
-    up?: boolean
-    down?: boolean
-    left?: boolean
-    right?: boolean
+    // Arrow flags carry ink's real names (`upArrow`, …) — keymap.ts and the
+    // ink-app tree both code against those; the classic program must match
+    // or `npm run typecheck` diverges from typecheck:ink.
+    upArrow?: boolean
+    downArrow?: boolean
+    leftArrow?: boolean
+    rightArrow?: boolean
     tab?: boolean
     space?: boolean
     pageUp?: boolean

@@ -15,6 +15,7 @@ import { getTheme, selectedForeground } from "../ui/theme.js"
 import { stringWidth } from "./utils/stringWidth.js"
 import { SLASH_COMMANDS } from "./types.js"
 import { isEnter } from "./keys.js"
+import { getKeymap } from "../keymap.js"
 import { fuzzyMatch, fuzzyMatchScore } from "./fuzzy.js"
 import { useAppInput } from "./useAppInput.js"
 import type { SlashCommand, ChooserOption, QuestionRequest } from "./types.js"
@@ -52,15 +53,14 @@ export interface CommandDef {
 }
 
 export interface PromptInputProps {
-  onSubmit: (input: string) => void
+  onSubmit: (input: string, display?: string) => void
   onSlashCommand?: (command: string, args: string) => void
   onChoose?: (command: string, value: string) => void
-  /** PageUp/PageDown (no menu open): slide the transcript window a page
-   *  through history — App owns the offset; the wheel does the same in
-   *  3-notch steps. Menu-open presses keep paging the menu instead. */
-  onHistoryScroll?: (dir: "up" | "down") => void
   /** Ctrl+E / /enhance rewrite callback — returns a result, never throws. */
   onEnhance?: (draft: string) => Promise<{ ok: true; text: string } | { ok: false; error: string }>
+  /** PageUp/PageDown page the conversation transcript. App owns the offset
+   *  (shared with the wheel); absent, the keys are inert. */
+  onHistoryScroll?: (dir: "up" | "down") => void
   placeholder?: string
   isLoading?: boolean
   disabled?: boolean
@@ -165,6 +165,38 @@ function padDisplay(items: ScoredItem[]): ScoredItem[] {
   }))
 }
 
+/** Pastes at/over this many chars collapse to a placeholder (Codex parity:
+ *  their tests pin a 1001-char paste collapsing). Count is unicode scalars,
+ *  like their `chars().count()` — not UTF-16 units, not bytes. */
+export const PASTE_COLLAPSE_CHARS = 1000
+
+/** Placeholder for a collapsed paste: `[Pasted Content N chars]`. */
+export function pastePlaceholder(text: string): string {
+  return `[Pasted Content ${Array.from(text).length} chars]`
+}
+
+/** Unique placeholder for this paste — a second DIFFERENT paste with the
+ *  same char count earns a Codex-style ` #2` suffix so the two payloads
+ *  never alias. Same text reuses its placeholder (both expand alike). */
+export function uniquePastePlaceholder(text: string, pastes: ReadonlyMap<string, string>): string {
+  const base = pastePlaceholder(text)
+  if (!pastes.has(base) || pastes.get(base) === text) return base
+  let n = 2
+  while (pastes.has(`${base} #${n}`)) n++
+  return `${base} #${n}`
+}
+
+/** Expand every known placeholder back to its full text for submit. Unknown
+ *  (user-typed or half-deleted) placeholders pass through untouched — only
+ *  exact map keys expand, so prose can never detonate into a paste. */
+export function expandPastes(draft: string, pastes: ReadonlyMap<string, string>): string {
+  let out = draft
+  for (const [placeholder, text] of pastes) {
+    if (out.includes(placeholder)) out = out.split(placeholder).join(text)
+  }
+  return out
+}
+
 function getDisplayText(item: SlashCommand | ChooserOption | CommandDef): string {
   if ("value" in item) return item.value
   const name = item.name
@@ -207,8 +239,8 @@ export const PromptInput = ({
   onSubmit,
   onSlashCommand,
   onChoose,
-  onHistoryScroll,
   onEnhance,
+  onHistoryScroll,
   placeholder = "Ask Trayambak to do anything...",
   isLoading = false,
   disabled = false,
@@ -277,6 +309,11 @@ export const PromptInput = ({
    *  The ref makes writes/reads synchronous so submit always sees what the
    *  user actually typed; state mirrors it for rendering. */
   const bufferRef = useRef("")
+  /** Large-paste payloads by placeholder: the composer shows
+   *  `[Pasted Content N chars]` (Codex parity) while the full text rides
+   *  here and expands back on submit. Pruned whenever the buffer empties
+   *  (see writeBuffer) so a long session can't hoard pastes. */
+  const pastesRef = useRef(new Map<string, string>())
   /** Last `@path` inserted this session — lets deriveMentionState detect
    *  "mention committed, now prose" (SKT AI LABS's sticky mention token). Cleared
    *  whenever the buffer is emptied. */
@@ -286,6 +323,12 @@ export const PromptInput = ({
   const [escArmed, setEscArmed] = useState(/*initial*/ false)
   const writeBuffer = (next: string): void => {
     if (!next) insertedRef.current = null
+    // Placeholders live and die with the draft text: drop payloads whose
+    // placeholder no longer appears, so stale pastes can neither expand
+    // later nor pile up over a long session.
+    for (const key of [...pastesRef.current.keys()]) {
+      if (!next.includes(key)) pastesRef.current.delete(key)
+    }
     bufferRef.current = next
     setBuffer(next)
     // Any text change also retires a pending Esc-arm: the next Esc must not
@@ -401,19 +444,21 @@ export const PromptInput = ({
 
   const inputActive = !disabled || askMode
 
-  // Blinky block caret ("animation dalo UI me"): the hardware caret is
-  // hidden for the whole app lifetime (App effect), so a permanently-lit
-  // `▌` read as a stuck glyph. A real terminal caret swaps solid/blank
-  // ~2×/s — the cell is always occupied (space on the off-phase), so the
-  // placeholder's columns never shift between blinks. The tick also
-  // pulses the busy `●` glyph (color, never content: dumps/oracles keep
-  // their ●). Idle (input inactive) → no timer at all.
+  // Static block caret + mid-turn-only pulse. The old blinky caret swapped
+  // solid/blank ~2×/s at IDLE too — every blink repainted the frame and
+  // yanked a native-scrolled viewport back to the cursor, so the Windows
+  // scrollbar and native drag could never hold still ("windows inbuilt
+  // scrollbar se scroll nahi hota"). Now: idle writes ZERO (caret static,
+  // no timer), so at rest the terminal owns the viewport natively —
+  // wheel (in-app window), drag and the Windows bar all hold position.
+  // Mid-turn the busy `●` still pulses (repaints already flow then, and
+  // the parked window — not the viewport — owns reading).
   const [caretOn, setCaretOn] = useState(/*initial*/ true)
   useEffect(() => {
-    if (!inputActive) return
+    if (!isLoading) return
     const timer = setInterval(() => setCaretOn((v) => !v), 530)
     return () => clearInterval(timer)
-  }, [inputActive])
+  }, [isLoading])
 
   useEffect(() => {
     if (!stdin.isRawModeSupported) return
@@ -428,9 +473,17 @@ export const PromptInput = ({
     (text: string) => {
       if (!inputActive) return
       const normalized = text.replace(/\r\n?/g, "\n").replace(/\n+/g, " ").trim()
-      if (normalized) {
-        writeBuffer(bufferRef.current + normalized)
+      if (!normalized) return
+      // Large pastes collapse to `[Pasted Content N chars]` (Codex parity):
+      // the box stays one readable line while the full text rides the paste
+      // map and expands back on submit — byte-identical to pasting raw.
+      if (Array.from(normalized).length >= PASTE_COLLAPSE_CHARS) {
+        const placeholder = uniquePastePlaceholder(normalized, pastesRef.current)
+        pastesRef.current.set(placeholder, normalized)
+        writeBuffer(bufferRef.current + placeholder)
+        return
       }
+      writeBuffer(bufferRef.current + normalized)
     },
     { isActive: inputActive },
   )
@@ -440,7 +493,7 @@ export const PromptInput = ({
       piLog(`in=${JSON.stringify(input)} return=${String(key.return)} active=${String(inputActive)}`)
       if (!inputActive) return
 
-      if (key.ctrl && input === "c") {
+      if (getKeymap().matchesInput("tui.input.copy", input, key)) {
         // Single Ctrl-C never exits: with a draft it clears the line
         // (terminal standard); on an empty composer App decides — deny an
         // open dialog, abort a live turn, or arm the idle double-press exit.
@@ -453,13 +506,13 @@ export const PromptInput = ({
         return
       }
 
-      if (key.ctrl && input === "s") {
+      if (getKeymap().matchesInput("tui.global.injectDraft", input, key)) {
         // Inject mid-stream: park the draft at the FRONT of the prompt
         // queue (ahead of Enter-queued prompts) without waiting for the
         // live turn. Skipped while answering questions — answers must not
         // become queued prompts. Empty draft: nothing to park.
         if (askMode || waitingCustom) return
-        const draft = bufferRef.current.trim()
+        const draft = expandPastes(bufferRef.current, pastesRef.current).trim()
         if (!draft) return
         writeBuffer("")
         setShowMenu(/*showMenu*/ false)
@@ -467,25 +520,25 @@ export const PromptInput = ({
         return
       }
 
-      if (key.ctrl && input === "l") {
+      if (getKeymap().matchesInput("tui.input.clear", input, key)) {
         writeBuffer("")
         setShowMenu(/*showMenu*/ false)
         return
       }
 
-      if (key.ctrl && input === "h") {
+      if (getKeymap().matchesInput("tui.input.help", input, key)) {
         onSlashCommand?.("help", "")
         return
       }
 
-      if (key.ctrl && input === "e") {
+      if (getKeymap().matchesInput("tui.global.enhance", input, key)) {
         // SKT AI LABS's sparkle button: enhance the current draft in place, then
         // review/edit and send normally (repeatable for iteration).
-        void runEnhance(bufferRef.current)
+        void runEnhance(expandPastes(bufferRef.current, pastesRef.current))
         return
       }
 
-      if (key.ctrl && input === "r") {
+      if (getKeymap().matchesInput("tui.global.editLast", input, key)) {
         // Edit-last-prompt: App reloads the previous prompt into the buffer
         // via a fresh draftRequest nonce (never auto-resends).
         onRetryEdit?.()
@@ -529,7 +582,12 @@ export const PromptInput = ({
         let keepBuffer = false
         // Ref-fresh text: chars appended by key replay in this same tick have
         // not re-rendered yet, so the `buffer` state can lag Enter by a chunk.
-        const text = bufferRef.current
+        // `text` is the EXPANDED submit (model + commands + answers always
+        // get whole pastes; unknown text never detonates) while `display`
+        // keeps the composer as typed — placeholders intact — so the sent
+        // transcript row stays a collapsed block. Identical when no pastes.
+        const text = expandPastes(bufferRef.current, pastesRef.current)
+        const display = bufferRef.current
         piLog(`ENTER text=${JSON.stringify(text)} ask=${String(askMode)}`)
         try {
           if (text.startsWith("/") && !askMode) {
@@ -620,10 +678,10 @@ export const PromptInput = ({
                 setScrollTop(0)
               }
             } else {
-              onSubmit(text)
+              onSubmit(text, display)
             }
           } else {
-            onSubmit(text)
+            onSubmit(text, display)
           }
         } catch (error) {
           // This handler runs inside Ink's stdin dispatch: letting a submit-
@@ -685,10 +743,10 @@ export const PromptInput = ({
         return
       }
 
-      // History paging with no menu open: PageUp/PageDown jump a page
-      // through the transcript (App keeps the offset anchored and snaps to
-      // live on the next turn). Above branches already returned for
-      // menu-open presses, so the two never drive each other's scroll.
+      // PageUp/PageDown page the TRANSCRIPT when no menu is open. The offset
+      // itself lives in App (shared with the mouse wheel, and anchored across
+      // growth — see scroll-math.ts), so this only reports the intent; without
+      // a listener the keys stay inert, exactly as before.
       if (!showMenu && (key.pageUp || key.pageDown)) {
         onHistoryScroll?.(key.pageUp ? "up" : "down")
         return
@@ -771,9 +829,10 @@ export const PromptInput = ({
         {/* Block caret at the typing position: the hardware caret is hidden
             for the app's lifetime (App effect) because Ink never
             repositions it — it floated wherever the last frame write ended
-            ("wo blinker show ho raha"). It now BLINKS like a real one
-            (solid ▌ ↔ a space on the same cell — no reflow). */}
-        {buffer.length === 0 && inputActive && <Text color={theme.primary}>{caretOn ? g("caret") : " "}</Text>}
+            ("wo blinker show ho raha"). STATIC (always solid ▌): a blinking
+            caret repainted the frame ~2×/s even at idle and yanked a
+            native-scrolled viewport on every blink. */}
+        {buffer.length === 0 && inputActive && <Text color={theme.primary}>{g("caret")}</Text>}
         {buffer.length > 0 ? (
           <Text color={isLoading ? theme.info : theme.warning}>{buffer}</Text>
         ) : (
@@ -781,9 +840,7 @@ export const PromptInput = ({
             {askMode ? (waitingCustom ? "Your custom answer..." : "Your answer (number or text)...") : placeholder}
           </Text>
         )}
-        {buffer.length > 0 && inputActive && (
-          <Text color={isLoading ? theme.info : theme.primary}>{caretOn ? g("caret") : " "}</Text>
-        )}
+        {buffer.length > 0 && inputActive && <Text color={isLoading ? theme.info : theme.primary}>{g("caret")}</Text>}
       </Box>
 
       {enhanceStatus &&

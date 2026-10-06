@@ -6,6 +6,8 @@
 
 import React, { useEffect, useRef, useState, type ReactNode } from "react"
 import { Box, Text, render, useStdout } from "ink"
+import { GenerationGate } from "./generation-gate.js"
+import { onMouseScroll } from "./mouse-input.js"
 import {
   loadSessions,
   createSession,
@@ -55,17 +57,17 @@ import { runDevmode } from "./devmode-command.js"
 import { runMcp } from "./mcp-command.js"
 export { type TrayambakAppProps } from "./app-bootstrap.js"
 import { useAppInput } from "./useAppInput.js"
-import { onMouseScroll } from "./mouse-input.js"
-import { pageScrollOffset, scrollOffsetAfterGrowth, wheelScrollOffset } from "./scroll-math.js"
 import { useBorderPulse } from "./use-border-pulse.js"
 import { useThemeColors } from "./themeColors.js"
 import { ThemePicker } from "./ThemePicker.js"
 import { CommandPalette } from "./CommandPalette.js"
 import type { PaletteEntry } from "./command-palette.js"
+import { mergeSlashRows, type SlashRow } from "./command-palette.js"
+import { foldTranscript } from "./transcript-fold.js"
 import { ModelPicker } from "./ModelPicker.js"
 import { ProviderPicker } from "./ProviderPicker.js"
 import { SplashScreen } from "./SplashScreen.js"
-import { BootCine } from "./BootCine.js"
+
 import { SandboxSetup } from "./SandboxSetup.js"
 import { pushRecent, toggleFavorite } from "./model-picker.js"
 import { Sidebar, shouldShowSidebar } from "./Sidebar.js"
@@ -123,6 +125,7 @@ import {
   stopTitleAnimation,
 } from "./terminal-notify.js"
 import { slashCommandService } from "../../../../apps/cli/src/commands/slash-command.js"
+import { VERSION } from "../../../../apps/cli/src/version.js"
 import {
   loadPromptCommands,
   defaultPromptCommandDirs,
@@ -158,6 +161,15 @@ export const TrayambakApp = ({
 }: TrayambakAppProps): ReactNode => {
   const theme = useThemeColors()
   const [messages, setMessages] = useState<TrayambakMessage[]>([])
+  /** Heap guard (observed 4GB Mark-Compact death spiral → Ink exit 134):
+   *  the transcript keeps every row by design and each streamed token copies
+   *  the array, so GBs of old tool outputs stall every token. foldTranscript
+   *  collapses old tool payloads past the soft cap (rows stay, newest stay
+   *  full) and returns the same reference otherwise, so this effect bails
+   *  out with no extra render and terminates after one fold pass. */
+  useEffect(() => {
+    setMessages((prev) => foldTranscript(prev))
+  }, [messages])
   /** Remount token for MessageList: bumped whenever `messages` is replaced
    *  wholesale (restore / clear / new chat) so Ink resets <Static>'s print
    *  index and the NEW history prints from item 0 (never continuing the
@@ -197,70 +209,50 @@ export const TrayambakApp = ({
   // HIDDEN (Ink never positions it — it floated mid-frame/border after
   // every write: "wo blinker show ho raha") and the composer draws its own
   // static block caret (PromptInput `▌`, at the typing position).
-  // Mouse reporting is ON for the TUI's LIFETIME (1000+1006, alongside the
-  // caret hide below): the wheel then ALWAYS arrives on the mouse-input bus
-  // (StdinSanitizer parses it) → scrollBack below → MessageList slides its
-  // window IN-APP, which token/caret writes can't yank. The old turn-scoped
-  // design left IDLE wheel-ups to native terminal scroll — exactly where a
-  // terminal that snaps output back to the live view struck ("scroll karke
-  // chhodo to wapas bottom pe snap" — the caret blinks a write every 530ms,
-  // same yank as "generation ke dauran ek jagah pe dubara aa jati hai").
-  // Trade-off: native wheel / drag-select over the printed <Static> prefix
-  // now needs Shift (xterm override) or /copy — and a scrolled frame re-shows
-  // those same rows in-app, so nothing becomes unreachable. Cleanup restores
-  // wheel + caret to the terminal on unmount.
+  // Mouse reporting stays OFF app-wide, always: the wheel belongs to the
+  // terminal's NATIVE scroll over the print-once <Static> prefix (that IS
+  // the history reader — "only auto scroll", no in-app park window, so no
+  // scroll can ever hide the live response). Cleanup still switches
+  // reporting off defensively: a crashed older build may have left it on,
+  // and a stale mode would eat the wheel (reachable history gone) and leak
+  // mouse bytes toward the composer.
   useEffect(() => {
     stdout?.write("\x1b[?25l")
-    stdout?.write("\x1b[?1000h\x1b[?1006h")
     return () => {
       stdout?.write("\x1b[?1000l\x1b[?1006l")
       stdout?.write("\x1b[?25h")
     }
   }, [stdout])
   const turnActive = isLoading || isStreaming
-  /** Wheel offset into history: messages the frame window sits BEHIND the
-   *  live end (0 = live). 3 messages per notch (wheelScrollOffset),
-   *  clamped to the first message up / 0 down — and ANCHORED while
-   *  scrolled (scrollOffsetAfterGrowth below): rows appended behind the
-   *  window can't slide the history being read out of frame. */
-  const [scrollBack, setScrollBack] = useState(0)
-  const scrollLenRef = useRef(messages.length)
-  useEffect(() => {
-    // Reporting is on for the TUI's lifetime, so the bus delivers wheel
-    // notches at idle and mid-turn alike (native terminal scroll never
-    // competes with this window).
-    return onMouseScroll((dir) => {
-      setScrollBack((s) => wheelScrollOffset(dir, s, messages.length))
-    })
-  }, [messages.length])
-  // Anchor: every message appended while scrolled (tool rows land two-per-
-  // call mid-turn) is matched by +1 on the offset, so endIdx =
-  // length − scrollBack — the exact window the user is reading — never
-  // moves toward live ("history hide nahi honi chahiye, pura show hoti
-  // rahe"). Live (0) stays live; wholesale replaces reset via staticEpoch.
-  useEffect(() => {
-    // Capture prev BEFORE the updater runs: the queued updater reads the
-    // ref when React flushes it — mutating scrollLenRef on the next line
-    // made it see (new, new) → delta 0 → anchor dead → the reading window
-    // slid toward live on every append (diag-scroll.mjs pins it: after a
-    // mid-turn wheel, S_after must keep endIdx=1, err=0).
-    const prev = scrollLenRef.current
-    setScrollBack((s) => scrollOffsetAfterGrowth(prev, messages.length, s))
-    scrollLenRef.current = messages.length
-  }, [messages.length])
-  // Snap to live ONLY at submit (runSlash + handleInput's runAgent call):
-  // the old turnActive effect yanked mid-turn wheel-ups back to live.
-  // The growth anchor above keeps a parked window stable while rows append.
-  useEffect(() => {
-    setScrollBack(0)
-  }, [staticEpoch])
-  /** PageUp/PageDown (PromptInput's onHistoryScroll): a 10-message stride
-   *  through history — same offset state, same clamps, same growth anchor
-   *  as the wheel's 3-notch steps ("easy scrollable": one keypress pages a
-   *  long transcript instead of a wheel marathon). */
-  const handleHistoryScroll = (dir: "up" | "down"): void => {
-    setScrollBack((s) => pageScrollOffset(dir, s, messages.length))
+  // Mouse reporting ONLY while a turn is producing output (generation gate).
+  // Idle → reporting off, the device scrollbar owns the screen and history stays
+  // put. Working → take the wheel so a scroll-away can be noticed. Parked (the
+  // user scrolled up) → hand it straight back, so scrolling is native again
+  // immediately and we stop intercepting. See ./generation-gate.ts.
+  const gateRef = useRef<GenerationGate | null>(null)
+  if (gateRef.current === null && stdout) {
+    gateRef.current = new GenerationGate({ write: (s) => stdout?.write(s), interactive: true })
   }
+  useEffect(() => {
+    const gate = gateRef.current
+    if (!gate) return
+    if (turnActive) gate.enterWorking()
+    else gate.enterIdle()
+  }, [turnActive])
+  useEffect(() => {
+    const gate = gateRef.current
+    if (!gate) return
+    return onMouseScroll((dir) => {
+      if (dir === "up") gate.park()
+    })
+  }, [])
+  useEffect(() => () => gateRef.current?.release(), [])
+  // Auto-scroll only: the frame ALWAYS ends at the live tail (MessageList
+  // holds the newest messages that fit, no offset state anywhere). There is
+  // deliberately no scrollBack/wheel-park/anchor here — a parked window is
+  // exactly what froze the screen on old history while the answer streamed
+  // invisibly below it ("auto scroll not working"). Wheel and PageUp/PageDown
+  // do nothing in-app; history reads through native terminal scrollback.
   // The CONVERSATION BOX itself joins the edge-chase while the AI works
   // ("animations dalo UI me"): one outline edge lights up and travels
   // round the ╭╮╰╯ frame — same language as the tool boxes and the footer
@@ -316,10 +308,10 @@ export const TrayambakApp = ({
   const [splashDone, setSplashDone] = useState(/*initial*/ false)
   const [sandboxDone, setSandboxDone] = useState(/*initial*/ false)
   const showSplash = isFirstRun && !splashDone
-  /** Boot cinematic for returning users (first-run keeps its own splash):
-   *  skipped when a prompt was passed in (never delay real work). */
-  const [bootCineDone, setBootCineDone] = useState(/*initial*/ false)
-  const showBootCine = !isFirstRun && !bootCineDone && !initialPrompt
+  /** Boot cinematic DISABLED by request (the eye/title/codename splash in
+   *  BootCine.tsx is kept + tested, just no longer mounted): every launch
+   *  goes straight to the welcome screen. */
+  const showBootCine = false
   const showSandboxSetup = isFirstRun && splashDone && !showThemePicker && !sandboxDone
   const [showSidebar, setShowSidebar] = useState(/*initial*/ false)
   const [modelFavorites, setModelFavorites] = useState<string[]>(() => loadConfig().modelFavorites ?? [])
@@ -1092,11 +1084,14 @@ export const TrayambakApp = ({
     }
 
     if (event.type === "compaction") {
-      addSystemMessage(
-        `${g("ok")} Context compacted: ~${event.estimatedBefore} → ~${event.estimatedAfter} tokens (freed ~${event.freedTokens}` +
-          `${event.removedMessages > 0 ? `, ${event.removedMessages} messages folded` : ""}` +
-          `${event.prunedToolOutputs > 0 ? `, ${event.prunedToolOutputs} tool outputs pruned` : ""}).`,
-      )
+      // Only notify for manual /compact; auto-compaction is silent
+      if (event.forced) {
+        addSystemMessage(
+          `${g("ok")} Context compacted: ~${event.estimatedBefore} → ~${event.estimatedAfter} tokens (freed ~${event.freedTokens}` +
+            `${event.removedMessages > 0 ? `, ${event.removedMessages} messages folded` : ""}` +
+            `${event.prunedToolOutputs > 0 ? `, ${event.prunedToolOutputs} tool outputs pruned` : ""}).`,
+        )
+      }
     }
   }
 
@@ -1457,8 +1452,7 @@ export const TrayambakApp = ({
             `Runs automatically when the current turn finishes — /queue list · /queue drop <n> · /queue clear · Ctrl+X clears`,
         )
       } else {
-        // Submit-time snap (the only one — nothing re-zeroes mid-turn).
-        setScrollBack(0)
+        // No snap needed: the frame is always live (auto-scroll only).
         void runAgent(v).catch(reportTurnError)
       }
     }
@@ -1569,6 +1563,13 @@ export const TrayambakApp = ({
     }
   }
 
+  /** Full slash-command help: the static list in its long-standing order plus
+   *  the registry-dispatched commands it never listed (`/company`, `/task`…).
+   *  Shared by `/help` and the leader `h` action so both print the same rows
+   *  the choosers offer. */
+  const slashHelpRows: SlashRow[] = mergeSlashRows(SLASH_COMMANDS, slashCommandService.registry.all())
+  const slashHelpText = slashHelpRows.map((cmd) => `/${cmd.name} — ${cmd.description}`).join("\n")
+
   const handleSlashCommand = (command: string, args: string): void => {
     // Provider connect owns the composer while active: only the hidden
     // /login-cancel hatch runs (Esc is the advertised exit).
@@ -1598,7 +1599,7 @@ export const TrayambakApp = ({
     }
     switch (command) {
       case "help":
-        addSystemMessage(SLASH_COMMANDS.map((cmd) => `/${cmd.name} — ${cmd.description}`).join("\n"))
+        addSystemMessage(slashHelpText)
         break
       case "keymap":
         addSystemMessage(formatKeymapMessage())
@@ -2690,11 +2691,8 @@ export const TrayambakApp = ({
     }
   }
 
-  /** Slash entry wrapper: snaps to live first — a slash is new activity, so
-   *  its TTL'd readout (see addSystemMessage) must land in-frame even if the
-   *  user was parked reading history. */
+  /** Slash entry wrapper. No snap needed — the frame is always live. */
   const runSlash = (command: string, args: string): void => {
-    setScrollBack(0)
     handleSlashCommand(command, args)
   }
 
@@ -3010,7 +3008,13 @@ export const TrayambakApp = ({
    *  frame widened on both sides when the terminal widened, but its bottom edge
    *  never followed the terminal downward ("width increases both sides, only
    *  grows straight, not towards the bottom"). Explicit rows from the live window
-   *  size also re-render on resize, so the border tracks terminal height both ways. */
+   *  size also re-render on resize, so the border tracks terminal height both ways.
+   *
+   *  Minus ONE row of slack, deliberately: when Ink's output reaches the full
+   *  viewport height its win32 path wipes screen+scrollback and reprints the
+   *  whole prefix on EVERY render (observed live: stacked "copy-paste" frames
+   *  in scrollback, torn border walls mid-reprint, scrollbar jumping). One
+   *  spare row keeps every repaint an in-place update. */
   const rows = useTerminalRows()
 
   const statusBarInfo: StatusBarInfo = {
@@ -3024,6 +3028,9 @@ export const TrayambakApp = ({
     queuedCount: queuedPrompts.length,
     backgroundCount: backgroundSubagents.size,
     taskHint: taskHint ?? undefined,
+    // Stamped from package.json by scripts/sync-version.mjs. The chip renders
+    // the codename when the semver carries an S-series tag (versionChipText).
+    version: VERSION,
   }
 
   useEffect(() => {
@@ -3581,12 +3588,14 @@ export const TrayambakApp = ({
     {
       key: "h",
       label: "help",
-      run: () => addSystemMessage(SLASH_COMMANDS.map((cmd) => `/${cmd.name} — ${cmd.description}`).join("\n")),
+      run: () => addSystemMessage(slashHelpText),
     },
   ]
 
-  /** Command-palette rows: every leader chord (as an action) plus the live
-   *  slash-command registry — SKT AI LABS's palette over trayambak's own commands. */
+  /** Command-palette rows: every leader chord (as an action) plus EVERY slash
+   *  command — registry-dispatched rows first (their long-standing order),
+   *  static rows the registry lacks appended (`/provider`, `/model`… never
+   *  reached the palette before). SKT AI LABS's palette over trayambak's own commands. */
   const paletteEntries: PaletteEntry[] = [
     ...leaderActions.map((a): PaletteEntry => ({
       id: `leader.${a.key}`,
@@ -3603,7 +3612,14 @@ export const TrayambakApp = ({
       keybinding: "ctrl+k",
       run: () => setShowWhichKey(/*showWhichKey*/ true),
     },
-    ...slashCommandService.registry.all().map((cmd, i): PaletteEntry => ({
+    ...mergeSlashRows(
+      slashCommandService.registry.all().map((cmd) => ({
+        name: cmd.name,
+        description: cmd.description,
+        category: cmd.category,
+      })),
+      SLASH_COMMANDS,
+    ).map((cmd, i): PaletteEntry => ({
       id: `cmd.${cmd.name}.${i}`,
       title: `/${cmd.name}`,
       description: cmd.description,
@@ -3629,7 +3645,9 @@ export const TrayambakApp = ({
   return (
     <Box
       flexDirection="column"
-      height={rows}
+      // One row below the viewport (see the rows comment above): a
+      // full-height frame trips Ink's win32 wipe+reprint on every render.
+      height={Math.max(1, rows - 1)}
       // "Blue outline, halka rounded corners": round → ╭╮╰╯ caps, and the
       // brand-blue primary paints the conversation box's outline (the
       // theme's grey border only backs the inner tool boxes now). While a
@@ -3646,10 +3664,15 @@ export const TrayambakApp = ({
       // conversation box — the divider line between prefix and live tail
       // must hide). Fresh sessions (no prefix) keep the ╭ cap.
       borderTop={hasStaticPrefix ? false : undefined}
+      // Paint the theme's own background across the whole frame. Without it
+      // the app renders on the terminal's own backdrop, so every theme looked
+      // identical — black on black — no matter which one /theme applied. The
+      // fill also covers the gap row Ink needs to stay under the viewport
+      // height (rows-1), so that row reads as part of the app, not as a strip
+      // of bare terminal. Box border cells keep their own colours.
+      backgroundColor={theme.background}
     >
-      {showBootCine ? (
-        <BootCine onDone={() => setBootCineDone(/*bootCineDone*/ true)} />
-      ) : showSplash ? (
+      {showSplash ? (
         <SplashScreen onDone={() => setSplashDone(/*splashDone*/ true)} />
       ) : showPalette ? (
         <CommandPalette
@@ -3766,7 +3789,14 @@ export const TrayambakApp = ({
               sandbox ready) are system rows: the old messages.length === 0
               check let any one of them kill the WelcomeScreen forever
               (observed live: logging in hid the logo on every boot). */}
-            {!messages.some((m) => m.role !== "system") ? <WelcomeScreen /> : null}
+            {!messages.some((m) => m.role !== "system") ? (
+              <WelcomeScreen
+                modelName={activeModel}
+                cwd={config?.cwd ?? bootConfig.cwd}
+                fillRows={Math.max(0, Math.min(rows - 22, 40))}
+                width={Math.max(20, (stdout?.columns ?? 80) - 4)}
+              />
+            ) : null}
             {messages.length === 0 ? null : (
               <Box flexDirection="column" flexGrow={1}>
                 {/* No TRAYAMBAK header row inside the frame: the compact logo
@@ -3778,7 +3808,6 @@ export const TrayambakApp = ({
                   messages={messages}
                   isLoading={isLoading}
                   isStreaming={isStreaming}
-                  scrollBack={scrollBack}
                   phase={status}
                   // PermissionOverlay stole ~12 rows from the message frame
                   // unbudgeted, clipping the reading window at approval
@@ -3844,7 +3873,10 @@ export const TrayambakApp = ({
           onSubmit={handleInput}
           onSlashCommand={runSlash}
           onChoose={handleChoose}
-          onHistoryScroll={handleHistoryScroll}
+          // No onHistoryScroll: PageUp/PageDown never page the transcript
+          // (auto-scroll only — the frame always holds the live tail, and
+          // history reads through native terminal scrollback). Without a
+          // listener the keys stay inert.
           onEnhance={enhanceDraft}
           isLoading={isLoading}
           disabled={showPicker}

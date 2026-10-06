@@ -178,6 +178,10 @@ export interface TrayambakConfig {
   questionDefaultOption?: number
   /** AskUserQuestion answer mode: "both" (choose by number or type custom), "choose" (number only), "type" (text only). Default "both". */
   questionAnswerMode?: "both" | "choose" | "type"
+  /** Maximum number of times to auto-continue when the model response is cut off
+   *  due to output token limit (stopReason === "length"). Each continuation adds
+   *  a nudge turn. Default 10; set to 0 to disable. Bounded by budget/turns. */
+  maxLengthContinuations?: number
   /** Custom monospace font family for code/terminal display (e.g. "Fira Code", "JetBrains Mono"). */
   codeFont?: string
   /** Enable browser automation (page navigation, link following, form interaction). */
@@ -200,6 +204,17 @@ export interface TrayambakConfig {
   mcpHealthCheckIntervalMs?: number
   /** MCP tool cache: cache listTools results. Default true. */
   mcpToolCacheEnabled?: boolean
+  /** Root directory holding the company-employee definitions. Unset = feature idle. */
+  companyDir?: string
+  /** Master switch for the company-employee feature. Default false. */
+  companyEnabled?: boolean
+  /** Division ids switched off (effective list: config wins, else env). */
+  companyDisabled?: string[]
+  /** Model override applied ONLY to company personas. */
+  companyModel?: string
+  /** Keybinding overrides: action id -> chord list. Shape-sanitised on load;
+   *  chord legality is decided by Keymap (packages/tui/src/keymap.ts). */
+  keybindings?: Record<string, string[]>
   /** MCP tool cache TTL in milliseconds. Default 300000 (5 minutes). */
   mcpToolCacheTtlMs?: number
   /** MCP auto-reconnect: reconnect after transport failure. Default true. */
@@ -215,8 +230,8 @@ export interface TrayambakConfig {
 }
 
 const DEFAULTS: TrayambakConfig = {
-  baseUrl: "https://integrate.api.nvidia.com",
-  model: "nvidia/nemotron-3-super-120b-a12b",
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+  model: "gemini-2.5-flash",
   small_model: undefined,
   subagent_model: undefined,
   judge_model: undefined,
@@ -263,10 +278,11 @@ const DEFAULTS: TrayambakConfig = {
   },
   scratchpadDir: ".scratchpad",
   autoupdate: true,
-  provider: "nvidia",
+  provider: "google",
   themeName: undefined,
   questionDefaultOption: 1,
   questionAnswerMode: "both" as const,
+  maxLengthContinuations: 10,
   codeFont: undefined,
   browserAutomationEnabled: false,
   browserAutomationHeadless: true,
@@ -285,6 +301,11 @@ const DEFAULTS: TrayambakConfig = {
     disabled: [],
     platform: {},
   },
+  // Company-employee switches are deliberately NOT defaulted here. `undefined`
+  // means "no opinion", which is what lets resolveCompanyState fall through to
+  // env and then to its own default-ON. A hard `false` would silently switch the
+  // whole company off for anyone who never touched the setting.
+  companyDisabled: [],
 }
 
 function detectDefaultShell(): string {
@@ -302,12 +323,152 @@ function configDir(): string {
   return path.join(os.homedir(), ".trayambak")
 }
 
+/**
+ * True when the ACTIVE config file is `<cwd>/.trayambak/config.json` rather than
+ * the user's own `~/.trayambak/config.json`.
+ *
+ * `configDir()` prefers the cwd copy so a project can ship defaults — but a
+ * checkout is untrusted input (`git clone` + `cd` is all it takes), so that file
+ * gets the reduced treatment in `stripRepoTrustedSettings`. `cwd === home` is
+ * NOT a repo: there the two paths are one file and the user is at their own
+ * prompt. An explicit `--config <file>` (TRAYAMBAK_CONFIG) is trusted by
+ * definition — the user named it.
+ */
+function isRepoLocalConfig(): boolean {
+  if (process.env.TRAYAMBAK_CONFIG) return false
+  const local = path.join(process.cwd(), ".trayambak")
+  if (!fs.existsSync(local)) return false
+  return path.resolve(local) !== path.resolve(os.homedir(), ".trayambak")
+}
+
+/** Warn once per process per message — loadConfig runs on every turn. */
+const warnedOnce = new Set<string>()
+function warnOnce(key: string, message: string): void {
+  if (warnedOnce.has(key)) return
+  warnedOnce.add(key)
+  console.warn(message)
+}
+
+/** Blanket-approval spellings, including the legacy ones (#93). */
+const BLANKET_APPROVAL_UI_MODES = new Set(["full-access", "auto-approve"])
+
+/**
+ * Repo-local configs may ship scoped rules (including denies); they may not
+ * hand the session blanket approval or choose the shell.
+ *
+ * - `uiMode: "full-access" | "auto-approve"` and the legacy `mode: "yolo"` /
+ *   `askByDefault: false` all mean "run everything unprompted", and
+ *   `evaluatePermission` short-circuits to `allow` for full-access before any
+ *   rule is evaluated — so a committed file would be a one-command escape from
+ *   every prompt.
+ * - `shellCommand` is the interpreter behind every bash run, and an MSYS-linked
+ *   shell is what downgrades a spawn out of AppContainer isolation
+ *   (packages/sandbox/src/ac-workload.ts). The detected default stands in.
+ *
+ * Each removal is announced loudly and names the file, once per process.
+ */
+function stripRepoTrustedSettings(cfg: Partial<TrayambakConfig>, file: string): Partial<TrayambakConfig> {
+  const out: Partial<TrayambakConfig> = { ...cfg }
+  const perms = out.permissions
+  if (perms && typeof perms === "object" && !Array.isArray(perms)) {
+    const p = { ...(perms as Record<string, unknown>) }
+    const uiMode = typeof p.uiMode === "string" ? p.uiMode : undefined
+    const mode = typeof p.mode === "string" ? p.mode : undefined
+    const blanket =
+      (uiMode !== undefined && BLANKET_APPROVAL_UI_MODES.has(uiMode)) ||
+      mode === "yolo" ||
+      p.askByDefault === false
+    if (blanket) {
+      delete p.uiMode
+      delete p.mode
+      delete p.askByDefault
+      warnOnce(
+        `blanket:${file}`,
+        `trayambak: ignoring blanket-approval settings from ${file} — a repository ` +
+          "cannot put the session into blanket-approval mode. Set it in " +
+          "~/.trayambak/config.json or point at a file you trust with --config instead.",
+      )
+    }
+    out.permissions = p as TrayambakConfig["permissions"]
+  }
+  if (typeof out.shellCommand === "string" && out.shellCommand.trim().length > 0) {
+    delete out.shellCommand
+    warnOnce(
+      `shell:${file}`,
+      `trayambak: ignoring shellCommand from ${file} — a repository cannot choose ` +
+        "the shell the agent runs. Set TRAYAMBAK_SHELL_COMMAND or put shellCommand " +
+        "in ~/.trayambak/config.json instead.",
+    )
+  }
+  return out
+}
+
+/** `uiMode` outside its enum is dropped, wherever the config came from (#94). */
+function sanitizeUIMode(perms: unknown, warn: boolean): TrayambakConfig["permissions"] {
+  if (!perms || typeof perms !== "object" || Array.isArray(perms)) return undefined
+  const p = { ...(perms as Record<string, unknown>) }
+  if (p.uiMode !== undefined) {
+    const allowed = ["read-only", "plan", "ask", "auto-approve", "full-access"]
+    if (typeof p.uiMode !== "string" || !allowed.includes(p.uiMode)) {
+      delete p.uiMode
+      if (warn) {
+        console.warn(
+          `trayambak: ignoring permissions.uiMode ${JSON.stringify(p.uiMode)} — expected one of ${allowed.join(", ")}`,
+        )
+      }
+    }
+  }
+  return p as TrayambakConfig["permissions"]
+}
+
 export function configPath(): string {
   // Explicit override (TRAYAMBAK_CONFIG, set by `--config <file>`):
   // resolve against the current directory so callers get one exact file.
   const explicit = process.env.TRAYAMBAK_CONFIG
-  if (explicit) return path.resolve(explicit)
+  if (explicit) {
+    // #58: refuse a share BEFORE any fs probe. existsSync/readFileSync against
+    // an attacker-chosen host would authenticate to it (NTLM hash leak) and
+    // stall for seconds. Loud, never silent — the operator asked for this file.
+    if (isRemoteUncPath(explicit)) {
+      process.stderr.write(
+        `trayambak: refusing remote UNC config path ${JSON.stringify(explicit)} — ` +
+          "config on a network share leaks credentials and cannot be written atomically. " +
+          "Using the default config location instead.\n",
+      )
+    } else {
+      return path.resolve(explicit)
+    }
+  }
   return path.join(configDir(), "config.json")
+}
+
+/**
+ * True when `p` addresses a file on a UNC/remote share rather than the local
+ * filesystem.
+ *
+ * Session/config paths arriving over the network are rejected by callers
+ * (`session.ts`, `session-manager.ts`) because the atomic-rename write they use
+ * is not atomic across SMB, and a torn config file is worse than a failed one.
+ * Recognised forms:
+ *   - `\\host\share\file`      classic UNC
+ *   - `//host/share/file`      same thing, forward slashes
+ *   - `\\?\UNC\host\share`    extended-length UNC
+ * Deliberately NOT remote, and therefore NOT rejected:
+ *   - `C:\local\file`          local drive
+ *   - `\\?\C:\local`           extended-length LOCAL path — still local
+ *   - `\\.\PhysicalDrive0`     Win32 device namespace, not a share
+ *   - relative paths          not remote by definition
+ */
+export function isRemoteUncPath(p: string): boolean {
+  if (typeof p !== "string" || p.length === 0) return false
+  // Win32 device namespace (\\.\PhysicalDrive0, \\.\PIPE\x) is never a share.
+  if (/^\\\\\.\\/.test(p) || /^\/\/\.\//.test(p)) return false
+  // Extended-length UNC: \\?\UNC\host\share
+  if (/^\\\\\?\\UNC\\/i.test(p)) return true
+  // Extended-length LOCAL path (\\?\C:\local) is still local.
+  if (/^\\\\\?\\[a-z]:\\/i.test(p) || /^\/\/\?\/[a-z]:\//i.test(p)) return false
+  // Classic UNC in either separator style: \\host\share or //host/share
+  return /^\\\\[^\\]/.test(p) || /^\/\/[^/]/.test(p)
 }
 
 export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakConfig {
@@ -331,8 +492,31 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
         delete raw[flag]
       }
       fileConfig = raw as Partial<TrayambakConfig>
+      // A checked-out repo's config is untrusted input: it may ship scoped
+      // rules, never blanket approval or the shell (see the helper).
+      if (isRepoLocalConfig()) fileConfig = stripRepoTrustedSettings(fileConfig, file)
     } catch {
       fileConfig = {}
+    }
+  }
+
+  // Home mcpServers merge UNDER the active file, per server (#bug: a repo file
+  // carrying `"mcpServers": {}` silently uninstalled every home server).
+  // Only for the implicit <cwd>/.trayambak/config.json — an explicit
+  // --config file stands alone.
+  if (!process.env.TRAYAMBAK_CONFIG && isRepoLocalConfig()) {
+    const homeFile = path.join(os.homedir(), ".trayambak", "config.json")
+    if (fs.existsSync(homeFile) && path.resolve(homeFile) !== path.resolve(file)) {
+      try {
+        const homeRaw = JSON.parse(fs.readFileSync(homeFile, "utf8")) as Record<string, unknown>
+        const homeServers = cleanMcpServers(homeRaw.mcpServers)
+        if (homeServers) {
+          const mine = cleanMcpServers((fileConfig as Record<string, unknown>).mcpServers)
+          fileConfig = { ...fileConfig, mcpServers: { ...homeServers, ...(mine ?? {}) } }
+        }
+      } catch {
+        /* home config unreadable — the active file still applies */
+      }
     }
   }
 
@@ -341,6 +525,19 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   if (process.env.TRAYAMBAK_MODEL) envConfig.model = process.env.TRAYAMBAK_MODEL
   if (process.env.TRAYAMBAK_SMALL_MODEL) envConfig.small_model = process.env.TRAYAMBAK_SMALL_MODEL
   if (process.env.TRAYAMBAK_SUBAGENT_MODEL) envConfig.subagent_model = process.env.TRAYAMBAK_SUBAGENT_MODEL
+  // Company-employee library. Env is the operator's lever for a machine-wide
+  // default; unset everywhere means one model does all the work.
+  if (process.env.TRAYAMBAK_COMPANY_DIR) envConfig.companyDir = process.env.TRAYAMBAK_COMPANY_DIR
+  if (process.env.TRAYAMBAK_COMPANY_MODEL) envConfig.companyModel = process.env.TRAYAMBAK_COMPANY_MODEL
+  if (process.env.TRAYAMBAK_COMPANY_DISABLED) {
+    envConfig.companyDisabled = process.env.TRAYAMBAK_COMPANY_DISABLED.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  if (process.env.TRAYAMBAK_COMPANY_ENABLED !== undefined) {
+    const v = process.env.TRAYAMBAK_COMPANY_ENABLED.trim().toLowerCase()
+    envConfig.companyEnabled = !(v === "0" || v === "false" || v === "off" || v === "no")
+  }
   if (process.env.TRAYAMBAK_JUDGE_MODEL) envConfig.judge_model = process.env.TRAYAMBAK_JUDGE_MODEL
   if (process.env.TRAYAMBAK_API_KEY) envConfig.apiKey = process.env.TRAYAMBAK_API_KEY
   if (process.env.TRAYAMBAK_CWD) envConfig.cwd = process.env.TRAYAMBAK_CWD
@@ -466,6 +663,13 @@ export function saveConfig(config: Partial<TrayambakConfig>): void {
       existing = {}
     }
   }
+  // No plaintext key at rest once the operator is in env mode: a key persisted
+  // before the switch is stale by definition (env outranks the file at load),
+  // so any save scrubs it instead of preserving it — otherwise the switch to
+  // env mode silently leaves the old secret on disk.
+  if (process.env.TRAYAMBAK_API_KEY && typeof existing.apiKey === "string") {
+    delete existing.apiKey
+  }
   // Atomic publish: readers see the old file or the new file, never a
   // half-written one (rename is atomic on the same volume). The previous
   // good file rotates to config.json.bak first, so an outright deletion
@@ -564,6 +768,42 @@ export function cleanMcpServers(raw: unknown): TrayambakConfig["mcpServers"] {
 
 /** Validate tool-call hook config: matcher groups with runnable commands.
  *  Malformed groups are dropped (a bad hook entry must never break turns). */
+/**
+ * Action ids are at least two dotted lowercase segments: `tui.global.palette`,
+ * `tui.input.submit`. A bare token like `single` is rejected — real ids are
+ * namespaced by scope, and an unnamespaced one can never resolve to a command.
+ * Empty, trailing-dot, leading-dot, double-dot and space-bearing ids are all
+ * rejected by the same rule.
+ */
+const KEYBINDING_ACTION_ID = /^[a-z0-9]+(?:\.[a-z0-9]+)+$/
+
+/**
+ * Coerce the untrusted `keybindings` config value into
+ * `Record<actionId, string[]>`, or `undefined` when there is nothing usable.
+ *
+ * This is the untrusted-input boundary: the config file is hand-editable JSON,
+ * so `"keybindings": "ctrl+p"` must be refused cleanly instead of crashing
+ * startup. It deliberately does NOT decide which chords are LEGAL — that
+ * policy lives in `Keymap` (packages/tui/src/keymap.ts), which reports its own
+ * rejections so `/keymap` can explain them. Here we only guarantee the SHAPE
+ * and the action-id grammar.
+ */
+export function sanitizeKeybindings(raw: unknown): Record<string, string[]> | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (typeof raw !== "object" || Array.isArray(raw)) return undefined
+  const out: Record<string, string[]> = {}
+  for (const [action, chords] of Object.entries(raw as Record<string, unknown>)) {
+    if (!KEYBINDING_ACTION_ID.test(action)) continue
+    if (!Array.isArray(chords)) continue
+    const kept = chords.filter((c): c is string => typeof c === "string" && c.trim().length > 0)
+    if (kept.length > 0) out[action] = kept
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** Test-facing alias: the sanitiser is pure and safe to assert directly. */
+export const sanitizeKeybindingsForTest = sanitizeKeybindings
+
 export function cleanToolHooks(raw: unknown): TrayambakConfig["hooks"] {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
   const out: NonNullable<TrayambakConfig["hooks"]> = {}
@@ -747,6 +987,12 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       Math.min(32, numDefault(cfg.maxParallelToolCalls, DEFAULTS.maxParallelToolCalls)),
     ),
     nativeTools: Boolean(cfg.nativeTools),
+    // llama.cpp server sizing. These live in the config file (not just CLI
+    // flags) so `trayambak config set ctxSize 8192` round-trips instead of
+    // being dropped by this rebuild and reported as an unknown key.
+    ctxSize: Math.max(256, Math.min(4_194_304, numDefault(cfg.ctxSize, DEFAULTS.ctxSize))),
+    batchSize: Math.max(1, Math.min(8192, numDefault(cfg.batchSize, DEFAULTS.batchSize))),
+    ubatchSize: Math.max(1, Math.min(8192, numDefault(cfg.ubatchSize, DEFAULTS.ubatchSize))),
     modelPath: typeof cfg.modelPath === "string" && cfg.modelPath.trim().length > 0 ? cfg.modelPath.trim() : undefined,
     llamaCppBin:
       typeof cfg.llamaCppBin === "string" && cfg.llamaCppBin.trim().length > 0 ? cfg.llamaCppBin.trim() : undefined,
@@ -763,7 +1009,7 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
         ? path.resolve(cfg.scratchpadDir.trim())
         : path.resolve(process.cwd(), ".scratchpad"),
     developerMode: cfg.developerMode && typeof cfg.developerMode === "object" ? cfg.developerMode : undefined,
-    permissions: cfg.permissions && typeof cfg.permissions === "object" ? cfg.permissions : undefined,
+    permissions: sanitizeUIMode(cfg.permissions, /*warn*/ true),
     provider: [
       "llamacpp",
       "nvidia",
@@ -848,6 +1094,20 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       ? cfg.modelRecents.filter((m): m is string => typeof m === "string" && m.trim().length > 0).slice(0, 20)
       : [],
     hooks: cleanToolHooks(cfg.hooks),
+    keybindings: sanitizeKeybindings(cfg.keybindings),
+    // Company-employee library. `companyEnabled` stays UNDEFINED when nobody
+    // set it — that is "no opinion", so resolveCompanyState falls through to
+    // env and then to its own default-ON. Coercing it to false here would
+    // silently disable the whole company for every existing user.
+    companyDir: typeof cfg.companyDir === "string" && cfg.companyDir.trim().length > 0 ? cfg.companyDir.trim() : undefined,
+    companyEnabled: typeof cfg.companyEnabled === "boolean" ? cfg.companyEnabled : undefined,
+    companyDisabled: Array.isArray(cfg.companyDisabled)
+      ? cfg.companyDisabled.filter((d): d is string => typeof d === "string" && d.trim().length > 0)
+      : [],
+    // Company-only model override. Blank/whitespace means "unset" so one model
+    // does all the work (config.ts never invents a model).
+    companyModel:
+      typeof cfg.companyModel === "string" && cfg.companyModel.trim().length > 0 ? cfg.companyModel.trim() : undefined,
     modelCache:
       cfg.modelCache && typeof cfg.modelCache === "object" && !Array.isArray(cfg.modelCache)
         ? cleanModelCache(cfg.modelCache as Record<string, unknown>)
