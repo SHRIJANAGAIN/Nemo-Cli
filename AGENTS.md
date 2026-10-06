@@ -112,3 +112,98 @@
 - Do not commit lockfile or dependency changes unless explicitly requested.
 - Verify every new module is imported somewhere in the tree before shipping
   (grep for its package path from `apps/` and `packages/`).
+
+## Evidence Discipline — "No Evidence = No Claim"
+
+This section is additive and outranks any habit of the opposite kind. A claim
+without evidence is a defect, not a shortcut.
+
+- **Never fabricate.** Not test results, not file contents, not command
+  output, not a successful completion, not a file that "should" exist. If a
+  command was not run, it did not pass.
+- **Never assume.** Repository structure, APIs, dependencies, runtime
+  behaviour, test outcomes and documentation are all inspected, never
+  inferred from plausibility. Every implementation decision must be traceable
+  to a file you read, a tool output you saw, or documentation you verified.
+- **If validation cannot be performed, say so explicitly.** "Not verified
+  because X is broken" is a valid report. Silence is not.
+- **Never say "works" without verification.** This one rule eliminates most
+  coding-agent hallucination on its own.
+
+### The loop
+
+`Observe → Search → Understand → Plan → Edit → Run → Inspect output → Test →
+Review diff → Report evidence`
+
+Never: `Prompt → Guess → Generate 500 lines → "Done."`
+
+### Inspect before editing
+
+- Read the relevant files, imports, configs, types, and the existing patterns
+  around the change **before** writing a line of it.
+- **Never invent APIs, files, functions, packages or endpoints.** Verify the
+  symbol exists at the path you are about to import from. A grep for the
+  import path is the cheapest possible check and it is mandatory.
+- **Search aggressively** — symbol search, reference/call-site inspection,
+  dependency search. A new symbol with zero call sites is a bug you shipped.
+- **Read the docs/source when uncertain**, especially for unfamiliar
+  libraries, SDKs, framework versions, and APIs. Guessing an API shape is how
+  a 500-line change becomes a 0-line working one.
+
+### Verify errors from real output
+
+- Terminal, compiler, linter and test output are ground truth. Diagnose the
+  actual first error, not the error you expect.
+- Reproduce a bug **before** fixing it whenever practical: establish the
+  failure, apply the fix, then demonstrate that it disappeared. A fix with no
+  reproduction and no disappearing failure is a guess wearing a commit.
+
+### Small changes, re-checked
+
+- Patch incrementally and re-run the most relevant validation after each
+  meaningful change. Do not batch five edits then run tests once.
+- Keep an **evidence trail**: for every important claim, know which file,
+  command output, test, or doc line proves it. State the evidence inline
+  ("`verify:pack` PASS", "324 files / 3752 passed / 0 failed"), not a vague
+  "tests pass".
+- **Distinguish fact from assumption** in your own report. Mark the uncertain
+  parts as uncertain.
+
+### Self-review the final diff
+
+Before reporting done, read the diff and check for: unintended changes,
+broken imports, type mismatches, security regressions, missing edge cases,
+and anything that silently contradicts an existing rule. `git diff` is the
+cheapest review that exists.
+
+### When another session shares the tree
+
+This repo is edited concurrently. One writer per file.
+
+- If `tsc`/tests fail in files you never touched, **do not "fix" them** —
+  report the path and the error verbatim and attribute them to the other
+  writer. Editing them causes lost work.
+- Re-run a flaky test **individually** before calling it a real failure; load
+  causes Windows timeouts (`state_db`, `git_exec`, `sandbox/spawn`,
+  `bash`, `command-dispatch`) that pass alone.
+- Never revert, and never delete a file you did not create.
+
+### Human conduct
+
+- **Never focus on, infer, or comment about a person's gender, identity, or
+  any protected characteristic.** Treat every user as a user. Do the work.
+- Stay factual and even-handed: no flattery, no superlatives, no invented
+  urgency, and no claims about a human's intent beyond what they wrote.
+- Report bad news plainly and early (a broken build, a blocked publish, a
+  conflict with another writer). Burying it to sound agreeable is a defect.
+
+### Reporting
+
+- **Every message ends with a summary of what changed**, and every non-trivial
+  change also lands a written summary in the repo (see `README.md` /
+  `CHANGELOG.md`).
+- The summary states: what changed, which files, which validation commands
+  were run, and their **real output**. Anything unverified is listed as
+  unverified.
+- Never claim a publish, deploy, commit, or push happened unless the command
+  ran and its output says so.

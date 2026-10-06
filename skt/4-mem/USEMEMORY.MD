@@ -26,131 +26,115 @@ The agent uses `4-mem/memory.ts loadMemory` to inject relevant entries into the 
 <!-- The assistant appends entries below. Do not edit by hand. -->
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:55:47.727Z
+- last_used: 2026-10-05T13:33:52.836Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:52:21.221Z
+- last_used: 2026-10-05T11:51:45.717Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:51:07.875Z
+- last_used: 2026-10-05T11:50:07.170Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:49:40.057Z
+- last_used: 2026-10-05T10:34:28.891Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:33:54.908Z
+- last_used: 2026-10-05T08:58:34.523Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T15:27:38.386Z
+- last_used: 2026-10-05T05:02:01.912Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T15:09:15.350Z
+- last_used: 2026-10-05T04:57:32.407Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T10:39:23.108Z
+- last_used: 2026-10-05T04:57:29.197Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:55:44.282Z
+- created: 2026-10-04T14:44:54.366Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T04:34:34.194Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T03:55:44.282Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T03:56:27.562Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T03:55:44.282Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T03:55:44.289Z
+- last_used: 2026-10-04T14:44:54.370Z
 - use_count: 0
 - tags: []
 
@@ -163,123 +147,697 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:55:47.727Z
+- last_used: 2026-10-05T13:33:52.836Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:52:21.221Z
+- last_used: 2026-10-05T11:51:45.717Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:51:07.875Z
+- last_used: 2026-10-05T11:50:07.170Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:49:40.057Z
+- last_used: 2026-10-05T10:34:28.891Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:33:54.908Z
+- last_used: 2026-10-05T08:58:34.523Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T15:27:38.386Z
+- last_used: 2026-10-05T05:02:01.912Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T15:09:15.350Z
+- last_used: 2026-10-05T04:57:32.407Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.195Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T10:39:23.108Z
+- last_used: 2026-10-05T04:57:29.197Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
+
+## Schema
+
+Each entry is a fenced block with a YAML-like front-matter and a free-form body:
+
+```
+
+### mem_muus3b70
+- created: 2026-10-05T04:57:29.197Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T04:34:34.194Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T03:56:27.556Z
+- created: 2026-10-05T04:57:29.197Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T03:56:27.562Z
+- last_used: 2026-10-06T10:03:28.806Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T08:42:05.458Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:42:54.075Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:37:47.547Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:33:52.836Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:51:45.717Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:50:07.170Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T10:34:28.891Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T08:58:34.523Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T05:02:01.912Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T04:57:32.407Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:29.197Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T04:57:29.197Z
+- use_count: 0
+- tags: []
+
+The user's name is Shri Shruti. Address them as Shri Shruti.
+
+Notes: previously clarified this after saying "you forget" — user expects me to retain personal facts across sessions, so confirm and save when they share identity/preferences info.
+
+### # SKT AI LABS - User Memory (Active)
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:11:47.665Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:03:28.806Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T08:42:05.458Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:42:54.075Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:37:47.547Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:33:52.836Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:51:45.717Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:50:07.170Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T10:34:28.891Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T08:58:34.523Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T05:02:01.912Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T04:57:32.407Z
+- use_count: 0
+- tags: []
+
+This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
+
+## Schema
+
+Each entry is a fenced block with a YAML-like front-matter and a free-form body:
+
+```
+
+### MEM-00000001
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:11:47.665Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:03:28.806Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T08:42:05.458Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:42:54.075Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:37:47.547Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:33:52.836Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:51:45.717Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:50:07.170Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T10:34:28.891Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T08:58:34.523Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T05:02:01.912Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T04:57:32.406Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T04:57:32.407Z
+- use_count: 0
+- tags: []
+
+shri shruti
+
+### # SKT AI LABS - User Memory (Active)
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:11:47.665Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:03:28.806Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T08:42:05.458Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:42:54.075Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:37:47.547Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:33:52.836Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:51:45.717Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:50:07.170Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T10:34:28.891Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T08:58:34.523Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T05:02:01.912Z
+- use_count: 0
+- tags: []
+
+This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
+
+## Schema
+
+Each entry is a fenced block with a YAML-like front-matter and a free-form body:
+
+```
+
+### MEM-00000002
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:11:47.665Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:03:28.806Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T08:42:05.458Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:42:54.075Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:37:47.547Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:33:52.836Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:51:45.717Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:50:07.170Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T10:34:28.891Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T08:58:34.523Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T05:02:01.911Z
+- category: preference
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T05:02:01.912Z
+- use_count: 0
+- tags: []
+
+in your pocket, never tears and never runs out
+
+### # SKT AI LABS - User Memory (Active)
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:11:47.665Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T10:03:28.806Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-06T08:42:05.458Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:42:54.075Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:37:47.547Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T13:33:52.836Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:51:45.717Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T11:50:07.170Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T10:34:28.891Z
+- use_count: 0
+- tags: []
+
+- created: 2026-10-05T08:58:34.520Z
+- category: context
+- confidence: 1.0
+- source: user
+- last_used: 2026-10-05T08:58:34.523Z
 - use_count: 0
 - tags: []
 
@@ -292,115 +850,75 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:55:47.727Z
+- last_used: 2026-10-05T13:33:52.836Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:52:21.221Z
+- last_used: 2026-10-05T11:51:45.717Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:51:07.875Z
+- last_used: 2026-10-05T11:50:07.170Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T04:34:34.187Z
+- created: 2026-10-05T10:34:28.887Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:49:40.057Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T04:34:34.187Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:33:54.908Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T04:34:34.187Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:27:38.386Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T04:34:34.187Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:09:15.350Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T04:34:34.187Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T10:39:23.108Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T04:34:34.187Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T04:34:34.194Z
+- last_used: 2026-10-05T10:34:28.891Z
 - use_count: 0
 - tags: []
 
@@ -413,107 +931,67 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:55:47.727Z
+- last_used: 2026-10-05T13:33:52.836Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:52:21.221Z
+- last_used: 2026-10-05T11:51:45.717Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T10:39:23.103Z
+- created: 2026-10-05T11:50:07.167Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:51:07.875Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T10:39:23.103Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:49:40.057Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T10:39:23.103Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:33:54.908Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T10:39:23.103Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:27:38.386Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T10:39:23.103Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:09:15.350Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T10:39:23.103Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T10:39:23.108Z
+- last_used: 2026-10-05T11:50:07.170Z
 - use_count: 0
 - tags: []
 
@@ -526,99 +1004,59 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:55:47.727Z
+- last_used: 2026-10-05T13:33:52.836Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:09:15.341Z
+- created: 2026-10-05T11:51:45.715Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:52:21.221Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:09:15.341Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:51:07.875Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:09:15.341Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:49:40.057Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:09:15.341Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:33:54.908Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:09:15.341Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:27:38.386Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:09:15.341Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:09:15.350Z
+- last_used: 2026-10-05T11:51:45.717Z
 - use_count: 0
 - tags: []
 
@@ -631,91 +1069,51 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T15:27:38.380Z
+- created: 2026-10-05T13:33:52.832Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:27:38.380Z
+- created: 2026-10-05T13:33:52.832Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:27:38.380Z
+- created: 2026-10-05T13:33:52.832Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:27:38.380Z
+- created: 2026-10-05T13:33:52.832Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:27:38.380Z
+- created: 2026-10-05T13:33:52.832Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T15:27:38.380Z
+- created: 2026-10-05T13:33:52.832Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:55:47.727Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:27:38.380Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:52:21.221Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:27:38.380Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:51:07.875Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:27:38.380Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:49:40.057Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:27:38.380Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:33:54.908Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T15:27:38.380Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T15:27:38.386Z
+- last_used: 2026-10-05T13:33:52.836Z
 - use_count: 0
 - tags: []
 
@@ -728,83 +1126,43 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T16:33:54.906Z
+- created: 2026-10-05T13:37:47.546Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:33:54.906Z
+- created: 2026-10-05T13:37:47.546Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:33:54.906Z
+- created: 2026-10-05T13:37:47.546Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:33:54.906Z
+- created: 2026-10-05T13:37:47.546Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:33:54.906Z
+- created: 2026-10-05T13:37:47.546Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T16:56:49.911Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:33:54.906Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:55:47.727Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:33:54.906Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:52:21.221Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:33:54.906Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:51:07.875Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:33:54.906Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:49:40.057Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:33:54.906Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:33:54.908Z
+- last_used: 2026-10-05T13:37:47.547Z
 - use_count: 0
 - tags: []
 
@@ -817,75 +1175,35 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T16:49:40.054Z
+- created: 2026-10-05T13:42:54.073Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:49:40.054Z
+- created: 2026-10-05T13:42:54.073Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:49:40.054Z
+- created: 2026-10-05T13:42:54.073Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:49:40.054Z
+- created: 2026-10-05T13:42:54.073Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:00:44.044Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:49:40.054Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:56:49.911Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:49:40.054Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:55:47.727Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:49:40.054Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:52:21.221Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:49:40.054Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:51:07.875Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:49:40.054Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:49:40.057Z
+- last_used: 2026-10-05T13:42:54.075Z
 - use_count: 0
 - tags: []
 
@@ -898,67 +1216,27 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T16:51:07.872Z
+- created: 2026-10-06T08:42:05.454Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:51:07.872Z
+- created: 2026-10-06T08:42:05.454Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:51:07.872Z
+- created: 2026-10-06T08:42:05.454Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-01T17:04:46.501Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:51:07.872Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:00:44.044Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:51:07.872Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:56:49.911Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:51:07.872Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:55:47.727Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:51:07.872Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:52:21.221Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:51:07.872Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:51:07.875Z
+- last_used: 2026-10-06T08:42:05.458Z
 - use_count: 0
 - tags: []
 
@@ -971,59 +1249,19 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T16:52:21.216Z
+- created: 2026-10-06T10:03:28.802Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 
-- created: 2026-10-01T16:52:21.216Z
+- created: 2026-10-06T10:03:28.802Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:00:42.081Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:52:21.216Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:04:46.501Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:52:21.216Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:00:44.044Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:52:21.216Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:56:49.911Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:52:21.216Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:55:47.727Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:52:21.216Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:52:21.221Z
+- last_used: 2026-10-06T10:03:28.806Z
 - use_count: 0
 - tags: []
 
@@ -1036,216 +1274,11 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ```
 
 ### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T16:55:47.723Z
+- created: 2026-10-06T10:11:47.662Z
 - category: context
 - confidence: 1.0
 - source: user
-- last_used: 2026-10-02T02:18:31.173Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:55:47.723Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:00:42.081Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:55:47.723Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:04:46.501Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:55:47.723Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:00:44.044Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:55:47.723Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:56:49.911Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:55:47.723Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:55:47.727Z
-- use_count: 0
-- tags: []
-
-This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
-
-## Schema
-
-Each entry is a fenced block with a YAML-like front-matter and a free-form body:
-
-```
-
-### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T16:56:49.908Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:18:31.173Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:56:49.908Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:00:42.081Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:56:49.908Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:04:46.501Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:56:49.908Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:00:44.044Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T16:56:49.908Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T16:56:49.911Z
-- use_count: 0
-- tags: []
-
-This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
-
-## Schema
-
-Each entry is a fenced block with a YAML-like front-matter and a free-form body:
-
-```
-
-### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T17:00:44.039Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:18:31.173Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T17:00:44.039Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:00:42.081Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T17:00:44.039Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:04:46.501Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T17:00:44.039Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:00:44.044Z
-- use_count: 0
-- tags: []
-
-This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
-
-## Schema
-
-Each entry is a fenced block with a YAML-like front-matter and a free-form body:
-
-```
-
-### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-01T17:04:46.495Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:18:31.173Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T17:04:46.495Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:00:42.081Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-01T17:04:46.495Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-01T17:04:46.501Z
-- use_count: 0
-- tags: []
-
-This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
-
-## Schema
-
-Each entry is a fenced block with a YAML-like front-matter and a free-form body:
-
-```
-
-### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-02T02:00:42.079Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:18:31.173Z
-- use_count: 0
-- tags: []
-
-- created: 2026-10-02T02:00:42.079Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:00:42.081Z
-- use_count: 0
-- tags: []
-
-This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in `MEMORY.MD` and is read-only for the assistant — it can be searched but not appended to.
-
-## Schema
-
-Each entry is a fenced block with a YAML-like front-matter and a free-form body:
-
-```
-
-### # SKT AI LABS - User Memory (Active)
-- created: 2026-10-02T02:18:31.170Z
-- category: context
-- confidence: 1.0
-- source: user
-- last_used: 2026-10-02T02:18:31.173Z
+- last_used: 2026-10-06T10:11:47.665Z
 - use_count: 0
 - tags: []
 

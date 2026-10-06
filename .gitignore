@@ -78,3 +78,8 @@ data/
 
 # Corrupt-config forensics (kept locally, never committed)
 *.corrupt-*
+
+skt/canary/
+
+# Packed npm artifacts (npm pack output) -- never source
+*.tgz

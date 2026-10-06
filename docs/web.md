@@ -61,16 +61,24 @@ trayambak web
 curl http://127.0.0.1:8787/v1/models -H "Authorization: Bearer mysecret"
 ```
 
-- With a token configured, **every route except `/health`** requires
+- **A bearer token always exists.** Pass `--token` (or set
+  `TRAYAMBAK_WEB_TOKEN`); when neither is given the server generates a strong
+  random token for the process and prints it once at startup
+  (`generated bearer token …`) — on loopback binds too. There is no
+  token-less mode: a default `skt web` used to serve the agent API, the
+  session index and the license-admin tooling to any local process with no
+  auth at all.
+- With that token, **every route except `/health` and the documented public
+  surface** (`/license/*`, `/auth/github/*`, `/webhooks/github`,
+  `/openapi.json`, `/install.*`, `/img/*`, `/docs/*`) requires
   `Authorization: Bearer <token>`; anything else gets
-  `401 {"error":"unauthorized"}`.
-- **On loopback (`127.0.0.1`, the default) with no token, there is no
-  authentication** — local-dev mode. **Non-loopback binds fail closed:** if
-  you pass `--host 0.0.0.0` (or any other non-loopback address) without a
-  token, the server generates a strong random token for that process and
-  prints it at startup (`generated bearer token …`). Every route except
-  `/health` then requires it, so the agent API is never reachable from the
-  network unauthenticated.
+  `401 {"error":"unauthorized"}`. `/github/*` is bearer-gated on top of the
+  stored GitHub login (OAuth alone is not enough).
+- `/v1/agent` additionally caps each run with a server-side timeout
+  (`TRAYAMBAK_AGENT_TIMEOUT_MS`, default 120s, clamped 5s–10min) so a model
+  call that never settles cannot hold the socket open forever, and only
+  accepts a `sessionFile` inside the transcript store
+  (`~/.trayambak/sessions/…`) — anything else is `400`.
 
 ## CORS
 
