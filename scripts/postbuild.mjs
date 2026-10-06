@@ -23,6 +23,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
+import { spawnSync } from "node:child_process"
 
 const require = createRequire(import.meta.url)
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -48,25 +49,26 @@ function copyTree(srcRel, destRel) {
   const src = path.join(ROOT, srcRel)
   const dest = path.join(DIST, destRel)
   fs.mkdirSync(dest, { recursive: true })
+  return copyTreeAbs(src, dest)
+}
+
+/** Recursive copy that descends into subdirectories (skills/ nests every
+ *  skill as <name>/SKILL.md — a flat top-level copy silently dropped the
+ *  whole fleet while still reporting its count). Returns files copied. */
+function copyTreeAbs(src, dest) {
   let count = 0
   for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
     const s = path.join(src, entry.name)
     const d = path.join(dest, entry.name)
-    if (entry.isDirectory()) count += countTree(s)
-    else {
+    if (entry.isDirectory()) {
+      fs.mkdirSync(d, { recursive: true })
+      count += copyTreeAbs(s, d)
+    } else {
       fs.copyFileSync(s, d)
       count++
     }
   }
   return count
-}
-
-function countTree(dir) {
-  let n = 0
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    n += entry.isDirectory() ? countTree(path.join(dir, entry.name)) : 1
-  }
-  return n
 }
 
 // --- 1. assets -----------------------------------------------------------
@@ -86,6 +88,18 @@ if (fs.existsSync(path.join(ROOT, "assets", "agents"))) {
 } else {
   console.error("postbuild: REQUIRED asset missing: assets/agents")
   process.exitCode = 1
+}
+
+// Bundled slash-command files + skills (same must-ship rule: the chooser
+// menu and the skills tool go empty for npm users otherwise).
+for (const dir of ["commands", "skills"]) {
+  if (fs.existsSync(path.join(ROOT, dir))) {
+    const n = copyTree(dir, path.join("assets", dir))
+    console.log(`postbuild: staged ${n} bundled ${dir} into dist/assets/${dir}.`)
+  } else {
+    console.error(`postbuild: REQUIRED asset missing: ${dir}`)
+    process.exitCode = 1
+  }
 }
 
 if (process.exitCode) {
@@ -114,3 +128,18 @@ if (distVersion !== pkgVersion) {
   process.exit(1)
 }
 console.log(`postbuild: OK — dist verified at v${pkgVersion}.`)
+
+// --- 4. ESM load smoke test ---------------------------------------------
+// Every check above is a path/shape check, and a path check passes on a
+// module that still throws the moment it is loaded — e.g. a CommonJS file
+// that landed in the `type: module` flattened dir. verify-ink-esm.mjs
+// actually imports the flattened entry points, so a REPL that cannot boot
+// fails the build instead of shipping.
+const smoke = spawnSync(process.execPath, [path.join(ROOT, "verify-ink-esm.mjs")], {
+  stdio: "inherit",
+  cwd: ROOT,
+})
+if (smoke.status !== 0) {
+  console.error("postbuild: ink ESM smoke test failed — see above.")
+  process.exit(1)
+}

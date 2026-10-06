@@ -256,7 +256,16 @@ async function main() {
     return [...expected].every((n) => got.has(n))
   }
 
-  const files = walkJs(OUT_DIST, [])
+  // Bundled content (personas, slash-command bodies, skill helpers) ships
+  // as-is, never obfuscated: skill `scripts/*.js` run via `node` from the
+  // skill's own directory (renaming their internals buys nothing), and at
+  // least one ships with non-standard syntax the obfuscator cannot even
+  // parse. The single ESM .mjs (ink-repl) already gets the same treatment.
+  const allJs = walkJs(OUT_DIST, [])
+  const files = allJs.filter((f) => !f.includes(`${path.sep}assets${path.sep}`))
+  if (files.length !== allJs.length) {
+    console.log(`publish: ${allJs.length - files.length} bundled-asset .js file(s) ship as-is (no obfuscation).`)
+  }
   const skipObfuscation = process.env.TRAYAMBAK_SKIP_OBFUSCATION === "1" || process.argv.includes("--skip-obfuscation")
   if (skipObfuscation) {
     console.log("publish: obfuscation skipped (TRAYAMBAK_SKIP_OBFUSCATION=1 or --skip-obfuscation) — debuggable build.")

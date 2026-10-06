@@ -86,6 +86,22 @@ else {
   n >= 50 ? ok(`bundled agent personas: ${n}`) : fail(`only ${n} agent personas bundled (expected >= 50)`)
 }
 
+// Bundled slash-command files + skills (same must-ship rule: the chooser
+// menu and the skills tool go empty for npm users otherwise).
+const commandsDir = path.join(OUT_DIST, "assets", "commands")
+if (!fs.existsSync(commandsDir)) fail("dist/assets/commands missing (chooser would go empty for npm users)")
+else {
+  const n = walk(commandsDir, () => true).length
+  n >= 50 ? ok(`bundled slash commands: ${n}`) : fail(`only ${n} slash commands bundled (expected >= 50)`)
+}
+
+const skillsDir = path.join(OUT_DIST, "assets", "skills")
+if (!fs.existsSync(skillsDir)) fail("dist/assets/skills missing (skills tool would go empty for npm users)")
+else {
+  const n = walk(skillsDir, (p) => path.basename(p) === "SKILL.md").length
+  n >= 50 ? ok(`bundled skills: ${n}`) : fail(`only ${n} SKILL.md files bundled (expected >= 50)`)
+}
+
 const pubPkg = JSON.parse(fs.readFileSync(path.join(OUT, "package.json"), "utf8"))
 pubPkg.name === "@skt-ai-labs/trayambak-cli" ? ok("package name") : fail(`unexpected name ${pubPkg.name}`)
 pubPkg.version === rootPkg.version

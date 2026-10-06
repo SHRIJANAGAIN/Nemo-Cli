@@ -77,7 +77,15 @@ const instance = render(
   { stdin, stdout, patchConsole: false },
 )
 resizeGuard.attach(instance)
-await wait(1500)
+// Boot cinema length varies (multi-second logo animation); poll for the
+// welcome frame instead of a fixed sleep — a fixed 1500ms wait went red
+// the moment boot got slower, and every downstream check then failed on
+// missing content rather than on the resize behaviour under test.
+{
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline && !stripAnsi(sink).includes(WELCOME)) await wait(100)
+  check(stripAnsi(sink).includes(WELCOME), "boot completes within 10s (welcome frame renders)")
+}
 
 // ── 1. Width DEcrease: must blank + full repaint ───────────────────────
 let mark = sink.length
@@ -141,11 +149,38 @@ if (blankAt !== -1) {
 
 // ── 3. Height-only resize: must NOT blank (no re-flow → no desync) ─────
 mark = sink.length
-stdout.rows = 35
+stdout.rows = 48 // INCREASE: the frame must grow downward to fill it
 stdout.emit("resize")
 await wait(300)
 post = sink.slice(mark)
 check(!post.includes(BLANK), "height-only resize → no blank (avoids needless flicker)")
+// ...and the frame must actually reach the new bottom. Root height is
+// {rows - 1} by deliberate design (App.tsx: ONE slack row below the
+// viewport keeps ink 7.1.1's win32 path off the fullscreen clear-storm —
+// 21 wipes/550ms at height=rows, 0 at rows-1), so the border-box span
+// tracks rows-1. A frame stuck at the old 40 rows would span 40 < 47.
+{
+  const hLines = stripAnsi(post).split("\n")
+  let topIdx = -1
+  for (let i = hLines.length - 1; i >= 0; i--) {
+    if (hLines[i].startsWith("╭")) {
+      topIdx = i
+      break
+    }
+  }
+  let botIdx = -1
+  for (let i = hLines.length - 1; i > topIdx; i--) {
+    if (hLines[i].startsWith("╰")) {
+      botIdx = i
+      break
+    }
+  }
+  const span = topIdx === -1 ? -1 : botIdx - topIdx + 1
+  check(
+    span >= stdout.rows - 1,
+    `height increase → frame grows with rows-1 slack (span=${span} rows=${stdout.rows})`,
+  )
+}
 
 // ── 4. Subsequent renders still work (counters not left broken) ────────
 mark = sink.length

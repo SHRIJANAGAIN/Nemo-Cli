@@ -24,6 +24,21 @@
     // build:ink) is the safe speedup: emit every run, typecheck separately
     // via `npm run typecheck:ink`.
   },
+  // Emit format under module=NodeNext is decided PER FILE by the `type` field of
+  // the nearest package.json to the SOURCE file, not by include/files. So
+  // packages/tui/src/{ink-app,ui,}/package.json each carry `"type": "module"`,
+  // and packages/tui/src/package.json does too — every .ts reachable from ink-app
+  // is then ESM. The flattened output dir is `type: module`, so a CommonJS file
+  // landing there throws "exports is not defined in ES module scope" the moment
+  // it is imported, even though fix-esm-imports.js' path check passed on it.
+  //
+  // Listed explicitly because these sit outside `include` and are ESM-critical:
+  // App.tsx/PromptInput.tsx reach them as "../keymap.js" and
+  // "../keybindings.js", and they are what /keymap renders. Do NOT add
+  // packages/tui/src/keys.ts here — packages/tui/src/ink-app/keys.ts is a
+  // DIFFERENT file with the same name, and both would flatten to one keys.js.
+  // Verified by verify-ink-esm.mjs, which imports the built files.
+  "files": ["packages/tui/src/keymap.ts", "packages/tui/src/keybindings.ts"],
   "include": [
     "packages/tui/src/ink-app/**/*.tsx",
     "packages/tui/src/ink-app/**/*.ts",
