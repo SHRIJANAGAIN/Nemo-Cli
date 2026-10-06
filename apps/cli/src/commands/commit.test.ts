@@ -60,6 +60,24 @@ describe("getStagedDiff", () => {
       error: "git diff failed: no git",
     })
   })
+
+  it("translates raw git dumps into one honest line (finding #30)", async () => {
+    const usageDump = Object.assign(new Error("Command failed"), {
+      stderr: "unknown option `staged'\nusage: git diff [--no-index] ...\n  200 more lines...",
+    })
+    expect(await getStagedDiff("staged", "/repo", async () => Promise.reject(usageDump))).toEqual({
+      ok: false,
+      error: "git diff failed: unknown option `staged'",
+    })
+
+    const notRepo = Object.assign(new Error("Command failed"), {
+      stderr: "fatal: not a git repository (or any of the parent directories): .git\n",
+    })
+    expect(await getStagedDiff("all", "/elsewhere", async () => Promise.reject(notRepo))).toEqual({
+      ok: false,
+      error: "not a git repository — run inside one or pass --cwd <repo>",
+    })
+  })
 })
 
 describe("pickFinalText", () => {
@@ -119,6 +137,8 @@ describe("commitCommand", () => {
 
     expect(out).toContain("Error: nothing staged")
     expect(called).toBe(0)
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
   })
 
   it("says so when the agent returns no text", async () => {
@@ -128,5 +148,7 @@ describe("commitCommand", () => {
     )
 
     expect(out).toContain("Error: the agent produced no commit message")
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
   })
 })

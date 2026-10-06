@@ -188,3 +188,40 @@ describe("todoCommand sessions and clear", () => {
     expect(todo.todoCommand({ action: "dance" as never })).toBe("Unknown todo action: dance")
   })
 })
+
+describe("todoCommand session id validation (round 12 attack)", () => {
+  it("rejects ids that are not single path segments before touching disk", () => {
+    for (const bad of ["../evil", "..\\evil", "/abs/path", "a/b"]) {
+      expect(todo.todoCommand({ action: "list", sessionId: bad })).toBe(`Invalid session id: ${bad}`)
+      expect(todo.todoCommand({ action: "add", content: "x", sessionId: bad })).toBe(`Invalid session id: ${bad}`)
+      expect(todo.todoCommand({ action: "clear", sessionId: bad })).toBe(`Invalid session id: ${bad}`)
+    }
+    // A traversal like `../evil` used to resolve to a sibling of the todos
+    // dir (~/.trayambak/evil.json) — nothing at all may be written.
+    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+    expect(fs.existsSync(path.join(home, "evil.json"))).toBe(false)
+    expect(fs.existsSync(todoDir())).toBe(false)
+  })
+
+  it("cannot read or clear the user's config as if it were a todo list", () => {
+    // `../config` resolves to ~/.trayambak/config.json: the old code would
+    // JSON.parse the real config (then crash on undefined .items) or, on
+    // `clear`, overwrite it with {"items":[]} — wiping the configuration.
+    fs.mkdirSync(path.join(home, ".trayambak"), { recursive: true })
+    const config = path.join(home, ".trayambak", "config.json")
+    fs.writeFileSync(config, JSON.stringify({ model: "keep-me" }), "utf8")
+
+    expect(todo.todoCommand({ action: "list", sessionId: "../config" })).toBe("Invalid session id: ../config")
+    expect(todo.todoCommand({ action: "clear", sessionId: "../config" })).toBe("Invalid session id: ../config")
+    expect(todo.todoListForSession("../config")).toEqual([])
+    expect(JSON.parse(fs.readFileSync(config, "utf8"))).toEqual({ model: "keep-me" })
+  })
+
+  it("todoListForSession returns nothing for an invalid id instead of escaping", () => {
+    expect(todo.todoListForSession("a/b")).toEqual([])
+    expect(todo.todoListForSession("..")).toEqual([])
+    // Valid ids still work.
+    todo.todoCommand({ action: "add", content: "real", sessionId: "sess-ok" })
+    expect(todo.todoListForSession("sess-ok")).toHaveLength(1)
+  })
+})

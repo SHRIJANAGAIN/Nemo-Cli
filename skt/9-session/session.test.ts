@@ -110,6 +110,17 @@ describe("session tool-result persistence", () => {
     expect(titleFromConversation([{ role: "assistant", content: "hi", ts: "t" }])).toBe("")
   })
 
+  it("round-trips the collapsed-paste display text beside full content", () => {
+    const s = createSession("persist-display", "")
+    const full = `summarize this ${"x".repeat(3039)}`
+    appendConversation(s.sessionId, "user", full, { display: "[Pasted Content 3039 chars]" })
+    const loaded = loadConversation(s.sessionId)
+    expect(loaded).toHaveLength(1)
+    // Model context keeps the whole paste; the UI block rides alongside.
+    expect(loaded[0].content).toBe(full)
+    expect(loaded[0].display).toBe("[Pasted Content 3039 chars]")
+  })
+
   it("backfills default names from transcript content, never touching custom names", () => {
     const untitled = createSession("New conversation", "")
     appendConversation(untitled.sessionId, "user", "deploy the billing service now please")

@@ -120,3 +120,53 @@ describe("execCommand wiring", () => {
     expect(agentCtl.prompts[0]).toContain("diff-context")
   })
 })
+
+describe("reviewCommand repo guard (finding #29)", () => {
+  let out = ""
+  let writeSpy: { mockRestore: () => void } | null = null
+  let savedExitCode: number | undefined
+
+  beforeEach(() => {
+    agentCtl.reset()
+    savedExitCode = (process as { exitCode?: number }).exitCode
+    process.exitCode = undefined
+    out = ""
+    writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array): boolean => {
+      out += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
+      return true
+    }) as unknown as typeof process.stdout.write)
+  })
+
+  afterEach(() => {
+    writeSpy?.mockRestore()
+    process.exitCode = savedExitCode
+  })
+
+  it("refuses the default target outside a repo without burning a model turn", async () => {
+    const { reviewCommand } = await import("./exec.js")
+    await reviewCommand("", { isRepo: async () => false, runAgent: async () => undefined as never })
+
+    expect(agentCtl.prompts).toHaveLength(0)
+    expect(out).toContain("Not a git repository")
+    expect((process as { exitCode?: number }).exitCode).toBe(1)
+  })
+
+  it("runs the model for the default target inside a repo", async () => {
+    const { reviewCommand } = await import("./exec.js")
+    await reviewCommand("", { isRepo: async () => true, runAgent: async () => undefined as never })
+
+    expect(out).not.toContain("Not a git repository")
+  })
+
+  it("never gates an explicit file target on repo membership", async () => {
+    const { reviewCommand } = await import("./exec.js")
+    const prompts: string[] = []
+    await reviewCommand("src/index.ts", {
+      isRepo: async () => false,
+      runAgent: async (prompt: string) => void prompts.push(prompt),
+    })
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain("src/index.ts")
+  })
+})

@@ -19,6 +19,11 @@ import { archiveSession, deleteSession, unarchiveSession } from "./archive.js"
 
 let sessionsDir = ""
 let savedEnv: string | undefined
+let savedExitCode: number | undefined
+
+function exitCode(): number | undefined {
+  return (process as { exitCode?: number }).exitCode
+}
 
 function sessionPath(id: string): string {
   return path.join(sessionsDir, id)
@@ -38,11 +43,14 @@ beforeEach(() => {
   sessionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sessions-"))
   savedEnv = process.env.TRAYAMBAK_SESSIONS_DIR
   process.env.TRAYAMBAK_SESSIONS_DIR = sessionsDir
+  savedExitCode = exitCode()
+  process.exitCode = undefined
 })
 
 afterEach(() => {
   if (savedEnv === undefined) delete process.env.TRAYAMBAK_SESSIONS_DIR
   else process.env.TRAYAMBAK_SESSIONS_DIR = savedEnv
+  process.exitCode = savedExitCode
   try {
     fs.rmSync(sessionsDir, { recursive: true, force: true })
   } catch {
@@ -112,5 +120,39 @@ describe("deleteSession", () => {
     makeSession("delete-me")
     deleteSession("delete-me")
     expect(fs.existsSync(sessionPath("keep-me"))).toBe(true)
+  })
+})
+
+describe("session id traversal (finding #28)", () => {
+  const hostile = ["../../../../important", "..", "../x", "/abs/path", "", "a/b", "a\\b"]
+
+  it("rejects hostile ids in all three commands without touching the filesystem", () => {
+    const canary = path.join(os.tmpdir(), `trayambak-canary-${Date.now()}`)
+    fs.writeFileSync(canary, "do not touch", "utf8")
+    try {
+      for (const id of hostile) {
+        expect(archiveSession(id), `archive ${id}`).toContain("invalid session id")
+        expect(unarchiveSession(id), `unarchive ${id}`).toContain("invalid session id")
+        expect(deleteSession(id), `delete ${id}`).toContain("invalid session id")
+        expect(exitCode()).toBe(2)
+        process.exitCode = undefined
+      }
+      expect(fs.readFileSync(canary, "utf8")).toBe("do not touch")
+    } finally {
+      fs.rmSync(canary, { force: true })
+    }
+  })
+
+  it("exits 1 on misses, 0 on success", () => {
+    expect(archiveSession("nope")).toContain("session not found")
+    expect(exitCode()).toBe(1)
+    process.exitCode = undefined
+    expect(unarchiveSession("ghost")).toContain("not found")
+    expect(exitCode()).toBe(1)
+    process.exitCode = undefined
+
+    makeSession("ok")
+    expect(archiveSession("ok")).toBe("archived ok")
+    expect(exitCode()).toBeUndefined()
   })
 })

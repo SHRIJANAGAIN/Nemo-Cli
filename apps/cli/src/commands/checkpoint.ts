@@ -1,5 +1,6 @@
 /* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
 import { createCheckpoint, listCheckpoints } from "../../../../packages/checkpoints/src/index.js"
+import { EXIT_USAGE } from "../command-registry.js"
 
 export function checkpointCommand(args: string[]): string {
   const [action, sessionId] = args
@@ -13,5 +14,8 @@ export function checkpointCommand(args: string[]): string {
       ? "no checkpoints"
       : list.map((c: { id: string; createdAt: number }) => `${c.id} ${new Date(c.createdAt).toISOString()}`).join("\n")
   }
+  // Usage errors exit 2 like every other usage error — printing usage text
+  // with exit 0 reads as success to every script driving the CLI.
+  process.exitCode = EXIT_USAGE
   return "Usage: trayambak checkpoint <create|list> <session-id>"
 }

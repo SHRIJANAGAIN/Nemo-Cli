@@ -20,7 +20,25 @@ export interface PlanOptions {
 
 const PLAN_DIR = path.join(os.homedir(), ".trayambak", "plans")
 
+/**
+ * Plan ids are single path segments by construction (`plan-<base36>`), so
+ * anything a caller (slash handler, CLI arg) hands us must clear this BEFORE
+ * it reaches a path join: `../../secret` would otherwise read/write `.json`
+ * files outside `~/.trayambak/plans`. Same shape as the session-id choke
+ * point in packages/core validate.
+ */
+const PLAN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+const STEP_STATUSES = new Set(["pending", "in_progress", "completed", "blocked"])
+
+function invalidPlanId(id: string): boolean {
+  return !PLAN_ID_RE.test(id)
+}
+
 function planFile(id: string): string {
+  // Backstop: savePlan() writes where the FILE's id says, so a crafted
+  // plan JSON must not be able to aim the write outside the plans root.
+  if (invalidPlanId(id)) throw new Error(`invalid plan id: ${JSON.stringify(id)}`)
   return path.join(PLAN_DIR, `${id}.json`)
 }
 
@@ -90,6 +108,7 @@ export function planCommand(options: PlanOptions): string {
     }
     case "add-step": {
       if (!options.planId) return "Missing plan id"
+      if (invalidPlanId(options.planId)) return `Invalid plan id: ${options.planId}`
       if (!options.stepDescription) return "Missing step description"
       const plan = loadPlan(options.planId)
       if (!plan) return `Plan not found: ${options.planId}`
@@ -107,6 +126,12 @@ export function planCommand(options: PlanOptions): string {
     }
     case "update-step": {
       if (!options.planId || !options.stepId) return "Missing plan id or step id"
+      if (invalidPlanId(options.planId)) return `Invalid plan id: ${options.planId}`
+      // Status is persisted verbatim into the plan JSON — an unknown word
+      // would wedge the file with a value the UI can never render.
+      if (options.status !== undefined && !STEP_STATUSES.has(options.status)) {
+        return `Invalid status: ${options.status}`
+      }
       const plan = loadPlan(options.planId)
       if (!plan) return `Plan not found: ${options.planId}`
       const step = plan.steps.find((s) => s.id === options.stepId!)
@@ -124,6 +149,7 @@ export function planCommand(options: PlanOptions): string {
     }
     case "complete": {
       if (!options.planId) return "Missing plan id"
+      if (invalidPlanId(options.planId)) return `Invalid plan id: ${options.planId}`
       const plan = loadPlan(options.planId)
       if (!plan) return `Plan not found: ${options.planId}`
       plan.status = "completed"
@@ -139,6 +165,7 @@ export function planCommand(options: PlanOptions): string {
     }
     case "show": {
       if (!options.planId) return "Missing plan id"
+      if (invalidPlanId(options.planId)) return `Invalid plan id: ${options.planId}`
       const plan = loadPlan(options.planId)
       if (!plan) return `Plan not found: ${options.planId}`
       const lines = [

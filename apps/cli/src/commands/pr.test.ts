@@ -105,10 +105,27 @@ describe("prCommand", () => {
     const dir = tempCwd()
 
     expect(await prCommand("checkout", undefined, dir, okRunner)).toContain("Usage:")
+    expect(process.exitCode).toBe(2)
+    process.exitCode = undefined
     expect(await prCommand("link", undefined, dir, okRunner)).toContain("Usage:")
     expect(await prCommand("link", "https://x/pull/9", dir, okRunner)).toContain("Linked")
     expect(await prCommand("status", undefined, dir, okRunner)).toContain("Linked PR:")
     expect(await prCommand("unlink", undefined, dir, okRunner)).toBe("Unlinked PR")
     expect(await prCommand("merge", undefined, dir, okRunner)).toContain("Unknown pr action")
+    expect(process.exitCode).toBe(2)
+    process.exitCode = undefined
+  })
+
+  it("exits 1 on gh failures and bad numbers", async () => {
+    const dir = tempCwd()
+
+    expect(await prCommand("checkout", "abc", dir, okRunner)).toContain("Error: PR number must be numeric")
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
+    expect(await prCommand("checkout", "12", dir, async () => Promise.reject(new Error("nope")))).toContain(
+      "Error: nope",
+    )
+    expect(process.exitCode).toBe(1)
+    process.exitCode = undefined
   })
 })

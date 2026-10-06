@@ -8,6 +8,7 @@ import { execFile } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { promisify } from "node:util"
+import { failOutput, usageOutput } from "../command-registry.js"
 
 const execFileAsync = promisify(execFile)
 
@@ -48,19 +49,19 @@ export function readPrLink(cwd: string): PrLink | null {
 
 /** `trayambak pr checkout <number>`: check out a PR branch via gh. */
 export async function prCheckout(number: string, cwd: string, run: GhRunner = defaultRunner): Promise<string> {
-  if (!/^\d+$/.test(number.trim())) return `Error: PR number must be numeric, got '${number}'`
+  if (!/^\d+$/.test(number.trim())) return failOutput(`Error: PR number must be numeric, got '${number}'`)
   try {
     const out = await run(["pr", "checkout", number.trim()], cwd)
     return out.length > 0 ? out : `Checked out PR #${number.trim()}`
   } catch (error) {
-    return `Error: ${error instanceof Error ? error.message : String(error)}`
+    return failOutput(`Error: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
 /** `trayambak pr link <url>`: attach a PR to this project. */
 export function prLink(url: string, cwd: string): string {
   const clean = url.trim()
-  if (!clean) return "Error: PR URL must not be empty"
+  if (!clean) return failOutput("Error: PR URL must not be empty")
   mkdirSync(join(cwd, ".trayambak"), { recursive: true })
   writeFileSync(linkFile(cwd), JSON.stringify({ url: clean, linkedAt: new Date().toISOString() }, null, 2), "utf8")
   return `Linked ${clean}`
@@ -101,10 +102,10 @@ export async function prCommand(
   const normalized = action.trim().toLowerCase() as PrAction | ""
   switch (normalized) {
     case "checkout":
-      if (!arg) return "Usage: trayambak pr checkout <number>"
+      if (!arg) return usageOutput("Usage: trayambak pr checkout <number>")
       return prCheckout(arg, cwd, run)
     case "link":
-      if (!arg) return "Usage: trayambak pr link <url>"
+      if (!arg) return usageOutput("Usage: trayambak pr link <url>")
       return prLink(arg, cwd)
     case "unlink":
       return prUnlink(cwd)
@@ -112,6 +113,6 @@ export async function prCommand(
     case "status":
       return prStatus(cwd, run)
     default:
-      return `Unknown pr action: ${action}. Available: checkout|link|unlink|status`
+      return usageOutput(`Unknown pr action: ${action}. Available: checkout|link|unlink|status`)
   }
 }

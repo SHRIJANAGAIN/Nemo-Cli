@@ -8,6 +8,7 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { Agent, loadConfig } from "../../../runtime/src/index.js"
 import type { AgentEvent, AgentMessage } from "../../../../packages/protocol/src/index.js"
+import { failOutput } from "../command-registry.js"
 
 const execFileAsync = promisify(execFile)
 
@@ -31,7 +32,20 @@ export async function getStagedDiff(
   try {
     raw = mode === "all" ? await run(["diff", "--", "."], cwd) : await run(["diff", "--staged", "--", "."], cwd)
   } catch (error) {
-    return { ok: false, error: `git diff failed: ${error instanceof Error ? error.message : String(error)}` }
+    // execFile surfaces git's raw stderr (often a full usage dump): distill
+    // it to the first meaningful line, with a plain-English note for the
+    // common "ran outside a repo" case.
+    const stderr =
+      typeof (error as { stderr?: unknown }).stderr === "string" ? (error as { stderr: string }).stderr : ""
+    const text = stderr.trim() || (error instanceof Error ? error.message : String(error))
+    if (/not a git repository/i.test(stderr)) {
+      return { ok: false, error: "not a git repository — run inside one or pass --cwd <repo>" }
+    }
+    const first = text
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? "git diff failed"
+    return { ok: false, error: `git diff failed: ${first.slice(0, 200)}` }
   }
   if (!raw.trim()) {
     return {
@@ -84,9 +98,9 @@ export async function commitCommand(
   const cwd = opts.cwd ?? process.cwd()
   const mode = opts.mode ?? "staged"
   const got = await getStagedDiff(mode, cwd, deps.runDiff)
-  if (!got.ok) return `Error: ${got.error}`
+  if (!got.ok) return failOutput(`Error: ${got.error}`)
   const runAgent = deps.runAgent ?? defaultAgentRunner
   const messages = await runAgent(buildCommitPrompt(got.diff))
   const text = pickFinalText(messages)
-  return text.length > 0 ? text : "Error: the agent produced no commit message"
+  return text.length > 0 ? text : failOutput("Error: the agent produced no commit message")
 }

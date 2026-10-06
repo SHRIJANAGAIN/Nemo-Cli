@@ -100,37 +100,80 @@ describe("taskCommand create", () => {
     expect(fs.existsSync(tasksFile())).toBe(false)
   })
 
-  it("echoes the queued content without persisting anything", () => {
+  it("persists the queued task so /task list and the tools can see it", () => {
     expect(task.taskCommand({ action: "create", content: "Ship release" })).toBe("[Task queued] Ship release")
-    // create is a pure acknowledgement; nothing lands in the store.
-    expect(fs.existsSync(tasksFile())).toBe(false)
+    // "[Task queued]" must be TRUE: the row lands in the same store that
+    // `list`, `reset`, and the trayambak__Task* tools read (it used to
+    // acknowledge without writing anything).
+    const stored = storedTasks()
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({ content: "Ship release", status: "pending" })
+    expect(stored[0].id).toMatch(/^task_[a-z0-9]+_[a-z0-9]+$/)
+    expect(task.taskCommand({ action: "list" })).toBe(`${stored[0].id} | pending | Ship release`)
   })
 
-  it("truncates long content to 200 characters", () => {
+  it("truncates the acknowledgement to 200 characters but stores the full content", () => {
     const out = task.taskCommand({ action: "create", content: "x".repeat(300) })
 
     expect(out).toBe(`[Task queued] ${"x".repeat(200)}`)
     expect(out.length).toBe("[Task queued] ".length + 200)
+    expect(storedTasks()[0].content).toHaveLength(300)
   })
 })
 
-describe("taskCommand update/get/output", () => {
+describe("taskCommand update/get/output against the real store (round 12 attack)", () => {
   it("update requires an id", () => {
     expect(task.taskCommand({ action: "update", status: "completed" })).toBe("Missing task id")
   })
 
-  it("update acknowledges the task id", () => {
+  it("update requires something to change", () => {
+    seedTasks([{ id: "task_1", content: "Ship release", status: "pending" }])
+
+    expect(task.taskCommand({ action: "update", id: "task_1" })).toBe("Missing status")
+    expect(storedTasks()[0].status).toBe("pending")
+  })
+
+  it("rejects an unknown status word instead of persisting it", () => {
+    seedTasks([{ id: "task_1", content: "Ship release", status: "pending" }])
+
+    expect(task.taskCommand({ action: "update", id: "task_1", status: "banana" as never })).toBe(
+      "Invalid status: banana",
+    )
+    expect(storedTasks()[0].status).toBe("pending")
+  })
+
+  it("really flips the stored status", () => {
+    seedTasks([{ id: "task_1", content: "Ship release", status: "pending" }])
+
     expect(task.taskCommand({ action: "update", id: "task_1", status: "completed" })).toBe("Task task_1 updated")
+    expect(storedTasks()[0].status).toBe("completed")
   })
 
-  it("get requires an id and echoes it", () => {
+  it("reports an id that is not in the store instead of pretending", () => {
+    // These three used to echo the id back as if the operation happened.
+    expect(task.taskCommand({ action: "update", id: "task_ghost", status: "completed" })).toBe(
+      "No such task: task_ghost",
+    )
+    expect(task.taskCommand({ action: "get", id: "task_ghost" })).toBe("No such task: task_ghost")
+    expect(task.taskCommand({ action: "output", id: "task_ghost" })).toBe("No such task: task_ghost")
+  })
+
+  it("get returns the stored row", () => {
+    seedTasks([{ id: "task_1", content: "Ship release", status: "pending", priority: "high" }])
+
     expect(task.taskCommand({ action: "get" })).toBe("Missing task id")
-    expect(task.taskCommand({ action: "get", id: "task_9" })).toBe("Task task_9")
+    expect(task.taskCommand({ action: "get", id: "task_1" })).toBe("task_1 | pending [high] | Ship release")
   })
 
-  it("output requires an id and appends 'output'", () => {
+  it("output returns the result only for completed tasks", () => {
+    seedTasks([
+      { id: "task_a", content: "x", status: "pending" },
+      { id: "task_b", content: "y", status: "completed" },
+    ])
+
     expect(task.taskCommand({ action: "output" })).toBe("Missing task id")
-    expect(task.taskCommand({ action: "output", id: "task_9" })).toBe("Task task_9 output")
+    expect(task.taskCommand({ action: "output", id: "task_a" })).toBe("Task not completed (status: pending)")
+    expect(task.taskCommand({ action: "output", id: "task_b" })).toBe("(no output)")
   })
 })
 

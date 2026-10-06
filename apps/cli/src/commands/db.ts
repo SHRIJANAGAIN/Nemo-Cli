@@ -10,6 +10,7 @@ import {
   stateFilePath,
   type DatabaseDatabase,
 } from "../../../../packages/core/src/state_db.js"
+import { usageOutput } from "../command-registry.js"
 
 export type DbAction = "path" | "summary" | "threads" | "violations"
 
@@ -79,6 +80,6 @@ export function dbCommand(action: string, codexHome?: string): string {
     case "violations":
       return dbViolations(codexHome)
     default:
-      return `Unknown db action: ${action}. Available: path|summary|threads|violations`
+      return usageOutput(`Unknown db action: ${action}. Available: path|summary|threads|violations`)
   }
 }

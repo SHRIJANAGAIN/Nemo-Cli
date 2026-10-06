@@ -83,6 +83,9 @@ describe("dbCommand", () => {
   })
 
   it("rejects unknown actions with the available list", () => {
+    process.exitCode = undefined
     expect(dbCommand("drop", home)).toContain("Unknown db action")
+    expect(process.exitCode).toBe(2)
+    process.exitCode = undefined
   })
 })

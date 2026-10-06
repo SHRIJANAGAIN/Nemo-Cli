@@ -62,12 +62,18 @@ afterAll(() => {
 beforeEach(() => {
   tmp = freshDir("trayambak-worktree-")
   process.chdir(tmp)
+  process.exitCode = undefined
+})
+
+afterEach(() => {
+  process.exitCode = undefined
 })
 
 describe("worktreeCommand validation", () => {
-  it("list reports an empty result outside a git repository", () => {
-    expect(worktreeCommand({ action: "list" })).toBe("No worktrees found")
-    expect(listWorktrees()).toEqual([])
+  it("list outside a git repository says so plainly and fails (never silent exit 0)", () => {
+    expect(worktreeCommand({ action: "list" })).toMatch(/^Worktree error: not a git repository: /)
+    expect(process.exitCode).toBe(1)
+    expect(() => listWorktrees()).toThrow(/not a git repository/)
   })
 
   it("create requires a path or name", () => {
@@ -98,6 +104,18 @@ describe("worktreeCommand validation", () => {
 
   it("unknown action is reported", () => {
     expect(worktreeCommand({ action: "bogus" as never })).toBe("Unknown worktree action: bogus")
+  })
+
+  it("usage errors exit 2, git failures exit 1", () => {
+    expect(worktreeCommand({ action: "create" })).toBe("Missing path or name")
+    expect(process.exitCode).toBe(2)
+    expect(worktreeCommand({ action: "remove" })).toBe("Missing path")
+    expect(process.exitCode).toBe(2)
+    expect(worktreeCommand({ action: "bogus" as never })).toBe("Unknown worktree action: bogus")
+    expect(process.exitCode).toBe(2)
+    // Outside a repo, create fails at git (not at validation).
+    expect(worktreeCommand({ action: "create", path: path.join(tmp, "wt") })).toMatch(/^Worktree error: /)
+    expect(process.exitCode).toBe(1)
   })
 })
 
@@ -161,5 +179,59 @@ describe("worktreeCommand with a real repository", () => {
 
     expect(created).toMatch(/^Created worktree at .+ on branch wt-[a-z0-9]+$/)
     expect(worktreeCommand({ action: "remove", path: wtPath })).toBe(`Removed worktree at ${wtPath}`)
+  })
+})
+
+describe("worktreeCommand never reaches a shell (round 12 attack)", () => {
+  it("passes metacharacter paths to git as literal argv — no command injection", () => {
+    // Pre-fix, create/remove interpolated user input into execSync's shell
+    // string: `git worktree add "${targetPath}"` turned
+    //   x" & echo pwned > "<sentinel>" & REM "
+    // into a second, arbitrary command (cmd.exe `&` / sh `;`). The sentinel
+    // is the canary: it must never appear.
+    const sentinel = path.join(tmp, "pwned.txt")
+    const payload =
+      process.platform === "win32"
+        ? `x" & echo pwned > "${sentinel}" & REM "`
+        : `x"; touch "${sentinel}"; : "`
+
+    try {
+      const out = worktreeCommand({ action: "create", path: payload, branch: "b1" })
+      expect(out).toMatch(/^Worktree error:/)
+      expect(process.exitCode).toBe(1)
+      expect(fs.existsSync(sentinel)).toBe(false)
+
+      const out2 = worktreeCommand({ action: "remove", path: payload })
+      expect(out2).toMatch(/^Worktree error:/)
+      expect(fs.existsSync(sentinel)).toBe(false)
+    } finally {
+      // If a future refactor re-introduces a shell, fail loudly but leave
+      // no canary behind even when the assertion above already failed.
+      try {
+        fs.rmSync(sentinel, { force: true })
+      } catch {
+        /* best effort */
+      }
+    }
+  })
+
+  it("branch names are argv too — the same payload in -b never runs", () => {
+    const sentinel = path.join(tmp, "pwned-branch.txt")
+    const branch =
+      process.platform === "win32"
+        ? `b" & echo pwned > "${sentinel}" & REM "`
+        : `b"; touch "${sentinel}"; : "`
+
+    try {
+      const out = worktreeCommand({ action: "create", path: path.join(tmp, "wt"), branch })
+      expect(out).toMatch(/^Worktree error:/)
+      expect(fs.existsSync(sentinel)).toBe(false)
+    } finally {
+      try {
+        fs.rmSync(sentinel, { force: true })
+      } catch {
+        /* best effort */
+      }
+    }
   })
 })

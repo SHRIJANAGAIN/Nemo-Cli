@@ -4,8 +4,9 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { execSync } from "child_process"
+import { execFileSync, execSync } from "child_process"
 import * as fs from "fs"
+import { EXIT_ERROR, EXIT_USAGE } from "../command-registry.js"
 
 export interface WorktreeOptions {
   readonly action: "list" | "create" | "remove" | "switch"
@@ -20,10 +21,29 @@ export interface WorktreeEntry {
   head?: string
 }
 
+/**
+ * True when the cwd is inside a git working tree. Checked quietly (piped
+ * stdio): the old code let git's `fatal: not a git repository` dump raw to
+ * the user's stderr and then reported "No worktrees found" with exit 0, which
+ * reads as success for "there is nothing here" instead of "this is not a repo".
+ */
+function insideGitRepo(): boolean {
+  try {
+    execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore", timeout: 30_000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function listWorktrees(): WorktreeEntry[] {
+  if (!insideGitRepo()) {
+    throw new Error(`not a git repository: ${process.cwd()}`)
+  }
   try {
     const output = execSync("git worktree list --porcelain", {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
       maxBuffer: 10 * 1024 * 1024,
       timeout: 30_000,
     })
@@ -43,12 +63,22 @@ export function listWorktrees(): WorktreeEntry[] {
     }
     if (current.path) entries.push(current as WorktreeEntry)
     return entries
-  } catch {
-    return []
+  } catch (error) {
+    // Inside a repo, a failed listing is a failure, not an empty result —
+    // returning [] here used to print "No worktrees found" with exit 0.
+    const detail = error instanceof Error ? error.message.split("\n")[0] : String(error)
+    throw new Error(`git worktree list failed: ${detail}`)
   }
 }
 
 export function worktreeCommand(options: WorktreeOptions): string {
+  // Usage errors (bad input) exit 2, git/runtime failures exit 1, success
+  // leaves the code alone — a bare string on stdout with exit 0 must never
+  // again mean "something failed".
+  const usage = (message: string): string => {
+    process.exitCode = EXIT_USAGE
+    return message
+  }
   try {
     switch (options.action) {
       case "list": {
@@ -58,34 +88,41 @@ export function worktreeCommand(options: WorktreeOptions): string {
       }
       case "create": {
         const targetPath = options.path ?? options.name
-        if (!targetPath) return "Missing path or name"
+        if (!targetPath) return usage("Missing path or name")
         const branch = options.branch ?? options.name ?? `wt-${Date.now().toString(36)}`
-        execSync(`git worktree add "${targetPath}" -b "${branch}"`, {
+        // argv, never a shell string: `git worktree add "${targetPath}"`
+        // ran path/branch through cmd.exe/`sh`, so a value like
+        // `x" & calc & "` executed arbitrary commands.
+        execFileSync("git", ["worktree", "add", targetPath, "-b", branch], {
           encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
           maxBuffer: 10 * 1024 * 1024,
           timeout: 60_000,
         })
         return `Created worktree at ${targetPath} on branch ${branch}`
       }
       case "remove": {
-        if (!options.path) return "Missing path"
-        execSync(`git worktree remove "${options.path}"`, {
+        if (!options.path) return usage("Missing path")
+        execFileSync("git", ["worktree", "remove", options.path], {
           encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
           maxBuffer: 10 * 1024 * 1024,
           timeout: 60_000,
         })
         return `Removed worktree at ${options.path}`
       }
       case "switch": {
-        if (!options.path) return "Missing path"
-        if (!fs.existsSync(options.path)) return `Worktree path does not exist: ${options.path}`
+        if (!options.path) return usage("Missing path")
+        if (!fs.existsSync(options.path)) return usage(`Worktree path does not exist: ${options.path}`)
         process.chdir(options.path)
         return `Switched to worktree at ${options.path}`
       }
       default:
-        return `Unknown worktree action: ${options.action}`
+        return usage(`Unknown worktree action: ${options.action}`)
     }
   } catch (error) {
-    return `Worktree error: ${error instanceof Error ? error.message : String(error)}`
+    process.exitCode = EXIT_ERROR
+    const message = error instanceof Error ? error.message.split("\n")[0] : String(error)
+    return `Worktree error: ${message}`
   }
 }

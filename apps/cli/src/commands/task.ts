@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { listTasks, resetTasks } from "../../../runtime/src/tools/trayambak/tasks.js"
+import { addTask, getTask, listTasks, resetTasks, updateTask } from "../../../runtime/src/tools/trayambak/tasks.js"
 
 export interface TaskOptions {
   readonly action: "list" | "create" | "update" | "get" | "output" | "reset"
@@ -15,6 +15,8 @@ export interface TaskOptions {
   readonly dependsOn?: string[]
 }
 
+const TASK_STATUSES = new Set(["pending", "in_progress", "completed"])
+
 export function taskCommand(options: TaskOptions): string {
   switch (options.action) {
     case "list": {
@@ -24,19 +26,34 @@ export function taskCommand(options: TaskOptions): string {
     }
     case "create": {
       if (!options.content) return "Missing content"
+      // Really persists into the SAME store `list`, `reset`, and the
+      // trayambak__Task* tools use — "[Task queued]" must never be an empty
+      // promise (it used to acknowledge without writing anything).
+      addTask(options.content, { priority: options.priority, dependsOn: options.dependsOn })
       return `[Task queued] ${options.content.slice(0, 200)}`
     }
     case "update": {
       if (!options.id) return "Missing task id"
+      if (options.status !== undefined && !TASK_STATUSES.has(options.status)) {
+        return `Invalid status: ${options.status}`
+      }
+      if (options.status === undefined && options.priority === undefined) return "Missing status"
+      const updated = updateTask(options.id, { status: options.status, priority: options.priority })
+      if (!updated) return `No such task: ${options.id}`
       return `Task ${options.id} updated`
     }
     case "get": {
       if (!options.id) return "Missing task id"
-      return `Task ${options.id}`
+      const t = getTask(options.id)
+      if (!t) return `No such task: ${options.id}`
+      return `${t.id} | ${t.status}${t.priority ? ` [${t.priority}]` : ""} | ${t.content}${t.result ? `\nresult: ${t.result}` : ""}`
     }
     case "output": {
       if (!options.id) return "Missing task id"
-      return `Task ${options.id} output`
+      const t = getTask(options.id)
+      if (!t) return `No such task: ${options.id}`
+      if (t.status !== "completed") return `Task not completed (status: ${t.status})`
+      return t.result ?? "(no output)"
     }
     case "reset": {
       resetTasks()

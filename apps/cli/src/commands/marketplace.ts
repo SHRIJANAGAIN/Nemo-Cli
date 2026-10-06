@@ -12,6 +12,7 @@ import {
   searchMarketplace,
   type MarketplaceKind,
 } from "../../../runtime/src/tools/marketplace/marketplace.js"
+import { failOutput, usageOutput } from "../command-registry.js"
 
 export interface MarketplaceOptions {
   action?: string
@@ -35,26 +36,28 @@ export function marketplaceCommand(opts: MarketplaceOptions): string {
     case "list":
       return entriesText(scanMarketplace(source))
     case "search": {
-      if (!opts.nameOrQuery) return "Usage: trayambak marketplace search <query> [--source <dir>]"
+      if (!opts.nameOrQuery) return usageOutput("Usage: trayambak marketplace search <query> [--source <dir>]")
       const hits = searchMarketplace(source, opts.nameOrQuery)
-      return hits.length > 0 ? entriesText(hits) : `No marketplace entries match '${opts.nameOrQuery}'.`
+      return hits.length > 0 ? entriesText(hits) : failOutput(`No marketplace entries match '${opts.nameOrQuery}'.`)
     }
     case "install": {
       const kind = (opts.kind ?? "").trim().toLowerCase()
       if (kind !== "skill" && kind !== "agent")
-        return "Usage: trayambak marketplace install <skill|agent> <name> [--source <dir>]"
-      if (!opts.nameOrQuery) return "Usage: trayambak marketplace install <skill|agent> <name> [--source <dir>]"
+        return usageOutput("Usage: trayambak marketplace install <skill|agent> <name> [--source <dir>]")
+      if (!opts.nameOrQuery)
+        return usageOutput("Usage: trayambak marketplace install <skill|agent> <name> [--source <dir>]")
       const result = installMarketplaceEntry(source, kind as MarketplaceKind, opts.nameOrQuery, cwd)
-      return result.ok ? result.message : `Error: ${result.error}`
+      return result.ok ? result.message : failOutput(`Error: ${result.error}`)
     }
     case "remove": {
       const kind = (opts.kind ?? "").trim().toLowerCase()
-      if (kind !== "skill" && kind !== "agent") return "Usage: trayambak marketplace remove <skill|agent> <name>"
-      if (!opts.nameOrQuery) return "Usage: trayambak marketplace remove <skill|agent> <name>"
+      if (kind !== "skill" && kind !== "agent")
+        return usageOutput("Usage: trayambak marketplace remove <skill|agent> <name>")
+      if (!opts.nameOrQuery) return usageOutput("Usage: trayambak marketplace remove <skill|agent> <name>")
       const result = removeMarketplaceEntry(kind as MarketplaceKind, opts.nameOrQuery, cwd)
-      return result.ok ? result.message : `Error: ${result.error}`
+      return result.ok ? result.message : failOutput(`Error: ${result.error}`)
     }
     default:
-      return `Unknown marketplace action: ${opts.action}. Available: list|search|install|remove`
+      return usageOutput(`Unknown marketplace action: ${opts.action}. Available: list|search|install|remove`)
   }
 }

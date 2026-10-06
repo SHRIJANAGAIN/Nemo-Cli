@@ -42,7 +42,7 @@ import { prCommand } from "./commands/pr.js"
 import { marketplaceCommand } from "./commands/marketplace.js"
 import { uninstallCommand } from "./commands/uninstall.js"
 import { archiveSession, unarchiveSession, deleteSession } from "./commands/archive.js"
-import { sessionResumeCommand } from "./commands/session-resume.js"
+import { resolveResumeTarget, sessionResumeCommand } from "./commands/session-resume.js"
 import { sessionExportCommand } from "./commands/session-export.js"
 import { sandboxCommand, execpolicyCommand } from "./commands/sandbox.js"
 import { startServer } from "../../../packages/server/src/index.js"
@@ -278,7 +278,22 @@ async function main(): Promise<void> {
     }
     case "task": {
       const action = (rest[0] as "list" | "create" | "update" | "get" | "output" | "reset") ?? "list"
-      process.stdout.write(taskCommand({ action, id: rest[1], content: rest.slice(2).join(" ") }) + "\n")
+      // Per-action mapping: `content: rest.slice(2)` dropped the first word
+      // of every created task ("create buy milk" → queued "milk"), and
+      // update's status (rest[2]) never reached taskCommand at all.
+      let out: string
+      if (action === "create") {
+        out = taskCommand({ action, content: rest.slice(1).join(" ") })
+      } else if (action === "update") {
+        out = taskCommand({
+          action,
+          id: rest[1],
+          status: rest[2] as "pending" | "in_progress" | "completed" | undefined,
+        })
+      } else {
+        out = taskCommand({ action, id: rest[1] })
+      }
+      process.stdout.write(out + "\n")
       return
     }
     case "todo": {
@@ -288,7 +303,28 @@ async function main(): Promise<void> {
     }
     case "plan": {
       const action = (rest[0] as "create" | "add-step" | "update-step" | "complete" | "list" | "show") ?? "list"
-      process.stdout.write(planCommand({ action, name: rest[1], description: rest.slice(2).join(" ") }) + "\n")
+      // One positional shape for every action meant planId/stepId/status
+      // NEVER reached planCommand from the CLI — `trayambak plan show <id>`
+      // always answered "Missing plan id". Map each action explicitly.
+      let out: string
+      if (action === "create") {
+        out = planCommand({ action, name: rest[1], description: rest.slice(2).join(" ") })
+      } else if (action === "add-step") {
+        out = planCommand({ action, planId: rest[1], stepDescription: rest.slice(2).join(" ") })
+      } else if (action === "update-step") {
+        out = planCommand({
+          action,
+          planId: rest[1],
+          stepId: rest[2],
+          status: rest[3] as "pending" | "in_progress" | "completed" | "blocked" | undefined,
+          stepDescription: rest.length > 4 ? rest.slice(4).join(" ") : undefined,
+        })
+      } else if (action === "complete" || action === "show") {
+        out = planCommand({ action, planId: rest[1] })
+      } else {
+        out = planCommand({ action })
+      }
+      process.stdout.write(out + "\n")
       return
     }
     case "manager": {
@@ -407,13 +443,33 @@ async function main(): Promise<void> {
       process.stdout.write(deleteSession(rest[0] ?? "") + "\n")
       return
     case "resume": {
-      const sessionId = rest[0]
+      const { flags, positional } = parseFor("resume", rest)
+      const sessionId = positional[0]
       if (!sessionId) {
-        process.stderr.write("Usage: trayambak resume <session-id>\n")
+        process.stderr.write("Usage: trayambak resume <session-id> [prompt]\n")
         process.exitCode = 2
         return
       }
+      // Resolve the transcript BEFORE reporting success. Printing "Resumed …"
+      // and exiting was the original bug: the id resolved in the metadata list,
+      // which carries no path to the conversation, so the agent that started
+      // later began from an empty session and never saw the earlier turns.
+      const target = resolveResumeTarget(sessionId)
       process.stdout.write(sessionResumeCommand({ sessionId }) + "\n")
+      if (!target) {
+        process.exitCode = 1
+        return
+      }
+      // Continue straight into the session with the transcript attached, which
+      // is the only way the history actually reaches the model.
+      await runCommand({
+        config: loadConfig(overrides),
+        prompt: positional.slice(1).join(" ") || flags.prompt || "",
+        sessionFile: target.file,
+        modelPath: flags["model-path"],
+        port: optionalPort(flags.port),
+        useInk: true,
+      })
       return
     }
     case "export": {

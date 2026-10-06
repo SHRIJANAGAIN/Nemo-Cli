@@ -58,6 +58,10 @@ describe("command registry", () => {
 
 describe("help rendering", () => {
   const help = renderRootHelp("trayambak")
+  it("root help carries SKT AI LABS branding, never third-party credit", () => {
+    expect(help).toContain("SKT AI LABS")
+    expect(help).not.toContain("NVIDIA")
+  })
   it("root help lists every visible command", () => {
     for (const c of COMMANDS.filter((x) => !x.hidden)) {
       expect(help).toContain(c.name)

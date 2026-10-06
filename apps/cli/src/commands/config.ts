@@ -4,8 +4,10 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { loadConfig, saveConfig, type TrayambakConfig } from "../../../runtime/src/index.js"
+import { loadConfig, saveConfig, configPath, type TrayambakConfig } from "../../../runtime/src/index.js"
+import { EXIT_USAGE } from "../command-registry.js"
 import { isSecretKey, redactSecrets } from "../../../../packages/core/src/secrets.js"
+import * as fs from "node:fs"
 
 function displayValue(key: string, value: unknown): string {
   if (isSecretKey(key)) {
@@ -28,6 +30,11 @@ export function configCommand(args: string[]): void {
       }
       return
     }
+    if (!(key in (cfg as unknown as Record<string, unknown>))) {
+      process.stderr.write(`Unknown config key "${key}". See 'trayambak config get' for known keys.\n`)
+      process.exitCode = EXIT_USAGE
+      return
+    }
     process.stdout.write(`${displayValue(key, (cfg as unknown as Record<string, unknown>)[key] ?? "")}\n`)
     return
   }
@@ -45,6 +52,26 @@ export function configCommand(args: string[]): void {
     const key = rawKey.replace(/^--+/, "").replace(/-([a-z])/g, (_, c: string) => (c as string).toUpperCase())
     const coerced = coerce(value)
     saveConfig({ [key]: coerced } as Partial<TrayambakConfig>)
+    // Round-trip proof: sanitizeConfig() rebuilds a typed config and drops
+    // unknown keys — without this check "Set bogus = 1" prints success for
+    // a key that does nothing (#11/#12).
+    if (!(key in (loadConfig() as unknown as Record<string, unknown>))) {
+      // Scrub the dead write so config.json doesn't accumulate keys the
+      // loader ignores; scrub failure is best-effort, the error is not.
+      try {
+        const file = configPath()
+        const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>
+        delete raw[key]
+        fs.writeFileSync(file, JSON.stringify(raw, null, 2), "utf8")
+      } catch {
+        /* best effort */
+      }
+      process.stderr.write(
+        `Unknown config key "${key}" — nothing was stored. See 'trayambak config get' for known keys.\n`,
+      )
+      process.exitCode = EXIT_USAGE
+      return
+    }
     process.stdout.write(`Set ${key} = ${displayValue(key, coerced)}\n`)
     return
   }

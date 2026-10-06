@@ -20,9 +20,33 @@ export interface TodoOptions {
 
 const TODO_DIR = path.join(os.homedir(), ".trayambak", "todos")
 
+/**
+ * Session ids name a FILE under TODO_DIR, so they must be single path
+ * segments (same rule as plan ids): `../config` would otherwise resolve to
+ * ~/.trayambak/config.json — parsed as a todo list on read, or overwritten
+ * with `{"items":[]}` by a `clear`. Mirrors core's assertSessionId.
+ */
+const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+function invalidSessionId(id: string): boolean {
+  return !SESSION_ID_RE.test(id)
+}
+
 function todoFile(sessionId?: string): string {
   const id = sessionId && sessionId.trim() ? sessionId.trim() : "global"
+  // Backstop for any future direct caller: the wrappers below pre-validate
+  // so they can answer with a message instead of throwing.
+  if (invalidSessionId(id)) throw new Error(`invalid session id: ${JSON.stringify(id)}`)
   return path.join(TODO_DIR, `${id}.json`)
+}
+
+/** undefined/blank → the documented global-list fallback (null = fine);
+ *  a non-segment id → the id to reject at the command layer. */
+function rejectedSessionId(sessionId: string | undefined): string | null {
+  if (sessionId === undefined) return null
+  const id = sessionId.trim()
+  if (!id) return null
+  return invalidSessionId(id) ? id : null
 }
 
 interface TodoItem {
@@ -61,6 +85,8 @@ function nextId(list: TodoList): number {
 
 export function todoCommand(options: TodoOptions): string {
   const sessionId = options.sessionId
+  const rejected = rejectedSessionId(sessionId)
+  if (rejected !== null) return `Invalid session id: ${rejected}`
   const list = load(sessionId)
 
   switch (options.action) {
@@ -112,5 +138,6 @@ export function todoCommand(options: TodoOptions): string {
 }
 
 export function todoListForSession(sessionId?: string): TodoItem[] {
+  if (rejectedSessionId(sessionId) !== null) return []
   return load(sessionId).items
 }

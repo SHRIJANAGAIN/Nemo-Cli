@@ -244,3 +244,47 @@ describe("planCommand complete/list/show", () => {
     expect(plan.planCommand({ action: "juggle" as never })).toBe("Unknown plan action: juggle")
   })
 })
+
+describe("planCommand id and status validation (round 11 attack)", () => {
+  it("rejects ids that are not single path segments before touching disk", () => {
+    // "" is falsy and lands in the "Missing plan id" branch (pinned above).
+    for (const bad of ["../evil", "..\\evil", "/abs/path", "a/b"]) {
+      expect(plan.planCommand({ action: "show", planId: bad })).toBe(`Invalid plan id: ${bad}`)
+      expect(plan.planCommand({ action: "add-step", planId: bad, stepDescription: "x" })).toBe(
+        `Invalid plan id: ${bad}`,
+      )
+      expect(plan.planCommand({ action: "update-step", planId: bad, stepId: "s1" })).toBe(`Invalid plan id: ${bad}`)
+      expect(plan.planCommand({ action: "complete", planId: bad })).toBe(`Invalid plan id: ${bad}`)
+    }
+    // Nothing escaped the plans root (the traversal would have read/written
+    // a sibling of ~/.trayambak/plans).
+    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+    expect(fs.existsSync(path.join(home, "evil.json"))).toBe(false)
+  })
+
+  it("rejects an unknown step status instead of persisting it", () => {
+    const id = createPlan("P")
+    plan.planCommand({ action: "add-step", planId: id, stepDescription: "step one" })
+    const stepId = readPlan(id).steps[0].id
+
+    expect(plan.planCommand({ action: "update-step", planId: id, stepId, status: "banana" as never })).toBe(
+      "Invalid status: banana",
+    )
+    // The stored step is untouched — no bogus status, no clobbered description.
+    expect(readPlan(id).steps[0]).toMatchObject({ description: "step one", status: "pending" })
+  })
+
+  it("backstop: a plan file whose internal id escapes cannot aim a write outside the plans root", () => {
+    fs.mkdirSync(planDir(), { recursive: true })
+    fs.writeFileSync(
+      planFile("plan-crafted"),
+      JSON.stringify({ id: "../evil", name: "x", description: "", status: "active", steps: [], createdAt: 1, updatedAt: 1 }),
+      "utf8",
+    )
+
+    expect(() => plan.planCommand({ action: "add-step", planId: "plan-crafted", stepDescription: "d" })).toThrow(
+      /invalid plan id/,
+    )
+    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+  })
+})

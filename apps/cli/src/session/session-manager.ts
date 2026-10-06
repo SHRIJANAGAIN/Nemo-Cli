@@ -2,6 +2,7 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import { isRemoteUncPath } from "../../../runtime/src/config.js"
 
 export interface SessionInfo {
   readonly id: string
@@ -30,7 +31,20 @@ function newSessionId(): string {
 }
 
 function sessionsFilePath(): string {
-  if (process.env.TRAYAMBAK_SESSIONS_FILE) return process.env.TRAYAMBAK_SESSIONS_FILE
+  const explicit = process.env.TRAYAMBAK_SESSIONS_FILE
+  if (explicit) {
+    if (isRemoteUncPath(explicit)) {
+      // Fail closed without touching the path: existsSync on a UNC target
+      // would authenticate to the remote host (NTLM hash leak).
+      try {
+        process.stderr.write(
+          `trayambak: refusing remote UNC sessions file "${explicit}" (NTLM/SMB risk) — using default instead.\n`,
+        )
+      } catch {
+        /* stderr unavailable */
+      }
+    } else return explicit
+  }
   return path.join(os.homedir(), ".trayambak", "sessions.json")
 }
 

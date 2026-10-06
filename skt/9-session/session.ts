@@ -7,6 +7,31 @@
 import * as fs from "fs"
 import { spawn, type ChildProcess } from "child_process"
 import * as path from "path"
+import { assertSessionId } from "../../packages/core/src/validate.js"
+
+/**
+ * Every `sessionId` handled below names a directory under `sessionsDir()`, and
+ * each of these four functions then does something destructive with it: a
+ * recursive `rmSync`, a `mkdirSync` plus append, a full-file rewrite, or a read.
+ *
+ * `skt/8-conversations/sessions.json` is a plain JSON file, so a poisoned entry
+ * (`{"sessionId":"../../../src"}`) turned the TUI session picker's delete —
+ * which imports `deleteSession` straight from this module — into an arbitrary
+ * directory delete, and the log helpers into arbitrary file append and read.
+ * Validate once at each entry point, and fail closed without throwing so no
+ * caller's return contract changes.
+ *
+ * Uses core's canonical rule rather than a second copy of the regex that could
+ * drift from `packages/session-backends` and the CLI's archive command.
+ */
+function usableSessionId(sessionId: string): boolean {
+  try {
+    assertSessionId(sessionId)
+    return true
+  } catch {
+    return false
+  }
+}
 
 declare const __dirname: string
 
@@ -197,6 +222,7 @@ export function endSession(sessionId: string): void {
 }
 
 export function deleteSession(sessionId: string): boolean {
+  if (!usableSessionId(sessionId)) return false
   try {
     const all = loadSessions()
     const filtered = all.filter((x) => x.sessionId !== sessionId)
@@ -215,6 +241,11 @@ export interface ConversationEntry {
   role: "user" | "assistant" | "system" | "tool"
   content: string
   ts: string
+  /** Display text for UI restores: when a pasted block rode the composer as
+   *  `[Pasted Content N chars]`, the log keeps the FULL text in `content`
+   *  (model context stays complete) while `display` holds the collapsed
+   *  block the transcript showed. Absent for every other row. */
+  display?: string
   toolCallId?: string
   toolName?: string
   toolStatus?: "running" | "completed" | "error"
@@ -286,8 +317,10 @@ export function appendConversation(
     result?: string
     isError?: boolean
     durationMs?: number
+    display?: string
   },
 ): void {
+  if (!usableSessionId(sessionId)) return
   try {
     const dir = path.join(sessionsDir(), sessionId)
     fs.mkdirSync(dir, { recursive: true })
@@ -330,6 +363,7 @@ export function isTransientNotice(content: string): boolean {
  * Only defined patch fields are written; everything else passes through.
  */
 export function updateConversationToolResult(sessionId: string, toolCallId: string, patch: ToolResultPatch): void {
+  if (!usableSessionId(sessionId)) return
   try {
     const file = path.join(sessionsDir(), sessionId, "log.jsonl")
     if (!fs.existsSync(file)) return
@@ -361,6 +395,7 @@ export function updateConversationToolResult(sessionId: string, toolCallId: stri
 }
 
 export function loadConversation(sessionId: string): ConversationEntry[] {
+  if (!usableSessionId(sessionId)) return []
   try {
     const file = path.join(sessionsDir(), sessionId, "log.jsonl")
     if (!fs.existsSync(file)) return []

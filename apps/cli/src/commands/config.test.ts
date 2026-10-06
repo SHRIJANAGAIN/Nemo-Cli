@@ -37,10 +37,13 @@ let tmp = ""
 let originalCwd = ""
 const savedEnv: Record<string, string | undefined> = {}
 let out = ""
-// Structural type: only mockRestore() is ever called on this spy, and the
+let errOut = ""
+let savedExitCode: number | undefined
+// Structural type: only mockRestore() is ever called on these spies, and the
 // concrete overload set of process.stdout.write doesn't fit vitest's
 // default MockInstance<(this: unknown, ...args: unknown[]) => unknown>.
 let writeSpy: { mockRestore: () => void } | undefined
+let errSpy: { mockRestore: () => void } | undefined
 
 const configFile = (): string => path.join(tmp, ".trayambak", "config.json")
 
@@ -65,15 +68,25 @@ beforeEach(() => {
   }
 
   out = ""
+  errOut = ""
+  savedExitCode = process.exitCode as number | undefined
+  process.exitCode = undefined
   writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: string | Uint8Array): boolean => {
     out += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
     return true
   }) as unknown as typeof process.stdout.write)
+  errSpy = vi.spyOn(process.stderr, "write").mockImplementation(((chunk: string | Uint8Array): boolean => {
+    errOut += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
+    return true
+  }) as unknown as typeof process.stderr.write)
 })
 
 afterEach(() => {
   writeSpy?.mockRestore()
   writeSpy = undefined
+  errSpy?.mockRestore()
+  errSpy = undefined
+  process.exitCode = savedExitCode
   process.chdir(originalCwd)
   for (const key of ENV_KEYS) {
     const value = savedEnv[key]
@@ -177,21 +190,40 @@ describe("configCommand get", () => {
     expect(out).toContain("baseUrl = ")
   })
 
-  it("prints an empty line for a key that does not exist", () => {
-    seedConfig({ model: "seeded-model" })
-    configCommand(["get", "doesNotExist"])
-    expect(out).toBe("\n")
-  })
-
-  it("persists an unknown key but does not surface it through the schema", () => {
-    // Unknown keys survive the raw file (merge-save) but sanitizeConfig()
-    // rebuilds a typed config, so get can never leak them back out.
+  it("rejects unknown keys instead of printing false success (#11/#12)", () => {
+    // sanitizeConfig() rebuilds a typed config and drops unknown keys, so a
+    // bare success message would be a lie: nothing would ever take effect.
     configCommand(["set", "totallyUnknownKey", "1"])
-    expect(readConfig().totallyUnknownKey).toBe(1)
+    expect(errOut).toContain('Unknown config key "totallyUnknownKey"')
+    expect(process.exitCode).toBe(2)
+    expect(out).toBe("")
+    // ...and the dead write is scrubbed, not left littering config.json.
+    expect(readConfig().totallyUnknownKey).toBeUndefined()
 
     out = ""
-    configCommand(["get", "totallyUnknownKey"])
-    expect(out).toBe("\n")
+    errOut = ""
+    process.exitCode = undefined
+    configCommand(["set", "approvalMode", "plan"])
+    expect(errOut).toContain('Unknown config key "approvalMode"')
+    expect(process.exitCode).toBe(2)
+  })
+
+  it("rejects unknown keys on get (#18)", () => {
+    seedConfig({ model: "seeded-model" })
+    configCommand(["get", "doesNotExist"])
+    expect(errOut).toContain('Unknown config key "doesNotExist"')
+    expect(process.exitCode).toBe(2)
+    expect(out).toBe("")
+  })
+
+  it("round-trips llama.cpp sizing keys instead of silently dropping them", () => {
+    configCommand(["set", "ctxSize", "8192"])
+    expect(out).toBe("Set ctxSize = 8192\n")
+    expect(readConfig().ctxSize).toBe(8192)
+
+    out = ""
+    configCommand(["get", "ctxSize"])
+    expect(out).toBe("8192\n")
   })
 
   it("lets TRAYAMBAK_MODEL win over the file value", () => {

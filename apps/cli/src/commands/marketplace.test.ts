@@ -7,11 +7,25 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { marketplaceCommand } from "./marketplace.js"
 
 let shelf = ""
 let project = ""
+let savedExitCode: number | undefined
+
+function readExitCode(): number | undefined {
+  return (process as { exitCode?: number }).exitCode
+}
+
+function writeExitCode(value: number | undefined): void {
+  ;(process as { exitCode?: number }).exitCode = value
+}
+
+beforeEach(() => {
+  savedExitCode = readExitCode()
+  writeExitCode(undefined)
+})
 
 afterEach(() => {
   for (const dir of [shelf, project]) {
@@ -19,6 +33,7 @@ afterEach(() => {
   }
   shelf = ""
   project = ""
+  writeExitCode(savedExitCode)
 })
 
 function makeShelf(): string {
@@ -56,5 +71,22 @@ describe("marketplaceCommand", () => {
 
   it("rejects unknown actions", () => {
     expect(marketplaceCommand({ action: "buy" })).toContain("Unknown marketplace action")
+    expect(process.exitCode).toBe(2)
+  })
+
+  it("exits 1 on a missing install and 0 on success", () => {
+    const dir = makeShelf()
+    project = mkdtempSync(join(tmpdir(), "trayambak-mktproj-"))
+
+    expect(
+      marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "ghost", source: dir, cwd: project }),
+    ).toContain("Error:")
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = undefined
+    expect(
+      marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "reviewer", source: dir, cwd: project }),
+    ).toContain("Installed skill")
+    expect(process.exitCode).toBeUndefined()
   })
 })

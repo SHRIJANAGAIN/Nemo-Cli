@@ -37,6 +37,78 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
 
   registry.register(
     makeDef({
+      name: "company",
+      description: "Browse the company agent library, divide a task across employees, or queue runs",
+      category: "Agent",
+      argsHint: "[divisions|list|info|run|assign|on|off|enable|disable|status] [division] [agent] [prompt|task]",
+      handler: async (args: string[], config) => {
+        const { companyCommand } = await import("./company.js")
+        const action = (args[0] ?? "divisions") as
+          "divisions" | "list" | "info" | "run" | "on" | "off" | "enable" | "disable" | "status"
+        if (action === "list") return companyCommand({ action, division: args[1] })
+        if (action === "info") return companyCommand({ action, division: undefined, type: args.slice(1).join(" ") })
+        if (action === "on" || action === "off" || action === "status") return companyCommand({ action })
+        if (action === "enable" || action === "disable") {
+          return companyCommand({ action, division: args[1], type: args.slice(1).join(" ") })
+        }
+        if (action === "run") {
+          // "all" / division shortcut first (single token, no name-split
+          // needed); otherwise multi-word persona names split by longest
+          // leading run that names a roster agent (same split as the TUI).
+          const { listCompanyDivisions, resolveCompanyState } =
+            await import("../../../runtime/src/agent/company-library.js")
+          const runState = resolveCompanyState(undefined, config?.cwd ?? process.cwd(), undefined, config ?? null)
+          if (!runState) return companyCommand({ action, type: args[1], prompt: args.slice(2).join(" ") })
+          if (!runState.enabled) return "Company is OFF — `/company on` to enable it."
+          const tail = args.slice(1)
+          const first = (tail[0] ?? "").toLowerCase()
+          const divisions = listCompanyDivisions(runState.root, runState.disabled)
+          if (first === "all" || (first && divisions.some((d) => d.id.toLowerCase() === first))) {
+            return companyCommand({ action, type: tail[0], prompt: tail.slice(1).join(" ") })
+          }
+          const { splitCompanyRunArgs } = await import("./company.js")
+          const split = splitCompanyRunArgs(runState.root, args.slice(1), runState.disabled)
+          if (!split) {
+            return args.length > 1
+              ? `Company agent not found: ${args.slice(1).join(" ")}`
+              : "Usage: /company run <agent> <prompt>"
+          }
+          return companyCommand({ action, type: split.type, prompt: split.prompt })
+        }
+        // assign/divide — or any unknown first word — treats the line as one
+        // task; company formation divides it across employees (company-assign).
+        const verb = args[0] ?? ""
+        if (verb === "assign" || verb === "divide" || !["divisions", "", "list", "info", "run"].includes(verb)) {
+          const { listCompanyAgents, listCompanyDivisions, resolveCompanyState } =
+            await import("../../../runtime/src/agent/company-library.js")
+          // State-aware: master OFF refuses, disabled departments are left
+          // out of the roster the work is divided across.
+          const state = resolveCompanyState(undefined, config?.cwd ?? process.cwd(), undefined, config ?? null)
+          // Missing library: same help companyCommand prints for bare /company.
+          if (!state) return companyCommand({ action: "divisions" })
+          if (!state.enabled) return "Company is OFF — `/company on` to enable it."
+          const { assignCompanyWork } = await import("./company-assign.js")
+          const start = verb === "assign" || verb === "divide" ? 1 : 0
+          const parts = args.slice(start)
+          // `--run` is TUI-only (this path has no launcher) — strip it and say so.
+          const fanout = parts[0] === "--run"
+          const task = (fanout ? parts.slice(1) : parts).join(" ")
+          const message = assignCompanyWork(
+            task,
+            listCompanyAgents(state.root, undefined, state.disabled),
+            listCompanyDivisions(state.root, state.disabled),
+          )
+          return fanout
+            ? `${message}\nNote: fan-out execution runs in the TUI — /company assign --run <task>.`
+            : message
+        }
+        return companyCommand({ action: "divisions" })
+      },
+    }),
+  )
+
+  registry.register(
+    makeDef({
       name: "task",
       description: "List and manage trayambak tasks",
       category: "Task",
@@ -46,7 +118,16 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
         const { taskCommand } = await import("./task.js")
         const action = (args[0] ?? "list") as "list" | "create" | "update" | "get" | "output" | "reset"
         if (action === "create") {
-          return taskCommand({ action, content: args.slice(1).join(" "), id: args[1] })
+          // Content is the REST of the line (id=args[1] used to eat the
+          // first word from the CLI path; neither path ever passed status).
+          return taskCommand({ action, content: args.slice(1).join(" ") })
+        }
+        if (action === "update") {
+          return taskCommand({
+            action,
+            id: args[1],
+            status: args[2] as "pending" | "in_progress" | "completed" | undefined,
+          })
         }
         return taskCommand({ action, id: args[1] })
       },
@@ -87,14 +168,25 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
         const { planCommand } = await import("./plan.js")
         const action = (args[0] ?? "list") as "create" | "add-step" | "update-step" | "complete" | "list" | "show"
         if (action === "create") {
-          return planCommand({ action, name: args[1], description: args[2] })
+          // Description is the REST of the line — args[2] alone dropped every
+          // word after the third ("/plan create p do the thing" → "do").
+          return planCommand({ action, name: args[1], description: args.slice(2).join(" ") })
         }
         if (action === "add-step") {
           return planCommand({ action, planId: args[1], stepDescription: args.slice(2).join(" ") })
         }
         if (action === "update-step") {
+          // <planId> <stepId> <status> [description...]. status and the
+          // description used to BOTH read args[3], so the status word
+          // overwrote the step description and everything after it vanished.
           const status = args[3] as "pending" | "in_progress" | "completed" | "blocked" | undefined
-          return planCommand({ action, planId: args[1], stepId: args[2], status, stepDescription: args[3] })
+          return planCommand({
+            action,
+            planId: args[1],
+            stepId: args[2],
+            status,
+            stepDescription: args.length > 4 ? args.slice(4).join(" ") : undefined,
+          })
         }
         if (action === "complete") {
           return planCommand({ action, planId: args[1] })
@@ -129,9 +221,12 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
       category: "Session",
       aliases: ["c"],
       argsHint: "[config|estimate|run|reset]",
-      handler: async () => {
+      handler: async (args: string[]) => {
         const { compactCommand } = await import("./compact.js")
-        return compactCommand({ action: "config" })
+        // Forward the action the argsHint promises — the old handler
+        // hard-coded `config`, so `/compact run` quietly showed settings.
+        const action = (args[0] ?? "config") as "config" | "estimate" | "run" | "reset"
+        return compactCommand({ action })
       },
     }),
   )
@@ -143,9 +238,15 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
       category: "Configuration",
       aliases: ["md"],
       argsHint: "[list|current|set] [mode]",
-      handler: async () => {
+      handler: async (args: string[]) => {
         const { modeCommand } = await import("./mode.js")
-        return modeCommand({ action: "list" })
+        // Forward action + mode name (was hard-coded to `list`, so
+        // `/mode set code` listed modes instead of switching).
+        const action = (args[0] ?? "list") as "list" | "current" | "set"
+        return modeCommand({
+          action,
+          mode: args[1] as "default" | "plan" | "architect" | "code" | "debug" | "review" | undefined,
+        })
       },
     }),
   )
@@ -157,9 +258,13 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
       category: "Worktree",
       aliases: ["wt"],
       argsHint: "[list|create|remove|switch] [path|name]",
-      handler: async () => {
+      handler: async (args: string[]) => {
         const { worktreeCommand } = await import("./worktree.js")
-        return worktreeCommand({ action: "list" })
+        // Mirror the CLI mapping (was hard-coded to `list`, silently
+        // dropping create/remove/switch). create/remove now go through
+        // argv git, so user-supplied paths never reach a shell.
+        const action = (args[0] ?? "list") as "list" | "create" | "remove" | "switch"
+        return worktreeCommand({ action, path: args[1], branch: args[2], name: args[1] })
       },
     }),
   )

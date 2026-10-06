@@ -45,6 +45,23 @@ export interface CommandSpec {
 export const EXIT_OK = 0
 export const EXIT_ERROR = 1
 export const EXIT_USAGE = 2
+
+/**
+ * Operational failure with a printable message (missing session, failed
+ * install, empty diff, ...): returns the message AND marks exit 1, so
+ * failures can never masquerade as success (finding #31). Tests keep
+ * asserting on the returned string; they additionally pin the code.
+ */
+export function failOutput(message: string): string {
+  process.exitCode = EXIT_ERROR
+  return message
+}
+
+/** Malformed invocation with a printable message: returns it, marks exit 2. */
+export function usageOutput(message: string): string {
+  process.exitCode = EXIT_USAGE
+  return message
+}
 /** Policy denial: the check ran fine, the answer is no (CI-gatable). */
 export const EXIT_DENIED = 3
 
@@ -373,7 +390,7 @@ export function renderRootHelp(binName: string): string {
   const width = Math.min(48, Math.max(...visible.map((c) => renderUsage(c).length)) + 2)
   const rows = visible.map((c) => `  ${pad(renderUsage(c), width)}${c.summary}`)
   return `
-TRAYAMBAK  local-first terminal agent powered by NVIDIA NIM / llama.cpp
+TRAYAMBAK  coding agent by SKT AI LABS
 
 Usage:
 ${rows.join("\n")}
