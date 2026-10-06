@@ -5,6 +5,7 @@
  */
 
 export * from "./messages.js"
+export * from "./stop-reason.js"
 export * from "./tools.js"
 export * from "./events.js"
 export * from "./permissions.js"

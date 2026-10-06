@@ -44,8 +44,35 @@ function isModernWindowsTerminal(): boolean {
 }
 
 /**
- * Returns the ANSI escape sequence to clear the terminal including scrollback.
+ * Screen-only clear. Erases the viewport and homes the cursor, but NEVER
+ * touches the scrollback.
+ *
+ * This is what a REPAINT needs, and the distinction is load-bearing. The chat
+ * UI keeps its transcript by printing settled rows to the terminal's native
+ * scrollback via Ink's `<Static>` and repainting only the live tail in-frame,
+ * which is what makes the device's own scrollbar an accurate view of the
+ * conversation. That scrollback is the only copy of the printed history.
+ *
+ * The renderer's flicker recovery (`log-update.ts` → `fullResetSequence`, on a
+ * window resize or any offscreen reflow) used to emit a `clearTerminal` patch,
+ * and that patch was rendered with the full sequence below — which includes
+ * ED3 on a modern Windows Terminal. Every resize therefore deleted the already
+ * printed transcript from the terminal: messages vanished and scrolling back
+ * showed nothing. A repaint is not a reset.
+ *
+ * No capability branch here on purpose. Dropping scrollback is never the right
+ * answer for a repaint, on any terminal, so this is one fixed sequence.
+ */
+export function getClearScreenSequence(): string {
+  return ERASE_SCREEN + CURSOR_HOME
+}
+
+/**
+ * Returns the ANSI escape sequence to clear the terminal INCLUDING scrollback.
  * Automatically detects terminal capabilities.
+ *
+ * Reserve this for a genuine full reset — one where losing scrollback is the
+ * intent. Never use it to recover from a repaint; see `getClearScreenSequence`.
  */
 export function getClearTerminalSequence(): string {
   if (process.platform === "win32") {

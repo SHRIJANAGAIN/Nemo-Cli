@@ -8,8 +8,11 @@ import * as http from "http"
 import * as https from "https"
 import * as url from "url"
 import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition } from "../../protocol/src/index.js"
+import { stopReasonFromWire } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
 import { clampTemperature } from "./types.js"
+import type { CacheableMessage } from "./prompt-cache.js"
+import { markAnthropicCacheBreakpoints, systemWithCacheControl } from "./prompt-cache.js"
 
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 8, maxFreeSockets: 4 })
@@ -116,9 +119,17 @@ export class AnthropicProvider implements Provider {
       model: this.options.model,
       max_tokens: this.options.maxTokens ?? 4096,
       stream: true,
-      messages,
+      // #123 — cache the stable prefix instead of re-billing it every turn.
+      // `messages` holds rows this loop just built, so marking the tail here
+      // is safe; `markAnthropicCacheBreakpoints` copies rather than mutates.
+      messages: markAnthropicCacheBreakpoints(messages as unknown as CacheableMessage[]) as unknown as Record<
+        string,
+        unknown
+      >[],
     }
-    if (system.trim().length > 0) body.system = system
+    const cachedSystem = systemWithCacheControl(system)
+    if (cachedSystem) body.system = cachedSystem
+    else if (system.trim().length > 0) body.system = system
     if (this.options.temperature !== undefined) body.temperature = clampTemperature(this.options.temperature, 1, 1)
     if (this.options.topP !== undefined) body.top_p = this.options.topP
     if (input.tools && input.tools.length > 0) body.tools = toAnthropicTools(input.tools)
@@ -237,7 +248,7 @@ export class AnthropicProvider implements Provider {
           } else if (type === "message_delta") {
             const delta = json.delta as Record<string, unknown> | undefined
             const reason = delta?.stop_reason as string | undefined
-            if (reason) stopReason = mapAnthropicStop(reason)
+            if (reason) stopReason = stopReasonFromWire(reason)
           }
         }
         res.setEncoding("utf8")
@@ -339,18 +350,9 @@ export class AnthropicProvider implements Provider {
   }
 }
 
-function mapAnthropicStop(reason: string): StopReason {
-  switch (reason) {
-    case "tool_use":
-      return "tool_use"
-    case "max_tokens":
-      return "length"
-    case "end_turn":
-    case "stop_sequence":
-    default:
-      return "end_turn"
-  }
-}
+// Stop reasons are normalised in one place (protocol/stop-reason.ts) rather than
+// per-adapter, so a spelling this adapter has never seen cannot default to
+// "end_turn" and report a severed answer as a finished one.
 
 export function createAnthropicProvider(options: ProviderOptions): Provider {
   return new AnthropicProvider(options)

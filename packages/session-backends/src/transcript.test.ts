@@ -3,6 +3,7 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import {
+  assertSessionId,
   createTranscript,
   appendContext,
   appendWire,
@@ -10,6 +11,7 @@ import {
   readState,
   listTranscripts,
   isEmptyTranscript,
+  sessionDir,
 } from "./transcript.js"
 
 beforeEach(() => {
@@ -44,5 +46,31 @@ describe("transcript store", () => {
     const ids = listTranscripts().map((t) => t.id)
     expect(ids).toContain(a.id)
     expect(ids).toContain(b.id)
+  })
+})
+
+describe("session id validation (finding #28)", () => {
+  it("accepts generated and ordinary ids", () => {
+    expect(() => assertSessionId("550e8400-e29b-41d4-a716-446655440000")).not.toThrow()
+    expect(() => assertSessionId("1722345600000-abcdef12")).not.toThrow()
+    expect(() => assertSessionId("s-1")).not.toThrow()
+  })
+
+  it("rejects traversal, absolute paths, and empty ids", () => {
+    for (const hostile of ["", ".", "..", "../x", "../../etc/passwd", "/abs/path", "a/b", "a\\b", "x".repeat(200)]) {
+      expect(() => assertSessionId(hostile), hostile).toThrow("invalid session id")
+    }
+  })
+
+  it("sessionDir throws before joining hostile ids", () => {
+    expect(() => sessionDir("../../../../important")).toThrow("invalid session id")
+  })
+
+  it("listTranscripts skips hostile directory names instead of dying", () => {
+    const root = process.env.TRAYAMBAK_SESSIONS_DIR as string
+    fs.mkdirSync(path.join(root, "..evil"), { recursive: true })
+    const { id } = createTranscript(process.cwd())
+    appendContext(id, { role: "user" })
+    expect(listTranscripts().map((t) => t.id)).toContain(id)
   })
 })

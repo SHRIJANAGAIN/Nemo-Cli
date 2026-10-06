@@ -7,7 +7,6 @@
 import { spawn, type ChildProcess } from "child_process"
 import * as http from "http"
 import * as https from "https"
-import * as readline from "readline"
 import * as url from "url"
 import { McpAuthError, authorizeMcpServer, getValidAccessToken, type McpOAuthConfig } from "./oauth.js"
 import { resolveMcpCommand } from "./spawn-resolve.js"
@@ -36,6 +35,16 @@ export interface McpServerSpec {
 export function mcpChildEnv(spec: Pick<McpServerSpec, "env">): Record<string, string> {
   return { ...getSafeEnv(process.env), ...(spec.env ?? {}) }
 }
+
+/**
+ * Transport buffer cap (#82a): neither stdio frames nor an HTTP response
+ * body may accumulate more than this without completing. Matches the repo's
+ * 256KB process-output policy — complete frames drain as they arrive, only
+ * the unframed remainder is bounded, so a hostile server flooding stdout
+ * without a newline (or an endless HTTP body) fails the connection instead
+ * of OOM-ing the host.
+ */
+export const MCP_MAX_BUFFER_BYTES = 256 * 1024
 
 export interface McpToolInfo {
   name: string
@@ -118,7 +127,6 @@ export class McpConnection {
   readonly name: string
   readonly spec: McpServerSpec
   private child: ChildProcess | null = null
-  private rl: readline.Interface | null = null
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
   private nextId = 1
   private initialized = false
@@ -425,8 +433,6 @@ export class McpConnection {
   close(): void {
     const child = this.child
     this.child = null
-    this.rl?.close()
-    this.rl = null
     this.initialized = false
     this.cachedTools = null
     this.authAttempted = false
@@ -471,8 +477,13 @@ export class McpConnection {
         if (this.stderrTail.length > 20) this.stderrTail.shift()
       }
     })
-    this.rl = readline.createInterface({ input: this.child.stdout! })
-    this.rl.on("line", (line: string) => {
+    // Bounded newline framing (#82a): readline accumulated an unframed
+    // stream without limit, so a hostile server flooding stdout with no
+    // `\n` could OOM the host. Complete frames drain first; only the
+    // unframed remainder is held, capped at MCP_MAX_BUFFER_BYTES.
+    let pending = ""
+    let flooded = false
+    const handleLine = (line: string): void => {
       try {
         const msg = JSON.parse(line) as { id?: number }
         if (msg.id === undefined) return
@@ -489,6 +500,30 @@ export class McpConnection {
       } catch {
         /* not JSON - skip */
       }
+    }
+    this.child.stdout!.setEncoding("utf8")
+    this.child.stdout!.on("data", (chunk: string) => {
+      if (flooded) return
+      pending += chunk
+      let nl = pending.indexOf("\n")
+      while (nl >= 0) {
+        handleLine(pending.slice(0, nl))
+        pending = pending.slice(nl + 1)
+        nl = pending.indexOf("\n")
+      }
+      if (pending.length > MCP_MAX_BUFFER_BYTES) {
+        flooded = true
+        pending = ""
+        this.lastError = `stdout flooded past ${MCP_MAX_BUFFER_BYTES} bytes with no frame boundary`
+        this.rejectAll(
+          new Error(
+            `MCP ${this.name}: server flooded stdout past ${MCP_MAX_BUFFER_BYTES} bytes without a frame boundary`,
+          ),
+        )
+        // Tear down the hostile child; close() re-rejects the already-empty
+        // pending map (a no-op) and SIGTERMs the process.
+        this.close()
+      }
     })
     this.child.on("error", (err) => {
       this.lastError = err.message
@@ -498,7 +533,8 @@ export class McpConnection {
       // Any exit (even 0) invalidates the transport: stale handle + cache
       // used to report connected:true and hang later calls on timeout.
       const tail = this.stderrTail.length > 0 ? ` Server stderr: ${this.stderrTail.join(" | ").slice(0, 500)}` : ""
-      this.lastError = `exited with code ${code ?? "signal"}.${tail}`
+      // A flood kill must keep ITS reason visible (the exit is our own SIGTERM).
+      if (!flooded) this.lastError = `exited with code ${code ?? "signal"}.${tail}`
       this.child = null
       this.initialized = false
       this.cachedTools = null
@@ -582,8 +618,26 @@ export class McpConnection {
         (res) => {
           const status = res.statusCode ?? 0
           let buf = ""
+          let capped = false
           res.setEncoding("utf8")
-          res.on("data", (c: string) => (buf += c))
+          res.on("data", (c: string) => {
+            if (capped) return
+            buf += c
+            if (buf.length > MCP_MAX_BUFFER_BYTES) {
+              // Unbounded body accumulation (#82a): a hostile HTTP server
+              // streaming without completing the response could OOM the
+              // host. Cut the socket at the transport cap.
+              capped = true
+              buf = ""
+              res.destroy()
+              this.lastError = `HTTP response exceeded ${MCP_MAX_BUFFER_BYTES} bytes`
+              reject(
+                new Error(
+                  `MCP '${this.name}': HTTP response exceeded the ${MCP_MAX_BUFFER_BYTES}-byte transport cap`,
+                ),
+              )
+            }
+          })
           res.on("end", () => {
             if (status === 401) {
               this.lastError = "HTTP 401 (authorization required)"

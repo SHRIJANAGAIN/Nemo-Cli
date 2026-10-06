@@ -1,6 +1,6 @@
 import { coerce, gte } from "semver"
 import type { Writable } from "stream"
-import { getClearTerminalSequence } from "./clearTerminal.js"
+import { getClearScreenSequence, getClearTerminalSequence } from "./clearTerminal.js"
 import type { Diff } from "./frame.js"
 import { cursorMove, cursorTo, eraseLines } from "./termio/csi.js"
 import { BSU, ESU, HIDE_CURSOR, SHOW_CURSOR } from "./termio/dec.js"
@@ -199,7 +199,13 @@ export function writeDiffToTerminal(terminal: Terminal, diff: Diff, skipSyncMark
         }
         break
       case "clearTerminal":
-        buffer += getClearTerminalSequence()
+        // Screen only, NOT the scrollback: this patch is the renderer's
+        // flicker-recovery full reset (window resize / offscreen reflow), and
+        // ED3 here deletes the transcript the chat UI already printed to
+        // scrollback via <Static> — messages vanish on every resize. The
+        // capability-aware full sequence stays available for callers that
+        // really do want a blank slate.
+        buffer += getClearScreenSequence()
         break
       case "cursorHide":
         buffer += HIDE_CURSOR

@@ -21,6 +21,9 @@ import {
 import { evaluatePolicy, ExecDecision } from "../../../packages/execpolicy/src/policy.js"
 import { isPathInside } from "../../sandbox/src/index.js"
 import { DEFAULT_PERMISSIONS, type PermissionConfig } from "../../../packages/protocol/src/permissions.js"
+// Single-sourced from the root package.json via sync-version — the
+// advertised serverInfo version went stale (0.6.0 vs a 0.6.7 release).
+import { VERSION } from "../../../apps/cli/src/version.js"
 
 export interface McpToolDef {
   name: string
@@ -226,7 +229,7 @@ export async function dispatchMcpServer(
     case "initialize":
       send(req.id, {
         protocolVersion: "2024-11-05",
-        serverInfo: { name: "trayambak", version: "0.6.0" }, // keep in sync with root package.json
+        serverInfo: { name: "trayambak", version: VERSION }, // stamped from root package.json by sync-version
         capabilities: { tools: {} },
       })
       break
@@ -265,8 +268,35 @@ export async function dispatchMcpServer(
   }
 }
 
+/** Ref'd keep-alive tick: effectively infinite, well under Node's 2^31-1 ms timer cap. */
+const MCP_KEEP_ALIVE_TICK_MS = 1 << 30
+/** How long the MCP server outlives stdin EOF; see runMcpServer. */
+const MCP_EXIT_GRACE_MS = 500
+
 export function runMcpServer(): void {
   const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity })
+  // Same stdio contract as the ACP server (packages/acp/src/index.ts):
+  // serve until stdin closes, and pin the event loop for the whole
+  // session — an idle loop that drains while the client still holds the
+  // pipe lets the MCP server exit mid-session, and the client's cleanup
+  // then signals a dead pid (ProcessLookupError).
+  const keepAlive = setInterval(() => {}, MCP_KEEP_ALIVE_TICK_MS)
+  // stdin EOF: release the pin, but hold the pid for one beat so a
+  // close-then-terminate client lands its signal on a live process.
+  let pinReleased = false
+  const releasePin = (): void => {
+    if (pinReleased) return
+    pinReleased = true
+    clearInterval(keepAlive)
+    setTimeout(() => {}, MCP_EXIT_GRACE_MS)
+  }
+  // Readline emits "close" on input *EOF* only — a destroyed or errored
+  // pipe emits the input's own "close" without ever feeding readline an
+  // 'end', which would leave the pin held forever (zombie server). Both
+  // paths release, exactly once.
+  rl.on("close", releasePin)
+  process.stdin.on("close", releasePin)
+  if (process.stdin.readableEnded) rl.close()
   rl.on("line", (line) => {
     if (!line.trim()) return
     try {

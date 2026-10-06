@@ -12,6 +12,8 @@
  * network call. Inspired by pi's test/test-harness.ts.
  */
 
+import { stopReasonFromWire } from "../../protocol/src/index.js"
+
 export interface FauxDelta {
   type:
     | "thinking_start"
@@ -86,7 +88,15 @@ export function createFauxStreamFn(responses: FauxResponse[]) {
         }
       }
 
-      yield { type: "done" as const, stopReason: resp.stopReason ?? "stop", usage: resp.usage }
+      yield {
+        type: "done" as const,
+        // Normalised, not passed through: a scripted `"length"` and a
+        // gateway's `"MAX_TOKENS"` must both reach the loop as the protocol's
+        // `"length"`, or the loop cannot tell a severed answer from a finished
+        // one. See protocol/stop-reason.ts.
+        stopReason: stopReasonFromWire(resp.stopReason),
+        usage: resp.usage,
+      }
     }
     yield { type: "done" as const, stopReason: "stop" }
   }

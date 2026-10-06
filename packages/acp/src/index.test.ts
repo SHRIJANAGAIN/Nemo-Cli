@@ -5,6 +5,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { readFileSync } from "node:fs"
+import * as path from "node:path"
 import { PassThrough } from "stream"
 import { runAcpServer } from "./index.js"
 
@@ -21,8 +23,11 @@ import { runAcpServer } from "./index.js"
  */
 
 const h = vi.hoisted(() => {
+  // Real AgentEvent shapes, not invented ones: `session/update` forwards only
+  // events that map to an ACP SessionUpdate, so `{type:"text"}` would be
+  // dropped and every assertion below would see zero updates.
   const defaultRun = (_prompt: string, _model: string | undefined, emit: (event: unknown) => void): Promise<void> => {
-    emit({ type: "text", text: "chunk" })
+    emit({ type: "message_update", delta: { text: "chunk" } })
     return Promise.resolve()
   }
 
@@ -147,7 +152,15 @@ describe("ACP server session lifecycle", () => {
     expect(msg.id).toBe(1)
     expect(msg.result).toMatchObject({
       protocolVersion: 1,
-      agentCapabilities: { loadSession: true, prompt: true, mcp: true, sessions: true },
+      // Spec-shaped: the short keys we used to send were dropped by every
+      // client, so they advertised nothing.
+      agentCapabilities: {
+        loadSession: true,
+        promptCapabilities: { image: false, audio: false, embeddedContext: false },
+        mcpCapabilities: { http: false, sse: false },
+        sessionCapabilities: {},
+        auth: {},
+      },
       agentInfo: { name: "trayambak" },
     })
   })
@@ -299,7 +312,10 @@ describe("ACP server prompt and cancel", () => {
       {
         jsonrpc: "2.0",
         method: "session/update",
-        params: { sessionId: "s2", event: { type: "text", text: "chunk" } },
+        params: {
+          sessionId: "s2",
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "chunk" } },
+        },
       },
       { jsonrpc: "2.0", id: 2, result: { sessionId: "s2", stopReason: "end_turn" } },
     ])
@@ -328,9 +344,9 @@ describe("ACP server prompt and cancel", () => {
     let finish: (() => void) | undefined
     h.runImpl = (_prompt, _model, emit) =>
       new Promise<void>((resolve) => {
-        emit({ type: "text", text: "early" })
+        emit({ type: "message_update", delta: { text: "early" } })
         finish = () => {
-          emit({ type: "text", text: "late" })
+          emit({ type: "message_update", delta: { text: "late" } })
           resolve()
         }
       })
@@ -347,7 +363,10 @@ describe("ACP server prompt and cancel", () => {
 
     const updates = messages().filter((m) => m.method === "session/update")
     expect(updates).toHaveLength(1) // the post-cancel event was suppressed
-    expect(updates[0].params).toMatchObject({ sessionId: "cancel-1", event: { text: "early" } })
+    expect(updates[0].params).toMatchObject({
+      sessionId: "cancel-1",
+      update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "early" } },
+    })
 
     // Cancellation is reported truthfully: handlePrompt reads the flag
     // before clearing it (the old order deleted first, which made
@@ -364,7 +383,7 @@ describe("ACP server prompt and cancel", () => {
     let rejectRun: ((err: Error) => void) | undefined
     h.runImpl = (_prompt, _model, emit) =>
       new Promise<void>((_resolve, reject) => {
-        emit({ type: "text", text: "first" })
+        emit({ type: "message_update", delta: { text: "first" } })
         rejectRun = reject
       })
 
@@ -381,19 +400,288 @@ describe("ACP server prompt and cancel", () => {
     // cleanup must not linger — otherwise this prompt's events would be
     // silently suppressed and it would be mislabeled "cancelled".
     h.runImpl = (_prompt, _model, emit) => {
-      emit({ type: "text", text: "back" })
+      emit({ type: "message_update", delta: { text: "back" } })
       return Promise.resolve()
     }
     await sendLine({ jsonrpc: "2.0", id: 9, method: "prompt", params: { sessionId: "leak-1", prompt: "again" } })
 
     const updates = messages()
       .filter((m) => m.method === "session/update")
-      .map((m) => m.params as { sessionId?: string; event?: { text?: string } } | undefined)
+      .map(
+        (m) =>
+          m.params as { sessionId?: string; update?: { content?: { text?: string } } } | undefined,
+      )
       .filter((p) => p?.sessionId === "leak-1")
-    expect(updates.some((p) => p?.event?.text === "back")).toBe(true)
+    expect(updates.some((p) => p?.update?.content?.text === "back")).toBe(true)
     expect(messages().find((m) => m.id === 9)?.result).toEqual({
       sessionId: "leak-1",
       stopReason: "end_turn",
     })
+  })
+})
+
+describe("ACP spec conformance", () => {
+  it("accepts session/new, session/load and session/resume under their spec names", async () => {
+    runAcpServer()
+    h.readStateImpl = (id) => (id === "known" ? { cwd: "/w" } : null)
+
+    await sendLine({ jsonrpc: "2.0", id: 1, method: "session/new", params: { cwd: "/spec-ws", mcpServers: [] } })
+    await sendLine({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "session/load",
+      params: { sessionId: "known", cwd: "/w", mcpServers: [] },
+    })
+    await sendLine({ jsonrpc: "2.0", id: 3, method: "session/resume", params: { sessionId: "known", cwd: "/w" } })
+
+    // The spec field is `cwd`, not `workDir` — it has to reach createTranscript.
+    expect(h.createCalls).toEqual(["/spec-ws"])
+    const msgs = messages()
+    expect(msgs[0].result).toEqual({ sessionId: "sess_1" })
+    expect(msgs[1].result).toEqual({ sessionId: "known", state: { cwd: "/w" } })
+    expect(msgs[2].result).toEqual({ sessionId: "known", state: { cwd: "/w" } })
+  })
+
+  it("takes the spec ContentBlock[] prompt as well as a bare string", async () => {
+    runAcpServer()
+    await sendLine({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "session/prompt",
+      params: {
+        sessionId: "s-blocks",
+        prompt: [{ type: "text", text: "first " }, { type: "text", text: "second" }, { type: "image", data: "…" }],
+      },
+    })
+
+    expect(h.runs[0].prompt).toBe("first second")
+    expect(messages().at(-1)?.result).toEqual({ sessionId: "s-blocks", stopReason: "end_turn" })
+  })
+
+  it("rejects a ContentBlock[] prompt with no text in it instead of running empty", async () => {
+    runAcpServer()
+    await sendLine({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "session/prompt",
+      params: { sessionId: "s-empty", prompt: [{ type: "image", data: "…" }] },
+    })
+
+    expect(messages()[0].error).toEqual({ code: -32602, message: "missing 'prompt'" })
+    expect(h.runs).toEqual([])
+  })
+
+  it("answers session/cancel as a notification with no frame and still stops the stream", async () => {
+    runAcpServer()
+    let finish: (() => void) | undefined
+    h.runImpl = (_prompt, _model, emit) =>
+      new Promise<void>((resolve) => {
+        emit({ type: "message_update", delta: { text: "early" } })
+        finish = () => {
+          emit({ type: "message_update", delta: { text: "late" } })
+          resolve()
+        }
+      })
+
+    await sendLine({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "session/prompt",
+      params: { sessionId: "n1", prompt: [{ type: "text", text: "go" }] },
+    })
+    expect(messages().filter((m) => m.method === "session/update")).toHaveLength(1)
+
+    // No `id` → notification, so nothing may be written back for it.
+    await sendLine({ jsonrpc: "2.0", method: "session/cancel", params: { sessionId: "n1" } })
+    expect(messages()).toHaveLength(1)
+
+    if (!finish) throw new Error("agent.run was never invoked")
+    finish()
+    await flush()
+
+    expect(messages().filter((m) => m.method === "session/update")).toHaveLength(1)
+    expect(messages().find((m) => m.id === 1)?.result).toEqual({ sessionId: "n1", stopReason: "cancelled" })
+  })
+
+  it("maps agent events onto SessionUpdate variants and drops the ones ACP has no shape for", async () => {
+    runAcpServer()
+    h.runImpl = (_prompt, _model, emit) => {
+      emit({ type: "message_update", delta: { thinking: "hmm" } })
+      emit({ type: "tool_execution_start", toolCallId: "c1", toolName: "bash", args: { command: "ls" } })
+      emit({
+        type: "tool_execution_update",
+        toolCallId: "c1",
+        toolName: "bash",
+        partialResult: { content: [], isError: false },
+      })
+      emit({
+        type: "tool_execution_end",
+        toolCallId: "c1",
+        toolName: "bash",
+        result: { content: [{ type: "text", text: "ok" }], isError: false },
+        isError: false,
+      })
+      emit({
+        type: "tool_execution_end",
+        toolCallId: "c2",
+        toolName: "bash",
+        result: { content: [], isError: true },
+        isError: true,
+      })
+      // `rawInput` is typed `object` by the spec — a string payload must not be forwarded.
+      emit({ type: "tool_execution_start", toolCallId: "c3", toolName: "t", args: "raw string" })
+      emit({ type: "agent_end", messages: [] })
+      return Promise.resolve()
+    }
+
+    await sendLine({ jsonrpc: "2.0", id: 1, method: "prompt", params: { sessionId: "map-1", prompt: "go" } })
+
+    const updates = messages()
+      .filter((m) => m.method === "session/update")
+      .map((m) => (m.params as { update?: Record<string, unknown> }).update)
+
+    expect(updates).toEqual([
+      { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hmm" } },
+      {
+        sessionUpdate: "tool_call",
+        toolCallId: "c1",
+        title: "bash",
+        status: "in_progress",
+        name: "bash",
+        rawInput: { command: "ls" },
+      },
+      { sessionUpdate: "tool_call_update", toolCallId: "c1", status: "in_progress" },
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "c1",
+        status: "completed",
+        rawOutput: { content: [{ type: "text", text: "ok" }], isError: false },
+      },
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "c2",
+        status: "failed",
+        rawOutput: { content: [], isError: true },
+      },
+      { sessionUpdate: "tool_call", toolCallId: "c3", title: "t", status: "in_progress", name: "t" },
+    ])
+  })
+
+  it("reports an unknown method under the name the client actually sent", async () => {
+    runAcpServer()
+    await sendLine({ jsonrpc: "2.0", id: 1, method: "session/nope" })
+
+    expect(messages()[0].error).toEqual({ code: -32601, message: "unknown method: session/nope" })
+  })
+})
+
+describe("ACP failure honesty and session liveness", () => {
+  it("advertises the single-sourced root package version", async () => {
+    runAcpServer()
+    await sendLine({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1 } })
+
+    // Drift guard: a hardcoded literal went stale at 0.6.0 while the
+    // release shipped 0.6.7 — the advertised version must track the root
+    // package.json (via apps/cli/src/version.ts, stamped by sync-version).
+    const rootPkg = JSON.parse(
+      readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as {
+      version: string
+    }
+    expect(messages()[0].result).toMatchObject({
+      agentInfo: { name: "trayambak", version: rootPkg.version },
+    })
+  })
+
+  it("an errored run forwards its text and answers stopReason error, not end_turn", async () => {
+    runAcpServer()
+    h.runImpl = (_prompt, _model, emit) => {
+      emit({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "provider exploded mid-stream" }],
+          stopReason: "error",
+        },
+      })
+      return Promise.resolve()
+    }
+
+    await sendLine({ jsonrpc: "2.0", id: 2, method: "prompt", params: { sessionId: "err-1", prompt: "go" } })
+
+    // Error text never streams as chunks — without the message_end
+    // mapping the client saw nothing, while the reply claimed end_turn.
+    expect(messages()[0]).toEqual({
+      jsonrpc: "2.0",
+      method: "session/update",
+      params: {
+        sessionId: "err-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "provider exploded mid-stream" },
+        },
+      },
+    })
+    expect(messages()[1]).toEqual({ jsonrpc: "2.0", id: 2, result: { sessionId: "err-1", stopReason: "error" } })
+  })
+
+  it("a normal final message_end stays unmapped (its text already streamed)", async () => {
+    runAcpServer()
+    h.runImpl = (_prompt, _model, emit) => {
+      emit({ type: "message_update", delta: { text: "answer" } })
+      emit({
+        type: "message_end",
+        message: { role: "assistant", content: [{ type: "text", text: "answer" }], stopReason: "end_turn" },
+      })
+      return Promise.resolve()
+    }
+
+    await sendLine({ jsonrpc: "2.0", id: 3, method: "prompt", params: { sessionId: "norm-1", prompt: "go" } })
+
+    // No duplicate chunk for already-streamed text; reply keeps end_turn.
+    expect(messages().filter((m) => m.method === "session/update")).toHaveLength(1)
+    expect(messages().at(-1)).toEqual({
+      jsonrpc: "2.0",
+      id: 3,
+      result: { sessionId: "norm-1", stopReason: "end_turn" },
+    })
+  })
+
+  it("an internal aborted stopReason reads as cancelled", async () => {
+    runAcpServer()
+    h.runImpl = (_prompt, _model, emit) => {
+      emit({ type: "message_end", message: { role: "assistant", content: [], stopReason: "aborted" } })
+      return Promise.resolve()
+    }
+
+    await sendLine({ jsonrpc: "2.0", id: 4, method: "prompt", params: { sessionId: "ab-1", prompt: "go" } })
+    expect(messages()[0].result).toEqual({ sessionId: "ab-1", stopReason: "cancelled" })
+  })
+
+  it("pins the event loop until stdin closes, then releases it", async () => {
+    const intervalSpy = vi.spyOn(global, "setInterval")
+    const clearIntervalSpy = vi.spyOn(global, "clearInterval")
+    try {
+      runAcpServer()
+
+      const entry = intervalSpy.mock.results
+        .map((result, i) => ({ call: intervalSpy.mock.calls[i], handle: result.value }))
+        .find(({ call }) => call?.[1] === 1 << 30)
+      expect(entry).toBeDefined()
+      // A ref'd timer handle is exactly what keeps Node's loop alive
+      // while the harness still holds stdin open (its cleanup used to
+      // signal an already-dead pid → ProcessLookupError → exit 1).
+      const handle = entry?.handle as unknown as { hasRef?: () => boolean }
+      expect(typeof handle?.hasRef).toBe("function")
+      expect(handle.hasRef?.()).toBe(true)
+
+      fakeStdin.destroy()
+      await flush()
+      // stdin EOF releases the pin — the loop may drain and exit now.
+      expect(clearIntervalSpy).toHaveBeenCalledWith(entry?.handle)
+    } finally {
+      intervalSpy.mockRestore()
+      clearIntervalSpy.mockRestore()
+    }
   })
 })

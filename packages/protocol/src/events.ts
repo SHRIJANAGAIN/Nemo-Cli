@@ -73,12 +73,18 @@ export type AgentEvent =
   | { type: "budget_exhausted"; used: number; max: number; remaining: number }
   | {
       type: "compaction"
+      forced?: boolean
       removedMessages: number
       prunedToolOutputs: number
       freedTokens: number
       estimatedBefore: number
       estimatedAfter: number
     }
+  /** The provider endpoint became unreachable mid-turn (not a server error).
+   *  The loop parks and probes rather than burning its retry budget. */
+  | { type: "network_lost"; message: string }
+  /** The endpoint answered again and the interrupted turn is being retried. */
+  | { type: "network_restored"; waitedMs: number; message: string }
 
 /**
  * Background job info for tracking asynchronous subagent tasks.

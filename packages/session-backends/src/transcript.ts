@@ -16,6 +16,12 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import { assertSessionId } from "../../core/src/validate.js"
+
+// The choke point lives in packages/core so apps/cli (and any other
+// consumer) shares ONE rule instead of a drifting copy. Re-exported here
+// because every fs sink below resolves through this module.
+export { assertSessionId }
 
 export interface TranscriptState {
   title: string
@@ -55,6 +61,7 @@ function atomicWrite0600(file: string, data: string): void {
 }
 
 export function sessionDir(id: string): string {
+  assertSessionId(id)
   return path.join(sessionsRoot(), id)
 }
 

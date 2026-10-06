@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { dispatchMcpServer, clampMcpTimeout, type McpServerDeps } from "./index.js"
+import { PassThrough } from "node:stream"
+import { dispatchMcpServer, runMcpServer, clampMcpTimeout, type McpServerDeps } from "./index.js"
 import type { TrayambakConfig } from "../../../apps/runtime/src/config.js"
 import type { HookShellExecutor } from "../../../apps/runtime/src/tools/hook-exec.js"
 import { ExecDecision } from "../../../packages/execpolicy/src/policy.js"
@@ -188,7 +189,10 @@ describe("bash gate: execpolicy layer", () => {
       policyDecide: () => ExecDecision.Deny,
     }
     await dispatchMcpServer(
-      { id: "p1", method: "tools/call", params: { name: "bash", arguments: { command: "sudo whoami" } } },
+      // Vehicle must clear the approval layer: a blanket `bash(*)` allow no
+      // longer unlocks force-ask commands like `sudo` (#90), and this test is
+      // about the execpolicy layer running *after* an approval allow.
+      { id: "p1", method: "tools/call", params: { name: "bash", arguments: { command: "echo hi" } } },
       deps,
     )
     const { text, isError } = textOf("p1")
@@ -364,5 +368,57 @@ describe("refused tools stay refused", () => {
     expect(isError).toBe(true)
     expect(text).toContain("not executed by mcp-server")
     expect(fs.existsSync(path.join(cwd, "x.txt"))).toBe(false)
+  })
+})
+
+describe("serverInfo version and stdio liveness", () => {
+  it("advertises the single-sourced root package version", async () => {
+    listen()
+    await dispatchMcpServer({ id: "init", method: "initialize" })
+
+    // Drift guard: a hardcoded literal went stale at 0.6.0 while the
+    // release shipped 0.6.7 — the advertised version must track the root
+    // package.json (via apps/cli/src/version.ts, stamped by sync-version).
+    const rootPkg = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
+    ) as {
+      version: string
+    }
+    const parsed = replyFor("init") as unknown as {
+      result?: { serverInfo?: { name?: string; version?: string } }
+    }
+    expect(parsed.result?.serverInfo).toEqual({ name: "trayambak", version: rootPkg.version })
+  })
+
+  it("pins the event loop until stdin closes, then releases it", async () => {
+    const savedStdin = Object.getOwnPropertyDescriptor(process, "stdin")
+    const fakeStdin = new PassThrough()
+    const intervalSpy = vi.spyOn(global, "setInterval")
+    const clearIntervalSpy = vi.spyOn(global, "clearInterval")
+    try {
+      Object.defineProperty(process, "stdin", { value: fakeStdin, configurable: true, writable: true })
+      runMcpServer()
+
+      const entry = intervalSpy.mock.results
+        .map((result, i) => ({ call: intervalSpy.mock.calls[i], handle: result.value }))
+        .find(({ call }) => call?.[1] === 1 << 30)
+      expect(entry).toBeDefined()
+      // A ref'd timer handle keeps Node's loop alive while the client
+      // still holds the pipe open — an idle loop that drains used to let
+      // the server exit mid-session (dead-pid cleanup on the client).
+      const handle = entry?.handle as unknown as { hasRef?: () => boolean }
+      expect(typeof handle?.hasRef).toBe("function")
+      expect(handle.hasRef?.()).toBe(true)
+
+      fakeStdin.destroy()
+      for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setImmediate(resolve))
+      // stdin EOF releases the pin — the loop may drain and exit now.
+      expect(clearIntervalSpy).toHaveBeenCalledWith(entry?.handle)
+    } finally {
+      if (savedStdin) Object.defineProperty(process, "stdin", savedStdin)
+      fakeStdin.destroy()
+      intervalSpy.mockRestore()
+      clearIntervalSpy.mockRestore()
+    }
   })
 })

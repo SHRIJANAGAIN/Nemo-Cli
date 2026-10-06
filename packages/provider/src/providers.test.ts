@@ -11,7 +11,7 @@ import { createOpenAIProvider } from "./openai.js"
 import { createXAIProvider } from "./xai.js"
 import { createHuggingFaceProvider } from "./huggingface.js"
 import { createCustomProvider } from "./custom.js"
-import { createNvidiaProvider } from "./nvidia.js"
+import { createNvidiaProvider, nvidiaReasoningParamsAllowed } from "./nvidia.js"
 import { createLlamaCppProvider } from "./llama-cpp.js"
 import { createAnthropicProvider, toAnthropicBody } from "./anthropic.js"
 import { createGoogleProvider, toGeminiBody } from "./google.js"
@@ -209,7 +209,10 @@ describe("anthropic/google providers", () => {
       "claude-3-5-sonnet-latest",
     )
     expect(body.model).toBe("claude-3-5-sonnet-latest")
-    expect(body.system).toBe("sys")
+    // #123: the system prompt is a cacheable BLOCK, not a bare string —
+    // Anthropic only honours a prompt-cache breakpoint on block form. The
+    // text itself is unchanged.
+    expect(body.system).toEqual([{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }])
     expect(Array.isArray(body.tools)).toBe(true)
     const msgs = body.messages as Array<{ role: string; content: unknown }>
     expect(msgs[0].role).toBe("user")
@@ -478,6 +481,33 @@ describe("anthropic/google providers", () => {
     expect(seen.body).not.toHaveProperty("reasoning_tokens")
     expect(seen.body).not.toHaveProperty("reasoning_effort")
     expect(seen.url).toBe("/v1/chat/completions")
+  }, 15000)
+})
+
+describe("nvidia reasoning params stay on NVIDIA's own endpoints", () => {
+  it("nvidiaReasoningParamsAllowed only admits NVIDIA hosts (and unset)", () => {
+    expect(nvidiaReasoningParamsAllowed("https://integrate.api.nvidia.com")).toBe(true)
+    expect(nvidiaReasoningParamsAllowed("https://integrate.api.nvidia.com/v1")).toBe(true)
+    expect(nvidiaReasoningParamsAllowed("https://build.nvidia.com")).toBe(true)
+    // Unset: the class targets NVIDIA's own cloud by default.
+    expect(nvidiaReasoningParamsAllowed("")).toBe(true)
+
+    expect(nvidiaReasoningParamsAllowed("http://localhost:11434")).toBe(false)
+    expect(nvidiaReasoningParamsAllowed("https://omniroute.example/v1")).toBe(false)
+    // Scheme-less / opaque targets are not provably NVIDIA — refuse.
+    expect(nvidiaReasoningParamsAllowed("definitely-not-a-url")).toBe(false)
+  })
+
+  it("a custom-gateway baseUrl gets no NVIDIA-dialect reasoning field", async () => {
+    // reasoning_tokens on a non-NVIDIA endpoint is exactly how strict
+    // gateways 400 — the same rule OpenAICompatibleProvider already
+    // applies wholesale (test above), now pinned for nvidia itself.
+    const seen = await withStub(async (stubUrl) => {
+      const p = createNvidiaProvider({ baseUrl: stubUrl, model: "m", reasoningEffort: "high" })
+      await p.chat(toolInput)
+    })
+    expect(seen.body).not.toHaveProperty("reasoning_tokens")
+    expect(seen.body).not.toHaveProperty("reasoning_effort")
   }, 15000)
 })
 
