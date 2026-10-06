@@ -23,6 +23,7 @@ import {
 } from "../../core/src/process.js"
 
 import { SandboxType, NetworkSandboxPolicy, SpawnRequest, SpawnedProcess } from "./types.js"
+import { acWorkloadIncompatible } from "./ac-workload.js"
 import { spawnWindowsAcShim, taskkillTree } from "./windows-ac.js"
 
 /**
@@ -214,18 +215,53 @@ export function landlockArgs(command: string[], cwd: string, networkPolicy: Netw
 /**
  * Windows AppContainer OS sandbox (windows-ac.ts has the verified recipe).
  *
- * Spawns the PowerShell shim, waits for the status handshake that proves an
- * AppContainer child is genuinely running, then reports `isSandboxed: true`
- * backed by kernel enforcement: default-deny NTFS ACLs, Low integrity, no
- * user SID, spawn-time network capability SIDs. The child inherits the
- * shim's pipe handles, so `readAll`/`waitForExit` stream bytes exactly like
- * every other backend. Kill escalates to `taskkill /T` so the sandboxed
- * command dies with its shim. Any infrastructure failure falls back to an
- * honest unsandboxed spawn (`isSandboxed: false`) instead of claiming
- * isolation that was not applied.
+ * Pre-flights the workload (ac-workload.ts: MSYS/Cygwin-linked binaries
+ * cannot initialize inside an AppContainer), spawns the PowerShell shim,
+ * waits for the status handshake that proves an AppContainer child is
+ * genuinely running, then reports `isSandboxed: true` backed by kernel
+ * enforcement: default-deny NTFS ACLs, Low integrity, no user SID,
+ * spawn-time network capability SIDs. The child inherits the shim's pipe
+ * handles, so `readAll`/`waitForExit` stream bytes exactly like every other
+ * backend. Kill escalates to `taskkill /T` so the sandboxed command dies
+ * with its shim. Any failure — unrunnable workload or infrastructure —
+ * falls back to an honest unsandboxed spawn (`isSandboxed: false`, with the
+ * stamps rewritten and a `fallbackReason`) instead of claiming isolation
+ * that was not applied.
  */
+
+/** Fallback reason: the workload links a runtime the container cannot host. */
+const MSYS_CYGWIN_FALLBACK_REASON = "msys/cygwin shell cannot run under windows-restricted isolation"
+/** Fallback reason: the AppContainer shim never proved a sandboxed child. */
+const HANDSHAKE_FALLBACK_REASON = "windows appcontainer handshake failed"
+
+/**
+ * Honest policy-only fallback: the command runs without OS isolation, the
+ * child's sandbox-metadata stamps are rewritten so it cannot claim
+ * isolation that was not applied (bash builds its env for the OS path
+ * before the spawn), and the handle carries `fallbackReason` so tool output
+ * can say why. spawn.ts is an allowlisted owner of the CODEX_* stamps —
+ * see .github/workflows/check-forbidden-strings.yml.
+ */
+async function fallbackUnsandboxed(request: SpawnRequest, fallbackReason: string): Promise<SpawnedProcess> {
+  const env = { ...request.env }
+  env["CODEX_SANDBOX"] = "policy-only"
+  delete env["CODEX_SANDBOX_NETWORK_DISABLED"]
+  const proc = await spawnUnsandboxed(request.command, request.cwd, env, request.outputCap, request.signal)
+  proc.fallbackReason = fallbackReason
+  return proc
+}
+
 async function spawnUnderWindowsAppContainer(request: SpawnRequest): Promise<SpawnedProcess> {
   const { command, cwd, env, networkPolicy, filesystemPolicy, outputCap, signal } = request
+
+  // Pre-flight before anything expensive: a shell that links the MSYS or
+  // Cygwin runtime dies in the container's denied \BaseNamedObjects write
+  // before its first instruction, and Git-bash is the shell
+  // detectDefaultShell() prefers on Windows — without this check every
+  // bash run fails with a fatal error the user cannot act on.
+  if (acWorkloadIncompatible(command[0] ?? "", cwd)) {
+    return fallbackUnsandboxed(request, MSYS_CYGWIN_FALLBACK_REASON)
+  }
   try {
     const shim = await spawnWindowsAcShim({
       command,
@@ -254,7 +290,7 @@ async function spawnUnderWindowsAppContainer(request: SpawnRequest): Promise<Spa
     return handle
   } catch {
     // The handshake failed — no isolation exists, so report none.
-    return spawnUnsandboxed(command, cwd, env, outputCap, signal)
+    return fallbackUnsandboxed(request, HANDSHAKE_FALLBACK_REASON)
   }
 }
 

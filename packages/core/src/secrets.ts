@@ -53,6 +53,10 @@ const SECRET_KEYS = [
   "privatekey",
   "private_key",
   "connectionstring",
+  // Any snake_case *_key (NVIDIA_KEY, OPENAI_KEY, …): provider keys arrive
+  // under vendor-prefixed names that no narrower marker catches. Bare words
+  // containing "key" without the underscore (monkey, keyboard) stay clean.
+  "_key",
 ]
 
 /**
@@ -99,8 +103,9 @@ export function isSecretKey(key: string): boolean {
  *  (whole block — the base64 body is the key), and `scheme://user:pass@`
  *  connection-string passwords. */
 const EMBEDDED_KEY_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
-  { pattern: /nvapi-[A-Za-z0-9_-]{8,}/g, replacement: "[REDACTED]" },
+  { pattern: /nvapi-[A-Za-z0-9_-]{8,}/gi, replacement: "[REDACTED]" },
   { pattern: /\bsk-[A-Za-z0-9_-]{8,}\b/g, replacement: "[REDACTED]" },
+  { pattern: /\bgsk_[A-Za-z0-9]{8,}\b/g, replacement: "[REDACTED]" },
   { pattern: /\bhf_[A-Za-z0-9]+\b/g, replacement: "[REDACTED]" },
   { pattern: /\bxai-[A-Za-z0-9_-]{8,}\b/g, replacement: "[REDACTED]" },
   { pattern: /\bAIza[0-9A-Za-z_-]{10,}\b/g, replacement: "[REDACTED]" },
@@ -111,10 +116,20 @@ const EMBEDDED_KEY_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: strin
   { pattern: /\bgho_[A-Za-z0-9_]{10,}/g, replacement: "[REDACTED]" },
   { pattern: /\bgithub_pat_[A-Za-z0-9_]{10,}/g, replacement: "[REDACTED]" },
   { pattern: /\bBearer\s+[A-Za-z0-9._~-]+/gi, replacement: "[REDACTED]" },
+  // HTTP Basic credentials mid-string (`Basic dXNlcjpwYXNz`): the prefix
+  // mask only fires at string head, so an embedded Authorization header
+  // sailed through every sink verbatim. The lookahead demands a digit,
+  // uppercase, or base64 symbol — plain words like "Basic training"
+  // (lowercase-only) stay untouched. Case spelled out by hand: /i would
+  // make the lookahead's A-Z match lowercase too and re-open the hole.
+  {
+    pattern: /\b[Bb][Aa][Ss][Ii][Cc]\s+(?=[A-Za-z0-9+/=]*[0-9A-Z+/=])[A-Za-z0-9+/=]{12,}/g,
+    replacement: "[REDACTED]",
+  },
   { pattern: /\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}(?:\.[A-Za-z0-9_-]+)?\b/g, replacement: "[REDACTED]" },
   { pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, replacement: "[REDACTED]" },
   { pattern: /\b[rs]k_(?:live|test)_[A-Za-z0-9]{8,}\b/g, replacement: "[REDACTED]" },
-  { pattern: /\bxox[baprs]-[A-Za-z0-9-]{10,}/g, replacement: "[REDACTED]" },
+  { pattern: /\bxox[a-z]-[A-Za-z0-9-]{10,}/g, replacement: "[REDACTED]" },
   { pattern: /\bnpm_[A-Za-z0-9]{20,}\b/g, replacement: "[REDACTED]" },
   {
     pattern: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
@@ -153,6 +168,8 @@ export function redactSecrets(value: unknown): unknown {
     return value
   }
   if (Array.isArray(value)) return value.map(redactSecrets)
+  // Dates carry no key material — recursing would rebuild them as {}.
+  if (value instanceof Date) return value
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
@@ -180,6 +197,8 @@ export function redactLogValue(value: unknown): unknown {
     return CREDENTIAL_PREFIX.test(trimmed) ? trimmed.slice(0, 4) + "****" : value
   }
   if (Array.isArray(value)) return value.map(redactLogValue)
+  // Dates carry no key material — recursing would rebuild them as {}.
+  if (value instanceof Date) return value
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
@@ -235,6 +254,8 @@ function redactPayloadInner(value: unknown, ancestors: WeakSet<object>): unknown
       ancestors.delete(value)
     }
   }
+  // Dates carry no key material — recursing would rebuild them as {}.
+  if (value instanceof Date) return value
   if (value && typeof value === "object") {
     if (ancestors.has(value)) return "[Circular]"
     ancestors.add(value)

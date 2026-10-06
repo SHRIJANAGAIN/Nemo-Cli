@@ -9,6 +9,7 @@ import { createTerminalTool } from "./command-exec/terminal.js"
 import { createEditFileTool } from "./file-edit/edit-file.js"
 import { createCheckpointTool, createRewindTool } from "./checkpoint/index.js"
 import { createReadFileTool } from "./file-edit/read-file.js"
+import { createViewImageTool } from "./file-edit/view-image.js"
 import { createWriteFileTool } from "./file-edit/write-file.js"
 import { createListDirTool } from "./directory/list-dir.js"
 import { createGrepTool } from "./regex/grep.js"
@@ -60,6 +61,7 @@ import { createRulesTool } from "./trayambak/rules.js"
 import { createGenerateAgentTool } from "./trayambak/generate-agent.js"
 import { createPentestTools } from "./pentest/pentest-tools.js"
 import * as fs from "fs"
+import * as path from "path"
 import type { TrayambakConfig } from "../config.js"
 import { reportToolUsage, serverCanUsePentest } from "../license.js"
 import { createMcpTools } from "./mcp/mcp.js"
@@ -67,7 +69,7 @@ import { createMarketplaceTool } from "./marketplace/marketplace.js"
 import { createToolSearchTool } from "./mcp/tool-search.js"
 import { createMcpInstallTool } from "./mcp/mcp-install.js"
 import { createMcpRunnerTool } from "./mcp/mcp-runner-tool.js"
-import { createSkillTools, defaultSkillsDir } from "./skills/skills.js"
+import { createSkillToolsFromRoots, bundledSkillsDir, defaultSkillsDir } from "./skills/skills.js"
 import { loadCustomTools, registerCustomToolset } from "./custom/custom-tools.js"
 import { createDiagnosticsTool } from "./diagnostics/diagnostics-tool.js"
 import { createMemoryTool } from "./memory/memory.js"
@@ -159,9 +161,11 @@ export { createDreamTool, planDreamConsolidation, runDreamConsolidation } from "
 export type { Diagnostic } from "./diagnostics/tsc-diagnostics.js"
 export {
   createSkillTools,
+  createSkillToolsFromRoots,
   createSkillTool,
   loadSkillsFromDir,
   defaultSkillsDir,
+  bundledSkillsDir,
   parseSkillFile,
   loadSkillsFromRoots,
 } from "./skills/skills.js"
@@ -287,6 +291,7 @@ export function createDefaultTools(
     createReadFileTool(),
     createWriteFileTool(),
     createEditFileTool(),
+    createViewImageTool(),
     createNotebookEditTool(),
     createCheckpointTool(),
     createRewindTool(),
@@ -420,8 +425,17 @@ export async function buildOptionalTools(
   if (config.mcpServers && Object.keys(config.mcpServers).length > 0) {
     tools.push(...(await createMcpTools(config.mcpServers, config.mcpToolCacheTtlMs)))
   }
-  if (config.skillsDir || fs.existsSync(defaultSkillsDir())) {
-    tools.push(...createSkillTools(config.skillsDir ?? defaultSkillsDir()))
+  // Skills: user/project root first, bundled fleet second (lowest
+  // precedence — user files keep winning name collisions). The bundled
+  // dir ships inside the install (dist/assets/skills), so npm users get
+  // the same 290 skills without needing a ./skills checkout.
+  {
+    const primary = config.skillsDir ?? defaultSkillsDir()
+    const bundled = bundledSkillsDir()
+    const roots = [primary, ...(bundled && path.resolve(bundled) !== path.resolve(primary) ? [bundled] : [])]
+    if (config.skillsDir || roots.some((r) => fs.existsSync(r))) {
+      tools.push(...createSkillToolsFromRoots(roots))
+    }
   }
 
   // User-defined tools: `.trayambak/{tool,tools}/*.{ts,js,mjs}` (SKT AI LABS's
@@ -502,6 +516,7 @@ export const TOOLSET_DEFS: ToolsetDefinition[] = [
       "read_file",
       "write_file",
       "edit_file",
+      "view_image",
       "trayambak__Checkpoint",
       "trayambak__Rewind",
       "list_dir",

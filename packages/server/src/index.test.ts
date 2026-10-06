@@ -5,29 +5,63 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { AddressInfo } from "node:net"
-import { startServer } from "./index.js"
+import { agentRunTimeoutMs, isAllowedSessionFile, startServer } from "./index.js"
 
 const base = (port: number): string => `http://127.0.0.1:${port}`
 
-async function boot(opts: Parameters<typeof startServer>[0]): Promise<{ port: number; close: () => Promise<void> }> {
+async function boot(
+  opts: Parameters<typeof startServer>[0],
+): Promise<{ port: number; token: string; close: () => Promise<void> }> {
   const server = startServer({ host: "127.0.0.1", port: 0, ...opts })
   await new Promise<void>((resolve) => server.on("listening", resolve))
   const port = (server.address() as AddressInfo).port
+  const token = (server as { effectiveToken?: string }).effectiveToken ?? ""
   return {
     port,
+    token,
     close: () => new Promise<void>((resolve, reject) => server.close((e) => (e ? reject(e) : resolve()))),
   }
 }
 
+function bearer(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` }
+}
+
 describe("agent HTTP server", () => {
-  it("answers /health without auth and reports the model", async () => {
+  it("answers /health without auth and reports liveness only (no model name)", async () => {
     const { port, close } = await boot({ token: "secret" })
     try {
       const res = await fetch(`${base(port)}/health`)
       expect(res.status).toBe(200)
-      const body = (await res.json()) as { status: string; model: string }
+      const body = (await res.json()) as { status: string; model?: string }
       expect(body.status).toBe("ok")
-      expect(typeof body.model).toBe("string")
+      // Deployment metadata does not belong on an unauthenticated endpoint.
+      expect(body.model).toBeUndefined()
+    } finally {
+      await close()
+    }
+  })
+
+  it("mints a bearer token even on loopback binds and gates everything behind it", async () => {
+    const { port, token, close } = await boot({})
+    try {
+      // A token always exists now, even with no --token on 127.0.0.1.
+      expect(token).toMatch(/^[0-9a-f]{64}$/)
+      // ...so the agent endpoint, the session index, the model list and the
+      // license-admin tooling all refuse unauthenticated callers.
+      for (const path of ["/v1/models", "/api/sessions", "/admin/licenses", "/admin/usage"]) {
+        const bare = await fetch(`${base(port)}${path}`)
+        expect(bare.status, path).toBe(401)
+      }
+      const agent = await fetch(`${base(port)}/v1/agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "hi" }),
+      })
+      expect(agent.status).toBe(401)
+      // And the generated token opens them.
+      const ok = await fetch(`${base(port)}/v1/models`, { headers: bearer(token) })
+      expect(ok.status).toBe(200)
     } finally {
       await close()
     }
@@ -47,15 +81,39 @@ describe("agent HTTP server", () => {
     }
   })
 
-  it("serves openapi + models + 404 JSON", async () => {
-    const { port, close } = await boot({})
+  it("serves openapi + models + 404 JSON to an authenticated caller", async () => {
+    const { port, token, close } = await boot({})
     try {
-      const spec = (await (await fetch(`${base(port)}/openapi.json`)).json()) as { openapi: string }
+      const spec = (await (await fetch(`${base(port)}/openapi.json`, { headers: bearer(token) })).json()) as {
+        openapi: string
+      }
       expect(spec.openapi).toBe("3.0.0")
-      const models = (await (await fetch(`${base(port)}/v1/models`)).json()) as { data: unknown[] }
+      const models = (await (await fetch(`${base(port)}/v1/models`, { headers: bearer(token) })).json()) as {
+        data: unknown[]
+      }
       expect(Array.isArray(models.data)).toBe(true)
-      const missing = await fetch(`${base(port)}/nope`)
+      const missing = await fetch(`${base(port)}/nope`, { headers: bearer(token) })
       expect(missing.status).toBe(404)
+    } finally {
+      await close()
+    }
+  })
+
+  it("rejects a sessionFile outside the sessions directory (no arbitrary-path transcript write)", async () => {
+    const { port, token, close } = await boot({})
+    try {
+      const outside = await fetch(`${base(port)}/v1/agent`, {
+        method: "POST",
+        headers: { ...bearer(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "hi", sessionFile: "../../../../important.json" }),
+      })
+      expect(outside.status).toBe(400)
+      const absolute = await fetch(`${base(port)}/v1/agent`, {
+        method: "POST",
+        headers: { ...bearer(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "hi", sessionFile: "C:\\Windows\\Temp\\evil.json" }),
+      })
+      expect(absolute.status).toBe(400)
     } finally {
       await close()
     }
@@ -159,28 +217,35 @@ describe("agent HTTP server", () => {
     }
   })
 
-  it("keeps loopback no-token behaviour (documented local-dev mode)", async () => {
-    const { port, close } = await boot({})
-    try {
-      const res = await fetch(`${base(port)}/v1/models`)
-      expect(res.status).toBe(200)
-    } finally {
-      await close()
-    }
+  it("clamps the agent run timeout (server-side socket ceiling)", () => {
+    expect(agentRunTimeoutMs({} as NodeJS.ProcessEnv)).toBe(120_000)
+    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "30000" } as NodeJS.ProcessEnv)).toBe(30_000)
+    // Absurd values clamp instead of disabling the ceiling.
+    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "0" } as NodeJS.ProcessEnv)).toBe(5_000)
+    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "99999999" } as NodeJS.ProcessEnv)).toBe(600_000)
+    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "garbage" } as NodeJS.ProcessEnv)).toBe(120_000)
+  })
+
+  it("only allows session files inside the sessions directory", () => {
+    const root = join(tmpdir(), "sessions-root-probe")
+    expect(isAllowedSessionFile(join(root, "abc", "session.json"), root)).toBe(true)
+    expect(isAllowedSessionFile(join(root, "..", "important.json"), root)).toBe(false)
+    expect(isAllowedSessionFile("C:\\Windows\\Temp\\evil.json", root)).toBe(false)
+    expect(isAllowedSessionFile(root, root)).toBe(false)
   })
 
   it("rejects missing prompt and oversize bodies on /v1/agent", async () => {
-    const { port, close } = await boot({})
+    const { port, token, close } = await boot({})
     try {
       const bad = await fetch(`${base(port)}/v1/agent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...bearer(token) },
         body: JSON.stringify({}),
       })
       expect(bad.status).toBe(400)
       const big = await fetch(`${base(port)}/v1/agent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...bearer(token) },
         body: JSON.stringify({ prompt: "x".repeat(2_000_000) }),
       })
       expect(big.status).toBe(413)
@@ -645,10 +710,13 @@ describe("VPS-routed GitHub writes", () => {
     })
   }
 
+  // /github/* is bearer-gated (like every non-public route), so the helper
+  // presents the test token — the OAuth gate underneath is what these tests
+  // exercise.
   const post = (port: number, path: string, body: unknown) =>
     fetch(`${base(port)}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer secret" },
       body: JSON.stringify(body),
     })
 
@@ -660,7 +728,16 @@ describe("VPS-routed GitHub writes", () => {
       githubOAuthPath: join(mkdtempSync(join(tmpdir(), "gh-vps-out3-")), "o.json"),
     })
     try {
+      // No bearer at all: the token gate answers first.
       expect((await fetch(`${base(port)}/github/repos?machineId=machine-1`)).status).toBe(401)
+      // Bearer but no OAuth login: the login gate answers.
+      expect(
+        (
+          await fetch(`${base(port)}/github/repos?machineId=machine-1`, {
+            headers: { Authorization: "Bearer secret" },
+          })
+        ).status,
+      ).toBe(401)
       const bodies: Array<[string, unknown]> = [
         ["/github/write", { machineId: "machine-1", repo: "o/r", path: "a.md", content: "x" }],
         ["/github/branch", { machineId: "machine-1", repo: "o/r", branch: "x" }],
@@ -711,7 +788,9 @@ describe("VPS-routed GitHub writes", () => {
       return { status: 404, json: { message: "Not Found" } }
     })
     try {
-      const repos = await fetch(`${base(port)}/github/repos?machineId=machine-1`)
+      const repos = await fetch(`${base(port)}/github/repos?machineId=machine-1`, {
+        headers: { Authorization: "Bearer secret" },
+      })
       expect(repos.status).toBe(200)
       const list = (await repos.json()) as { ok: boolean; login: string; repos: Array<{ fullName: string }> }
       expect(list.ok).toBe(true)
@@ -757,6 +836,59 @@ describe("VPS-routed GitHub writes", () => {
       })
       expect(cp.status).toBe(200)
       expect(((await cp.json()) as { ok: boolean; commit: string }).commit).toBe("bbb2222")
+    } finally {
+      await close()
+    }
+  })
+})
+
+describe("server hardening headers and limits", () => {
+  it("sends clickjacking/sniffing/referrer/sensor guards on every response", async () => {
+    const { port, close } = await boot({ token: "secret" })
+    try {
+      for (const path of ["/health", "/openapi.json", "/nope"]) {
+        const res = await fetch(`${base(port)}${path}`, { headers: bearer("secret") })
+        expect(res.headers.get("x-frame-options")).toBe("DENY")
+        expect(res.headers.get("x-content-type-options")).toBe("nosniff")
+        expect(res.headers.get("referrer-policy")).toBe("no-referrer")
+        expect(res.headers.get("permissions-policy")).toContain("camera=()")
+        expect(res.headers.get("content-security-policy")).toContain("frame-ancestors 'none'")
+      }
+      // Error paths carry them too (unauthorized + unknown route above).
+      const denied = await fetch(`${base(port)}/v1/models`)
+      expect(denied.status).toBe(401)
+      expect(denied.headers.get("x-frame-options")).toBe("DENY")
+    } finally {
+      await close()
+    }
+  })
+
+  it("rejects oversized URLs (414) and header blocks (431)", async () => {
+    const { port, close } = await boot({ token: "secret" })
+    try {
+      const huge = await fetch(`${base(port)}/${"a".repeat(3000)}`, { headers: bearer("secret") })
+      expect(huge.status).toBe(414)
+      const fat = await fetch(`${base(port)}/health`, {
+        headers: { ...bearer("secret"), "x-pad": "x".repeat(9000) },
+      })
+      expect(fat.status).toBe(431)
+      // Just under the caps still works.
+      const ok = await fetch(`${base(port)}/health`, { headers: bearer("secret") })
+      expect(ok.status).toBe(200)
+    } finally {
+      await close()
+    }
+  })
+
+  it("serves /.well-known/security.txt publicly with the support contact", async () => {
+    const { port, close } = await boot({ token: "secret" })
+    try {
+      const res = await fetch(`${base(port)}/.well-known/security.txt`)
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toContain("text/plain")
+      const body = await res.text()
+      expect(body).toContain("Contact: mailto:support@sktailabs.in")
+      expect(body).toContain("Expires:")
     } finally {
       await close()
     }

@@ -69,6 +69,25 @@ describe("bash tool", () => {
     expect(textOf(res)).toContain("[exit code 3]")
   })
 
+  it("declares an outer ceiling covering the foreground max (no 30s kill)", async () => {
+    // The runner kills at definition.timeoutMs no matter what the tool was
+    // asked: at 30s every build died with "Tool timed out: bash (30000ms)".
+    expect(createBashTool().definition.timeoutMs).toBe(300_000)
+  })
+
+  it("honors an explicit per-call timeout (fast fail, honest message)", async () => {
+    const slow = process.platform === "win32" ? "ping -n 3 127.0.0.1 > nul" : "sleep 2"
+    const res = await run({ command: slow, timeout: 1 })
+    expect(res.isError).toBe(true)
+    expect(textOf(res)).toContain("timed out after 1s")
+  })
+
+  it("lets short commands finish with no timeout arg (no hair-trigger default)", async () => {
+    const slow = process.platform === "win32" ? "ping -n 3 127.0.0.1 > nul" : "sleep 2"
+    const res = await run({ command: slow })
+    expect(res.isError).toBeFalsy()
+  })
+
   it("passes quoted command text through the shell unmangled (#75)", async () => {
     // Windows CRT-escaping used to turn `node -e "..."` into a string
     // literal: exit 0, silently no output — and `echo "hi"` printed

@@ -35,7 +35,10 @@ import { checkAutoApproval } from "../../../../../packages/approval/src/index.js
 import { randomUUID } from "crypto"
 
 const definition: ToolDefinition = {
-  timeoutMs: 30_000,
+  // Outer-runner ceiling MUST cover the documented foreground max (300s):
+  // it used to sit at 30s, so every foreground run died at 30s no matter
+  // what the model asked for ("Tool timed out: bash (30000ms)" on builds).
+  timeoutMs: 300_000,
   name: "bash",
   description:
     "Run a shell command in the project working directory. Returns combined stdout/stderr with OS-level sandbox isolation, output capping, and process tree management. Pass background: true for long-running work: the command starts detached and you get a job_id back immediately — keep working, then poll bash with job_id to read the result (or action: 'kill' to stop it).",
@@ -52,7 +55,7 @@ const definition: ToolDefinition = {
       },
       timeout: {
         type: "number",
-        description: "Optional timeout in seconds (foreground max 300; background max 3600, default 600).",
+        description: "Optional timeout in seconds (foreground max 300, default 300; background max 3600, default 600).",
       },
       background: {
         type: "boolean",
@@ -114,6 +117,137 @@ export function resetBackgroundJobsForTests(): void {
   backgroundJobs.clear()
 }
 
+/**
+ * Truthful sandbox descriptor for tool output. Real isolation reports
+ * `os (<type>)`; a downgraded spawn (MSYS shell that cannot run under
+ * windows-restricted, or a failed handshake) reports `policy-only` and
+ * carries the handle's reason — never `os (none)`, which claims an OS
+ * sandbox it does not have.
+ */
+function sandboxDescriptor(p: SpawnedProcess): string {
+  if (p.isSandboxed) return `os (${p.sandboxType})`
+  return p.fallbackReason ? `policy-only — ${p.fallbackReason}` : "policy-only"
+}
+
+/**
+ * Split a configured shell command into executable + trailing args
+ * (`"C:\…\bash.exe" -c` → `bash` path + `["-c"]`, `cmd /c` → `cmd` +
+ * `["/c"]`). One parser for both the run and the probe key, so the verdict
+ * always applies to the argv that will actually be spawned.
+ */
+export function parseShellCommand(shellCommand: string): { shell: string; shellArgs: string[] } {
+  const parts = shellCommand.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [shellCommand]
+  return { shell: parts[0].replace(/^"|"$/g, ""), shellArgs: parts.slice(1) }
+}
+
+/**
+ * Whether `windowsVerbatimArguments` (#75: cmd.exe must see the raw
+ * command text) is safe for this program — i.e. its argv[0] has no
+ * spaces. Verbatim passes the command line UNQUOTED, so a spaced path
+ * splits at the first space: the program starts (lpApplicationName is the
+ * file) but the shell parses `Files\Git\…` as its script argument
+ * ("No such file or directory"); pre-quoting the token instead lands the
+ * quotes in lpApplicationName (ENOENT). Default quoting round-trips
+ * correctly for CRT argv parsers (bash/sh — e.g. Git's spaced install
+ * path), which is the only case this excludes from verbatim.
+ */
+function verbatimArgvSafe(bin: string): boolean {
+  return !bin.includes(" ")
+}
+
+/** Session verdict for one shell: does its process chain survive the isolator? */
+export interface ShellOsProbe {
+  /** True when OS spawning may proceed (verified working, or not verifiable — see below). */
+  ok: boolean
+  /** Why it is policy-only, when known. */
+  reason?: string
+}
+
+/** Probe deadline: covers the shim's one-time helper compile (STATUS_TIMEOUT_MS). */
+const SHELL_OS_PROBE_TIMEOUT_MS = 60_000
+
+const shellProbeCache = new Map<string, Promise<ShellOsProbe>>()
+
+const shellKey = (shell: string, shellArgs: string[]): string => [shell, ...shellArgs].join("\u0000")
+
+/** Test hook: pre-seed a verdict so unit tests never spawn a real probe. */
+export function seedShellProbeForTests(shellCommand: string, outcome: ShellOsProbe): void {
+  const { shell, shellArgs } = parseShellCommand(shellCommand)
+  shellProbeCache.set(shellKey(shell, shellArgs), Promise.resolve(outcome))
+}
+
+/** Test hook: forget every cached verdict. */
+export function resetShellProbeForTests(): void {
+  shellProbeCache.clear()
+}
+
+/**
+ * Session probe: can this shell chain actually run under the OS sandbox?
+ *
+ * Static detection (ac-workload.ts) catches shells that link MSYS/Cygwin
+ * directly — but the shell `detectDefaultShell()` prefers on Windows is
+ * Git's *dispatcher stub* (`Git\bin\bash.exe`, 47KB, imports no MSYS), and
+ * the stub's child — the real `usr\bin\bash.exe` — dies inside the
+ * AppContainer in DllMain before it can run `exit 0`. Only an empirical
+ * spawn sees that chain, and it must run OUR trivial payload, never the
+ * user's command: nothing the agent says can influence the verdict, so
+ * forcing a downgrade stays impossible for repo-controlled input
+ * (`shellCommand` from a repo-local config is stripped in config.ts).
+ *
+ * Verdicts cache per (shell, args) for the session — one probe spawn on
+ * the first OS run, nothing after. An empty `shellArgs` (exotic
+ * `[bin, command]` configs, e.g. a wrapper that takes the command as its
+ * first argument) is not probe-able with a trailing payload, so it
+ * proceeds exactly as before: `ok: true` means "engaged, still governed by
+ * spawnProcess's own per-spawn handshake".
+ */
+async function probeShellUnderOsSandbox(opts: {
+  shell: string
+  shellArgs: string[]
+  ctx: ToolContext
+  safeEnv: Record<string, string>
+  sandboxType: SandboxType
+  networkDisabled: boolean
+  spawnFn?: typeof spawnProcess
+}): Promise<ShellOsProbe> {
+  if (opts.shellArgs.length === 0) return { ok: true }
+  const key = shellKey(opts.shell, opts.shellArgs)
+  const existing = shellProbeCache.get(key)
+  if (existing) return existing
+
+  const pending = (async (): Promise<ShellOsProbe> => {
+    try {
+      const proc = await (opts.spawnFn ?? spawnProcess)(
+        osSpawnRequest({
+          shell: opts.shell,
+          shellArgs: opts.shellArgs,
+          command: "exit 0",
+          cwd: opts.ctx.cwd,
+          env: opts.safeEnv,
+          sandboxType: opts.sandboxType,
+          networkDisabled: opts.networkDisabled,
+          timeoutMs: SHELL_OS_PROBE_TIMEOUT_MS,
+        }),
+      )
+      const code = await proc.waitForExit()
+      if (!proc.isSandboxed) {
+        // spawnProcess already refused this spawn (static MSYS detection
+        // or a failed handshake) — its reason travels with every real run.
+        return { ok: false, reason: proc.fallbackReason ?? "os isolation unavailable for this spawn" }
+      }
+      // Sandboxed, and a payload that cannot legitimately fail did fail:
+      // the workload chain is incompatible with the isolator.
+      return code === 0
+        ? { ok: true }
+        : { ok: false, reason: "shell cannot run under windows-restricted isolation" }
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+    }
+  })()
+  shellProbeCache.set(key, pending)
+  return pending
+}
+
 async function startBackgroundJob(opts: {
   command: string
   shell: string
@@ -125,6 +259,7 @@ async function startBackgroundJob(opts: {
   sandboxType: SandboxType
   networkDisabled: boolean
   spawnFn?: typeof spawnProcess
+  osProbe?: ShellOsProbe
 }): Promise<ToolResult> {
   sweepBackgroundJobs()
   const running = [...backgroundJobs.values()].filter((j) => j.state === "running").length
@@ -147,8 +282,10 @@ async function startBackgroundJob(opts: {
   backgroundJobs.set(id, job)
 
   // OS-sandbox path (flag-gated): the same spawnProcess every foreground
-  // run uses — pid/kill/wait/read map 1:1 onto the job registry.
-  if (shouldUseOsSandbox(opts.sandboxType)) {
+  // run uses — pid/kill/wait/read map 1:1 onto the job registry. The
+  // session probe must also have approved this shell chain, otherwise the
+  // job falls to the policy path below instead of dying per spawn.
+  if (shouldUseOsSandbox(opts.sandboxType) && opts.osProbe?.ok === true) {
     let proc: SpawnedProcess
     try {
       proc = await (opts.spawnFn ?? spawnProcess)(
@@ -193,7 +330,7 @@ async function startBackgroundJob(opts: {
         job.state = "done"
       })
     return textResult(
-      `Background job started.\njob_id: ${id}\ncommand: ${opts.command}\ntimeout: ${opts.timeoutSec}s\nsandbox: os (${proc.sandboxType})\n\nPoll with bash({"job_id": "${id}"}) for status and output; stop it with bash({"job_id": "${id}", "action": "kill"}).`,
+      `Background job started.\njob_id: ${id}\ncommand: ${opts.command}\ntimeout: ${opts.timeoutSec}s\nsandbox: ${sandboxDescriptor(proc)}\n\nPoll with bash({"job_id": "${id}"}) for status and output; stop it with bash({"job_id": "${id}", "action": "kill"}).`,
     )
   }
 
@@ -208,8 +345,10 @@ async function startBackgroundJob(opts: {
       timeoutMs: opts.timeoutMs,
       outputCap: OUTPUT_MAX_BYTES,
       processGroup: true,
-      // Shell pattern needs cmd.exe to see the raw command text (#75).
-      windowsVerbatimArguments: true,
+      // Shell pattern needs cmd.exe to see the raw command text (#75);
+      // a spaced program path must use default quoting instead (see
+      // verbatimArgvSafe).
+      windowsVerbatimArguments: verbatimArgvSafe(opts.shell),
     })
   } catch (e) {
     backgroundJobs.delete(id)
@@ -233,8 +372,12 @@ async function startBackgroundJob(opts: {
       job.state = "done"
     })
 
+  const downgradeLine =
+    shouldUseOsSandbox(opts.sandboxType) && opts.osProbe && !opts.osProbe.ok
+      ? `sandbox: policy-only — ${opts.osProbe.reason ?? "os isolation unavailable"}\n`
+      : ""
   return textResult(
-    `Background job started.\njob_id: ${id}\ncommand: ${opts.command}\ntimeout: ${opts.timeoutSec}s\n\nPoll with bash({"job_id": "${id}"}) for status and output; stop it with bash({"job_id": "${id}", "action": "kill"}).`,
+    `Background job started.\njob_id: ${id}\ncommand: ${opts.command}\ntimeout: ${opts.timeoutSec}s\n${downgradeLine}\nPoll with bash({"job_id": "${id}"}) for status and output; stop it with bash({"job_id": "${id}", "action": "kill"}).`,
   )
 }
 
@@ -319,7 +462,9 @@ export function osSpawnRequest(opts: {
 /**
  * Foreground run under OS isolation. Mirrors the ProcessManager path's
  * contract exactly (timeout/abort messages, truncation, exit-code suffix)
- * plus a truthful `[sandbox: os (<type>)]` marker from the spawn handle.
+ * plus a truthful `[sandbox: …]` marker from the spawn handle — `os
+ * (<type>)` when isolation really applied, `policy-only — <reason>` when
+ * the spawner had to downgrade.
  */
 export function runForegroundOsSandboxed(opts: {
   shell: string
@@ -386,7 +531,7 @@ export function runForegroundOsSandboxed(opts: {
         const truncated = truncateOutput(out, opts.ctx.config)
         const isError = exitCodeResult !== 0
         const status = isError ? `\n\n[exit code ${exitCodeResult}]` : ""
-        finish(textResult(`${truncated.text}${status}\n\n[sandbox: os (${p.sandboxType})]`, isError))
+        finish(textResult(`${truncated.text}${status}\n\n[sandbox: ${sandboxDescriptor(p)}]`, isError))
       })
       .catch((err: unknown) => {
         finish(textResult(`Command failed: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true))
@@ -443,18 +588,20 @@ export function createBashTool(deps?: BashToolDeps): Tool {
         if (!command) return textResult("Missing 'command'.", /*isError*/ true)
         const background = args.background === true
 
+        // Foreground default is the full 300s window (builds/tests run
+        // minutes; aborts still cut it short): a 30s default killed every
+        // un-timed long command at the outer runner before this timer or
+        // the model's own `timeout` arg ever mattered.
         const timeoutSec = background
           ? typeof args.timeout === "number"
             ? Math.max(1, Math.min(3600, args.timeout))
             : 600
           : typeof args.timeout === "number"
             ? Math.max(1, Math.min(300, args.timeout))
-            : 30
+            : 300
         const timeoutMs = timeoutSec * 1000
         const config = ctx.config
-        const parts = config.shellCommand.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [config.shellCommand]
-        const shell = parts[0].replace(/^"|"$/g, "")
-        const shellArgs = parts.slice(1)
+        const { shell, shellArgs } = parseShellCommand(config.shellCommand)
 
         // ─── 1. Exec Policy Evaluation ───
         // Evaluate against .rules files (if any) and default deny rules
@@ -503,7 +650,30 @@ export function createBashTool(deps?: BashToolDeps): Tool {
             : false
 
         // ─── 5. Filter Environment Variables ───
-        const safeEnv = buildBashEnv(process.env, sandboxType, networkDisabled)
+        let safeEnv = buildBashEnv(process.env, sandboxType, networkDisabled)
+
+        // ─── 5b. Shell-vs-isolator session probe (cached): static checks
+        //     cannot see launcher chains like Git's dispatcher stub, so the
+        //     first OS run verifies the shell with our own `exit 0`
+        //     payload. A failed probe parks the session on the policy path
+        //     with truthful child metadata instead of dying on every call. ───
+        const osEngaged = shouldUseOsSandbox(sandboxType)
+        let osProbe: ShellOsProbe | undefined
+        if (osEngaged) {
+          osProbe = await probeShellUnderOsSandbox({
+            shell,
+            shellArgs,
+            ctx,
+            safeEnv,
+            sandboxType,
+            networkDisabled,
+            spawnFn: deps?.spawnFn,
+          })
+          if (!osProbe.ok) {
+            // The child must not carry OS-sandbox stamps it does not have.
+            safeEnv = buildBashEnv(process.env, "policy-only", /*networkDisabled*/ false)
+          }
+        }
 
         // ─── 6. Background mode: same checks as foreground, but the job
         //     is handed to the registry and we return its id at once. ───
@@ -519,12 +689,15 @@ export function createBashTool(deps?: BashToolDeps): Tool {
             sandboxType,
             networkDisabled,
             spawnFn: deps?.spawnFn,
+            osProbe,
           })
         }
 
         // ─── 7. Execute: OS-isolated when the sandboxSpawn flag engages a
-        //     real backend, otherwise the long-standing policy path. ───
-        if (shouldUseOsSandbox(sandboxType)) {
+        //     real backend AND the shell survives it, otherwise the
+        //     long-standing policy path. ───
+        if (osEngaged && osProbe?.ok === true) {
+          if (signal?.aborted) return textResult("aborted", /*isError*/ true)
           return runForegroundOsSandboxed({
             shell,
             shellArgs,
@@ -539,6 +712,14 @@ export function createBashTool(deps?: BashToolDeps): Tool {
             spawnFn: deps?.spawnFn,
           })
         }
+
+        // Downgraded from the OS path: the policy-path contract is "no
+        // marker where no isolator exists" — but an isolator that was
+        // engaged and then refused this shell must say so.
+        const osDowngradeNote =
+          osEngaged && osProbe && !osProbe.ok
+            ? `\n\n[sandbox: policy-only — ${osProbe.reason ?? "os isolation unavailable"}]`
+            : ""
 
         // ─── 7. Execute Under Sandbox (OS-isolated when engaged, else policy) ───
         return new Promise<ToolResult>((resolve) => {
@@ -577,8 +758,9 @@ export function createBashTool(deps?: BashToolDeps): Tool {
               // [shell, /c, <raw command>] must reach cmd.exe exactly as
               // typed: CRT-quoting escapes the user's quotes into `\"` and
               // cmd mangles them (`echo "hi"` → `\"hi\"`, `node -e "..."`
-              // silently no-ops).
-              windowsVerbatimArguments: true,
+              // silently no-ops). A spaced program path (Git's default
+              // bash) must NOT be verbatim — see verbatimArgvSafe.
+              windowsVerbatimArguments: verbatimArgvSafe(shell),
             })
             .then(async ({ exitCode, output }) => {
               // Wait for output with capping
@@ -596,7 +778,7 @@ export function createBashTool(deps?: BashToolDeps): Tool {
 
                 // Violations are recorded in the state DB by the sandbox layer;
                 // the tool result itself stays clean.
-                resolve(textResult(truncated.text + status, isError))
+                resolve(textResult(truncated.text + status + osDowngradeNote, isError))
               }
             })
             .catch((err) => {

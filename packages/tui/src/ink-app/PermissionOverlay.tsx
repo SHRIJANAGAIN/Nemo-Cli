@@ -10,7 +10,7 @@ import { useThemeColors } from "./themeColors.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 import type { PermissionRequest, PermissionMode } from "./types.js"
 import { PERMISSION_MODE_LABELS } from "./types.js"
-import { isEnter } from "./keys.js"
+import { approvalDecisionFor, approvalNavigationFor } from "./approvalKeys.js"
 import { Spinner } from "./Spinner.js"
 import { g, spinnerFrames } from "./glyphs.js"
 
@@ -101,39 +101,31 @@ export const PermissionOverlay = ({
     // decisions (PromptInput reports the flag via onComposerHasTextChange
     // and keeps every other key for itself while the buffer is empty).
     if (composerHasText) return
-    if (isEnter(input, key)) {
-      // Enter = allow once: the empty-composer default path (the composer
-      // types normally once it holds text — the overlay stands down then,
-      // see composerHasText above).
-      onApprove(current.id)
-      return
+    const decision = approvalDecisionFor(input, key, composerHasText)
+    if (decision) {
+      switch (decision) {
+        case "approve":
+          onApprove(current.id)
+          return
+        case "deny":
+          onDeny(current.id)
+          return
+        case "approveAlways":
+          onApproveAlways(current.id)
+          return
+        case "approveSession":
+          onApproveSession(current.id)
+          return
+        case "denyAlways":
+          onDenyAlways(current.id)
+          return
+        default:
+          return
+      }
     }
-    if (input === "y" || input === "Y") {
-      onApprove(current.id)
-      return
-    }
-    if (input === "a" || input === "A") {
-      onApproveAlways(current.id)
-      return
-    }
-    if (input === "s" || input === "S") {
-      onApproveSession(current.id)
-      return
-    }
-    if (input === "n" || input === "N") {
-      onDeny(current.id)
-      return
-    }
-    if (input === "x" || input === "X") {
-      onDenyAlways(current.id)
-      return
-    }
-    if (key.upArrow) {
-      setSelectedIdx(Math.max(0, safeIdx - 1))
-      return
-    }
-    if (key.downArrow) {
-      setSelectedIdx(Math.min(pendingRequests.length - 1, safeIdx + 1))
+    const nav = approvalNavigationFor(input, key)
+    if (nav !== 0) {
+      setSelectedIdx((prev) => Math.max(0, Math.min(pendingRequests.length - 1, prev + nav)))
       return
     }
   })

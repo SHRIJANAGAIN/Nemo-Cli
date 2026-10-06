@@ -252,3 +252,25 @@ describe("exec policy", () => {
     expect(approvalFor("bash", { command: "npm test" }, {}).decision).toBe("ask")
   })
 })
+
+describe("checkExecPolicy is immune to catastrophic backtracking (round 13)", () => {
+  it("star-heavy rule vs a long non-matching command answers immediately", () => {
+    // globToRegExp compiled `*a*a*…*` into a `.*` chain: ~2^30 backtracks
+    // against 60 non-matching chars (vitest would time out). globMatch is
+    // O(pattern × text) and falls through to the default verdict.
+    const rules = [{ pattern: "*a".repeat(30) + "*", allow: false }]
+    const t0 = Date.now()
+    const verdict = checkExecPolicy("b".repeat(60), rules)
+    expect(Date.now() - t0).toBeLessThan(250)
+    expect(verdict.allowed).toBe(true) // no rule matched → default allow
+  })
+
+  it("still matches real rules through the same path", () => {
+    expect(checkExecPolicy("rm -rf /tmp/x", [{ pattern: "rm -rf /*", allow: false }])).toMatchObject({
+      allowed: false,
+    })
+    expect(checkExecPolicy("ls", [{ pattern: "rm -rf /*", allow: false }])).toMatchObject({ allowed: true })
+    // `?` remains a single-char wildcard for sandbox rules
+    expect(checkExecPolicy("cat", [{ pattern: "c?t", allow: false }])).toMatchObject({ allowed: false })
+  })
+})

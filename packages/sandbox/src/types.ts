@@ -130,6 +130,13 @@ export interface SpawnedProcess {
   isSandboxed: boolean
   /** The sandbox type actually applied. */
   sandboxType: SandboxType
+  /**
+   * Why OS isolation was not applied, when the spawner knows. Set on the
+   * honest fallback paths (workload incompatible with the container,
+   * handshake failure) so tool output can say *why* it is policy-only
+   * instead of silently dropping the marker.
+   */
+  fallbackReason?: string
   /** Process group ID for tree-killing. */
   processGroupId: number
   /** Kill the entire process tree. */

@@ -7,10 +7,10 @@
 import * as http from "http"
 import { randomBytes, timingSafeEqual } from "crypto"
 import { readFileSync } from "node:fs"
-import { join as pathJoin } from "node:path"
+import { join as pathJoin, resolve as pathResolve, relative as pathRelative, sep as pathSep } from "node:path"
 import { Agent, loadConfig } from "../../../apps/runtime/src/index.js"
 import { createTelemetry } from "../../telemetry/src/index.js"
-import { listTranscripts } from "../../session-backends/src/transcript.js"
+import { listTranscripts, sessionsRoot } from "../../session-backends/src/transcript.js"
 import {
   createAppJwt,
   createInstallationToken,
@@ -36,6 +36,7 @@ import {
   parseAutofixRepos,
 } from "./github-autofix.js"
 import { resolveCors } from "./cors.js"
+import { applySecurityHeaders, buildSecurityTxt, checkRequestLimits, securityContact } from "./security-headers.js"
 
 /** Read a small JSON body with the shared 1MB cap. Returns null after
  *  responding (413/400) so callers just return. */
@@ -187,11 +188,34 @@ export interface TrayambakServer extends http.Server {
   readonly effectiveToken?: string
 }
 
-/** Hosts that only the local machine can reach. */
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost", "0:0:0:0:0:0:0:1"])
-
 /** Max JSON body accepted on POST routes (DoS guard — unbounded concat). */
 const MAX_BODY_BYTES = 1_048_576
+
+/**
+ * Server-side ceiling for one /v1/agent run. Without it a request whose model
+ * call never settles holds its socket (and the SSE response) open forever
+ * while the server otherwise stays responsive — an unauthenticated
+ * connection-exhaustion DoS one curl per socket. Override with
+ * TRAYAMBAK_AGENT_TIMEOUT_MS (clamped to 5s..10min); the client-abort path
+ * already cancels the run, this covers the run that never settles at all.
+ */
+export function agentRunTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = Number(env.TRAYAMBAK_AGENT_TIMEOUT_MS ?? 120_000)
+  if (!Number.isFinite(raw)) return 120_000
+  return Math.min(Math.max(Math.floor(raw), 5_000), 600_000)
+}
+
+/**
+ * sessionFile allow-check for /v1/agent. The Agent persists its transcript to
+ * this path (mkdir + write), so an unconstrained value is an arbitrary-path
+ * JSON write primitive. Only paths inside the transcript store are accepted —
+ * callers that need an ad-hoc file can create a transcript id first.
+ */
+export function isAllowedSessionFile(sessionFile: string, root: string = sessionsRoot()): boolean {
+  const resolved = pathResolve(sessionFile)
+  const base = pathResolve(root) + pathSep
+  return resolved.startsWith(base) && resolved.length > base.length
+}
 
 export const OPENAPI_SPEC = {
   openapi: "3.0.0",
@@ -244,13 +268,16 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
   // Browser origins allowed to call the API (see cors.ts for the decision
   // order). Read once at startup so the policy cannot change mid-process.
   const corsOrigins = options.corsOrigins ?? process.env.TRAYAMBAK_WEB_ORIGINS ?? ""
-  // Fail closed: a non-loopback bind must never serve the agent API without
-  // auth. If the operator didn't provide a token, generate a strong one for
-  // this process and print it (same pattern as webhooks below, which refuse
-  // to run without GITHUB_WEBHOOK_SECRET). Loopback-only binds keep the
-  // documented local-dev behaviour: no token means no auth on 127.0.0.1.
+  // Fail closed: the server mints bearer auth on EVERY bind, loopback included.
+  // Previously only non-loopback binds auto-generated a token, so a default
+  // `skt web` served /v1/agent (full agent execution with tools), /api/sessions,
+  // and the license-admin tooling to ANY local process with no auth at all.
+  // If the operator didn't provide a token, generate a strong one for this
+  // process and print it once at startup (paste it into the served page's
+  // token field or send `Authorization: Bearer`). effectiveToken exposes it
+  // to in-process callers and tests.
   let generatedToken = false
-  if (!token && !LOOPBACK_HOSTS.has(host)) {
+  if (!token) {
     token = randomBytes(32).toString("hex")
     generatedToken = true
   }
@@ -271,6 +298,13 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
    *    (X-Hub-Signature-256) IS its auth, verified per-request. Never gate
    *    this behind bearer: every delivery would 401 "unauthorized" before
    *    the signature is even looked at (observed live).
+   *  - /auth/github/*: the browser OAuth dance cannot present a bearer token
+   *    (the callback is a plain browser redirect), and these endpoints only
+   *    move OAuth state — they neither read nor write repos.
+   *  /github/* is deliberately NOT here: after a GitHub login ANY local
+   *  process could otherwise read/write repo files and open PRs as the user,
+   *  even on a token-protected server. Those routes require the bearer token
+   *  AND the stored OAuth login.
    *  Exact pathnames only (never a prefix — no /license/../admin smuggling).
    *  Everything else stays bearer-gated. */
   const PUBLIC_LICENSE_PATHS = new Set([
@@ -283,14 +317,9 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
     "/auth/github/callback",
     "/auth/github/status",
     "/auth/github/logout",
-    "/github/read",
-    "/github/repos",
-    "/github/write",
-    "/github/branch",
-    "/github/pr",
-    "/github/copy",
     "/install.ps1",
     "/install.sh",
+    "/.well-known/security.txt",
   ])
   // README images live next to the code (Img/); npmjs.com renders
   // tarball-relative image links unreliably, so absolute URLs point here.
@@ -385,6 +414,15 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
     for (const [header, value] of Object.entries(cors.headers)) {
       res.setHeader(header, value)
     }
+    // Hardening headers on EVERY response (success and error alike), then
+    // request-size guards before any routing.
+    applySecurityHeaders(res)
+    const limit = checkRequestLimits(req)
+    if (limit) {
+      res.writeHead(limit.status, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ error: limit.message }))
+      return
+    }
     if (req.method === "OPTIONS") {
       res.writeHead(cors.allowed ? 204 : 403)
       res.end()
@@ -421,8 +459,18 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       }
     }
     if (req.method === "GET" && req.url === "/health") {
+      // Liveness only. The configured model name used to be returned here on
+      // every server, token or not — it is deployment metadata, not a health
+      // signal, and does not belong on an unauthenticated endpoint.
       res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ status: "ok", model: config.model }))
+      res.end(JSON.stringify({ status: "ok" }))
+      return
+    }
+
+    // RFC 9116 vulnerability contact (public, like /health).
+    if (req.method === "GET" && pathname === "/.well-known/security.txt") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" })
+      res.end(buildSecurityTxt(securityContact()))
       return
     }
 
@@ -1336,6 +1384,11 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
           res.end(JSON.stringify({ error: "missing 'prompt'" }))
           return
         }
+        if (sessionFile !== undefined && !isAllowedSessionFile(sessionFile)) {
+          res.writeHead(400, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ error: "sessionFile must be inside the sessions directory" }))
+          return
+        }
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
@@ -1349,6 +1402,26 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
             controller.abort()
           }
         }
+        // Server-side run ceiling (see agentRunTimeoutMs): a model call that
+        // never settles must not hold this socket open forever.
+        let settled = false
+        const finish = (chunk: string): void => {
+          if (settled) return
+          settled = true
+          clearTimeout(runTimer)
+          safeWrite(chunk)
+          try {
+            if (!req.destroyed && !res.writableEnded) res.end()
+          } catch {
+            /* client already gone */
+          }
+        }
+        const runTimer = setTimeout(() => {
+          controller.abort()
+          finish(`data: ${JSON.stringify({ error: "agent run timed out" })}\n\n`)
+        }, agentRunTimeoutMs())
+        // A timer must never hold the process open by itself.
+        if (typeof runTimer.unref === "function") runTimer.unref()
         agent
           .run(
             prompt,
@@ -1359,20 +1432,10 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
             controller.signal,
           )
           .then(() => {
-            safeWrite("data: [DONE]\n\n")
-            try {
-              if (!req.destroyed && !res.writableEnded) res.end()
-            } catch {
-              /* client already gone */
-            }
+            finish("data: [DONE]\n\n")
           })
           .catch((err) => {
-            safeWrite(`data: ${JSON.stringify({ error: String(err) })}\n\n`)
-            try {
-              if (!req.destroyed && !res.writableEnded) res.end()
-            } catch {
-              /* client already gone */
-            }
+            finish(`data: ${JSON.stringify({ error: String(err) })}\n\n`)
           })
       })
       return

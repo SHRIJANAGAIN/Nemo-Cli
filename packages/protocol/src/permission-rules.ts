@@ -63,6 +63,13 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "del /q /s", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "Remove-Item -Recurse -Force", action: "ask", reason: "recursive delete (PowerShell)" },
   { tool: "*", pattern: "Remove-Item -Force -Recurse", action: "ask", reason: "recursive delete (PowerShell)" },
+  // PowerShell accepts the path BEFORE the switch list, and that ordering is
+  // what a human writes: `Remove-Item C:\Windows\System32\config -Recurse
+  // -Force` (which destroys the offline registry hives) matched neither rule
+  // above and returned `allow` under auto-approve. Globs rather than literals
+  // because the path is arbitrary.
+  { tool: "*", pattern: "Remove-Item * -Recurse -Force", action: "ask", reason: "recursive delete (PowerShell)" },
+  { tool: "*", pattern: "Remove-Item * -Force -Recurse", action: "ask", reason: "recursive delete (PowerShell)" },
   { tool: "*", pattern: "rmdir /s", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "rd /s /q", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "rd /q /s", action: "ask", reason: "recursive delete (Windows)" },
@@ -85,6 +92,9 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "Stop-Computer", action: "ask", reason: "system power (PowerShell)" },
   { tool: "*", pattern: "systemctl poweroff", action: "ask", reason: "system power" },
   { tool: "*", pattern: "systemctl reboot", action: "ask", reason: "system power" },
+  // Same family: switches the machine's boot target out from under every
+  // running process, which is the availability consequence `halt` has.
+  { tool: "*", pattern: "systemctl isolate", action: "ask", reason: "system power" },
 
   // ── filesystem / disk destruction ───────────────────────────────────
   { tool: "*", pattern: "mkfs", action: "ask", reason: "filesystem format" },
@@ -93,6 +103,14 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "dd if=", action: "ask", reason: "raw disk write" },
   { tool: "*", pattern: "of=/dev/", action: "ask", reason: "raw disk write" },
   { tool: "*", pattern: "> /dev/sd", action: "ask", reason: "raw disk write" },
+  // Same destruction as `dd of=/dev/sd`, reached through the dedicated
+  // block-device tools: `wipefs` erases filesystem/partition signatures so the
+  // disk reads as empty, `blkdiscard` zeroes every block. Both leave the device
+  // present but its contents unrecoverable, which is exactly the class the
+  // `dd` patterns above already gate. Measured returning `allow` under
+  // `--ui-mode auto-approve`.
+  { tool: "*", pattern: "wipefs", action: "ask", reason: "raw disk write" },
+  { tool: "*", pattern: "blkdiscard", action: "ask", reason: "raw disk write" },
   { tool: "*", pattern: "fdisk", action: "ask", reason: "partition table write" },
   { tool: "*", pattern: "parted", action: "ask", reason: "partition table write" },
   { tool: "*", pattern: "diskpart", action: "ask", reason: "partition table write (Windows)" },
@@ -109,6 +127,26 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   // ── force push / history rewriting ──────────────────────────────────
   { tool: "*", pattern: "git push --force", action: "ask", reason: "force push" },
   { tool: "*", pattern: "git push -f", action: "ask", reason: "force push" },
+  // Remote ref DESTRUCTION. Same hazard the force-push rules above already gate
+  // ("no local reflog can bring them back" — everyone who cloned has them), and
+  // `--mirror` is strictly worse than `--force`: it deletes every ref on the
+  // remote that has no local counterpart, not just the one being overwritten.
+  // These were measured returning `allow` under `--ui-mode auto-approve`.
+  // Ordered ahead of the plain `git push origin` rule so the specific
+  // destructive form is the one reported, not the generic one.
+  { tool: "*", pattern: "git push --mirror", action: "ask", reason: "remote ref destruction" },
+  { tool: "*", pattern: "git push --delete", action: "ask", reason: "remote ref destruction" },
+  { tool: "*", pattern: "git push -d", action: "ask", reason: "remote ref destruction" },
+  // A refspec is destructive by its first character: `:` deletes the named
+  // remote ref, `+` force-overwrites it. Matched with a glob rather than a
+  // literal remote name, because the destructive refspec may sit on either side
+  // of the remote (`git push origin :x` and `git push upstream :x` are the same
+  // hazard, and no remote name is privileged), and because the delete flag can
+  // follow the remote (`git push origin --delete x`) as well as precede it.
+  { tool: "*", pattern: "git push * :*", action: "ask", reason: "remote ref destruction" },
+  { tool: "*", pattern: "git push * +*", action: "ask", reason: "remote ref destruction" },
+  { tool: "*", pattern: "git push * --delete*", action: "ask", reason: "remote ref destruction" },
+  { tool: "*", pattern: "git push * -d *", action: "ask", reason: "remote ref destruction" },
   { tool: "*", pattern: "git push origin", action: "ask", reason: "remote mutation" },
   { tool: "*", pattern: "git reset --hard", action: "ask", reason: "discard working tree" },
   { tool: "*", pattern: "git filter-branch", action: "ask", reason: "history rewrite" },
@@ -143,6 +181,10 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "DROP DATABASE", action: "ask", reason: "database destruction" },
   { tool: "*", pattern: "DROP TABLE", action: "ask", reason: "table destruction" },
   { tool: "*", pattern: "TRUNCATE TABLE", action: "ask", reason: "table destruction" },
+  // `DELETE FROM <t>` with no WHERE clause empties a table exactly as TRUNCATE
+  // does, and the WHERE-less form is the one an agent emits when it means
+  // "clear this out". Measured returning `allow` under `--ui-mode auto-approve`.
+  { tool: "*", pattern: "DELETE FROM", action: "ask", reason: "table destruction" },
   { tool: "*", pattern: "db.dropDatabase", action: "ask", reason: "database destruction" },
   { tool: "*", pattern: "DROP SCHEMA", action: "ask", reason: "schema destruction" },
   { tool: "*", pattern: "docker system prune", action: "ask", reason: "container destruction" },
@@ -151,6 +193,14 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "terraform apply", action: "ask", reason: "infrastructure mutation" },
   { tool: "*", pattern: "kubectl delete", action: "ask", reason: "cluster destruction" },
   { tool: "*", pattern: "aws s3 rb", action: "ask", reason: "cloud storage destruction" },
+  // Object-level deletion, which `aws s3 rb` (bucket removal) does not cover.
+  // `aws s3 rm s3://bucket --recursive` empties the bucket and
+  // `aws s3 sync s3://bucket . --delete` prunes every object absent from the
+  // local source. Unrecoverable for everyone else using the bucket, the same
+  // argument that gates the git remote-ref rules. Measured returning `allow`.
+  { tool: "*", pattern: "aws s3 rm", action: "ask", reason: "cloud storage destruction" },
+  { tool: "*", pattern: "aws s3 sync", action: "ask", reason: "cloud storage destruction" },
+  { tool: "*", pattern: "az storage blob delete", action: "ask", reason: "cloud storage destruction" },
   { tool: "*", pattern: "gsutil rm -r", action: "ask", reason: "cloud storage destruction" },
   { tool: "*", pattern: "az storage delete", action: "ask", reason: "cloud storage destruction" },
   { tool: "*", pattern: "helm delete", action: "ask", reason: "cluster destruction" },
@@ -163,6 +213,14 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "printenv", action: "ask", reason: "environment dump" },
   { tool: "*", pattern: "env | grep", action: "ask", reason: "environment dump" },
   { tool: "*", pattern: "setx", action: "ask", reason: "persistent env mutation (Windows)" },
+  // Publishing a package is a one-way door for consumers: `npm unpublish` is
+  // refused after 72 hours or 300 downloads, so a version that shipped broken
+  // stays shipped. Deliberate, infrequent, and never something a build or test
+  // command does incidentally.
+  { tool: "*", pattern: "npm publish", action: "ask", reason: "package publication" },
+  { tool: "*", pattern: "npm unpublish", action: "ask", reason: "package publication" },
+  { tool: "*", pattern: "cargo publish", action: "ask", reason: "package publication" },
+  { tool: "*", pattern: "twine upload", action: "ask", reason: "package publication" },
 ]
 
 /**
@@ -178,8 +236,15 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
  * auto-approve lets them through because they are recoverable or routine):
  *   - privilege escalation (`sudo`, `doas`, `runas`) — noisy, and the
  *     escalation itself fails without real credentials;
- *   - force push / `git reset --hard` — recoverable from the reflog;
- *   - raw disk writes and permission churn outside the delete families;
+ *   - `git reset --hard` — recoverable from the reflog;
+ *   - permission churn (`chmod`/`chown`/`icacls` outside the delete families).
+ *     Note that raw disk writes are gated more broadly than this list implies:
+ *     the `dd if=` rule matches on the READ side, so EVERY `dd` asks under
+ *     auto-approve, including benign ones like `dd if=/dev/zero of=./disk.img`.
+ *     That over-gate predates this audit and is left alone deliberately —
+ *     narrowing it means parsing argv, and a spurious prompt is the safe
+ *     direction. Anything aimed at a whole device (`of=/dev/…`, `wipefs`,
+ *     `blkdiscard`) IS in this set via the `raw disk write` reason;
  *   - credential *reads* (`cat ~/.ssh/id_rsa`, `printenv`) — these are
  *     read-only, and the network-deny sandbox plus secret redaction are the
  *     controls that actually limit exfiltration.
@@ -224,6 +289,32 @@ export const IRREVERSIBLE_FORCE_ASK_REASONS: ReadonlySet<string> = new Set([
   "remote download",
   "dynamic evaluation",
   "persistent env mutation (Windows)",
+  // Remote history rewrite. Listed here even though it was previously grouped
+  // with `git reset --hard` as "recoverable from the reflog": that is true
+  // only for the LOCAL branch. A force push overwrites the remote branch, and
+  // the commits it removed are gone for everyone who had cloned it — no local
+  // reflog can bring them back, so it is not recoverable in the sense the
+  // rest of this list uses. A plain `git push origin feature/x` stays
+  // auto-approved; that is routine work.
+  "force push",
+  // Deleting a remote ref outright. Identical reasoning to the force push above,
+  // and for the same reason it was moved here: once the branch or tag is gone
+  // from the remote it is gone for every collaborator, and no local reflog
+  // restores it. `git push --mirror` is the broad form — it removes every remote
+  // ref that has no local counterpart.
+  "remote ref destruction",
+  // Host availability. `shutdown`, `reboot`, `poweroff`, `halt`, `Stop-Computer`
+  // and the systemctl power verbs were all already ASK rules, but their reason
+  // was absent from this set — and a force-ask rule whose reason is missing here
+  // is not in DELETE_FORCE_ASK_RULES, so it does not gate at all under
+  // auto-approve. Measured: `shutdown /s /t 0` returned `allow`, contradicting
+  // AGENTS.md, which names `shutdown` in the list of operations that "always
+  // resolve to `ask` unless danger mode is explicit". Tearing down a machine the
+  // agent is running on is unrecoverable from inside the session either way.
+  "system power",
+  "system power (PowerShell)",
+  // A published version cannot be recalled once consumers have installed it.
+  "package publication",
 ])
 
 /**
@@ -256,23 +347,93 @@ export function getSessionPermissionRules(): ReadonlyArray<PermissionRuleV2> {
 
 /* ───────────────────────────── matching ───────────────────────────── */
 
-function globToRegExp(pattern: string, anchored: boolean): RegExp {
-  const body = pattern
-    // escape regex specials except `*`, then turn `*` into `.*`
-    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-  return new RegExp(anchored ? `^${body}$` : body, "i")
+/**
+ * Linear-time glob matcher (round 13). The old `globToRegExp` compiled
+ * `*`→`.*` and ran it against untrusted subjects on the permission hot
+ * path — a rule with a dozen stars vs a long non-matching command/path
+ * was catastrophic backtracking (ReDoS). This is the classic greedy
+ * matcher: O(pattern × text) worst case, NEVER exponential, and it
+ * reproduces the old RegExp semantics exactly:
+ *   - `*` = any run except "\n" (`.*` without the s-flag),
+ *   - `?` is literal unless `singleChar` is set (protocol globs never
+ *     treated it as a wildcard; sandbox rules do),
+ *   - `caseInsensitive` folds like the old `i` flag,
+ *   - `unanchored` = the old body-only (no `^…$`) pattern, i.e. `*`+p+`*`.
+ */
+export function globMatch(
+  pattern: string,
+  text: string,
+  opts: { caseInsensitive?: boolean; singleChar?: boolean; unanchored?: boolean } = {},
+): boolean {
+  const p = opts.unanchored ? `*${pattern}*` : pattern
+  const s = text
+  // A `\n` in the text is only ever consumable by a literal `\n` in the
+  // pattern — wildcards never cross it (mirrors `.` without s-flag).
+  if (s.includes("\n") && !p.includes("\n")) return false
+  const fold = (v: string): string => (opts.caseInsensitive === true ? v.toLowerCase() : v)
+  const fp = fold(p)
+  const fs = fold(s)
+  const ok = (pc: string, sc: string): boolean => pc === sc || (sc !== "\n" && opts.singleChar === true && pc === "?")
+  let pi = 0
+  let si = 0
+  let starPi = -1
+  let starSi = -1
+  while (si < fs.length) {
+    if (pi < fp.length && fp[pi] === "*") {
+      starPi = pi
+      starSi = si
+      while (pi + 1 < fp.length && fp[pi + 1] === "*") pi++ // coalesce runs
+      pi++
+      continue
+    }
+    if (pi < fp.length && ok(fp[pi]!, fs[si]!)) {
+      pi++
+      si++
+      continue
+    }
+    if (starPi !== -1) {
+      // Let the recorded star consume one more char — but never a "\n": a
+      // wildcard is `.` without the s-flag, so it can only match a newline if
+      // the pattern has a literal one.
+      //
+      // Running off the END of the text is NOT a failure. A trailing `*` may
+      // legitimately match zero further characters, and whether the whole match
+      // succeeds is decided by the loop exit plus the tail check below.
+      // Rejecting here instead made every unanchored pattern whose expansion
+      // reaches the last character fail to match — which silently disarmed the
+      // whole force-ask layer: `unanchored` rewrites the pattern to `*p*`, so
+      // `rm -rf` against `rm -rf /tmp/x` expanded its trailing `*` to the end of
+      // the subject and returned false. Every destructive command (and every
+      // deny rule) that needed its wildcard to reach the end of the string
+      // stopped matching, and auto-approve mode then ran `rm -rf` with no prompt.
+      if (fs[starSi] === "\n") return false
+      starSi++
+      si = starSi
+      pi = starPi + 1
+      continue
+    }
+    return false
+  }
+  while (pi < fp.length && fp[pi] === "*") pi++
+  return pi === fp.length
 }
 
 function matchTool(tool: string, pattern: string): boolean {
   if (!pattern || pattern === "*") return true
-  if (pattern.includes("*")) return globToRegExp(pattern, /*anchored*/ true).test(tool)
+  if (pattern.includes("*")) return globMatch(pattern, tool, { caseInsensitive: true })
   return pattern.toLowerCase() === tool.toLowerCase()
 }
 
 function matchSubject(subject: string, pattern?: string): boolean {
   if (!pattern || pattern === "*") return true
-  return globToRegExp(pattern, /*anchored*/ false).test(subject)
+  // Windows subjects use `\` while rules are written with `/`. Normalize
+  // BOTH sides (#84) or `**/secrets/**` silently never fires against
+  // `C:\proj\secrets\key` — a deny rule that matches nothing. Case
+  // insensitivity is the old `i` flag: globMatch folds both sides.
+  return globMatch(pattern.replace(/\\/g, "/"), subject.replace(/\\/g, "/"), {
+    caseInsensitive: true,
+    unanchored: true,
+  })
 }
 
 /**
@@ -283,7 +444,11 @@ export function permissionSubject(args: unknown): string {
   if (typeof args === "string") return args
   if (args && typeof args === "object") {
     const obj = args as Record<string, unknown>
-    for (const key of ["command", "path", "file_path", "filePath", "url", "query", "pattern"]) {
+    // Ordered most-specific first; `name`/`target` sit last so they only
+    // pick the subject when nothing concrete matched (#85) — otherwise the
+    // JSON-blob fallback let a rule pattern match against an unrelated
+    // field of the same args object (false allow/deny).
+    for (const key of ["command", "path", "file_path", "filePath", "url", "query", "pattern", "name", "target"]) {
       const value = obj[key]
       if (typeof value === "string" && value.length > 0) return value
     }
@@ -310,6 +475,48 @@ function deriveUIMode(config: PermissionConfig): PermissionUIMode {
   // rules and force-ask still protect the user.
   if (config.mode === "yolo" || config.askByDefault === false) return "auto-approve"
   return "ask"
+}
+
+/**
+ * `READ_ONLY_TOOLS` entries whose tool name alone does not mean "reads only".
+ *
+ * `memory`, `todo`, and `artifact` are multi-action: each exposes read
+ * actions alongside actions that create, overwrite, or delete files on disk
+ * (`memory.save` -> `~/.trayambak/memory/memory.json`; `todo.write` ->
+ * `~/.trayambak/todos/`; `artifact.create` -> `<cwd>/skt/10-upload/artifacts/`
+ * — and its manager even `mkdirSync`s in the constructor). The read-only gate
+ * used to match on the tool NAME alone, so `artifact create` was `allow` in
+ * read-only mode and really did write `1.json` + `manifest.json` into the
+ * project. "Read-only" has to mean read-only, so the gate is now action-aware
+ * for exactly these three: the listed actions still pass, every other action
+ * is denied.
+ *
+ * Keep in sync with each tool's `action` enum — `memory` (memory.ts),
+ * `todo` (todo.ts), `artifact` (artifact.ts).
+ */
+const READ_ONLY_TOOL_SAFE_ACTIONS = new Map<string, ReadonlySet<string>>([
+  ["memory", new Set(["search", "list"])],
+  ["todo", new Set(["read"])],
+  ["artifact", new Set(["get", "list", "search"])],
+])
+
+/**
+ * Whether a `READ_ONLY_TOOLS` member may run in read-only/plan mode.
+ *
+ * Fail-closed at execution time: an action that is missing, not a string, or
+ * not in the safe set is treated as a write, so a malformed call cannot slip
+ * past by omitting `action`. The one exception is `args === undefined`, which
+ * is the agent loop's catalogue-listing call (`agent-loop.ts` filters tools
+ * before a model can choose arguments) — there the action is genuinely
+ * unknown, and denying would hide the tool's READ half from the model instead
+ * of protecting anything.
+ */
+function isReadOnlyAllowed(tool: string, args: unknown): boolean {
+  const safe = READ_ONLY_TOOL_SAFE_ACTIONS.get(tool)
+  if (!safe) return true
+  if (args === undefined) return true
+  const action = (args as { action?: unknown } | null)?.action
+  return typeof action === "string" && safe.has(action)
 }
 
 /* ─────────────────────────── evaluation ─────────────────────────── */
@@ -355,11 +562,30 @@ export function evaluatePermission(
           ["default", legacyToRules(config.rules ?? [])],
         ]
   const matches = (rule: PermissionRuleV2): boolean => matchTool(tool, rule.tool) && matchSubject(subject, rule.pattern)
+
+  // Force-ask pool, resolved up front. A destructive command must land on `ask`
+  // even when an allow rule matches it: `bash(*)` — or a plan-exit rule the
+  // model itself proposed — used to short-circuit here and run `rm -rf /` with
+  // no prompt at all. AGENTS.md is unconditional on this ("Destructive commands
+  // always resolve to `ask` unless danger mode is explicit"), and full-access
+  // already returned allow at step 0, so danger mode keeps its exception.
+  // In auto-approve only delete-family operations gate, which is what that mode
+  // already documented.
+  const forcePool = uiMode === "auto-approve" ? DELETE_FORCE_ASK_RULES : FORCE_ASK_RULES
+  const forced = (): PermissionRuleV2 | undefined =>
+    forcePool.find((r) => matchTool(tool, r.tool) && matchSubject(subject, r.pattern))
+
   for (const [layer, rules] of layers) {
     const deny = rules.find((r) => r.action === "deny" && matches(r))
     if (deny) return { action: "deny", source: "deny-rule", rule: deny, layer }
     const allow = rules.find((r) => r.action === "allow" && matches(r))
-    if (allow) return { action: "allow", source: "allow-rule", rule: allow, layer }
+    if (allow) {
+      // Deny lists win over allow lists, and a destructive command is never
+      // unlocked by "always allow".
+      const force = forced()
+      if (force) return { action: "ask", source: "force-ask", rule: force, layer: "force-ask" }
+      return { action: "allow", source: "allow-rule", rule: allow, layer }
+    }
   }
 
   // 2) Read-only & plan mode: mutating tools are denied outright (and
@@ -368,7 +594,7 @@ export function evaluatePermission(
   //    but never modify — plus plan instructions appended to the system
   //    prompt by the agent loop, so it produces a plan for approval.
   if (uiMode === "read-only" || uiMode === "plan") {
-    return READ_ONLY_TOOLS.has(tool)
+    return READ_ONLY_TOOLS.has(tool) && isReadOnlyAllowed(tool, args)
       ? { action: "allow", source: "read-only-tool", layer: "mode" }
       : { action: "deny", source: uiMode === "plan" ? "plan-mode" : "read-only-mode", layer: "mode" }
   }
@@ -380,9 +606,10 @@ export function evaluatePermission(
 
   // 5) Force-ask: in auto-approve mode ONLY delete-family operations can
   //    still gate a call — everything else auto-allows. (Full-access never
-  //    reaches here: it returns allow at step 0.)
-  const forcePool = uiMode === "auto-approve" ? DELETE_FORCE_ASK_RULES : FORCE_ASK_RULES
-  const force = forcePool.find((r) => matchTool(tool, r.tool) && matchSubject(subject, r.pattern))
+  //    reaches here: it returns allow at step 0. A matched allow rule already
+  //    consulted the same pool above, so this only sees commands no rule
+  //    allowed.)
+  const force = forced()
   if (force) {
     return { action: "ask", source: "force-ask", rule: force, layer: "force-ask" }
   }

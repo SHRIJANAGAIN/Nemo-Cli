@@ -292,9 +292,10 @@ describe("redactPayload", () => {
   })
 
   it("masks credential-prefixed strings with a 4-char head + ****", () => {
-    const out = String(redactPayload("Basic dXNlcjpwYXNzd29yZA"))
-    expect(out).toMatch(/^Basi\*\*\*\*$/)
-    expect(out).not.toContain("dXNlcjpwYXNz")
+    // A bare Basic credential now matches the embedded pattern first, so the
+    // whole string goes to [REDACTED] (reveals even less than Basi****).
+    expect(String(redactPayload("Basic dXNlcjpwYXNzd29yZA"))).toBe("[REDACTED]")
+    expect(String(redactPayload("Basic dXNlcjpwYXNzd29yZA"))).not.toContain("dXNlcjpwYXNz")
     // Short provider keys that the embedded pattern (≥8) skips still get masked.
     expect(String(redactPayload("sk-abc1234"))).toBe("sk-a****")
   })
@@ -325,6 +326,54 @@ describe("redactPayload", () => {
     expect(redactPayload(false)).toBe(false)
     expect(redactPayload(null)).toBe(null)
     expect(redactPayload(undefined)).toBe(undefined)
+  })
+
+  it("passes Date objects through instead of rebuilding them as {} (#65)", () => {
+    const when = new Date("2026-01-01T00:00:00.000Z")
+    const out = redactPayload({ at: when }) as { at: unknown }
+    expect(out).toEqual({ at: when })
+    expect(out.at).toBeInstanceOf(Date)
+  })
+})
+
+describe("round-7 pattern hardening (#62)", () => {
+  it("masks uppercase NVAPI keys like lowercase ones", () => {
+    expect(redactEmbeddedSecrets("key NVAPI-ABCDEF1234567890 here")).toBe("key [REDACTED] here")
+    expect(redactEmbeddedSecrets("key nvapi-abcdef1234567890 here")).toBe("key [REDACTED] here")
+  })
+
+  it("masks Groq gsk_ keys mid-prose", () => {
+    const out = redactEmbeddedSecrets("using gsk_abcdefghij1234567890 for inference")
+    expect(out).toBe("using [REDACTED] for inference")
+  })
+
+  it("masks embedded HTTP Basic credentials but not plain words", () => {
+    expect(redactEmbeddedSecrets("auth Basic dXNlcjpwYXNzd29yZA end")).toBe("auth [REDACTED] end")
+    expect(redactEmbeddedSecrets("auth basic dXNlcjpwYXNzd29yZA end")).toBe("auth [REDACTED] end")
+    expect(redactEmbeddedSecrets("Basic training for new hires starts Monday")).toBe(
+      "Basic training for new hires starts Monday",
+    )
+  })
+
+  it("masks every Slack xox flavor", () => {
+    expect(redactEmbeddedSecrets("token SLACK_BOT_FIXTURE and SLACK_USER_FIXTURE")).toBe(
+      "token [REDACTED] and [REDACTED]",
+    )
+  })
+})
+
+describe("snake_case *_key names (#63)", () => {
+  it("masks vendor-prefixed *_KEY keys while plain words stay clean", () => {
+    expect(isSecretKey("NVIDIA_KEY")).toBe(true)
+    expect(isSecretKey("OPENAI_KEY")).toBe(true)
+    expect(isSecretKey("api_key")).toBe(true)
+    expect(isSecretKey("monkey")).toBe(false)
+    expect(isSecretKey("keyboard")).toBe(false)
+    expect(isSecretKey("maxTokens")).toBe(false)
+    expect(redactPayload({ NVIDIA_KEY: "nvapi-abcdef1234567890", monkey: "banana" })).toEqual({
+      NVIDIA_KEY: "****",
+      monkey: "banana",
+    })
   })
 })
 

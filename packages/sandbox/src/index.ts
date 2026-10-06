@@ -16,7 +16,7 @@ import * as fs from "fs"
 import * as path from "path"
 import { enforcementForBackend } from "./gate.js"
 import { windowsAcCapable } from "./windows-ac.js"
-import { FORCE_ASK_RULES } from "../../protocol/src/permission-rules.js"
+import { FORCE_ASK_RULES, globMatch } from "../../protocol/src/permission-rules.js"
 import { segmentCommand } from "../../execpolicy/src/segments.js"
 
 // ─── Original Policy Engine ───
@@ -112,6 +112,9 @@ export interface ExecRule {
   allow: boolean
 }
 
+/** Compiled-regexp form kept for API compatibility/tests. Enforcement goes
+ *  through `globMatch` (linear, ReDoS-proof) — `.*` chains backtracked
+ *  catastrophically on long non-matching commands. */
 export function globToRegExp(glob: string): RegExp {
   const esc = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
@@ -139,7 +142,11 @@ function canonicalizeForMatch(value: string): string {
 export function checkExecPolicy(command: string, rules: ExecRule[]): { allowed: boolean; rule?: ExecRule } {
   const candidate = canonicalizeForMatch(command)
   for (const rule of rules) {
-    if (globToRegExp(canonicalizeForMatch(rule.pattern)).test(candidate)) return { allowed: rule.allow, rule }
+    // globMatch, not globToRegExp: rules × commands meet here on every
+    // execution — a star-heavy pattern must never backtrack-bomb (ReDoS).
+    if (globMatch(canonicalizeForMatch(rule.pattern), candidate, { singleChar: true })) {
+      return { allowed: rule.allow, rule }
+    }
   }
   return { allowed: true }
 }
@@ -172,6 +179,17 @@ export const DEFAULT_EXEC_RULES: ExecRule[] = [
   { pattern: "sudo *", allow: false },
   { pattern: "dd *of=*", allow: false },
   { pattern: "reg delete *", allow: false },
+  { pattern: "del */s*", allow: false },
+  { pattern: "erase */s*", allow: false },
+  { pattern: "rd */s*", allow: false },
+  { pattern: "rmdir */s*", allow: false },
+  { pattern: "deltree *", allow: false },
+  { pattern: "remove-item *-r*", allow: false },
+  { pattern: "format-volume*", allow: false },
+  { pattern: "stop-computer*", allow: false },
+  { pattern: "restart-computer*", allow: false },
+  { pattern: "doas *", allow: false },
+  { pattern: "runas *", allow: false },
   { pattern: "vssadmin *", allow: false },
   { pattern: "* | sh", allow: false },
   { pattern: "* | sh *", allow: false },

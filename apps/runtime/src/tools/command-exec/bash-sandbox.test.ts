@@ -18,7 +18,14 @@ import {
 import { DEFAULT_PERMISSIONS } from "../../../../../packages/protocol/src/permissions.js"
 import type { TrayambakConfig } from "../../config.js"
 import type { ToolContext, ToolResult } from "../types.js"
-import { createBashTool, osSpawnRequest, resetBackgroundJobsForTests, runForegroundOsSandboxed } from "./bash.js"
+import {
+  createBashTool,
+  osSpawnRequest,
+  resetBackgroundJobsForTests,
+  resetShellProbeForTests,
+  runForegroundOsSandboxed,
+  seedShellProbeForTests,
+} from "./bash.js"
 
 /**
  * OS-sandbox engagement (sandboxSpawn flag) without needing seatbelt/bwrap
@@ -216,6 +223,7 @@ describe("bash OS path engagement", () => {
     if (savedFlag === undefined) delete process.env[FLAG]
     else process.env[FLAG] = savedFlag
     resetBackgroundJobsForTests()
+    resetShellProbeForTests()
   })
 
   it("stays on the policy path (no marker) where no isolator exists, flag or not", async () => {
@@ -245,6 +253,7 @@ describe("bash OS path engagement", () => {
     const original = Object.getOwnPropertyDescriptor(process, "platform")
     setWindowsAcProbeForTests(() => true)
     Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    seedShellProbeForTests(SHELL, { ok: true })
     try {
       const spawnFn = vi.fn(async (_request: SpawnRequest) =>
         stubProc({ sandboxType: SandboxType.WindowsRestrictedToken }),
@@ -264,6 +273,69 @@ describe("bash OS path engagement", () => {
     }
   })
 
+  it("a failed shell probe parks the session on the policy path with an honest note", async () => {
+    process.env[FLAG] = "1"
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const original = Object.getOwnPropertyDescriptor(process, "platform")
+    setWindowsAcProbeForTests(() => true)
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    try {
+      // Probe call: sandboxed, but our own `exit 0` payload fails — the
+      // shell chain cannot survive the isolator (Git's dispatcher-stub
+      // case). The real command then runs through the policy path: the
+      // injected spawner must see exactly one call (the probe), because
+      // the verdict is cached for the whole session.
+      const spawnFn = vi.fn(async () => stubProc({ waitForExit: async () => 1 }))
+      const tool = createBashTool({ spawnFn: spawnFn as never })
+      const first = await tool.execute("t1", { command: "echo probe-degraded" }, undefined, undefined, ctxFor(dir))
+
+      expect(spawnFn).toHaveBeenCalledTimes(1) // only the probe
+      expect(textOf(first)).toContain("probe-degraded") // the command still ran
+      expect(textOf(first)).toContain("[sandbox: policy-only — shell cannot run under windows-restricted isolation]")
+      expect(textOf(first)).not.toContain("[sandbox: os")
+
+      const second = await tool.execute("t1", { command: "echo again" }, undefined, undefined, ctxFor(dir))
+      expect(spawnFn).toHaveBeenCalledTimes(1) // cached — no second probe
+      expect(textOf(second)).toContain("[sandbox: policy-only —")
+    } finally {
+      if (original) Object.defineProperty(process, "platform", original)
+      setWindowsAcProbeForTests(null)
+      resetShellProbeForTests()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("a passing probe is cached and the real run keeps its OS marker", async () => {
+    process.env[FLAG] = "1"
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const original = Object.getOwnPropertyDescriptor(process, "platform")
+    setWindowsAcProbeForTests(() => true)
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    try {
+      const spawnFn = vi.fn(async (_request: SpawnRequest) =>
+        stubProc({ sandboxType: SandboxType.WindowsRestrictedToken }),
+      )
+      const tool = createBashTool({ spawnFn: spawnFn as never })
+      const first = await tool.execute("t1", { command: "echo os-path" }, undefined, undefined, ctxFor(dir))
+
+      // First run: the probe (our trivial payload) + the real command.
+      expect(spawnFn).toHaveBeenCalledTimes(2)
+      expect(spawnFn.mock.calls[0]?.[0].command.slice(-1)).toEqual(["exit 0"])
+      expect(spawnFn.mock.calls[1]?.[0].command.slice(-1)).toEqual(["echo os-path"])
+      expect(textOf(first)).toContain("[sandbox: os (windows_sandbox)]")
+
+      // Verdict cached: the second run spawns only the real command.
+      const second = await tool.execute("t1", { command: "echo os-path-2" }, undefined, undefined, ctxFor(dir))
+      expect(spawnFn).toHaveBeenCalledTimes(3)
+      expect(textOf(second)).toContain("[sandbox: os (windows_sandbox)]")
+    } finally {
+      if (original) Object.defineProperty(process, "platform", original)
+      setWindowsAcProbeForTests(null)
+      resetShellProbeForTests()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it("background OS jobs capture output end-to-end (readAll attached before waitForExit)", async () => {
     process.env[FLAG] = "1"
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
@@ -278,6 +350,7 @@ describe("bash OS path engagement", () => {
       // sequencing only — the AppContainer shim itself is covered by the
       // win32 integration case in packages/sandbox/src/spawn.test.ts.
       const spawnFn = async (req: SpawnRequest) => spawnProcess({ ...req, sandboxType: SandboxType.None })
+      seedShellProbeForTests(SHELL, { ok: true })
       const tool = createBashTool({ spawnFn: spawnFn as never })
       const start = await tool.execute(
         "t1",
@@ -306,3 +379,53 @@ describe("bash OS path engagement", () => {
     }
   }, 30_000)
 })
+
+/**
+ * The reported bug, end to end: the default Windows shell
+ * (`detectDefaultShell()` → Git's dispatcher stub `Git\bin\bash.exe`)
+ * chains into the real `usr\bin\bash.exe`, which dies in DllMain inside
+ * the AppContainer (MSYS's `NtCreateDirectoryObject(\BaseNamedObjects\…)`
+ * → 0xC0000022 → exit 0xC0000142) before the command's first
+ * instruction. The session probe must see that chain fail exactly once,
+ * park the run on the policy path, and let the command actually work — no
+ * fatal error, no claim of isolation that was not applied.
+ */
+describe.runIf(process.platform === "win32" && fs.existsSync("C:\\Program Files\\Git\\bin\\bash.exe"))(
+  "bash session probe vs Git's dispatcher stub",
+  () => {
+    afterEach(() => {
+      if (savedFlag === undefined) delete process.env[FLAG]
+      else process.env[FLAG] = savedFlag
+      resetBackgroundJobsForTests()
+      resetShellProbeForTests()
+      setWindowsAcProbeForTests(null)
+    })
+
+    it("runs the default Windows shell policy-only instead of dying in DllMain", async () => {
+      process.env[FLAG] = "1"
+      setWindowsAcProbeForTests(() => true) // infra probe passes, as on the user's machine
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+      try {
+        const base = ctxFor(dir)
+        const ctx = {
+          ...base,
+          config: { ...base.config, shellCommand: '"C:\\Program Files\\Git\\bin\\bash.exe" -c' },
+        } as ToolContext
+        const tool = createBashTool() // REAL spawner: the AppContainer shim must really engage
+        const result = await tool.execute("t1", { command: "echo probe-ok" }, undefined, undefined, ctx)
+        const text = textOf(result)
+
+        expect(result.isError).toBeFalsy()
+        expect(text).toContain("probe-ok") // the command actually ran
+        expect(text).not.toContain("fatal error") // the bug's signature
+        expect(text).not.toContain("NtCreateDirectoryObject")
+        expect(text).toContain("[sandbox: policy-only")
+        expect(text).not.toContain("[sandbox: os")
+      } finally {
+        resetShellProbeForTests()
+        setWindowsAcProbeForTests(null)
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    }, 120_000)
+  },
+)

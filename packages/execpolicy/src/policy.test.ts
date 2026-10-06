@@ -217,7 +217,7 @@ describe("loadUserPolicy (user file merged over defaults)", () => {
     fs.writeFileSync(file, "sudo * allow\nnpm * allow\n", "utf8")
     const manager = new PolicyManager()
     const policy = manager.loadUserPolicy(file)
-    expect(policy.rules).toHaveLength(12) // 10 defaults + 2 user lines
+    expect(policy.rules).toHaveLength(new PolicyManager().getPolicy().rules.length + 2) // defaults + 2 user lines
     expect(policy.file).toBe(file)
     // Deny pass runs before the allow pass, so the default `sudo *` deny
     // beats the user's `sudo * allow`: a file can widen, never un-deny.
@@ -239,7 +239,7 @@ describe("loadUserPolicy (user file merged over defaults)", () => {
     // A directory where a file is expected: readFileSync throws (EISDIR).
     const policy = manager.loadUserPolicy(dir)
     expect(policy.file).toBe("(default)")
-    expect(manager.getPolicy().rules).toHaveLength(10)
+    expect(manager.getPolicy().rules).toHaveLength(new PolicyManager().getPolicy().rules.length)
     expect(manager.evaluate("rm -rf /")).toBe(ExecDecision.Deny)
   })
 
@@ -276,5 +276,42 @@ describe("evaluatePolicy", () => {
     expect(evaluatePolicy("rm -rf /")).toBe(ExecDecision.Deny)
     expect(evaluatePolicy("npm test")).toBe(ExecDecision.Ask)
     expect(getPolicyManager()).toBe(getPolicyManager())
+  })
+})
+
+describe("obfuscation bypasses (round-2 findings #21-25)", () => {
+  const deny = (cmd: string): void => {
+    expect(new PolicyManager().evaluate(cmd), cmd).toBe(ExecDecision.Deny)
+  }
+
+  it("denies payloads hidden in command substitution and backticks", () => {
+    deny("ls $(rm -rf /tmp/x)")
+    deny("echo `rm -rf /`")
+  })
+
+  it("denies eval/sh -c wrappers around destructive payloads", () => {
+    deny('eval "rm -rf /"')
+    deny('sh -c "rm -rf /"')
+    deny('sudo bash -c "rm -rf /"')
+  })
+
+  it("denies chained destructive segments", () => {
+    deny("echo $HOME && rm -rf /")
+    deny("echo hi; rm -rf /tmp/x")
+  })
+
+  it("denies Windows destructive verbs at parity with rm -rf", () => {
+    deny('powershell -Command "Remove-Item -Recurse -Force C:\\Users"')
+    deny('cmd /c "del /f /s /q C:\\Windows"')
+    deny("del /s /q C:\\Windows")
+    deny("Remove-Item -Recurse -Force C:\\Users")
+    deny("rd /s /q C:\\temp")
+    deny("rmdir /s C:\\temp")
+  })
+
+  it("still asks for benign wrappers and single-file deletes", () => {
+    const manager = new PolicyManager()
+    expect(manager.evaluate("echo hello")).toBe(ExecDecision.Ask)
+    expect(manager.evaluate("del notes.txt")).toBe(ExecDecision.Ask)
   })
 })
