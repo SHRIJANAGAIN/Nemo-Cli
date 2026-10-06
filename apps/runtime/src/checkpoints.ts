@@ -94,6 +94,15 @@ interface CheckpointManifest {
   createdAt: number
   /** relPath (forward slashes) → sha256 of content, or null when untracked. */
   files: Record<string, string | null>
+  /** relPath → { s: byte size, m: mtimeMs } at hash time. Powers the stat
+   *  cache: an unchanged size+mtime reuses the recorded hash WITHOUT
+   *  re-reading the file, so repeat captures on a quiet workspace cost a
+   *  walk + stats instead of a full re-hash (measured 4.8s → ~0.3s on the
+   *  trayambak repo). Absent on pre-cache manifests — those entries are
+   *  simply re-hashed once, then recorded. Same mtime+size assumption as
+   *  git's racy-clean logic; a missed sub-tick rewrite only affects which
+   *  undo point a file restores to, never correctness of the restore. */
+  stats?: Record<string, { s: number; m: number }>
   stateHash: string
   fileCount: number
 }
@@ -149,10 +158,40 @@ export class CheckpointStore {
       fs.mkdirSync(this.objectsDir, { recursive: true })
     }
     this.loadState()
+    this.hydrateStatCache()
   }
 
   /** True when captures are refused (home/root cwd) — see disabledReason. */
   readonly disabled: boolean
+
+  /**
+   * relPath → last hashed stat. A stat match (size + mtimeMs) reuses the
+   * recorded hash without touching file contents. Seeded from the newest
+   * manifest on construction so the FIRST capture after a restart also
+   * benefits. A cache hit whose blob was GC'd is still valid — the next
+   * capture re-copies the blob from the working file (stat still matches,
+   * so no re-hash is needed either).
+   */
+  private readonly statCache = new Map<string, { hash: string | null; size: number; mtimeMs: number }>()
+
+  private hydrateStatCache(): void {
+    if (this.disabled) return
+    try {
+      const lastId = this.undoStack.length > 0 ? this.undoStack[this.undoStack.length - 1] : undefined
+      const ids = lastId !== undefined ? [lastId] : this.listIds().slice(-1)
+      if (ids.length === 0) return
+      const manifest = this.readManifest(ids[0])
+      const stats = manifest?.stats
+      if (!stats) return
+      for (const [rel, hash] of Object.entries(manifest.files)) {
+        const st = stats[rel]
+        if (!st) continue
+        this.statCache.set(rel, { hash, size: st.s, mtimeMs: st.m })
+      }
+    } catch {
+      /* best effort — a missing cache only costs one full re-hash */
+    }
+  }
 
   disabledReason(): string {
     return `checkpoints off: "${this.cwd}" is a home directory or filesystem root — snapshotting it would copy your whole machine (observed: 25GB). cd into a project folder instead.`
@@ -208,37 +247,36 @@ export class CheckpointStore {
 
     const entries = await this.walkAsync(expired, budgetError)
     const files: Record<string, string | null> = {}
+    const stats: Record<string, { s: number; m: number }> = {}
     const lines: string[] = []
     let bytesRead = 0
 
     for (const { rel, abs } of entries) {
       try {
-        const stat = await fs.promises.stat(abs)
-        if (stat.size > MAX_FILE_BYTES) {
+        const sized = await this.hashFileCachedAsync(abs, rel)
+        if (sized.hash === null) {
           files[rel] = null // present but untracked (too large)
+          stats[rel] = { s: sized.size, m: sized.mtimeMs }
           continue
         }
-        bytesRead += stat.size
+        bytesRead += sized.size
         if (bytesRead > MAX_CAPTURE_BYTES) throw new CheckpointTooBigError(entries.length, bytesRead)
-        const hash = sha256(await fs.promises.readFile(abs))
-        const objPath = path.join(this.objectsDir, hash)
-        if (!fs.existsSync(objPath)) {
-          try {
-            await fs.promises.copyFile(abs, objPath)
-          } catch {
-            files[rel] = null
-            continue
-          }
+        stats[rel] = { s: sized.size, m: sized.mtimeMs }
+        // Cache hit + GC'd blob: re-copy from the working file (stat still
+        // matches, so the content is the recorded hash — no re-read needed).
+        if (!(await this.ensureBlobAsync(abs, sized.hash))) {
+          files[rel] = null
+          continue
         }
-        files[rel] = hash
-        lines.push(`${rel}:${hash}`)
+        files[rel] = sized.hash
+        lines.push(`${rel}:${sized.hash}`)
       } catch {
         continue // vanished mid-walk / unreadable
       }
       if (expired()) throw budgetError
     }
 
-    const meta = this.finalizeSnapshot(label, files, lines)
+    const meta = this.finalizeSnapshot(label, files, lines, stats)
     await this.recordCaptureAsync(meta)
     return meta
   }
@@ -438,11 +476,64 @@ export class CheckpointStore {
     return out
   }
 
-  /** sha256 of the file, or null when the file is too large to track. */
-  private hashFile(abs: string): { hash: string | null; size: number } {
+  /**
+   * Sync cached hash: a stat-cache hit returns WITHOUT reading the file.
+   * Throws on missing/unreadable files exactly like a direct stat+read, so
+   * existing try/catch call sites behave identically.
+   */
+  private hashFileCached(abs: string, rel: string): { hash: string | null; size: number; mtimeMs: number } {
     const stat = fs.statSync(abs)
-    if (stat.size > MAX_FILE_BYTES) return { hash: null, size: stat.size }
-    return { hash: sha256(fs.readFileSync(abs)), size: stat.size }
+    const size = stat.size
+    const mtimeMs = stat.mtimeMs
+    if (size > MAX_FILE_BYTES) {
+      const out = { hash: null as string | null, size, mtimeMs }
+      this.statCache.set(rel, { ...out })
+      return out
+    }
+    const hit = this.statCache.get(rel)
+    if (hit && hit.size === size && hit.mtimeMs === mtimeMs) return { ...hit }
+    const out = { hash: sha256(fs.readFileSync(abs)) as string | null, size, mtimeMs }
+    this.statCache.set(rel, { ...out })
+    return out
+  }
+
+  /**
+   * Async twin of hashFileCached for the per-turn captureAsync() path:
+   * every stat/read is awaited so the event loop keeps turning.
+   */
+  private async hashFileCachedAsync(
+    abs: string,
+    rel: string,
+  ): Promise<{ hash: string | null; size: number; mtimeMs: number }> {
+    const stat = await fs.promises.stat(abs)
+    const size = stat.size
+    const mtimeMs = stat.mtimeMs
+    if (size > MAX_FILE_BYTES) {
+      const out = { hash: null as string | null, size, mtimeMs }
+      this.statCache.set(rel, { ...out })
+      return out
+    }
+    const hit = this.statCache.get(rel)
+    if (hit && hit.size === size && hit.mtimeMs === mtimeMs) return { ...hit }
+    const out = { hash: sha256(await fs.promises.readFile(abs)) as string | null, size, mtimeMs }
+    this.statCache.set(rel, { ...out })
+    return out
+  }
+
+  /**
+   * Ensure the content blob for a hash exists, copying from the working file
+   * when the stat cache spared us the re-hash but GC dropped the blob.
+   * Returns null when the file must be recorded as untracked (copy failed).
+   */
+  private async ensureBlobAsync(abs: string, hash: string): Promise<boolean> {
+    const objPath = path.join(this.objectsDir, hash)
+    if (fs.existsSync(objPath)) return true
+    try {
+      await fs.promises.copyFile(abs, objPath)
+      return true
+    } catch {
+      return false
+    }
   }
 
   /* ────────────────────────── snapshot/restore ────────────────────────── */
@@ -457,21 +548,23 @@ export class CheckpointStore {
   private *snapshotSteps(label: string): Generator<void, CheckpointMeta, void> {
     fs.mkdirSync(this.objectsDir, { recursive: true })
     const files: Record<string, string | null> = {}
+    const stats: Record<string, { s: number; m: number }> = {}
     const lines: string[] = []
     const entries = this.walk()
 
     let bytesRead = 0
     for (let i = 0; i < entries.length; i++) {
       const { rel, abs } = entries[i]
-      let sized: { hash: string | null; size: number } | null
+      let sized: { hash: string | null; size: number; mtimeMs: number } | null
       try {
-        sized = this.hashFile(abs)
+        sized = this.hashFileCached(abs, rel)
       } catch {
         continue // vanished mid-walk / unreadable
       }
       const hash = sized.hash
       bytesRead += sized.size
       if (bytesRead > MAX_CAPTURE_BYTES) throw new CheckpointTooBigError(entries.length, bytesRead)
+      stats[rel] = { s: sized.size, m: sized.mtimeMs }
       if (hash === null) {
         files[rel] = null // present but untracked (too large)
         continue
@@ -492,12 +585,17 @@ export class CheckpointStore {
       }
     }
 
-    return this.finalizeSnapshot(label, files, lines)
+    return this.finalizeSnapshot(label, files, lines, stats)
   }
 
   /** Shared manifest write for the sync snapshotSteps() drain and the async
    *  captureAsync() path — identical ids, stateHash, and manifest bytes. */
-  private finalizeSnapshot(label: string, files: Record<string, string | null>, lines: string[]): CheckpointMeta {
+  private finalizeSnapshot(
+    label: string,
+    files: Record<string, string | null>,
+    lines: string[],
+    stats: Record<string, { s: number; m: number }>,
+  ): CheckpointMeta {
     lines.sort()
     const stateHash = sha256(lines.join("\n"))
     this.counter += 1
@@ -507,6 +605,7 @@ export class CheckpointStore {
       label,
       createdAt: Date.now(),
       files,
+      stats,
       stateHash,
       fileCount: Object.keys(files).length,
     }
@@ -543,7 +642,7 @@ export class CheckpointStore {
       if (hash === null) continue // untracked → leave whatever is there
       const abs = path.join(this.cwd, rel.split("/").join(path.sep))
       try {
-        if (fs.existsSync(abs) && this.hashFile(abs).hash === hash) continue
+        if (fs.existsSync(abs) && this.hashFileCached(abs, rel).hash === hash) continue
         const objPath = path.join(this.objectsDir, hash)
         if (!fs.existsSync(objPath)) continue // object GC'd — nothing to do
         fs.mkdirSync(path.dirname(abs), { recursive: true })

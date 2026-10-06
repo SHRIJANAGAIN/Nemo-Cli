@@ -16,13 +16,17 @@ import type { Provider } from "../../../../packages/provider/src/index.js"
 import type { TrayambakConfig } from "../config.js"
 import type { Tool, ToolContext } from "../tools/index.js"
 import type { ToolResult } from "../../../../packages/protocol/src/index.js"
+import { toolResultImages } from "../../../../packages/protocol/src/index.js"
+import { isLengthStop } from "../../../../packages/protocol/src/index.js"
+import { isNetworkOutage, waitForNetwork } from "./network-recovery.js"
+import { stripHistoricalMedia } from "../../../../packages/core/src/media-strip.js"
+import { publishActivity } from "../../../../packages/core/src/terminal-activity.js"
 import type { Session } from "../session/session.js"
 import type { DeveloperModeEngine } from "../developer-mode/index.js"
-import { getRolloutBudget } from "../../../../packages/core/src/rollout_budget.js"
+import { recordModelUsage } from "./usage-accounting.js"
 import {
   applyBudget,
   budgetStatus,
-  estimateTokens,
   parseTokenBudget,
   resetBudget,
   shouldContinueTurn,
@@ -46,6 +50,28 @@ const PLAN_MODE_INSTRUCTIONS =
   "Do NOT attempt to change anything. Produce a clear step-by-step implementation plan: goal, files to touch, " +
   "exact changes per file, verification steps, and open questions. " +
   "Finish by asking the user to approve the plan and switch out of plan mode to execute it."
+
+/**
+ * Streamed `text`/`thinking` buffers are memory-bounded (round 13): every
+ * delta ALSO allocates a full placeholder message, so an endless or
+ * multi-megabyte stream was quadratic churn with no ceiling. 2M chars sits
+ * far above any real context window — truncating the FINAL message is the
+ * context manager's job, this only stops mid-stream buffers from growing
+ * forever. The provider's returned assistant message is untouched.
+ */
+export const MAX_STREAM_TEXT_CHARS = 2_000_000
+export const MAX_STREAM_THINKING_CHARS = 2_000_000
+
+/**
+ * Append-at-most-`max` helper: returns the slice of `delta` that still
+ * fits (null = the buffer is already full, drop the delta entirely).
+ * Exported for the guards test that pins the ceiling.
+ */
+export function boundedAppend(buffer: string, delta: string, max: number): string | null {
+  const room = max - buffer.length
+  if (room <= 0) return null
+  return delta.length > room ? delta.slice(0, room) : delta
+}
 
 export interface RunConfig {
   provider: Provider
@@ -87,7 +113,11 @@ async function chatWithRetry(run: RunConfig, request: Parameters<Provider["chat"
     } catch (error) {
       const raw: string = error instanceof Error ? error.message : String(error)
       const isRateLimit = /429|too many requests|rate.?limit/i.test(raw)
-      const isTransient = /ECONNRESET|EPIPE|socket hang up|connection closed|ENOTFOUND|ETIMEDOUT|timeout/i.test(raw)
+      // 5xx is server-side transient, same class as a dropped socket:
+      // gateway families (500/502/503/504) recover on retry. 4xx stays
+      // fatal — a retried 400/401/404 can only fail the same way.
+      const isTransient =
+        /ECONNRESET|EPIPE|socket hang up|connection closed|ENOTFOUND|ETIMEDOUT|timeout|\b5\d{2}\b/i.test(raw)
       const effectiveRetries = isRateLimit ? Math.max(maxRetries, 5) : maxRetries
       if (attempt >= effectiveRetries || run.signal?.aborted) {
         throw error
@@ -174,8 +204,9 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
   // Half-cut answers ("response stopped mid-list"): when the model exhausts
   // maxTokens mid-answer it stops with `length` and the turn would end on a
   // severed sentence. Auto-continue with a nudge turn instead, bounded so a
-  // pathologically long answer still terminates.
-  const MAX_LENGTH_CONTINUATIONS = 3
+  // pathologically long answer still terminates. Configurable via
+  // maxLengthContinuations (default 10, 0 = disabled).
+  const MAX_LENGTH_CONTINUATIONS = run.config.maxLengthContinuations ?? 10
   let lengthContinuations = 0
   while (true) {
     if (++turns > run.config.maxTurns) {
@@ -220,8 +251,22 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
     let assistant: AssistantMessage | null = null
     const MAX_EMPTY_RECOVER = 3
     let emptyRecoveries = 0
+    // #122 — replay instead of settling a severed turn. A stream that dies
+    // mid-answer still carries the text it managed to emit, so the loop used
+    // to accept that fragment as a finished reply (the "response gets cut"
+    // report). Re-running costs one model call and, because streamAssistant's
+    // text/thinking buffers are local to it, each attempt starts clean — the
+    // fragment is DISCARDED rather than appended to. Bounded so a provider
+    // that is permanently incomplete still terminates.
+    const MAX_INCOMPLETE_REPLAYS = 2
+    let incompleteReplays = 0
     for (;;) {
+      // Terminal activity (OSC 777) — the shell tab can then say what the turn
+      // is actually doing instead of a title that only knows "busy"/"not busy".
+      // A no-op unless TRAYAMBAK_TERMINAL_ACTIVITY=1, so pipes stay clean.
+      publishActivity("busy")
       assistant = await streamAssistant(run, prompt, () => {})
+      publishActivity(assistant ? "done" : "error")
       if (!assistant) {
         break
       }
@@ -232,6 +277,11 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
       const isEmpty = !hasThinking && !hasText && !hasToolCalls
       if (isEmpty && emptyRecoveries < MAX_EMPTY_RECOVER && !run.signal?.aborted) {
         emptyRecoveries++
+        continue
+      }
+      if (isIncompleteReply(assistant) && incompleteReplays < MAX_INCOMPLETE_REPLAYS && !run.signal?.aborted) {
+        incompleteReplays++
+        publishActivity("retry")
         continue
       }
       break
@@ -262,11 +312,24 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
       }
       run.session.add(assistant)
       await run.emit({ type: "message_end", message: assistant })
-      if (assistant.stopReason === "length" && lengthContinuations < MAX_LENGTH_CONTINUATIONS && !run.signal?.aborted) {
+      // The continuation budget is per ANSWER, not per run. It used to be a
+      // lifetime counter that was only ever incremented, so three long answers
+      // anywhere in a session silently truncated every answer after them —
+      // which is what made this look intermittent: the first replies were fine
+      // and later ones cut off mid-sentence. A turn that finished on its own
+      // terms restores the budget.
+      if (!isLengthStop(assistant.stopReason)) lengthContinuations = 0
+      if (
+        isLengthStop(assistant.stopReason) &&
+        lengthContinuations < MAX_LENGTH_CONTINUATIONS &&
+        !run.signal?.aborted
+      ) {
         lengthContinuations++
         const nudge: AgentMessage = {
           role: "user",
-          content: "Continue generating exactly where you stopped. Do not repeat what you already wrote.",
+          // Internal nudge — hidden from UI, tells model to continue from cutoff
+          content:
+            "[internal:nudge] Continue generating exactly where you stopped. Do not repeat what you already wrote.",
         }
         run.session.add(nudge)
         await run.emit({ type: "message_start", message: nudge })
@@ -313,21 +376,10 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
  * unit on both sides); the protected packages/core accounting is untouched.
  */
 function recordAssistantUsage(run: RunConfig, assistant: AssistantMessage): void {
-  try {
-    const outputText = assistant.content
-      .map((part) => (part.type === "toolCall" ? JSON.stringify(part.arguments ?? {}) : part.text))
-      .join("\n")
-    const inputText = JSON.stringify(run.session.toWireMessages())
-    const inputTokens = estimateTokens(inputText)
-    const outputTokens = estimateTokens(outputText)
-    getRolloutBudget().recordUsage({
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      codex_rollout_budget_units: inputTokens + outputTokens,
-    })
-  } catch {
-    /* budget accounting is best-effort — never break a turn over it */
-  }
+  const outputText = assistant.content
+    .map((part) => (part.type === "toolCall" ? JSON.stringify(part.arguments ?? {}) : part.text))
+    .join("\n")
+  recordModelUsage(JSON.stringify(run.session.toWireMessages()), outputText)
 }
 
 async function streamAssistant(
@@ -374,12 +426,17 @@ async function streamAssistant(
   let recovered = 0
   // Outer-layer restarts for retryable failures. chatWithRetry already
   // bounded its own attempts (maxRetries + backoff) before rethrowing
-  // here; the old unbounded `continue` restarted the whole call chain
-  // forever on a persistently unreachable endpoint — an eternal
-  // "Thinking…" spinner that never surfaced an error. Cap it so a dead
-  // endpoint fails LOUDLY instead of spinning silently.
-  const MAX_TRANSIENT_RESTARTS = 2
+  // here; the old budget (2 restarts × fixed 1s) gave up after ~10s, so a
+  // connection blip barely longer than that killed the whole run with a
+  // "[model/connection error]" row ("STOP HO JATA ERROR SE" — Codex keeps
+  // working until the work is done). Ride out longer blips: more restarts
+  // with exponential backoff, still bounded by count AND wall-clock so a
+  // dead endpoint fails LOUDLY instead of spinning silently forever.
+  const MAX_TRANSIENT_RESTARTS = 5
+  const TRANSIENT_RESTART_BUDGET_MS = 120_000
+  const TRANSIENT_RESTART_MAX_MS = 15_000
   let transientRestarts = 0
+  let firstTransientAt = 0
 
   for (;;) {
     text = ""
@@ -390,21 +447,29 @@ async function streamAssistant(
     try {
       assistant = await chatWithRetry(run, {
         system: effectiveSystem,
-        messages: run.session.toWireMessages().filter((m) => m.role !== "system"),
+        messages: stripHistoricalMedia(run.session.toWireMessages().filter((m) => m.role !== "system")),
         tools: run.config.nativeTools ? toolDefs : undefined,
         signal: run.signal,
         callbacks: {
           onText: (d) => {
-            text += d
-            queueStreamEvent({ type: "message_update", message: placeholder(text, thinking, []), delta: { text: d } })
+            const slice = boundedAppend(text, d, MAX_STREAM_TEXT_CHARS)
+            if (slice === null) return
+            text += slice
+            queueStreamEvent({
+              type: "message_update",
+              message: placeholder(text, thinking, []),
+              delta: { text: slice },
+            })
           },
           onThinking: (d) => {
-            thinking += d
+            const slice = boundedAppend(thinking, d, MAX_STREAM_THINKING_CHARS)
+            if (slice === null) return
+            thinking += slice
             onThinking?.(thinking)
             queueStreamEvent({
               type: "message_update",
               message: placeholder(text, thinking, []),
-              delta: { thinking: d },
+              delta: { thinking: slice },
             })
           },
           onToolCallDelta: (name, args) => {
@@ -447,12 +512,72 @@ async function streamAssistant(
         continue
       }
       const isRetryable =
-        /429|too many requests|rate.?limit|ECONNRESET|EPIPE|socket hang up|connection closed|ENOTFOUND|ETIMEDOUT|timeout/i.test(
+        /429|too many requests|rate.?limit|ECONNRESET|EPIPE|socket hang up|connection closed|ENOTFOUND|ETIMEDOUT|timeout|\b5\d{2}\b/i.test(
           raw,
         )
-      if (isRetryable && !run.signal?.aborted && transientRestarts < MAX_TRANSIENT_RESTARTS) {
+      // #124 — a LOCAL network outage is not a server problem. The retry budget
+      // below is sized for a gateway blip (5 tries / 120s); a refused socket
+      // means nothing is answering until the interface comes back, so counting
+      // down that budget kills a run whose network recovered seconds later.
+      // Park the turn and probe the provider endpoint instead, and say so out
+      // loud rather than appearing to hang.
+      if (!run.signal?.aborted && isNetworkOutage(`${raw} ${nested} ${errCode}`)) {
+        const probeTarget = providerProbeUrl(run)
+        // Nothing to probe → the bounded retry path below is the honest
+        // fallback rather than an indefinite wait.
+        if (probeTarget.length > 0) {
+          const outageStart = Date.now()
+          queueStreamEvent({ type: "message_update", message: placeholder(text, thinking, []), delta: { text: "" } })
+          await run.emit({
+            type: "network_lost",
+            message: "Network connection lost — waiting for it to come back.",
+          })
+          const outcome = await waitForNetwork({
+            probeUrl: probeTarget,
+            signal: run.signal,
+            onState: (state) => {
+              if (state === "timeout" || state === "aborted") return
+              void run.emit({
+                type: "network_restored",
+                waitedMs: Date.now() - outageStart,
+                message: "Network is back — resuming.",
+              })
+            },
+          })
+          if (outcome === "restored") {
+            // The interface is back: reset the transient accounting so the
+            // restart budget is available again, and retry the SAME turn.
+            transientRestarts = 0
+            firstTransientAt = 0
+            continue
+          }
+          if (outcome === "aborted") break
+          // timeout → fall through and report the failure loudly as before.
+        }
+      }
+      const transientBudgetSpent =
+        firstTransientAt !== 0 && Date.now() - firstTransientAt >= TRANSIENT_RESTART_BUDGET_MS
+      if (isRetryable && !run.signal?.aborted && transientRestarts < MAX_TRANSIENT_RESTARTS && !transientBudgetSpent) {
+        if (firstTransientAt === 0) firstTransientAt = Date.now()
+        // Backoff off the configured retry base (production 750ms →
+        // 0.75/1.5/3/6/12s ≈ 23s of patience; tests pin a tiny base).
+        // Abort-aware: a 15s nap must never outlive a Ctrl+C.
+        const delay = Math.min(
+          Math.max(0, run.config.retryDelayMs) * Math.pow(2, transientRestarts),
+          TRANSIENT_RESTART_MAX_MS,
+        )
         transientRestarts++
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, delay)
+          run.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer)
+              reject(new Error("Operation aborted during provider retry."))
+            },
+            { once: true },
+          )
+        })
         continue
       }
       // ALWAYS surface the failure. The old `if (message.trim())` skipped
@@ -497,9 +622,23 @@ async function streamAssistant(
     return null
   }
 
-  // Merge streamed deltas with the provider's assembled message to keep final text authoritative.
+  // Merge streamed deltas with the provider's assembled message.
+  //
+  // Streamed deltas win while the stream is INTACT: they are what the user
+  // watched render, and several providers return a placeholder text part that
+  // would otherwise overwrite the real answer. But a stream that reached
+  // MAX_STREAM_TEXT_CHARS was truncated — its buffer is a prefix of the reply,
+  // not the reply. Trusting it there made every capped turn end with 2M
+  // characters of truncated deltas and the model's actual answer discarded, so
+  // a truncated stream falls back to the provider's assembled text.
   const providerText = assistant.content.find((c) => c.type === "text")
-  const finalText = text || (providerText && "text" in providerText ? providerText.text : "")
+  const assembled = providerText && "text" in providerText ? providerText.text : ""
+  const streamTruncated = text.length >= MAX_STREAM_TEXT_CHARS
+  const authoritative = text && !streamTruncated ? text : assembled || text
+  // Still bounded: a provider that assembles its own text must not be able to
+  // reintroduce the unbounded allocation the stream cap exists to prevent.
+  const finalText =
+    authoritative.length > MAX_STREAM_TEXT_CHARS ? authoritative.slice(0, MAX_STREAM_TEXT_CHARS) : authoritative
   const hasToolCalls = assistant.content.some((c) => c.type === "toolCall")
   const merged: AssistantMessage = {
     role: "assistant",
@@ -936,12 +1075,17 @@ async function runOneTool(
     /* post-hooks never break the turn */
   }
 
+  const images = toolResultImages(result)
   return {
     role: "tool",
     toolCallId: call.id,
     toolName: call.name,
     content: result.content,
     isError: result.isError,
+    // Only kept when the tool actually produced pictures, so an ordinary tool
+    // result serializes byte-identically to before (view_image, web_fetch on
+    // an image, an MCP screenshot are the only producers).
+    ...(images.length > 0 ? { images } : {}),
   }
 }
 
@@ -1008,6 +1152,56 @@ function detectDoomLoop(recentCalls: string[]): boolean {
 }
 
 /**
+ * Endpoint whose reachability answers "can I reach the thing I need?" (#124).
+ *
+ * The provider's own base URL, not a public site: probing a third party would
+ * report the network as fine while the provider host is the unreachable part.
+ * Providers that expose no URL yield an empty string, which disables probing
+ * and keeps the previous bounded-retry behaviour.
+ */
+export function providerProbeUrl(run: { provider?: unknown }): string {
+  const options = (run.provider as { options?: { baseUrl?: unknown } } | undefined)?.options
+  const raw = options?.baseUrl
+  if (typeof raw !== "string" || raw.trim().length === 0) return ""
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return ""
+    return parsed.origin
+  } catch {
+    return ""
+  }
+}
+
+/**
+ * True when a reply is a severed turn rather than a finished one (#122).
+ *
+ * Only signals that are HONEST about the truncation are accepted. A reply that
+ * stopped on a clean `end_turn` cannot be told apart from a short answer, so
+ * it is never replayed — guessing would cost a model call on every short reply
+ * and could reword a perfectly good answer. The two marks below are emitted by
+ * the transport itself when it knows it did not finish:
+ *
+ *   - `stopReason === "error"` carrying content: the turn failed after it had
+ *     already streamed partial output.
+ *   - a tool call still carrying the `__partial` marker that `placeholder()`
+ *     sets for arguments that were cut off mid tool-call.
+ *
+ * `length` is deliberately excluded: that is a completed-but-truncated answer
+ * and already has its own continuation path.
+ */
+export function isIncompleteReply(assistant: AssistantMessage): boolean {
+  if (assistant.stopReason === "length" || assistant.stopReason === "aborted") return false
+  const hasOutput = assistant.content.some(
+    (c) => (c.type === "text" && c.text.trim().length > 0) || c.type === "toolCall" || c.type === "thinking",
+  )
+  if (!hasOutput) return false
+  if (assistant.stopReason === "error") return true
+  return assistant.content.some(
+    (c) => c.type === "toolCall" && Object.prototype.hasOwnProperty.call(c.arguments ?? {}, "__partial"),
+  )
+}
+
+/**
  * Keep the session inside the model's usable context window.
  * Non-forced: only runs once the estimate crosses the trigger ratio.
  * Forced: runs every stage regardless (reactive overflow / manual /compact).
@@ -1024,6 +1218,7 @@ async function ensureContextWithinLimit(run: RunConfig, opts?: { force?: boolean
   for (const m of result.messages) run.session.add(m)
   await run.emit({
     type: "compaction",
+    forced: opts?.force ?? false,
     removedMessages: result.removedMessages,
     prunedToolOutputs: result.prunedToolOutputs,
     freedTokens: result.freedTokens,

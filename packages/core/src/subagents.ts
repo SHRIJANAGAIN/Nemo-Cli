@@ -132,6 +132,31 @@ export interface WorkerResult {
 /** Runner supplied by the host. The engine performs no model calls itself. */
 export type SubagentWorker = (task: SubagentTask, ctx: WorkerContext) => Promise<WorkerResult>
 
+/**
+ * A worker failure that still knows what the run cost.
+ *
+ * A worker that throws a bare `Error` tells the engine nothing, so the run's
+ * usage was dropped: the child had already spent real turns and tool calls
+ * (charged to the rollout budget inside the nested loop) and none of it reached
+ * `usageFor()`/`aggregateUsage()`, which then reported the failure as if nothing
+ * had happened. Throwing this instead preserves the accounting without changing
+ * the failure contract — the engine still reports `worker_failed`.
+ */
+export class SubagentWorkerError extends Error {
+  readonly usage: WorkerUsage
+
+  constructor(message: string, usage: WorkerUsage) {
+    super(message)
+    this.name = "SubagentWorkerError"
+    this.usage = usage
+  }
+}
+
+/** Extract usage from a thrown worker error, if it carried any. */
+function usageFromError(error: unknown): WorkerUsage | undefined {
+  return error instanceof SubagentWorkerError ? error.usage : undefined
+}
+
 export type SubagentFailureCode = "depth_limit_exceeded" | "worker_failed" | "cancelled" | "not_found"
 
 export interface SubagentFailure {
@@ -285,6 +310,10 @@ export class SubagentEngine {
       return { id: task.id, depth, ok: true, background: false, text: result.text, usage: result.usage }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      // A failed run still cost something — keep it out of the silent-zero
+      // bucket so a failing subagent can't look like one that never ran.
+      const usage = usageFromError(error)
+      if (usage) this.usageById.set(task.id, usage)
       await emit?.({ type: "subagent_fail", subagentId: task.id, name: task.description, error: message })
       return {
         id: task.id,
@@ -292,6 +321,7 @@ export class SubagentEngine {
         ok: false,
         background: false,
         text: "",
+        ...(usage ? { usage } : {}),
         error: { code: "worker_failed", message },
       }
     }
@@ -427,6 +457,13 @@ export class SubagentEngine {
       status.completedAt = this.now()
       status.status = cancelled ? "cancelled" : "error"
       status.error = cancelled ? "cancelled" : message
+      // Same accounting rule as the foreground path: work already done is
+      // recorded even when the run ends in an error or a cancellation.
+      const usage = usageFromError(error)
+      if (usage) {
+        this.usageById.set(task.id, usage)
+        status.usage = usage
+      }
       this.fireEmit(emit, {
         type: "subagent_background_fail",
         subagentId: task.id,
@@ -439,6 +476,7 @@ export class SubagentEngine {
         ok: false,
         background: true,
         text: "",
+        ...(usage ? { usage } : {}),
         error: { code: cancelled ? "cancelled" : "worker_failed", message },
       }
     }

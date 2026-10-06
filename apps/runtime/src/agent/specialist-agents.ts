@@ -7,6 +7,8 @@
 import * as fs from "fs"
 import * as os from "os"
 import path from "path"
+import { companyAgentDirs, resolveCompanyState } from "./company-library.js"
+import { loadConfig } from "../config.js"
 
 declare const __dirname: string
 
@@ -128,12 +130,24 @@ export function discoverAgentProfiles(cwd: string, additionalDirectories: string
     searchDirs.push({ directory: externalEcc, source: "library" })
   }
 
-  // 3. Standard workspace agent dirs
+  // 3. Company library: an external agent collection (divisions of .md
+  // personas) mounted as one company — every enabled division dir becomes
+  // a discovery source, so company agents list AND run as normal profiles.
+  // Missing library, master OFF, or fully-disabled = skipped silently
+  // (same as a missing workspace dir).
+  const companyState = resolveCompanyState(undefined, cwd, os.homedir(), loadConfig())
+  if (companyState?.enabled) {
+    for (const dir of companyAgentDirs(companyState.root, companyState.disabled)) {
+      searchDirs.push({ directory: dir, source: `company/${path.basename(dir)}` })
+    }
+  }
+
+  // 4. Standard workspace agent dirs
   for (const parts of standardAgentDirectories) {
     searchDirs.push({ directory: path.join(cwd, ...parts), source: parts.join("/") })
   }
 
-  // 4. Configured custom directories
+  // 5. Configured custom directories
   for (const dir of additionalDirectories) {
     searchDirs.push({ directory: path.resolve(cwd, dir), source: "configured" })
   }

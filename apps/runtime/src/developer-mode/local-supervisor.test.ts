@@ -4,7 +4,9 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { getRolloutBudget } from "../../../../packages/core/src/rollout_budget.js"
+import { estimateTokens, resetBudget } from "../../../../packages/core/src/token_budget.js"
 import type { AssistantMessage } from "../../../../packages/protocol/src/index.js"
 import type { Provider, ProviderOptions } from "../../../../packages/provider/src/types.js"
 import {
@@ -121,6 +123,7 @@ describe("parseSupervisorDecision", () => {
 })
 
 describe("requestSupervisorDecision", () => {
+  afterEach(() => resetBudget())
   it("does nothing when the supervisor is unconfigured", async () => {
     const createProvider = vi.fn()
     const out = await requestSupervisorDecision({
@@ -191,6 +194,37 @@ describe("requestSupervisorDecision", () => {
     expect(payload.recentMistakes).toHaveLength(SUPERVISOR_MAX_HISTORY)
     expect(payload.recentMistakes.every((m) => m.description.length <= 200)).toBe(true)
     expect(payload.currentAdjustments).toEqual({ temperature: 0.2 })
+  })
+
+  it("charges its model call to the rollout budget", async () => {
+    // The supervisor's provider call sits OUTSIDE the turn loop, so the loop's
+    // usage recording never sees it. Unrecorded, a token cap the user set
+    // silently ignored every decision the supervisor made on their dime.
+    const reply = '{"temperature":0.4}'
+    const sent: string[] = []
+    const fake: Provider = {
+      id: "fake",
+      chat: async (input) => {
+        sent.push((input.system ?? "") + (input.messages[0]?.content ?? ""))
+        return textMessage(reply)
+      },
+    }
+    // configure() zeroes the accumulator, so this doubles as the reset.
+    getRolloutBudget().configure({ samplingTokenWeight: 1, maxBudget: 1_000_000, reminderInterval: 1_000 })
+    expect(getRolloutBudget().getUsed()).toBe(0)
+
+    const out = await requestSupervisorDecision({
+      supervisor: configured,
+      mistakes: [{ type: "tool_error", severity: 3, description: "sloppy", resolved: false, timestamp: 1 }],
+      currentAdjustments: { temperature: 0.2 },
+      createProvider: () => fake,
+    })
+
+    expect(out).toEqual({ temperature: 0.4 })
+    // BOTH sides charged (#64): a penalty round is input-heavy — the whole
+    // mistake log plus the system prompt goes out on every decision.
+    expect(getRolloutBudget().getUsed()).toBe(estimateTokens(sent[0] ?? "") + estimateTokens(reply))
+    expect(getRolloutBudget().getUsed()).toBeGreaterThan(0)
   })
 
   it("passes an abort signal and an explicit baseUrl through untouched", async () => {

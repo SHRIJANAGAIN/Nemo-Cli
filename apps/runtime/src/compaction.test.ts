@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest"
 import type { AgentMessage, AssistantMessage, ToolResultMessage } from "../../../packages/protocol/src/messages.js"
 import {
   compactMessages,
+  estimateMessageTokens,
   estimateMessages,
   policyFromConfig,
   truncateText,
@@ -64,6 +65,28 @@ describe("estimateMessages", () => {
     const withSystem = estimateMessages(msgs, "s".repeat(4000))
     expect(base).toBeGreaterThanOrEqual(1000)
     expect(withSystem).toBeGreaterThan(base)
+  })
+
+  it("estimates corrupt persisted messages finitely so compaction stays armed (#88)", () => {
+    // A non-string content used to yield NaN (or throw on a nameless
+    // toolCall) — and a NaN total compares false against every threshold,
+    // silently disabling compaction until the provider 400s on overflow.
+    const corrupt = [
+      { role: "user", content: { not: "a string" } },
+      { role: "tool", content: [{ type: "text", text: 42 }] },
+      { role: "assistant", content: [{ type: "toolCall", id: "1", arguments: {} }] },
+      { role: "assistant", content: "not-an-array" },
+      { role: "nonsense" },
+      null,
+    ] as unknown as AgentMessage[]
+    for (const m of corrupt) {
+      expect(Number.isFinite(estimateMessageTokens(m))).toBe(true)
+    }
+    expect(Number.isFinite(estimateMessages(corrupt))).toBe(true)
+    // The trigger gate reads these totals — they must always be finite.
+    const res = compactMessages(corrupt, policy(), { force: false })
+    expect(Number.isFinite(res.estimatedBefore)).toBe(true)
+    expect(Number.isFinite(res.estimatedAfter)).toBe(true)
   })
 })
 

@@ -37,6 +37,7 @@ import type { GoalStore } from "../goals.js"
 import type { SelfImprovementStore } from "../self-improvement.js"
 import { HarnessRuntime, type HarnessPlugin } from "../../../../packages/harness/src/index.js"
 import { discoverAgentProfiles, getAgentProfile, type AgentProfile } from "./specialist-agents.js"
+import { companyAgentDirs, buildCompanyBlock, companyModelForProfile, resolveCompanyState } from "./company-library.js"
 import { DEFAULT_PERMISSIONS } from "../../../../packages/protocol/src/permissions.js"
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
 import { getDatabase } from "../../../../packages/core/src/state_db.js"
@@ -45,12 +46,14 @@ import { gitExec } from "../git_exec.js"
 import {
   createSubagentTask,
   SubagentEngine,
+  SubagentWorkerError,
   type BackgroundSubagentStatus,
   type SubagentTask,
   type WorkerContext,
   type WorkerResult,
   type WorkerUsage,
 } from "../../../../packages/core/src/subagents.js"
+import { recordModelUsage } from "./usage-accounting.js"
 
 /**
  * Tools that spawn MORE agents. Withheld from subagent children so fan-out
@@ -260,8 +263,8 @@ export class Agent {
     this.developerMode = new DeveloperModeEngine(this.config.cwd, devConfig)
     // Provider-aware: mistake penalties tune local samplers only (ollama /
     // llama.cpp) — hosted backends get the clean control-mode base. Same
-    // default as provider selection below (unknown → nvidia).
-    const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "nvidia" })
+    // default as provider selection below (unknown → google).
+    const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "google" })
     // Clamped like config sanitize ([0, 2]): an unbounded dev override used
     // to reach the wire verbatim (observed live: 2.7 → NVIDIA HTTP 400).
     // Per-backend ceilings bind later, at each provider's body builder.
@@ -300,6 +303,7 @@ export class Agent {
         tools: toolDefinitions(reorderedTools),
         memoryBlock: getContextBlock(),
         operatorBlock: this.operatorBlock(),
+        companyBlock: buildCompanyBlock(this.config.cwd, this.config) || undefined,
         developerModeSuffix: this.developerMode.getSystemPromptSuffix(),
         modeSuffix: specialistBlock + modeSystemPromptSuffix(this.mode),
         sktBlock: getSktContextBlock(),
@@ -316,7 +320,7 @@ export class Agent {
   }
 
   private createProviderForConfig(options: ProviderOptions): Provider {
-    const provider = this.config.provider ?? "nvidia"
+    const provider = this.config.provider ?? "google"
     if (provider === "nvidia" || provider === "nvidia-nim") {
       const baseUrl =
         options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "https://integrate.api.nvidia.com"
@@ -404,11 +408,17 @@ export class Agent {
       const cotConfig = this.developerMode?.getCotChainConfig()
       this.sotaMode = new SotaDevMode({
         generate: async (system, messages) => {
-          const response = await this.provider.chat({
-            messages: [{ role: "system", content: system }, ...(messages as WireMessage[])],
-          })
+          const wire: WireMessage[] = [{ role: "system", content: system }, ...(messages as WireMessage[])]
+          const response = await this.provider.chat({ messages: wire })
           const textPart = response.content.find((c) => c.type === "text")
-          return textPart ? String(textPart.text) : ""
+          const text = textPart ? String(textPart.text) : ""
+          // SOTA answers complex prompts INSTEAD of runAgentLoop, so the loop's
+          // usage recording never sees it — and one solve is not one call: the
+          // engines invoke `generate` per candidate, per re-solve, per verify
+          // step and per CoT-chain node. Uncharged, a token cap ignored the
+          // single most expensive path in the agent.
+          recordModelUsage(JSON.stringify(wire), text)
+          return text
         },
         signal: undefined,
         cotChainConfig: cotConfig,
@@ -550,7 +560,7 @@ export class Agent {
     // turn runs. Gated to local providers only (hosted APIs never pay this
     // call), and fail-open inside — unconfigured / no new mistakes / any
     // error keeps the heuristic penalties.
-    const activeProviderId = this.config.provider ?? "nvidia"
+    const activeProviderId = this.config.provider ?? "google"
     if (this.developerMode.isEnabled() && isLocalProvider(activeProviderId)) {
       const decision = await this.developerMode.runSupervisorDecision({ signal })
       const baseOptions = this.providerOptions
@@ -568,7 +578,7 @@ export class Agent {
       const runTools = this.arsenal ? this.arsenal.resolveTools(this.tools) : this.tools
       // Same provider-aware penalties as construction above (maxToolCalls
       // caps from foreign-backend mistake logs must not leak in either).
-      const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "nvidia" })
+      const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "google" })
       messages = await runAgentLoop(prompt, {
         onRequestPermission: this.onRequestPermission,
         provider: this.provider,
@@ -601,8 +611,22 @@ export class Agent {
     return messages
   }
 
+  /** agentProfileDirs plus the configured company library's ENABLED
+   *  divisions (discovery ALSO auto-includes env/home defaults — the
+   *  explicit config root only needs merging here when it points
+   *  somewhere custom; the state gate keeps master-OFF/disabled
+   *  departments out of subagent runs). */
+  private profileDirsWithCompany(): string[] | undefined {
+    const base = this.config.agentProfileDirs
+    const state = resolveCompanyState(this.config.companyDir, this.config.cwd, undefined, this.config)
+    if (!state?.enabled) return base
+    const extra = companyAgentDirs(state.root, state.disabled)
+    if (extra.length === 0) return base
+    return [...(base ?? []), ...extra]
+  }
+
   discoverAgentProfiles(): AgentProfile[] {
-    return discoverAgentProfiles(this.config.cwd, this.config.agentProfileDirs)
+    return discoverAgentProfiles(this.config.cwd, this.profileDirsWithCompany())
   }
 
   async runSubagents(
@@ -653,6 +677,25 @@ export class Agent {
   }
 
   /**
+   * Usage for one child run, derived from the messages it produced.
+   *
+   * Used on both the success and the failure path, so a run that dies partway
+   * still reports the turns and tool calls it actually spent. `durationMs` is
+   * clamped at zero because a non-monotonic clock adjustment would otherwise
+   * sum a negative duration into the aggregate.
+   */
+  private usageFromMessages(messages: readonly AgentMessage[], startedAt: number): WorkerUsage {
+    let turns = 0
+    let toolCalls = 0
+    for (const message of messages) {
+      if (message.role !== "assistant") continue
+      turns++
+      toolCalls += message.content.filter((part) => part.type === "toolCall").length
+    }
+    return { turns, toolCalls, durationMs: Math.max(0, Date.now() - startedAt) }
+  }
+
+  /**
    * Engine worker: one isolated subagent run. A fresh child Agent owns a
    * fresh Session; the parent's provider, config, and event sink are reused
    * (unless a model override requests a different provider); tools are this
@@ -662,7 +705,7 @@ export class Agent {
    */
   private async runSubagentWorker(task: SubagentTask, ctx: WorkerContext): Promise<WorkerResult> {
     const startedAt = Date.now()
-    const profile = getAgentProfile(task.type, this.config.cwd, this.config.agentProfileDirs)
+    const profile = getAgentProfile(task.type, this.config.cwd, this.profileDirsWithCompany())
     const isolation = task.isolation ?? "inherit"
     const explicitModel = task.model && task.model !== "" && task.model !== this.config.model ? task.model : undefined
     // Legacy parity (subagent_model): an explicit per-task model wins; else the
@@ -674,20 +717,25 @@ export class Agent {
       this.config.subagent_model !== this.config.model
         ? this.config.subagent_model
         : undefined
-    const modelOverride = explicitModel ?? configuredModel
+    // Company personas run on `companyModel` when set (and different from
+    // the session model); unset = one model does everything. Explicit
+    // per-task models always win over the company default.
+    const companyModel = companyModelForProfile(profile?.source, this.config, this.config.model)
+    const modelOverride = explicitModel ?? companyModel ?? configuredModel
     const baseChildConfig: TrayambakConfig = {
       ...this.config,
       permissions: { ...(this.config.permissions ?? DEFAULT_PERMISSIONS), askByDefault: false },
     }
     let childConfig: TrayambakConfig = modelOverride ? { ...baseChildConfig, model: modelOverride } : baseChildConfig
     let worktreeCleanup: (() => void) | undefined
+    let child: Agent | undefined
     try {
       if (isolation === "worktree") {
         const wt = await createWorktreeIsolation(this.config.cwd)
         worktreeCleanup = wt.cleanup
         childConfig = { ...childConfig, cwd: wt.cwd }
       }
-      const child = new Agent({
+      child = new Agent({
         config: childConfig,
         // Reuse the parent's provider instance; a model override makes the
         // child build its own from (the overridden) config.
@@ -706,14 +754,16 @@ export class Agent {
       const assistant = [...messages].reverse().find((message) => message.role === "assistant")
       const text = assistant?.content.find((part) => part.type === "text")
       const resultText = text && "text" in text ? text.text : ""
-      let turns = 0
-      let toolCalls = 0
-      for (const message of messages) {
-        if (message.role !== "assistant") continue
-        turns++
-        toolCalls += message.content.filter((part) => part.type === "toolCall").length
+      return { text: resultText, usage: this.usageFromMessages(messages, startedAt) }
+    } catch (error) {
+      // A subagent that dies after N turns still spent them, and the nested
+      // loop already charged them to the rollout budget. Reporting the spend
+      // keeps a failed run from reading as one that never happened.
+      const spent = child ? this.usageFromMessages(child.session.messages, startedAt) : undefined
+      if (spent && spent.turns + spent.toolCalls > 0) {
+        throw new SubagentWorkerError(error instanceof Error ? error.message : String(error), spent)
       }
-      return { text: resultText, usage: { turns, toolCalls, durationMs: Date.now() - startedAt } }
+      throw error
     } finally {
       worktreeCleanup?.()
     }

@@ -99,8 +99,25 @@ export function parseTokenBudget(spec: string | number | undefined): ParseTokenB
  * usage/token fields, so every number derived from this is reported as
  * estimated, never as measured usage.
  */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4)
+export function estimateTokens(text: unknown): number {
+  return Math.ceil(estimateTextChars(text) / 4)
+}
+
+/**
+ * Char count for estimation, total over any payload (#88): a non-string
+ * `content` made `text.length` undefined → NaN, which made every budget
+ * threshold comparison false (budget silently never blocks). Circular-safe:
+ * unserializable values fall back to `String()`.
+ */
+function estimateTextChars(text: unknown): number {
+  if (typeof text === "string") return text.length
+  if (text == null) return 0
+  try {
+    const json = JSON.stringify(text)
+    return typeof json === "string" ? json.length : String(text).length
+  } catch {
+    return String(text).length
+  }
 }
 
 /** Tunables forwarded to `RolloutBudget.configure()`. */

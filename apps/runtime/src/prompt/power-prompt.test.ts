@@ -70,4 +70,14 @@ describe("buildSystemPrompt senior upgrade", () => {
     expect(prompt.length).toBeGreaterThan(corpus.length + 10_000)
     expect(prompt.length).toBeLessThan(corpus.length + 60_000)
   })
+
+  it("carries the company roster block when the caller supplies one", () => {
+    const block = "## COMPANY (2 specialists across 1 departments — yours to command)"
+    const withCompany = buildSystemPrompt({ ...ctx(), companyBlock: block })
+    expect(withCompany).toContain("## COMPANY")
+    expect(withCompany.length).toBeLessThan(buildSystemPrompt(ctx()).length + 2000)
+    // Absent by default: no roster leaks into sessions without a library
+    // (the static slash-commands line only names the section).
+    expect(buildSystemPrompt(ctx())).not.toContain("yours to command")
+  })
 })

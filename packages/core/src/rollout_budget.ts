@@ -93,8 +93,13 @@ export class RolloutBudget {
 
     const { config } = this.state
 
-    const units = usage.codex_rollout_budget_units ?? usage.output_tokens * config.samplingTokenWeight
-    const weighted = Math.max(0, units as number)
+    const raw = usage.codex_rollout_budget_units ?? usage.output_tokens * config.samplingTokenWeight
+    // Garbage usage must not poison the accumulator (#87): Math.max(0, NaN)
+    // is NaN — one bad record would NaN weightedTokensUsed, and every later
+    // `remaining <= 0` / exhaustion check would silently evaluate false
+    // (fail-open budget). Non-finite records contribute 0; negatives stay
+    // clamped to 0 (no rebate).
+    const weighted = Number.isFinite(raw) ? Math.max(0, raw) : 0
     this.state.weightedTokensUsed += weighted
 
     const remaining = config.maxBudget >= 0 ? config.maxBudget - this.state.weightedTokensUsed : Infinity

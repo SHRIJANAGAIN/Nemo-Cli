@@ -22,6 +22,7 @@
  */
 
 import { createProviderRegistry } from "../../../../packages/core/src/providers/registry.js"
+import { recordModelUsage } from "../agent/usage-accounting.js"
 import type { AssistantMessage } from "../../../../packages/protocol/src/index.js"
 import type { Provider, ProviderOptions } from "../../../../packages/provider/src/types.js"
 
@@ -239,6 +240,10 @@ export async function requestSupervisorDecision(
       signal,
     })
     const text = message.content.map((part) => (part.type === "text" ? part.text : "")).join("")
+    // This call sits outside the turn loop, so nothing else charges it. Left
+    // unrecorded the supervisor's spend was invisible to the rollout budget —
+    // it kept paying for model calls the user's token cap was meant to stop.
+    recordModelUsage(SYSTEM_PROMPT + payload, text)
     return parseSupervisorDecision(text)
   } catch {
     return null

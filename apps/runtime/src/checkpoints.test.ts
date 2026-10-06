@@ -215,4 +215,66 @@ describe("CheckpointStore", () => {
     expect(store.list()).toEqual([])
     expect(store.canUndo()).toBe(false)
   })
+
+  it("repeat captures reuse hashes via the stat cache (no re-read)", async () => {
+    const store = new CheckpointStore(dir)
+    const first = await store.captureAsync("turn 1")
+    const second = await store.captureAsync("turn 2")
+    // Same workspace → same checkpoint content…
+    expect(second.stateHash).toBe(first.stateHash)
+    expect(second.fileCount).toBe(first.fileCount)
+    // …and the manifest records the stats that spared the re-read.
+    const manifestPath = path.join(dir, ".trayambak", "checkpoints", `cp-${second.id}`, "manifest.json")
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      stats?: Record<string, { s: number; m: number }>
+    }
+    expect(Object.keys(manifest.stats ?? {}).length).toBe(second.fileCount)
+    expect(manifest.stats?.["a.txt"]?.s).toBe(fs.statSync(path.join(dir, "a.txt")).size)
+  })
+
+  it("a restarted store reuses hashes from the persisted manifest stats", async () => {
+    const first = await new CheckpointStore(dir).captureAsync("turn 1")
+    // Fresh process, warm disk cache: the stat cache hydrates from the last
+    // manifest, so content is identical without re-hashing anything new.
+    const reopened = new CheckpointStore(dir)
+    const second = await reopened.captureAsync("turn 2")
+    expect(second.stateHash).toBe(first.stateHash)
+  })
+
+  it("modified files are re-hashed, untouched files are not", async () => {
+    type Manifest = { files: Record<string, string | null>; stats?: Record<string, { s: number; m: number }> }
+    const readManifest = (id: string): Manifest =>
+      JSON.parse(
+        fs.readFileSync(path.join(dir, ".trayambak", "checkpoints", `cp-${id}`, "manifest.json"), "utf8"),
+      ) as Manifest
+    const store = new CheckpointStore(dir)
+    const first = await store.captureAsync("turn 1")
+    fs.writeFileSync(path.join(dir, "a.txt"), "CHANGED CONTENT LONGER")
+    const second = await store.captureAsync("turn 2")
+    expect(second.stateHash).not.toBe(first.stateHash)
+    const m1 = readManifest(first.id)
+    const m2 = readManifest(second.id)
+    // Changed file: new size recorded, hash differs.
+    expect(m2.stats?.["a.txt"]?.s).toBe(fs.statSync(path.join(dir, "a.txt")).size)
+    expect(m2.files["a.txt"]).not.toBe(m1.files["a.txt"])
+    // Untouched file: stat entry carried over.
+    expect(m2.stats?.["b.txt"]).toEqual(m1.stats?.["b.txt"])
+    expect(m2.files["b.txt"]).toBe(m1.files["b.txt"])
+  })
+
+  it("manifests without stats (pre-cache) still capture and restore", async () => {
+    const store = new CheckpointStore(dir)
+    store.capture("turn 1")
+    const manifestPath = path.join(dir, ".trayambak", "checkpoints", "cp-0001", "manifest.json")
+    const stripped = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, unknown>
+    delete stripped.stats
+    fs.writeFileSync(manifestPath, JSON.stringify(stripped))
+    // Fresh store over a stat-less manifest: full re-hash, then restore works.
+    const reopened = new CheckpointStore(dir)
+    const meta = await reopened.captureAsync("turn 2")
+    expect(meta.fileCount).toBeGreaterThan(0)
+    fs.writeFileSync(path.join(dir, "a.txt"), "MODIFIED")
+    expect(reopened.undo().ok).toBe(true)
+    expect(read("a.txt")).toBe("original A")
+  })
 })

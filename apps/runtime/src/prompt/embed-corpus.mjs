@@ -7,6 +7,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import { fileURLToPath } from "url"
+import { format, resolveConfig } from "prettier"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const corpusPath = path.join(here, "corpus.txt")
@@ -41,8 +42,13 @@ const block =
   START + EOL + "const CORPUS_INLINE: string[] = [" + EOL + "  " + parts.join("," + EOL + "  ") + EOL + "];" + EOL + END
 
 const out = src.slice(0, i) + block + src.slice(j + END.length)
-const changed = out !== src
-if (changed) fs.writeFileSync(tsPath, out)
+// Prettier-normalize before writing: the raw block (JSON.stringify quotes,
+// trailing semicolon) is not prettier-clean, and a non-clean write makes
+// `npm run format:check` fail right after the documented embed workflow.
+const prettierConfig = (await resolveConfig(tsPath)) ?? {}
+const formatted = await format(out, { ...prettierConfig, filepath: tsPath })
+const changed = formatted !== src
+if (changed) fs.writeFileSync(tsPath, formatted)
 console.log(
   `${changed ? "updated" : "up-to-date"}: corpus.txt ${corpus.length} chars -> ${parts.length} chunks embedded`,
 )

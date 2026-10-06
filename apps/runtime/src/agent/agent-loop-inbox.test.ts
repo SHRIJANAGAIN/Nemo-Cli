@@ -147,7 +147,7 @@ describe("runAgentLoop length continuation", () => {
       provider: sequencingProvider(["length", "length", "length", "length", "length"]),
       tools: [],
       session,
-      config: cfg2,
+      config: { ...cfg2, maxLengthContinuations: 3 },
       emit: async () => {},
     })
     const assistants = session.messages.filter((m: AgentMessage) => m.role === "assistant")

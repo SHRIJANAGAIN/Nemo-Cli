@@ -160,6 +160,37 @@ describe("token_budget estimator", () => {
     expect(estimateTokens("1234")).toBe(1)
     expect(estimateTokens("12345")).toBe(2)
   })
+
+  it("estimateTokens coerces non-string payloads to a finite count (#88)", () => {
+    // `.length` on a non-string was undefined → NaN, which made every
+    // budget threshold comparison false (the budget silently never blocks).
+    expect(estimateTokens(undefined)).toBe(0)
+    expect(estimateTokens(null)).toBe(0)
+    expect(Number.isFinite(estimateTokens({ content: "hello" }))).toBe(true)
+    expect(estimateTokens({ content: "hello" })).toBeGreaterThan(0)
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    expect(Number.isFinite(estimateTokens(circular))).toBe(true)
+  })
+})
+
+describe("recordUsage garbage hardening (#87)", () => {
+  it("skips non-finite usage instead of NaN-poisoning the budget", () => {
+    const parsed = parseTokenBudget("100 tokens")
+    if (!parsed.ok) throw new Error("spec must parse")
+    applyBudget(parsed.budget)
+    // Math.max(0, NaN) is NaN: one bad record used to NaN the accumulator,
+    // after which every exhaustion/remainder check compared false — the
+    // budget stopped enforcing itself without saying so (fail-open).
+    getRolloutBudget().recordUsage({ input_tokens: NaN, output_tokens: NaN, codex_rollout_budget_units: NaN })
+    getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: Infinity })
+    // Negative usage clamps to 0 (no rebate), never contributes.
+    getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: -50 })
+    expect(budgetStatus()).toEqual({ used: 0, remaining: 100, max: 100, exhausted: false })
+    // Finite usage AFTER garbage must still drive the budget to its cap.
+    getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: 0, codex_rollout_budget_units: 100 })
+    expect(budgetStatus().exhausted).toBe(true)
+  })
 })
 
 describe("token_budget TurnBudget", () => {

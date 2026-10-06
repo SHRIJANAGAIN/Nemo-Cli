@@ -13,6 +13,7 @@ import {
   MAX_SUBAGENT_DEPTH,
   runSubagent,
   SubagentEngine,
+  SubagentWorkerError,
   summarizeUsage,
   sumUsage,
 } from "./subagents.js"
@@ -160,6 +161,82 @@ describe("SubagentEngine foreground", () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.error).toEqual({ code: "worker_failed", message: "child exploded" })
     expect(events.map((e) => e.type)).toEqual(["subagent_start", "subagent_fail"])
+  })
+
+  describe("a failed run still reports what it spent", () => {
+    // The engine used to record usage ONLY on the success path, so a worker
+    // that burned N turns and tool calls before throwing produced no entry at
+    // all: usageFor() was undefined and the failure aggregated as if nothing
+    // had run — while the nested loop had already charged those tokens to the
+    // rollout budget.
+    const spent = { turns: 7, toolCalls: 12, durationMs: 900 }
+
+    it("keeps usage from a foreground failure", async () => {
+      const engine = new SubagentEngine({
+        runWorker: async () => {
+          throw new SubagentWorkerError("child exploded", spent)
+        },
+      })
+      const t = task()
+      const outcome = await engine.run(t, { depth: 0 })
+
+      expect(outcome.ok).toBe(false)
+      // The failure contract is unchanged — still worker_failed, still no throw.
+      expect(outcome.error).toEqual({ code: "worker_failed", message: "child exploded" })
+      // ...but the spend is no longer silently dropped.
+      expect(outcome.usage).toEqual(spent)
+      expect(engine.usageFor(t.id)).toEqual(spent)
+      expect(engine.aggregateUsage()).toEqual(spent)
+    })
+
+    it("keeps usage from a background failure and cancellation", async () => {
+      const engine = new SubagentEngine({
+        runWorker: async () => {
+          throw new SubagentWorkerError("child exploded", spent)
+        },
+      })
+      const t = task({ background: true })
+      engine.startBackground(t, { depth: 0 })
+      const done = await engine.awaitBackground(t.id)
+
+      expect(done.ok).toBe(false)
+      expect(done.usage).toEqual(spent)
+      expect(engine.usageFor(t.id)).toEqual(spent)
+      expect(engine.getStatus(t.id)).toMatchObject({ status: "error", usage: spent })
+    })
+
+    it("still reports nothing when the worker failed before doing any work", async () => {
+      // No usage carried => nothing invented. A zero entry would read as
+      // "ran and cost nothing", which is the opposite of what we know.
+      const engine = new SubagentEngine({
+        runWorker: async () => {
+          throw new Error("never started")
+        },
+      })
+      const t = task()
+      const outcome = await engine.run(t, { depth: 0 })
+      expect(outcome.usage).toBeUndefined()
+      expect(engine.usageFor(t.id)).toBeUndefined()
+    })
+
+    it("sums a failure into an aggregate alongside successful runs", async () => {
+      let call = 0
+      const engine = new SubagentEngine({
+        runWorker: async () => {
+          call++
+          if (call === 1) return { text: "ok", usage: { turns: 2, toolCalls: 3, durationMs: 100 } }
+          throw new SubagentWorkerError("child exploded", spent)
+        },
+      })
+      await engine.run(task(), { depth: 0 })
+      await engine.run(task(), { depth: 0 })
+
+      expect(engine.aggregateUsage()).toEqual({
+        turns: 2 + spent.turns,
+        toolCalls: 3 + spent.toolCalls,
+        durationMs: 100 + spent.durationMs,
+      })
+    })
   })
 
   it("gives every task a fresh, independent worker context", async () => {

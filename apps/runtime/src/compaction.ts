@@ -91,36 +91,62 @@ function ceilDiv(n: number): number {
   return Math.ceil(n / 4)
 }
 
-/** Rough token estimate for a single message (~chars/4 + per-message overhead). */
+/** Char count that tolerates corrupt persisted messages (#88): non-string
+ *  content must estimate, not NaN — a NaN session total makes every
+ *  `total <= usable * triggerRatio` gate false and compaction stays OFF
+ *  until the provider 400s on overflow. Circular-safe. */
+function charsOf(value: unknown): number {
+  if (typeof value === "string") return value.length
+  if (value == null) return 0
+  try {
+    const json = JSON.stringify(value)
+    return typeof json === "string" ? json.length : String(value).length
+  } catch {
+    return String(value).length
+  }
+}
+
+/** Rough token estimate for a single message (~chars/4 + per-message overhead).
+ *  Total over any input: corrupt roles/content estimate finitely, never NaN. */
 export function estimateMessageTokens(m: AgentMessage): number {
+  if (typeof m !== "object" || m === null) return OVERHEAD_TOKENS
   switch (m.role) {
     case "system":
     case "user":
-      return ceilDiv(m.content.length) + OVERHEAD_TOKENS
+      return ceilDiv(charsOf(m.content)) + OVERHEAD_TOKENS
     case "assistant": {
+      if (!Array.isArray(m.content)) return ceilDiv(charsOf(m.content)) + OVERHEAD_TOKENS
       let chars = 0
       for (const part of m.content) {
+        if (part == null) continue
         if (part.type === "toolCall") {
-          chars += part.name.length + JSON.stringify(part.arguments ?? {}).length
+          chars += charsOf(part.name) + charsOf(part.arguments ?? {})
         } else {
-          chars += (part as { text?: string }).text?.length ?? 0
+          chars += charsOf((part as { text?: string }).text)
         }
       }
       return ceilDiv(chars) + OVERHEAD_TOKENS
     }
     case "tool": {
+      if (!Array.isArray(m.content)) return ceilDiv(charsOf(m.content)) + OVERHEAD_TOKENS
       let chars = 0
-      for (const part of m.content) chars += part.text.length
+      for (const part of m.content) chars += charsOf(part?.text)
       return ceilDiv(chars) + OVERHEAD_TOKENS
     }
+    default:
+      // Corrupt persisted role (#88): falling off the switch returned
+      // `undefined`, which NaN'd the session total on the next `+=`.
+      return ceilDiv(charsOf((m as { content?: unknown }).content)) + OVERHEAD_TOKENS
   }
 }
 
-/** Session token estimate, optionally including the system prompt. */
+/** Session token estimate, optionally including the system prompt.
+ *  Fail-safe (#88): a non-finite total must force the compaction path
+ *  (over-compact), never compare false and disable it (overflow → 400). */
 export function estimateMessages(messages: readonly AgentMessage[], systemPrompt = ""): number {
   let total = systemPrompt ? ceilDiv(systemPrompt.length) : 0
   for (const m of messages) total += estimateMessageTokens(m)
-  return total
+  return Number.isFinite(total) ? total : Number.MAX_SAFE_INTEGER
 }
 
 /** Build a policy from (possibly partial) runtime config. */

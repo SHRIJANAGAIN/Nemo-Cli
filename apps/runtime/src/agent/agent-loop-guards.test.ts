@@ -20,7 +20,13 @@
 
 import { describe, expect, it } from "vitest"
 import * as os from "node:os"
-import { runAgentLoop, type RunConfig } from "./agent-loop.js"
+import {
+  runAgentLoop,
+  boundedAppend,
+  MAX_STREAM_TEXT_CHARS,
+  MAX_STREAM_THINKING_CHARS,
+  type RunConfig,
+} from "./agent-loop.js"
 import { Session } from "../session/session.js"
 import { textResult, type Tool } from "../tools/types.js"
 import type { HookShellExecutor } from "../tools/hook-exec.js"
@@ -235,6 +241,21 @@ describe("provider retry and streaming", () => {
     expect(assistantTexts(messages).join("\n")).toContain("recovered after retry")
   })
 
+  it("retries a transient 5xx like any other transient error", async () => {
+    // A provider 5xx surfaced as `HTTP 500: …` used to fail the turn
+    // instantly (not in the transient regex), killing runs on a single
+    // gateway hiccup. One 5xx → one retry → the answer.
+    const { provider, calls } = makeProvider([
+      failReply("HTTP 500: upstream exploded"),
+      textReply("recovered after 5xx"),
+    ])
+    const { events, messages } = await runLoop(baseConfig({ maxRetries: 3 }), provider)
+
+    expect(calls()).toBe(2)
+    expect(streamedErrors(events)).toHaveLength(0)
+    expect(assistantTexts(messages).join("\n")).toContain("recovered after 5xx")
+  })
+
   it("honors a retryAfter hint when backing off from a rate limit", async () => {
     const rateLimited: Reply = () => {
       const err = new Error("429 rate limited") as Error & { retryAfter?: string }
@@ -271,10 +292,57 @@ describe("provider retry and streaming", () => {
     const { provider, calls } = makeProvider([failReply("read ECONNRESET")])
     const { events } = await runLoop(baseConfig(), provider)
 
-    expect(calls()).toBe(3) // initial attempt + 2 bounded restarts
+    expect(calls()).toBe(6) // initial attempt + 5 bounded restarts
     const errors = streamedErrors(events)
     expect(errors).toHaveLength(1)
     expect(errors[0]).toContain("ECONNRESET")
+    expect(eventsOfType(events, "agent_end")).toHaveLength(1)
+  })
+
+  it("rides out a transient blip and completes the work (no early stop)", async () => {
+    // Three straight ECONNRESETs — past the old give-up point — then the
+    // model answers: the run must finish the work, not die with an error
+    // row ("CODEX RUN UNTIL THE WORK IS COMPLETED").
+    const { provider, calls } = makeProvider([
+      failReply("read ECONNRESET"),
+      failReply("read ECONNRESET"),
+      failReply("read ECONNRESET"),
+      textReply("finally through"),
+    ])
+    const { events, messages } = await runLoop(baseConfig(), provider)
+
+    expect(calls()).toBe(4)
+    expect(streamedErrors(events)).toHaveLength(0)
+    expect(assistantTexts(messages).join("\n")).toContain("finally through")
+    expect(eventsOfType(events, "agent_end")).toHaveLength(1)
+  })
+
+  it("restarts bounded turns on a 5xx family error (not just ECONNRESET)", async () => {
+    // Same shape as the ECONNRESET blip test above, but with the gateway
+    // error strings providers actually emit — before the fix none of
+    // these matched isRetryable, so one 503 failed the whole run.
+    const { provider, calls } = makeProvider([
+      failReply("HTTP 503 service unavailable"),
+      failReply("HTTP 502 bad gateway"),
+      failReply("HTTP 500 internal server error"),
+      textReply("finally through"),
+    ])
+    const { events, messages } = await runLoop(baseConfig(), provider)
+
+    expect(calls()).toBe(4)
+    expect(streamedErrors(events)).toHaveLength(0)
+    expect(assistantTexts(messages).join("\n")).toContain("finally through")
+    expect(eventsOfType(events, "agent_end")).toHaveLength(1)
+  })
+
+  it("never retries a 4xx — broadening the 5xx retry must not catch it", async () => {
+    // Guards the other direction: 400/401/404 stay fatal on the first
+    // attempt (a retried 4xx can only fail the same way).
+    const { provider, calls } = makeProvider([failReply("HTTP 404 not found")])
+    const { events } = await runLoop(baseConfig(), provider)
+
+    expect(calls()).toBe(1)
+    expect(streamedErrors(events)).toHaveLength(1)
     expect(eventsOfType(events, "agent_end")).toHaveLength(1)
   })
 
@@ -649,5 +717,38 @@ describe("text-fence extraction, hooks, verification, context", () => {
     expect(calls()).toBe(0)
     expect(eventsOfType(events, "agent_end")).toHaveLength(1)
     expect(streamedErrors(events)).toHaveLength(0)
+  })
+})
+
+describe("stream buffer caps (round 13)", () => {
+  it("boundedAppend returns the fitting slice, or null once full", () => {
+    expect(boundedAppend("", "abc", 10)).toBe("abc")
+    expect(boundedAppend("12345", "abcde", 8)).toBe("abc")
+    expect(boundedAppend("12345678", "x", 8)).toBeNull()
+    expect(boundedAppend("", "toolong", 3)).toBe("too")
+  })
+
+  it("caps streamed text and thinking — a pathological stream cannot grow memory forever", async () => {
+    // 1.5M × 2 calls = 3M > the 2M ceiling for EACH buffer. Every delta
+    // used to allocate a full-size placeholder on top of the append —
+    // quadratic churn with no ceiling.
+    const chunk = "x".repeat(1_500_000)
+    const megaReply: Reply = (input) => {
+      input.callbacks?.onText?.(chunk)
+      input.callbacks?.onText?.(chunk)
+      input.callbacks?.onThinking?.(chunk)
+      input.callbacks?.onThinking?.(chunk)
+      return { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "end_turn" }
+    }
+    const { provider } = makeProvider([megaReply])
+    const { events, messages } = await runLoop(baseConfig(), provider)
+
+    const updates = eventsOfType(events, "message_update")
+    const textTotal = updates.reduce((n, u) => n + (u.delta.text?.length ?? 0), 0)
+    const thinkingTotal = updates.reduce((n, u) => n + (u.delta.thinking?.length ?? 0), 0)
+    expect(textTotal).toBe(MAX_STREAM_TEXT_CHARS)
+    expect(thinkingTotal).toBe(MAX_STREAM_THINKING_CHARS)
+    // The turn still finishes normally — only mid-stream buffers are bounded.
+    expect(assistantTexts(messages)).toContain("done")
   })
 })

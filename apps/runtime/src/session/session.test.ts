@@ -12,11 +12,15 @@
  * backups, in anything that later archived the file) and was never read back —
  * Agent rebuilds it from config via setSystemPrompt() right after load.
  */
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import { Session } from "./session.js"
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function tmpFile(name: string): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-session-")), name)
@@ -69,6 +73,22 @@ describe("Session.save", () => {
 })
 
 describe("Session.load", () => {
+  it("refuses remote UNC paths without touching the network", () => {
+    const errSpy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as never)
+    expect(Session.load("\\\\192.0.2.1\\share\\s.json")).toBeNull()
+    expect(String(errSpy.mock.calls[0]?.[0] ?? "")).toContain("refusing to load session")
+    errSpy.mockRestore()
+  })
+
+  it("refuses to save to remote UNC paths", () => {
+    const errSpy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as never)
+    const session = new Session()
+    session.add({ role: "user", content: "hi" })
+    expect(() => session.save("\\\\192.0.2.1\\share\\s.json")).not.toThrow()
+    expect(String(errSpy.mock.calls[0]?.[0] ?? "")).toContain("refusing to save session")
+    errSpy.mockRestore()
+  })
+
   it("discards a legacy persisted system prompt instead of restoring it", () => {
     const file = tmpFile("legacy.json")
     fs.writeFileSync(
