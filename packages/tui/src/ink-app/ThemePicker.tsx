@@ -8,6 +8,8 @@ import { Box, Text, useStdout } from "ink"
 import { TrayambakLogo } from "./TrayambakLogo.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
+import { useBorderPulse } from "./use-border-pulse.js"
+import { useThemeColors } from "./themeColors.js"
 import { g } from "./glyphs.js"
 
 export interface ThemeOption {
@@ -127,6 +129,14 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
   })
 
   const current = themes[selected]
+  // Living preview: the accent border edge-chases in the SELECTED theme's
+  // own swatch (same language as the root frame + tool boxes), and the
+  // selected row's marker rides the same travelling light — the choice and
+  // its preview pulse as one. Recolors only: zero rows added, so the
+  // fitLayout budget above stays exact. The timer dies with the picker
+  // (unmount), never leaking into the transcript behind it.
+  const theme = useThemeColors()
+  const pulse = useBorderPulse(/*active*/ true, current ? [current.swatch, theme.accent] : [theme.accent], theme.primary)
 
   return (
     <Box flexDirection="column" height="100%" paddingX={1} paddingY={1}>
@@ -150,7 +160,7 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
           const idx = scrollTop + i
           return (
             <Box key={theme.name}>
-              <Text color={idx === selected ? "#6cb6f5" : undefined} bold={idx === selected}>
+              <Text color={idx === selected ? pulse.color : undefined} bold={idx === selected}>
                 {idx === selected ? `${g("picker")} ` : "  "}
               </Text>
               <Text color={theme.swatch} bold={idx === selected}>
@@ -168,7 +178,17 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
         ) : null}
       </Box>
       {current && showPreview ? (
-        <Box flexDirection="column" borderStyle="round" borderColor={current.swatch} marginBottom={1} flexShrink={0}>
+        <Box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor={pulse.color}
+          borderTopColor={pulse.top}
+          borderRightColor={pulse.right}
+          borderBottomColor={pulse.bottom}
+          borderLeftColor={pulse.left}
+          marginBottom={1}
+          flexShrink={0}
+        >
           <CodePreview accent={current.swatch} />
           <Text dimColor> Accent colour: {current.swatch}</Text>
         </Box>

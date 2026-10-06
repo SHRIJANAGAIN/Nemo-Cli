@@ -162,4 +162,34 @@ describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
       instance?.unmount()
     }
   }, 15000)
+
+  it("animates while open (border chase + marker pulse repaint, layout intact)", async () => {
+    const { stdin, stdout, sink } = openStdio(124, 40)
+    let instance: Instance | undefined
+    try {
+      instance = render(
+        React.createElement(
+          Box,
+          { height: 40, borderStyle: "single" },
+          React.createElement(ThemePicker, { themes, onSelect: () => {}, onExit: () => {} }),
+        ),
+        { stdin, stdout, patchConsole: false },
+      )
+      expect(await waitFor(sink, "Pick the text style")).toBe(true)
+      await wait(150)
+      const before = sink().length
+      // Two full pulse ticks (160ms each): the travelling light must have
+      // repainted, or the page is static and the "animated" claim is a lie.
+      await wait(400)
+      expect(sink().length).toBeGreaterThan(before)
+      // …and the animation recolors only: header still below the art, the
+      // accent line still on its own row (no overlay, no drift).
+      const out = stripAnsi(sink())
+      const lastArt = Math.max(out.lastIndexOf("▀"), out.lastIndexOf("▄"))
+      expect(out.lastIndexOf(TITLE)).toBeGreaterThan(lastArt)
+      expect(out).toContain("Accent colour: #6cb6f5")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
 })

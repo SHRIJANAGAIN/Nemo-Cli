@@ -8,38 +8,123 @@ import React, { useEffect, useState, type ReactNode } from "react"
 import { Box, Text } from "ink"
 import { useThemeColors } from "./themeColors.js"
 import { TrayambakLogo } from "./TrayambakLogo.js"
+import { ThemeFill } from "./ThemeFill.js"
 
 export interface WelcomeScreenProps {
   modelName?: string
   permissionMode?: string
   cwd?: string
   tokenCount?: number
+  /** Empty rows below the status block to paint with the theme background
+   *  (Ink writes no background on empty rows — see ThemeFill). */
+  fillRows?: number
+  /** Usable width in cells for those fill rows. */
+  width?: number
 }
 
-/** Idle-home animation: the welcome line breathes through the brand hues
- *  (~0.5 s per step) so the first screen isn't a frozen poster. Content
- *  never changes — only the colour — so width/oracles stay exact. */
+/** Idle-home animation: the clock line breathes through the brand hues
+ *  (~0.5 s per step) so the first screen isn't a frozen poster. The TIME is
+ *  what changes each tick, so it stays honest wall-clock time, not a loop. */
 const WELCOME_CYCLE_MS = 500
 
-export function WelcomeScreen(): ReactNode {
+/** Live local clock under the logo — replaces the old static
+ *  "Welcome To Trayambak CLI" banner line. */
+export function formatClock(date: Date): string {
+  const hh = String(date.getHours()).padStart(2, "0")
+  const mm = String(date.getMinutes()).padStart(2, "0")
+  const ss = String(date.getSeconds()).padStart(2, "0")
+  return `${hh}:${mm}:${ss}`
+}
+
+/** Weekday + day + month, so the clock is not a bare number (ASCII only: the
+ *  weekday/month names never carry accents, so no mojibake on legacy
+ *  codepage consoles the way the rest of the UI's marks are guarded). */
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const
+
+export function formatDate(date: Date): string {
+  return `${WEEKDAYS[date.getDay()]} ${MONTHS[date.getMonth()]} ${date.getDate()}`
+}
+
+/** Shorten a long absolute path for the status line: keep the drive/root so
+ *  the path is never mistaken for a different folder, elide the middle, and
+ *  keep the newest `maxSegments` FOLDERS after the root (a shown root spends
+ *  one of them). Pure (unit-tested) — no cwd guessing in the render. */
+export function shortPath(cwd: string | undefined, maxSegments = 3): string {
+  if (!cwd) return ""
+  const trimmed = cwd.replace(/[\\/]+$/, "")
+  if (!trimmed) return ""
+  const sep = trimmed.includes("\\") ? "\\" : "/"
+  const parts = trimmed.split(sep).filter(Boolean)
+  if (parts.length <= maxSegments) return trimmed
+  // A short first segment is a drive/root ("C:", "/"); anything longer is a
+  // real folder name and must never be promoted to a root.
+  const hasRoot = parts[0]!.length <= 3
+  const root = hasRoot ? parts[0]! : ""
+  const folders = hasRoot ? parts.slice(1) : parts
+  const keep = Math.max(1, hasRoot ? maxSegments - 1 : maxSegments)
+  const tail = folders.slice(-keep).join(sep)
+  return root ? `${root}${sep}...${sep}${tail}` : `...${sep}${tail}`
+}
+
+export function WelcomeScreen({ modelName, cwd, fillRows = 0, width = 80 }: WelcomeScreenProps): ReactNode {
   const theme = useThemeColors()
-  const [hue, setHue] = useState(0)
+  const [now, setNow] = useState(() => new Date())
   useEffect(() => {
-    const timer = setInterval(() => setHue((h) => h + 1), WELCOME_CYCLE_MS)
+    // One interval drives BOTH the displayed second and the hue breath, so the
+    // idle screen still repaints while the clock advances.
+    const timer = setInterval(() => {
+      setNow(new Date())
+    }, WELCOME_CYCLE_MS)
     return () => clearInterval(timer)
   }, [])
   const welcomeColors = [theme.info, theme.primary, theme.accent, theme.success]
+  const color = welcomeColors[Math.floor(now.getTime() / WELCOME_CYCLE_MS) % welcomeColors.length]
+  const dir = shortPath(cwd)
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
-      <Box flexDirection="column" alignItems="center">
-        <TrayambakLogo compact={false} />
+      {/* One full-width slot for the logo: it owns the WHOLE frame width so
+          its truncate can never claim a border column, and the banner's own
+          raster decides where the mark sits. Everything below is left-aligned
+          to match it — logo and the status block share one column. */}
+      <TrayambakLogo compact={false} width={width} />
+
+      <Box flexDirection="column" alignItems="flex-start" marginTop={1}>
+        <Text bold color={color}>
+          {formatDate(now)} {formatClock(now)}
+        </Text>
+        {modelName ? (
+          <Text color={theme.textMuted}>
+            {"model  "}
+            {modelName}
+          </Text>
+        ) : null}
+        {dir ? (
+          <Text color={theme.textMuted}>
+            {"cwd    "}
+            {dir}
+          </Text>
+        ) : null}
       </Box>
 
-      <Box flexDirection="column" alignItems="center" marginTop={1}>
-        <Text bold color={welcomeColors[hue % welcomeColors.length]}>
-          Welcome To Trayambak CLI
-        </Text>
-      </Box>
+      {/* The banner's own rows are padded to the frame width with the theme
+          background inside TrayambakLogo (width), so no terminal-black strip
+          survives beside the mark. Everything below it is painted the same
+          way, because Ink writes nothing for a row that holds no text. */}
+      {fillRows > 0 ? <ThemeFill rows={fillRows} background={theme.background} width={width} /> : null}
     </Box>
   )
 }
