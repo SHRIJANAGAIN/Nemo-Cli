@@ -16,6 +16,7 @@ import type {
 } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
 import { clampTemperature } from "./types.js"
+import { expandWireMessages } from "./vision.js"
 
 interface SktTool {
   type: "function"
@@ -72,10 +73,13 @@ export class LlamaCppProvider implements Provider {
     for (const m of input.messages) {
       messages.push(m)
     }
+    // Vision: same expansion as nvidia (local vision models via llama.cpp
+    // accept OpenAI content parts too). Shared helper so the two never drift.
+    const wireMessages = expandWireMessages(messages)
 
     const body: Record<string, unknown> = {
       model: this.options.model,
-      messages,
+      messages: wireMessages,
       stream: true,
       // Local servers accept ANY temperature without complaint — 2.7 sails
       // through and the sampler melts into multilingual mush (observed

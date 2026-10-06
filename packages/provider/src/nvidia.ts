@@ -8,8 +8,11 @@ import * as http from "http"
 import * as https from "https"
 import * as url from "url"
 import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition } from "../../protocol/src/index.js"
+import { stopReasonFromWire } from "../../protocol/src/index.js"
 import type { ChatInput, FimInput, FimResult, Provider, ProviderOptions, WireMessage } from "./types.js"
 import { clampTemperature } from "./types.js"
+import { expandWireMessages } from "./vision.js"
+import { buildPromptCacheKey, withPromptCacheKey } from "./prompt-cache.js"
 
 interface SktTool {
   type: "function"
@@ -36,6 +39,43 @@ function toSktTools(tools: ToolDefinition[]): SktTool[] {
       parameters: tool.parameters,
     },
   }))
+}
+
+/**
+ * Whether NVIDIA's `reasoning_tokens` field may be sent to `baseUrl`.
+ *
+ * The field is NVIDIA dialect: NVIDIA's own cloud endpoints understand
+ * it, every other target (custom gateway/omniroute, NIM, proxies) is an
+ * unknown dialect — and provider-specific fields are exactly how a strict
+ * gateway 400s (the rule OpenAICompatibleProvider already applies
+ * wholesale to its requests). Empty means "unset": the class targets
+ * NVIDIA's own cloud, so the default keeps the parameter.
+ */
+export function nvidiaReasoningParamsAllowed(baseUrl: string): boolean {
+  if (baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "").length === 0) return true
+  let host: string
+  try {
+    host = new URL(baseUrl).host.toLowerCase()
+  } catch {
+    return false // relative/opaque target — not provably NVIDIA
+  }
+  return host === "integrate.api.nvidia.com" || host === "build.nvidia.com"
+}
+
+/**
+ * Whether `prompt_cache_key` may be sent at all (#123 follow-up).
+ *
+ * Default OFF, explicit opt-in only (`TRAYAMBAK_PROMPT_CACHE_KEY_ENABLED=1`).
+ * Proven by live 400s: NVIDIA's cloud rejects the key outright, and OpenAI +
+ * strict gateways reject unrecognized arguments the same documented way —
+ * and this base class serves OpenAI direct, xAI, Ollama, HuggingFace, custom
+ * gateways and a dozen OpenAICompatible providers, whose own docstring
+ * promises "never provider-specific fields". A missing hint only costs
+ * cache hits; a rejected call costs everything. Operators whose gateway
+ * documents the key re-enable it with the env flag.
+ */
+export function promptCacheKeyAllowed(): boolean {
+  return process.env.TRAYAMBAK_PROMPT_CACHE_KEY_ENABLED === "1"
 }
 
 /**
@@ -157,7 +197,11 @@ export class NvidiaProvider implements Provider {
 
   protected applyReasoning(body: Record<string, unknown>): void {
     // NVIDIA reasoning_tokens hook — subclasses override (OpenAI uses
-    // reasoning_effort; xAI/HF/custom send none).
+    // reasoning_effort; xAI/HF/custom send none). Even the base class
+    // must not guess: reasoning_tokens is NVIDIA dialect and only
+    // NVIDIA's own endpoints understand it — a custom-gateway baseUrl
+    // (omniroute and friends) gets no provider-specific field.
+    if (!nvidiaReasoningParamsAllowed(this.options.baseUrl)) return
     if (this.options.reasoningEffort) {
       const effortMap: Record<string, number | undefined> = {
         low: 10,
@@ -183,10 +227,13 @@ export class NvidiaProvider implements Provider {
     for (const m of input.messages) {
       messages.push(m)
     }
+    // Vision: expand any user row that carries images into OpenAI content
+    // parts. Text-only rows keep their original string content byte-for-byte.
+    const wireMessages = expandWireMessages(messages)
 
     const body: Record<string, unknown> = {
       model: this.options.model,
-      messages,
+      messages: wireMessages,
       stream: true,
       temperature: clampTemperature(this.options.temperature, 0.7, 2),
       top_p: this.options.topP ?? 0.95,
@@ -200,7 +247,13 @@ export class NvidiaProvider implements Provider {
       body.tool_choice = "auto"
       body.parallel_tool_calls = false
     }
-    return body
+    // #123 — OpenAI-compatible caching is implicit and routed by a stable
+    // prefix key, so this is the entire lever. Keyed on system + tool schemas
+    // only: folding the transcript in would change it every turn and force a
+    // guaranteed miss. Gated (promptCacheKeyAllowed): strict APIs 400 unknown
+    // fields, so the key ships only on explicit operator opt-in.
+    if (!promptCacheKeyAllowed()) return body
+    return withPromptCacheKey(body, buildPromptCacheKey(input.system, input.tools))
   }
 
   protected postJson(
@@ -309,7 +362,7 @@ export class NvidiaProvider implements Provider {
               const json = JSON.parse(payload)
               this.handleDelta(json, text, thinking, toolBuffer, callbacks)
               if (json.choices?.[0]?.finish_reason) {
-                stopReason = mapFinishReason(json.choices[0].finish_reason)
+                stopReason = stopReasonFromWire(json.choices[0].finish_reason)
               }
             } catch {
               // ignore malformed keep-alive lines
@@ -449,19 +502,11 @@ export class NvidiaProvider implements Provider {
   }
 }
 
-function mapFinishReason(reason: string): StopReason {
-  switch (reason) {
-    case "tool_calls":
-      return "tool_use"
-    case "length":
-      return "length"
-    case "abort":
-      return "aborted"
-    case "stop":
-    default:
-      return "end_turn"
-  }
-}
+// Finish reasons are normalised in one place (protocol/stop-reason.ts) so the
+// OpenAI-compatible gateways this adapter also serves — Ollama, vLLM, LM Studio,
+// llama.cpp, OpenRouter, Together, Groq — cannot each reintroduce their own
+// spelling and silently truncate answers. See that module for why an unmapped
+// reason must fall back to "length" rather than "end_turn".
 
 function parseToolArgs(raw: string): Record<string, unknown> {
   const trimmed = raw.trim()

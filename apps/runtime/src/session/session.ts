@@ -6,6 +6,7 @@
 
 import * as fs from "fs"
 import * as path from "path"
+import { isRemoteUncPath } from "../config.js"
 import type {
   AgentMessage,
   AssistantMessage,
@@ -13,7 +14,38 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from "../../../../packages/protocol/src/index.js"
+import { toolResultImages } from "../../../../packages/protocol/src/index.js"
 import type { WireMessage, WireToolCall } from "../../../../packages/provider/src/index.js"
+
+/** Refuse to read back a session file larger than this. */
+const MAX_SESSION_FILE_BYTES = 512 * 1024 * 1024
+
+/** Cap on messages restored from disk, so a huge array cannot exhaust memory. */
+const MAX_RESTORED_MESSAGES = 100_000
+
+/** Roles that `AgentMessage` actually admits. */
+const RESTORABLE_ROLES = new Set(["system", "user", "assistant", "tool"])
+
+/**
+ * Keep only entries shaped like a restorable message.
+ *
+ * `payload.messages` came out of a user-writable JSON file with no validation,
+ * and the old code did `push(...(payload.messages ?? []))` — which spreads
+ * whatever is actually there. A string became one message per CHARACTER; a
+ * non-iterable object threw, and the catch swallowed it and reported "no
+ * session", silently discarding the whole transcript. Anything not carrying a
+ * valid role is dropped rather than allowed to reach `toWire()` and a provider.
+ */
+function sanitizeRestoredMessages(raw: unknown): AgentMessage[] {
+  if (!Array.isArray(raw)) return []
+  const out: AgentMessage[] = []
+  for (const entry of raw.slice(0, MAX_RESTORED_MESSAGES)) {
+    if (!entry || typeof entry !== "object") continue
+    const role = (entry as { role?: unknown }).role
+    if (typeof role === "string" && RESTORABLE_ROLES.has(role)) out.push(entry as AgentMessage)
+  }
+  return out
+}
 
 export class Session {
   readonly messages: AgentMessage[] = []
@@ -60,6 +92,22 @@ export class Session {
     if (this.systemPrompt) out.push({ role: "system", content: this.systemPrompt })
     for (const m of this.messages) {
       out.push(toWire(m))
+      // No OpenAI-compatible endpoint accepts an image part on a `role: "tool"`
+      // row, so a tool that returned a picture (view_image, web_fetch on an
+      // image URL, an MCP screenshot) re-surfaces it as a user turn placed
+      // immediately after its own tool response. Tool-call pairing stays
+      // intact: every assistant `tool_calls` id is still answered by its
+      // `role: "tool"` row before any user row appears.
+      if (m.role === "tool") {
+        const images = toolResultImages(m)
+        if (images.length > 0) {
+          out.push({
+            role: "user",
+            content: `[image returned by ${m.toolName}]`,
+            images,
+          })
+        }
+      }
     }
     return out
   }
@@ -81,23 +129,70 @@ export class Session {
    * session files keep resuming — they just stop being a leak.
    */
   save(file: string): void {
+    if (isRemoteUncPath(file)) {
+      // Fail closed without touching the path: mkdir/write on a UNC target
+      // would authenticate to the remote host (NTLM hash leak).
+      try {
+        process.stderr.write(`trayambak: refusing to save session to remote UNC path "${file}".\n`)
+      } catch {
+        /* stderr unavailable */
+      }
+      return
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true })
     const payload = { messages: this.messages.filter((m) => m.role !== "system") }
-    fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf8")
+    const body = JSON.stringify(payload, null, 2)
+    // Write to a sibling temp file and rename into place. A crash mid-write used
+    // to leave a truncated file that `load` could not parse, so it reported "no
+    // session" and the next save overwrote it — the entire transcript lost, with
+    // no error anywhere. Mode 0600 because this file holds the user's prompts and
+    // full tool output; the umask default (0644 on POSIX) left it world-readable,
+    // unlike the sibling stores in `transcript.ts` and `session-manager.ts`.
+    const tmp = `${file}.${process.pid}.tmp`
+    try {
+      fs.writeFileSync(tmp, body, { encoding: "utf8", mode: 0o600 })
+      fs.renameSync(tmp, file)
+    } catch (error) {
+      try {
+        fs.rmSync(tmp, { force: true })
+      } catch {
+        /* best-effort cleanup of the temp file */
+      }
+      throw error
+    }
   }
 
   static load(file: string): Session | null {
+    if (isRemoteUncPath(file)) {
+      // Fail closed without touching the path: existsSync/readFileSync on a
+      // UNC target would authenticate to the remote host (NTLM hash leak).
+      try {
+        process.stderr.write(`trayambak: refusing to load session from remote UNC path "${file}".\n`)
+      } catch {
+        /* stderr unavailable */
+      }
+      return null
+    }
     if (!fs.existsSync(file)) return null
     try {
+      const stat = fs.statSync(file)
+      if (stat.size > MAX_SESSION_FILE_BYTES) {
+        try {
+          process.stderr.write(`trayambak: refusing to load oversized session file "${file}" (${stat.size} bytes).\n`)
+        } catch {
+          /* stderr unavailable */
+        }
+        return null
+      }
       const payload = JSON.parse(fs.readFileSync(file, "utf8")) as {
         system?: string
-        messages: AgentMessage[]
+        messages?: unknown
       }
       const s = new Session()
       // Legacy files carry a `system` field. It is intentionally NOT applied:
       // the caller rebuilds the prompt from config, and restoring a stale copy
       // from disk would pin an outdated (or tampered) prompt.
-      s.messages.push(...(payload.messages ?? []))
+      s.messages.push(...sanitizeRestoredMessages(payload.messages))
       return s
     } catch {
       return null
@@ -109,8 +204,15 @@ function toWire(m: AgentMessage): WireMessage {
   switch (m.role) {
     case "system":
       return { role: "system", content: (m as SystemMessage).content }
-    case "user":
-      return { role: "user", content: (m as UserMessage).content }
+    case "user": {
+      const u = m as UserMessage
+      const images = u.images?.filter((d) => typeof d === "string" && d.startsWith("data:image/"))
+      return {
+        role: "user",
+        content: u.content,
+        ...(images && images.length > 0 ? { images } : {}),
+      }
+    }
     case "assistant": {
       const a = m as AssistantMessage
       const text = a.content

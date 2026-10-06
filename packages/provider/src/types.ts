@@ -13,7 +13,21 @@ export interface WireMessage {
   name?: string
   tool_calls?: WireToolCall[]
   tool_call_id?: string
+  /**
+   * Attached pictures as `data:image/*;base64,...` URLs.
+   *
+   * Deliberately a sibling of `content` rather than a widening of it: every
+   * OpenAI-compatible body builder copies `WireMessage` straight into the JSON
+   * request, but anthropic/google read `content` as a bare string (`.trim()`,
+   * `.length`). Widening the union would have broken both. Keeping it separate
+   * means those providers ignore pictures (they degrade to text-only) instead
+   * of emitting `[object Object]` — see `expandWireMessages` in ./vision.ts.
+   */
+  images?: string[]
 }
+
+/** OpenAI chat-completions content part. */
+export type WireContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
 
 export interface WireToolCall {
   id: string

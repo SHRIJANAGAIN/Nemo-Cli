@@ -33,6 +33,10 @@ export interface SystemMessage {
 export interface UserMessage {
   role: "user"
   content: string
+  /** Attached pictures as `data:image/*;base64,...` URLs, in display order.
+   *  Text-only backends silently drop these (anthropic/google build bodies
+   *  that only read `content`), so an attach must never be load-bearing on
+   *  its own — the prompt text always carries the meaning too. */
   images?: string[]
 }
 
@@ -48,6 +52,10 @@ export interface ToolResultMessage {
   toolName: string
   content: TextPart[]
   isError: boolean
+  /** Pictures the tool produced, as `data:image/*;base64,...` URLs. See
+   *  `ToolResult.images` — kept off `content` so every `.text` reader keeps
+   *  working unchanged. */
+  images?: string[]
 }
 
 export type StopReason = "end_turn" | "tool_use" | "length" | "aborted" | "error"

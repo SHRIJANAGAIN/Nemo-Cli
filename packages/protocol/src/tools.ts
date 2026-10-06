@@ -37,9 +37,35 @@ export interface ToolResultContent {
   text: string
 }
 
+/** Mime types a vision backend will accept inline. */
+export const SUPPORTED_IMAGE_MIME = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const
+
+export type SupportedImageMime = (typeof SUPPORTED_IMAGE_MIME)[number]
+
 export interface ToolResult {
   content: ToolResultContent[]
   isError: boolean
   /** When true, ends the current turn even if more tools are pending. */
   terminate?: boolean
+  /**
+   * Pictures this tool produced, as `data:image/*;base64,...` URLs.
+   *
+   * A sibling of `content` rather than a variant inside it, for the same
+   * reason `WireMessage.images` is: `content` is read as `TextPart[]` by the
+   * agent loop, the TUI transcript, and every tool test, so widening it into a
+   * discriminated union would have broken all of them for no gain. `content`
+   * still carries the prose caption that tells the model what it is looking
+   * at — an image here is never the only signal.
+   *
+   * `Session.toWireMessages` re-surfaces these as a synthetic user turn,
+   * because no OpenAI-compatible endpoint accepts an image part on a
+   * `role: "tool"` row.
+   */
+  images?: string[]
+}
+
+/** Data URLs a tool result carries, filtered to ones a backend can read. Pure. */
+export function toolResultImages(result: Pick<ToolResult, "images">): string[] {
+  if (!result.images || result.images.length === 0) return []
+  return result.images.filter((u) => typeof u === "string" && u.startsWith("data:image/"))
 }
