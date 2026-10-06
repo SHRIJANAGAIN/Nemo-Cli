@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { createMcpConnection } from "../../../../../packages/mcp/src/index.js"
+import * as http from "node:http"
+import { createMcpConnection, MCP_MAX_BUFFER_BYTES } from "../../../../../packages/mcp/src/index.js"
 import { ExecDecision } from "../../../../../packages/execpolicy/src/policy.js"
 import { createMcpTools, resetMcpRegistry, slugify, toToolProperty } from "./mcp.js"
 import {
@@ -254,4 +255,46 @@ describe("mcp__install execution", () => {
     const unknown = await tool.execute("t", { action: "definitely-unknown" }, undefined, undefined)
     expect(unknown.isError).toBe(true)
   })
+})
+
+describe("MCP transport buffer cap (#82a)", () => {
+  it("kills a stdio server that floods stdout past 256KB with no frame boundary", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mcp-flood-"))
+    const script = path.join(dir, "flood.cjs")
+    // Never frames a newline and never exits: readline used to buffer this
+    // unboundedly (OOM class); the capped framer must reject instead. The
+    // interval keeps the child alive so its exit can't race the flood reject.
+    fs.writeFileSync(
+      script,
+      `setInterval(() => process.stdout.write("x".repeat(64 * 1024)), 10)`,
+    )
+    try {
+      const conn = createMcpConnection("flood", { command: [process.execPath, script], timeoutMs: 5000 })
+      await expect(conn.connect()).rejects.toThrow(/without a frame boundary/)
+      conn.close()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("caps an unbounded HTTP response body instead of buffering it", async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" })
+      res.write("x".repeat(MCP_MAX_BUFFER_BYTES + 4096))
+      // Never complete the response: pre-fix this hung until test timeout.
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const port = (server.address() as { port: number }).port
+    try {
+      const conn = createMcpConnection("http-flood", {
+        url: `http://127.0.0.1:${port}/mcp`,
+        oauth: false,
+        timeoutMs: 5000,
+      })
+      await expect(conn.connect()).rejects.toThrow(/byte transport cap/)
+      conn.close()
+    } finally {
+      server.close()
+    }
+  }, 15000)
 })

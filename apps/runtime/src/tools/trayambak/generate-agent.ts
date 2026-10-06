@@ -140,6 +140,15 @@ async function callProvider(
   })
 }
 
+/**
+ * Collapse a model-supplied value onto one frontmatter line. `parseAgentFile`
+ * splits frontmatter on `\n` and takes `key: value`, so an embedded newline
+ * breaks out of its key and persists as attacker-chosen YAML for later runs.
+ */
+export function frontmatterField(value: string, maxLen: number): string {
+  return value.replace(/[\r\n]+/g, " ").slice(0, maxLen)
+}
+
 export function saveAgentProfile(agent: GeneratedAgent, cwd: string): string {
   // Choke point: the identifier is embedded in a file name AND the YAML
   // frontmatter, so an unsafe segment must throw before anything is written.
@@ -153,9 +162,14 @@ export function saveAgentProfile(agent: GeneratedAgent, cwd: string): string {
   const frontmatter: string[] = []
   frontmatter.push("---")
   frontmatter.push(`name: ${safeIdentifier}`)
-  frontmatter.push(`description: ${agent.whenToUse.replace(/\n/g, " ").slice(0, 200)}`)
-  if (agent.model) frontmatter.push(`model: ${agent.model}`)
-  if (agent.tools && agent.tools.length > 0) frontmatter.push(`tools: ${agent.tools.join(", ")}`)
+  // Every other field is model-supplied and re-parsed as YAML frontmatter on
+  // later runs (`parseAgentFile` reads `model:`/`tools:` for routing). A raw
+  // newline here breaks out of its key (`model: x\nmalicious: ...`) and the
+  // poisoned profile persists on disk. Collapse line breaks first.
+  frontmatter.push(`description: ${frontmatterField(agent.whenToUse, 200)}`)
+  if (agent.model) frontmatter.push(`model: ${frontmatterField(agent.model, 200)}`)
+  if (agent.tools && agent.tools.length > 0)
+    frontmatter.push(`tools: ${agent.tools.map((t) => frontmatterField(t, 80)).join(", ")}`)
   frontmatter.push("---")
   frontmatter.push("")
 

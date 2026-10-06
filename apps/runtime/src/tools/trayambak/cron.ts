@@ -65,6 +65,61 @@ function computeNextFire(cron: string, from: Date = new Date()): number {
   return from.getTime() + 24 * 60 * 60 * 1000
 }
 
+/* ───────────────────── create-time validation ───────────────────── */
+
+function isIntInRange(s: string, min: number, max: number): boolean {
+  if (!/^\d+$/.test(s)) return false
+  const n = Number(s)
+  return n >= min && n <= max
+}
+
+/**
+ * Validate a single field against the forms `matchField` can actually
+ * evaluate: `*`, `*\/step`, `N`, `N/step`, `N-M`, and comma lists of `N`.
+ * Bounds mirror [min, max] of the field's range.
+ */
+function isValidField(field: string, min: number, max: number): boolean {
+  if (field === "*") return true
+  if (field.includes("/")) {
+    const parts = field.split("/")
+    if (parts.length !== 2) return false
+    const [base, step] = parts
+    if (!/^\d+$/.test(step ?? "") || Number(step) < 1) return false
+    if (base !== "*" && !isIntInRange(base ?? "", min, max)) return false
+    return true
+  }
+  if (field.includes(",")) {
+    return field.split(",").every((part) => isIntInRange(part, min, max))
+  }
+  if (field.includes("-")) {
+    const parts = field.split("-")
+    if (parts.length !== 2) return false
+    const [start, end] = parts
+    if (!isIntInRange(start ?? "", min, max) || !isIntInRange(end ?? "", min, max)) return false
+    return Number(start) <= Number(end)
+  }
+  return isIntInRange(field, min, max)
+}
+
+/**
+ * Reject un-parseable expressions at CREATE time (round 13). The old code
+ * accepted anything: `computeNextFire` found no match in its 7-day scan,
+ * took the +24h fallback, and a typo like `banana` became a silent DAILY
+ * job that fired forever. Bounds: [0-59] [0-23] [1-31] [1-12] [0-6].
+ */
+export function isValidCron(cron: string): boolean {
+  const fields = cron.trim().split(/\s+/)
+  if (fields.length !== 5) return false
+  const bounds: Array<[number, number]> = [
+    [0, 59],
+    [0, 23],
+    [1, 31],
+    [1, 12],
+    [0, 6],
+  ]
+  return fields.every((field, i) => isValidField(field, bounds[i]![0], bounds[i]![1]))
+}
+
 export function listCronJobs(): CronJob[] {
   return [...jobs.values()]
 }
@@ -107,6 +162,13 @@ export function createCronCreateTool(): Tool {
       const prompt = String(args.prompt ?? "")
       const recurring = args.recurring !== false
       if (!cron || !prompt) return textResult("Missing 'cron' or 'prompt'.", /*isError*/ true)
+      if (!isValidCron(cron)) {
+        return textResult(
+          `Invalid cron expression: ${cron} (expected 5 fields: minute hour day-of-month month day-of-week — ` +
+            `each one of *, N, N-M, N/step, or comma lists)`,
+          /*isError*/ true,
+        )
+      }
       const id = nextId()
       const nextFireAt = computeNextFire(cron)
       jobs.set(id, { id, cron, prompt, recurring, createdAt: Date.now(), nextFireAt })

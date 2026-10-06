@@ -5,10 +5,9 @@
  */
 
 import { spawn, type ChildProcess } from "child_process"
-import * as readline from "readline"
 import { getConnectorRegistry } from "./registry.js"
 import { resolveMcpCommand } from "../../../../../packages/mcp/src/spawn-resolve.js"
-import type { McpServerSpec } from "../../../../../packages/mcp/src/index.js"
+import { MCP_MAX_BUFFER_BYTES, type McpServerSpec } from "../../../../../packages/mcp/src/index.js"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
 import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
@@ -26,7 +25,6 @@ export class McpProcess {
   readonly name: string
   readonly spec: McpServerSpec
   private child: ChildProcess | null = null
-  private rl: readline.Interface | null = null
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
   private nextId = 1
   private initialized = false
@@ -160,8 +158,6 @@ export class McpProcess {
   close(): void {
     const child = this.child
     this.child = null
-    this.rl?.close()
-    this.rl = null
     this.initialized = false
     this.rejectAll(new Error(`MCP ${this.name} connection closed`))
     if (child && child.exitCode === null && !child.killed) {
@@ -202,8 +198,12 @@ export class McpProcess {
       windowsHide: true,
     })
 
-    this.rl = readline.createInterface({ input: this.child.stdout! })
-    this.rl.on("line", (line: string) => {
+    // Bounded newline framing (#82a): same contract as the client — a
+    // server flooding stdout without a frame boundary fails the connection
+    // instead of buffering unbounded (AGENTS 256KB output policy).
+    let pending = ""
+    let flooded = false
+    const handleLine = (line: string): void => {
       try {
         const msg = JSON.parse(line) as { id?: number }
         if (msg.id === undefined) return
@@ -215,6 +215,28 @@ export class McpProcess {
         else waiter.resolve(resp.result)
       } catch {
         // ignore non-JSON lines
+      }
+    }
+    this.child.stdout!.setEncoding("utf8")
+    this.child.stdout!.on("data", (chunk: string) => {
+      if (flooded) return
+      pending += chunk
+      let nl = pending.indexOf("\n")
+      while (nl >= 0) {
+        handleLine(pending.slice(0, nl))
+        pending = pending.slice(nl + 1)
+        nl = pending.indexOf("\n")
+      }
+      if (pending.length > MCP_MAX_BUFFER_BYTES) {
+        flooded = true
+        pending = ""
+        this.lastError = `stdout flooded past ${MCP_MAX_BUFFER_BYTES} bytes with no frame boundary`
+        this.rejectAll(
+          new Error(
+            `MCP ${this.name}: server flooded stdout past ${MCP_MAX_BUFFER_BYTES} bytes without a frame boundary`,
+          ),
+        )
+        this.close()
       }
     })
 
@@ -237,7 +259,8 @@ export class McpProcess {
       // Any exit invalidates the transport (stale handle reported
       // connected:true and later calls hung on timeout).
       const tail = this.stderrLines.slice(-5).join(" | ").slice(0, 500)
-      this.lastError = `exited with code ${code ?? "signal"}`
+      // A flood kill must keep ITS reason visible (the exit is our own SIGTERM).
+      if (!flooded) this.lastError = `exited with code ${code ?? "signal"}`
       this.child = null
       this.initialized = false
       this.rejectAll(

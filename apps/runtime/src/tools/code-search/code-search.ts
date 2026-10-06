@@ -7,7 +7,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext } from "../types.js"
+import { resolveConstrainedPath, textResult, type Tool, type ToolContext } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
 import { searchRipgrep, type RgHit } from "../search/ripgrep.js"
 
@@ -73,7 +73,13 @@ export function createCodeSearchTool(): Tool {
       const ctx = context as ToolContext
       const query = String(args.query ?? "")
       if (!query) return textResult("Missing 'query'.", /*isError*/ true)
-      const base = path.resolve(ctx.cwd, typeof args.path === "string" ? args.path : ".")
+      const rawBase = typeof args.path === "string" ? args.path : "."
+      let base: string
+      try {
+        base = resolveConstrainedPath(path.resolve(ctx.cwd, rawBase), ctx.cwd)
+      } catch (error) {
+        return textResult(error instanceof Error ? error.message : String(error), /*isError*/ true)
+      }
       const glob = typeof args.glob === "string" ? args.glob : "*"
       const flags = args.ignore_case ? "i" : ""
       const maxResults = typeof args.max_results === "number" ? args.max_results : 120

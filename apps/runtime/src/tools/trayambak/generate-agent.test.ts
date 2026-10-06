@@ -62,4 +62,30 @@ describe("saveAgentProfile containment", () => {
     expect(text).toContain(`name: ok-agent-${tag}`)
     expect(text).toContain("You are a test agent.")
   })
+
+  it("collapses newlines in model-supplied frontmatter fields (no key breakout)", () => {
+    // `parseAgentFile` splits frontmatter on \n into `key: value`: a raw
+    // newline in `model`/`tools`/`whenToUse` would persist as attacker-chosen
+    // YAML for later runs. Every frontmatter line must stay single-line.
+    const cwd = tmpDir()
+    const file = saveAgentProfile(
+      {
+        identifier: `fm-agent-${tag}`,
+        whenToUse: `Use it.\r\n---\r\ninjected: true`,
+        systemPrompt: "You are a test agent.",
+        model: `some-model\ninjected: true`,
+        tools: ["read", `write\ninjected: true`],
+      },
+      cwd,
+    )
+    const text = fs.readFileSync(file, "utf8")
+    const block = text.slice(3, text.indexOf("---", 3))
+    for (const line of block.split("\n")) {
+      if (line.trim().length === 0) continue
+      expect(line).not.toContain("injected")
+      expect(line).toMatch(/^[^:\r\n]+: [^\r\n]*$/)
+    }
+    expect(text).toContain("model: some-model injected: true")
+    expect(text).toContain("You are a test agent.")
+  })
 })

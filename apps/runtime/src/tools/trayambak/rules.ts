@@ -13,6 +13,14 @@ import { safePathSegment } from "./safe-path.js"
 
 const RULE_FILENAMES = ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"]
 
+/**
+ * Store files that live directly in the home scope dir (`~/.trayambak`).
+ * `safePathSegment` stops `..` escapes but a bare `config.json` is a legal
+ * segment — without this list a global `write` overwrites the live config
+ * (provider credentials + model routing) with model-chosen bytes.
+ */
+const GLOBAL_RESERVED_FILES = new Set(["config.json", "config.json.bak", "sessions.json"])
+
 interface RuleFile {
   path: string
   name: string
@@ -154,6 +162,18 @@ export function createRulesTool(): Tool {
               /*isError*/ true,
             )
           const scope = (args.scope as string) === "global" ? "global" : "project"
+          // Segment validation stops traversal but NOT sensitive-file
+          // overwrite *inside* the directory: `scope=global` targets the live
+          // home store, where `config.json` holds provider credentials and
+          // model routing (overwrite = baseUrl redirect → key exfil on the
+          // next provider call). Refuse the reserved store files by exact
+          // name (case-insensitive — the home dir lives on case-insensitive
+          // filesystems far more often than not).
+          if (scope === "global" && GLOBAL_RESERVED_FILES.has(safeName.toLowerCase()))
+            return textResult(
+              `Refusing to overwrite '${safeName}': reserved Trayambak store file (write a rule file instead).`,
+              /*isError*/ true,
+            )
           let targetDir: string
           if (scope === "global") {
             targetDir = path.join(os.homedir(), ".trayambak")

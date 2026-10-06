@@ -121,35 +121,34 @@ export function isInstallRootName(name: unknown): boolean {
 }
 
 /**
- * Locate the trayambak installation root: TRAYAMBAK_HOME first (what the
- * global shim sets), then walk up from the module until a package.json whose
- * name is an install-root name (isInstallRootName: source "trayambak" or
- * published "@skt-ai-labs/trayambak-cli") — the same two-signal root rule
- * the shim uses, so stray
- * package.json files can't hijack version detection. Works from both the
- * source tree and dist/ (walk-up is depth-independent).
+ * Locate the trayambak installation root: walk up from the running module
+ * FIRST (ground truth of the code that is executing — a stale TRAYAMBAK_HOME
+ * pointing at a source checkout used to hijack every global install into
+ * comparing/updating the wrong tree: observed live, auto-update never fired
+ * outside dev checkouts and `upgrade` targeted the wrong package name),
+ * then fall back to TRAYAMBAK_HOME (exotic runners outside any install
+ * tree). Works from both the source tree and dist/ (walk-up is
+ * depth-independent). Stray package.json files can't hijack version
+ * detection: only install-root names match (source "trayambak" or published
+ * "@skt-ai-labs/trayambak-cli").
  */
 export function findInstallRoot(opts?: { startDir?: string; env?: NodeJS.ProcessEnv }): string | undefined {
-  const env = opts?.env ?? process.env
-  const marker = (dir: string): string | undefined => {
-    const pkg = readPackageJson(dir)
-    if (isInstallRootName(pkg?.name)) return dir
-    return undefined
-  }
-  const envRoot = env.TRAYAMBAK_HOME
-  if (envRoot) {
-    const hit = marker(path.resolve(envRoot))
-    if (hit) return hit
-  }
   const start = opts?.startDir ?? (typeof __dirname !== "undefined" ? __dirname : process.cwd())
   let dir = path.resolve(start)
   for (;;) {
-    const hit = marker(dir)
-    if (hit) return hit
+    const pkg = readPackageJson(dir)
+    if (isInstallRootName(pkg?.name)) return dir
     const parent = path.dirname(dir)
-    if (parent === dir) return undefined
+    if (parent === dir) break
     dir = parent
   }
+  const envRoot = opts?.env ?? process.env
+  const raw = envRoot.TRAYAMBAK_HOME
+  if (raw) {
+    const pkg = readPackageJson(path.resolve(raw))
+    if (isInstallRootName(pkg?.name)) return path.resolve(raw)
+  }
+  return undefined
 }
 
 /** Installed version from the install root's package.json (SKT AI LABS's compiled
@@ -200,11 +199,19 @@ interface CaptureResult {
  *  Exported for tests. Runs with the filtered env (#79): the npm path runs
  *  `npm install -g <pkg>@<latest>`, i.e. postinstall scripts of the update
  *  and every transitive dependency — package code that must not inherit the
- *  CLI's raw secret-bearing env (same boundary as mcp-install, #77). */
+ *  CLI's raw secret-bearing env (same boundary as mcp-install, #77).
+ *
+ *  `shell` exists for one caller: npm on Windows ships as npm.cmd, which
+ *  Node refuses to spawn directly without a shell (observed live: EINVAL,
+ *  every Windows auto-apply died). Same posture as upgrade.ts runInherit.
+ *  Keep shell-bound arguments charset-clean (isSafeVersion at the registry
+ *  edge; install-root names matched exactly) AND space-free (shell:true
+ *  concatenates without escaping or quoting — an exe path with spaces
+ *  splits, DEP0190) — `npm.cmd` qualifies on both counts. */
 export function runCapture(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; timeoutMs: number },
+  opts: { cwd?: string; timeoutMs: number; shell?: boolean },
 ): Promise<CaptureResult> {
   return new Promise<CaptureResult>((resolve) => {
     let child: ReturnType<typeof spawn>
@@ -214,6 +221,7 @@ export function runCapture(
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
         env: getSafeEnv(process.env),
+        shell: opts.shell ?? false,
       })
     } catch (error) {
       resolve({ ok: false, out: "", err: String(error), code: null })
@@ -291,6 +299,12 @@ async function applyNpmUpdate(root: string, pkgName: string, latest: string): Pr
   const result = await runCapture(npmCommand(), ["install", "-g", `${pkgName}@${latest}`], {
     cwd: root,
     timeoutMs: NPM_APPLY_TIMEOUT_MS,
+    // npm.cmd without a shell is EINVAL on Windows — every auto-apply died
+    // before npm ran. Both shell-bound tokens are charset-clean by
+    // construction (isSafeVersion at the registry edge; the name can only
+    // ever be an install-root name matched exactly by findInstallRoot), so
+    // the DEP0190 concat warning does not apply to hostile input.
+    shell: process.platform === "win32",
   })
   if (!result.ok) {
     throw new Error(result.err.trim() || `npm install exited with code ${result.code}`)
@@ -351,6 +365,11 @@ export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<Updat
   const releaseType = getReleaseType(current, latest)
   // SKT AI LABS gates auto-apply to patches under `autoupdate: true`; we additionally
   // force notify for git checkouts (rebuild-under-running-process is unsafe).
+  // Shell-safety of the apply (win32 shell:true): the version token is
+  // isSafeVersion-gated at the registry edge and the package name can only
+  // ever be an install-root name ("trayambak" / "@skt-ai-labs/trayambak-cli",
+  // any case — findInstallRoot matched it exactly), so neither shell-bound
+  // token carries metacharacters (DEP0190 concat is safe here).
   const notifyOnly = opts.config.autoupdate === "notify" || releaseType !== "patch" || method === "git"
   if (notifyOnly) return { kind: "update-available", current, latest, releaseType, auto: false }
 

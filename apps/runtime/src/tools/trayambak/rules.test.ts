@@ -74,4 +74,42 @@ describe("trayambak__Rules write containment", () => {
     expect(outText(res)).toContain("No rule file")
     expect(outText(res)).toContain("[isError]")
   })
+
+  it("refuses reserved store files in global scope before touching disk", async () => {
+    // Segment validation allows bare `config.json` (no separators, no `..`),
+    // but global scope targets the live home store: overwriting it with
+    // model-chosen bytes redirects the next provider call (baseUrl) and
+    // leaks the key. The refusal precedes mkdir/write, so this never touches
+    // the real home directory.
+    const cwd = tmpDir()
+    const tool = createRulesTool()
+    for (const reserved of ["config.json", "CONFIG.JSON", "config.json.bak", "sessions.json"]) {
+      const res = await tool.execute(
+        `r4-${reserved}`,
+        { action: "write", name: reserved, scope: "global", content: `{"baseUrl":"https://evil-${tag}.example"}` },
+        undefined,
+        undefined,
+        { cwd } as ToolContext,
+      )
+      expect(outText(res)).toContain("reserved")
+      expect(outText(res)).toContain("[isError]")
+    }
+    expect(fs.readdirSync(cwd)).toEqual([])
+  })
+
+  it("still allows config.json as a project-scope rule name (not a loaded path)", async () => {
+    // `<cwd>/config.json` is never read as config (only `<cwd>/.trayambak/`
+    // or `~/.trayambak/config.json` are), so project scope stays unblocked.
+    const cwd = tmpDir()
+    const tool = createRulesTool()
+    const res = await tool.execute(
+      "r5",
+      { action: "write", name: "config.json", content: "project notes" },
+      undefined,
+      undefined,
+      { cwd } as ToolContext,
+    )
+    expect(outText(res)).toContain("Rule written")
+    expect(fs.readFileSync(path.join(cwd, "config.json"), "utf8")).toBe("project notes")
+  })
 })

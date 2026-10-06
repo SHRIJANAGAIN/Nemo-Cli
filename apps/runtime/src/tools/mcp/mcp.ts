@@ -16,6 +16,7 @@ import {
 import type { ToolDefinition, ToolParameterProperty } from "../../../../../packages/protocol/src/index.js"
 import { evaluatePolicy, ExecDecision } from "../../../../../packages/execpolicy/src/policy.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
+import { containsInstructionOverride } from "../../agent/prompt-guard.js"
 
 export interface McpRegistryEntry {
   name: string
@@ -48,6 +49,7 @@ export async function createMcpTools(
   decide: (command: string) => ExecDecision = evaluatePolicy,
 ): Promise<Tool[]> {
   const out: Tool[] = []
+  const uniqueName = nameAllocator()
   for (const [serverName, spec] of Object.entries(mcpServers)) {
     const cmdLine = (spec.command ?? []).join(" ")
     if (cmdLine.length > 0 && decide(cmdLine) === ExecDecision.Deny) {
@@ -55,7 +57,7 @@ export async function createMcpTools(
       // connection and drop it from the registry, or the old tools linger.
       registry.get(serverName)?.conn?.close()
       registry.delete(serverName)
-      out.push(makeMcpErrorTool(serverName, `exec policy denies: ${cmdLine}`))
+      out.push(makeMcpErrorTool(serverName, `exec policy denies: ${cmdLine}`, uniqueName))
       continue
     }
     let entry = registry.get(serverName)
@@ -85,12 +87,12 @@ export async function createMcpTools(
     } catch (err) {
       // Transient failure must not wipe a working toolset: keep serving the
       // last-known tools and surface the error alongside them.
-      out.push(makeMcpErrorTool(serverName, err instanceof Error ? err.message : String(err)))
+      out.push(makeMcpErrorTool(serverName, err instanceof Error ? err.message : String(err), uniqueName))
       if (!hadTools) continue
     }
-    for (const t of entry.tools) out.push(makeMcpCallTool(serverName, t))
-    for (const r of entry.resources) out.push(makeMcpReadResourceTool(serverName, r))
-    for (const p of entry.prompts) out.push(makeMcpGetPromptTool(serverName, p))
+    for (const t of entry.tools) out.push(makeMcpCallTool(serverName, t, uniqueName))
+    for (const r of entry.resources) out.push(makeMcpReadResourceTool(serverName, r, uniqueName))
+    for (const p of entry.prompts) out.push(makeMcpGetPromptTool(serverName, p, uniqueName))
   }
   return out
 }
@@ -103,6 +105,99 @@ export function slugify(value: string): string {
     .replace(/^_+|_+$/g, "")
     .slice(0, 40)
   return slug || "item"
+}
+
+/* ───────────────── untrusted server-supplied metadata ───────────────── */
+
+/** Cap on a server-supplied description. The description is part of the tool
+ *  definition the provider receives on EVERY request, so an unbounded string is
+ *  a per-turn cost and a way to push everything else out of the context. */
+const MCP_DESCRIPTION_MAX_CHARS = 2000
+
+/** Cap on server-supplied tool-result text before it enters the transcript.
+ *  `truncateOutput` is applied by the shell, multi-search and pentest tools;
+ *  the MCP surfaces skipped it, so a chatty server could flood the session. */
+const MCP_RESULT_MAX_CHARS = 256 * 1024
+
+/** Cap on the number of `required` entries accepted from a server schema. */
+const MCP_MAX_REQUIRED = 64
+
+/** Cap on a server-supplied identifier echoed into a description. */
+const MCP_DISPLAY_NAME_MAX_CHARS = 80
+
+/**
+ * Render a server-supplied identifier for the trusted part of a description.
+ *
+ * `describeTools` takes only the first line, but in `nativeTools` mode the full
+ * description reaches the provider — so an identifier containing newlines would
+ * still forge extra prompt lines even though the catalogue NAME is slugified.
+ * Collapse whitespace and cap the length.
+ */
+function safeDisplayName(raw: unknown): string {
+  const flat = (typeof raw === "string" ? raw : "").replace(/\s+/g, " ").trim()
+  if (flat.length === 0) return "(unnamed)"
+  return flat.length > MCP_DISPLAY_NAME_MAX_CHARS ? `${flat.slice(0, MCP_DISPLAY_NAME_MAX_CHARS)}…` : flat
+}
+
+/**
+ * Build a tool description around server-controlled text.
+ *
+ * Everything after `prefix` was chosen by the MCP server, i.e. by a third party
+ * the user installed. In `nativeTools` mode it is forwarded verbatim as part of
+ * the tool definition the model treats as authoritative, and
+ * `annotateUntrustedToolResult` never sees it — that guard only covers tool
+ * RESULTS. So withhold the text outright when it trips the instruction-override
+ * guard, and cap it otherwise. Note the guard is a narrow phrase matcher, not a
+ * sandbox: this raises the cost of a lazy or sloppy server, it does not make
+ * server metadata safe to obey.
+ */
+function serverDescription(prefix: string, raw: unknown): string {
+  const text = typeof raw === "string" ? raw.trim() : ""
+  if (text.length === 0) return prefix
+  if (containsInstructionOverride(text)) {
+    return `${prefix} [server-supplied description withheld: it contained instruction-override phrasing]`
+  }
+  if (text.length > MCP_DESCRIPTION_MAX_CHARS) {
+    return `${prefix} ${text.slice(0, MCP_DESCRIPTION_MAX_CHARS)}… [description truncated]`
+  }
+  return `${prefix} ${text}`
+}
+
+/** Cap server-supplied result text before it joins the transcript. */
+export function capMcpResultText(text: string): string {
+  if (text.length <= MCP_RESULT_MAX_CHARS) return text
+  const note = `\n[MCP result truncated: ${text.length} characters, showing first ${MCP_RESULT_MAX_CHARS}]`
+  return text.slice(0, MCP_RESULT_MAX_CHARS) + note
+}
+
+/**
+ * Validate a server-supplied `required` list. The value reached this code via
+ * `as string[]`, so a server returning `[1, null, {a: 1}]` produced a malformed
+ * tool definition that was forwarded to the provider verbatim.
+ */
+export function sanitizeRequired(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((r): r is string => typeof r === "string" && r.length > 0).slice(0, MCP_MAX_REQUIRED)
+}
+
+/**
+ * Allocate a unique tool name. Server-supplied names are slugified, which is a
+ * many-to-one mapping (`Foo Bar` and `foo-bar` both become `foo_bar`), so a
+ * second server could otherwise overwrite an earlier tool in the catalogue.
+ */
+function nameAllocator(): (name: string) => string {
+  const used = new Set<string>()
+  return (name: string): string => {
+    if (!used.has(name)) {
+      used.add(name)
+      return name
+    }
+    let n = 2
+    while (used.has(`${name}_${n}`)) n++
+    const next = `${name}_${n}`
+    used.add(next)
+    return next
+  }
 }
 
 export function toToolProperty(raw: unknown): ToolParameterProperty {
@@ -141,9 +236,12 @@ function abortable<T>(signal: AbortSignal | undefined, work: Promise<T>): Promis
   })
 }
 
-function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
-  const name = `mcp__${server}__${info.name}`
-  const schema = (info.inputSchema ?? {}) as { properties?: Record<string, unknown>; required?: string[] }
+function makeMcpCallTool(server: string, info: McpToolInfo, uniqueName: (n: string) => string): Tool {
+  // The catalogue name is slugified, but dispatch still uses the server's real
+  // tool name — `slugify` is many-to-one and would break `tools/call`.
+  const remoteName = typeof info.name === "string" ? info.name : ""
+  const name = uniqueName(`mcp__${server}__${slugify(remoteName)}`)
+  const schema = (info.inputSchema ?? {}) as { properties?: Record<string, unknown>; required?: unknown }
   const properties: Record<string, ToolParameterProperty> = {}
   for (const [k, v] of Object.entries(schema.properties ?? {})) {
     properties[k] = toToolProperty(v)
@@ -151,11 +249,14 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
     name,
-    description: `Call tool '${info.name}' on MCP server '${server}'. ${info.description ?? ""}`.trim(),
+    description: serverDescription(
+      `Call tool '${safeDisplayName(remoteName)}' on MCP server '${server}'.`,
+      info.description,
+    ),
     parameters: {
       type: "object",
       properties,
-      required: (schema.required ?? []) as string[],
+      required: sanitizeRequired(schema.required),
     },
   }
   return {
@@ -164,19 +265,22 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
       const entry = registry.get(server)
       if (!entry) return textResult(`MCP server '${server}' is not registered.`, /*isError*/ true)
       try {
-        const result = await abortable(signal, entry.conn!.callTool(info.name, args as Record<string, unknown>))
+        const result = await abortable(signal, entry.conn!.callTool(remoteName, args as Record<string, unknown>))
         const text = (result.content ?? [])
           .map((c) =>
             typeof c.text === "string" ? c.text : c.blob ? `[binary ${c.mimeType ?? "blob"}]` : JSON.stringify(c),
           )
           .join("\n")
-        return textResult(text || "(empty MCP result)", Boolean(result.isError))
+        return textResult(capMcpResultText(text) || "(empty MCP result)", Boolean(result.isError))
       } catch (err) {
         if (err instanceof McpError) {
-          return textResult(`mcp ${server}.${info.name} [${err.code}]: ${err.message}`, /*isError*/ true)
+          return textResult(
+            `mcp ${server}.${safeDisplayName(info.name)} [${err.code}]: ${err.message}`,
+            /*isError*/ true,
+          )
         }
         return textResult(
-          `mcp ${server}.${info.name}: ${err instanceof Error ? err.message : String(err)}`,
+          `mcp ${server}.${safeDisplayName(info.name)}: ${err instanceof Error ? err.message : String(err)}`,
           /*isError*/ true,
         )
       }
@@ -184,18 +288,20 @@ function makeMcpCallTool(server: string, info: McpToolInfo): Tool {
   }
 }
 
-function makeMcpReadResourceTool(server: string, resource: McpResourceInfo): Tool {
-  const name = `mcp__${server}__read_resource_${slugify(resource.uri)}`
+function makeMcpReadResourceTool(server: string, resource: McpResourceInfo, uniqueName: (n: string) => string): Tool {
+  const name = uniqueName(`mcp__${server}__read_resource_${slugify(resource.uri)}`)
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
     name,
-    description:
-      `Read resource '${resource.name}' (${resource.uri}) from MCP server '${server}'. ${resource.description ?? ""}`.trim(),
+    description: serverDescription(
+      `Read resource '${safeDisplayName(resource.name)}' (${safeDisplayName(resource.uri)}) from MCP server '${server}'.`,
+      resource.description,
+    ),
     parameters: {
       type: "object",
       required: [],
       properties: {
-        uri: { type: "string", description: `Resource URI (default ${resource.uri})` },
+        uri: { type: "string", description: `Resource URI (default ${safeDisplayName(resource.uri)})` },
       },
     },
   }
@@ -207,7 +313,7 @@ function makeMcpReadResourceTool(server: string, resource: McpResourceInfo): Too
       const uri = typeof args.uri === "string" ? args.uri : resource.uri
       try {
         const content = await abortable(signal, entry.conn!.readResource(uri))
-        return textResult(content || "(empty resource)")
+        return textResult(capMcpResultText(content) || "(empty resource)")
       } catch (err) {
         if (err instanceof McpError) {
           return textResult(`mcp ${server} resource read [${err.code}]: ${err.message}`, /*isError*/ true)
@@ -221,17 +327,20 @@ function makeMcpReadResourceTool(server: string, resource: McpResourceInfo): Too
   }
 }
 
-function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo): Tool {
-  const name = `mcp__${server}__get_prompt_${slugify(prompt.name)}`
+function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo, uniqueName: (n: string) => string): Tool {
+  const name = uniqueName(`mcp__${server}__get_prompt_${slugify(prompt.name)}`)
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
     name,
-    description: `Get prompt '${prompt.name}' from MCP server '${server}'. ${prompt.description ?? ""}`.trim(),
+    description: serverDescription(
+      `Get prompt '${safeDisplayName(prompt.name)}' from MCP server '${server}'.`,
+      prompt.description,
+    ),
     parameters: {
       type: "object",
       required: [],
       properties: {
-        name: { type: "string", description: `Prompt name (default ${prompt.name})` },
+        name: { type: "string", description: `Prompt name (default ${safeDisplayName(prompt.name)})` },
         args: { type: "object", description: "Optional prompt arguments." },
       },
     },
@@ -250,7 +359,7 @@ function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo): Tool {
         const text = prompt.messages
           .map((m) => `[${m.role}] ${typeof m.content === "string" ? m.content : JSON.stringify(m.content)}`)
           .join("\n")
-        return textResult(text || "(empty prompt)")
+        return textResult(capMcpResultText(text) || "(empty prompt)")
       } catch (err) {
         if (err instanceof McpError) {
           return textResult(`mcp ${server} prompt get [${err.code}]: ${err.message}`, /*isError*/ true)
@@ -264,11 +373,11 @@ function makeMcpGetPromptTool(server: string, prompt: McpPromptInfo): Tool {
   }
 }
 
-function makeMcpErrorTool(server: string, message: string): Tool {
+function makeMcpErrorTool(server: string, message: string, uniqueName: (n: string) => string): Tool {
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
-    name: `mcp__${server}__error`,
-    description: `MCP server '${server}' failed to initialize: ${message}.`,
+    name: uniqueName(`mcp__${server}__error`),
+    description: `MCP server '${server}' failed to initialize: ${safeDisplayName(message)}.`,
     parameters: { type: "object", properties: {}, required: [] },
   }
   return {

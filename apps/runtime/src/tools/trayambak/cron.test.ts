@@ -85,3 +85,41 @@ describe("tickCronJobs", () => {
     expect(fires).toBeGreaterThanOrEqual(0)
   })
 })
+
+describe("CronCreate rejects invalid expressions (round 13)", () => {
+  // The old create accepted ANY string: computeNextFire missed its 7-day
+  // scan, took the +24h fallback, and a typo became a silent DAILY job.
+  it.each([
+    "banana",
+    "* * *",
+    "* * * * * *",
+    "60 * * * *",
+    "* 24 * * *",
+    "abc * * * *",
+    "*/0 * * * *",
+    "1-99 * * * *",
+    "5-1 * * * *",
+    "0 0 0 * *",
+    "0 0 * 13 *",
+    "0 0 * * 7",
+    "1,2/x * * * *",
+    "1/2/3 * * * *",
+  ])("rejects %j instead of scheduling it", async (bad) => {
+    const r = await createCronCreateTool().execute("t1", { cron: bad, prompt: "p" }, undefined, undefined, ctx)
+    expect(r.isError).toBe(true)
+    expect(r.content.map((c) => c.text ?? "").join()).toContain("Invalid cron expression")
+    expect(listCronJobs().some((j) => j.cron === bad)).toBe(false)
+  })
+
+  it("still accepts every form the matcher can evaluate", async () => {
+    const valid = ["*/5 * * * *", "0 0 * * *", "30 9-17 * * 1-5", "15,45 * * * *", "0/15 12 * * *", "7 8 9 10 6"]
+    const ids: string[] = []
+    for (const ok of valid) {
+      const r = await createCronCreateTool().execute("t1", { cron: ok, prompt: `valid-${ok}` }, undefined, undefined, ctx)
+      expect(r.isError, ok).toBeFalsy()
+      const job = listCronJobs().find((j) => j.prompt === `valid-${ok}`)
+      if (job) ids.push(job.id)
+    }
+    await cleanup(ids)
+  })
+})

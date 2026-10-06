@@ -168,6 +168,18 @@ describe("findInstallRoot / getInstalledVersion", () => {
     expect(findInstallRoot({ startDir: root, env: { TRAYAMBAK_HOME: elsewhere } })).toBe(root)
   })
 
+  it("prefers the running module's root over a stale TRAYAMBAK_HOME (no hijack)", () => {
+    // Observed live: a persistent TRAYAMBAK_HOME pointing at a source
+    // checkout made every global install compare/upgrade the WRONG tree
+    // (source version, unscoped package name) — auto-update never fired.
+    const stale = makeRoot("1.1.1", "trayambak")
+    const live = makeRoot("0.6.7", "@skt-ai-labs/trayambak-cli")
+    const nested = path.join(live, "dist", "apps", "runtime", "src", "update")
+    fs.mkdirSync(nested, { recursive: true })
+    expect(findInstallRoot({ startDir: nested, env: { TRAYAMBAK_HOME: stale } })).toBe(live)
+    expect(getInstalledVersion({ startDir: nested, env: { TRAYAMBAK_HOME: stale } })).toBe("0.6.7")
+  })
+
   it("recognizes the published scoped package name (production installs)", () => {
     expect(isInstallRootName("trayambak")).toBe(true)
     expect(isInstallRootName("Trayambak")).toBe(true)
@@ -188,6 +200,27 @@ describe("findInstallRoot / getInstalledVersion", () => {
     expect(npmCommand("win32")).toBe("npm.cmd")
     expect(npmCommand("darwin")).toBe("npm")
     expect(npmCommand("linux")).toBe("npm")
+  })
+
+  it("spawns through a shell when asked (cross-platform plumbing)", async () => {
+    // echo is space-free on every platform (cmd builtin on win32), so this
+    // proves the shell flag threads through without tripping DEP0190-style
+    // concat hazards (an exe path WITH spaces would split — callers must
+    // only shell short, space-free commands like npm.cmd).
+    const res = await runCapture("echo", ["auto-update-shell-ok"], { timeoutMs: 10_000, shell: true })
+    expect(res.ok).toBe(true)
+    expect(res.out.trim()).toBe("auto-update-shell-ok")
+  })
+
+  it.runIf(process.platform === "win32")("runs npm.cmd with shell:true (EINVAL without — the dead auto-apply)", async () => {
+    // Observed live on this machine: spawn("npm.cmd") without a shell is
+    // EINVAL, so every Windows auto-apply died before npm ran. shell:true
+    // is the apply path now (same posture as upgrade.ts runInherit).
+    const dead = await runCapture("npm.cmd", ["--version"], { timeoutMs: 30_000 })
+    expect(dead.ok).toBe(false)
+    const live = await runCapture("npm.cmd", ["--version"], { timeoutMs: 30_000, shell: true })
+    expect(live.ok).toBe(true)
+    expect(live.out).toMatch(/\d+\.\d+\.\d+/)
   })
 })
 

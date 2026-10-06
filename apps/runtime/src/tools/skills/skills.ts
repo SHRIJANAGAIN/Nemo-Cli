@@ -8,8 +8,11 @@ import { execFile } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
+import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 import { textResult, type Tool, type ToolContext, type ToolResult, resolveConstrainedPath } from "../types.js"
+import { sanitizeToolName } from "../custom/custom-tools.js"
 import { sanitizeSingleLine, repairFrontmatterScalarFields, validateSkillFrontmatter } from "./skill-parser.js"
+import { SKILL_MAX_DEPTH, SKILL_MAX_FILES, SKIPPED_SKILL_DIRS } from "./skill-core.js"
 
 /**
  * Skills are automation snippets - the same idea as the `skills/` folders in
@@ -38,26 +41,6 @@ export interface SkillSpec {
   timeout?: number
   body?: string
 }
-
-/** Walk caps: skills roots must never become a full-disk scan. */
-const SKILL_MAX_DEPTH = 5
-const SKILL_MAX_FILES = 500
-
-const SKIPPED_SKILL_DIRS = new Set([
-  "node_modules",
-  ".git",
-  ".hg",
-  ".svn",
-  "dist",
-  "build",
-  "coverage",
-  ".turbo",
-  ".next",
-  ".cache",
-  "__pycache__",
-  ".venv",
-  "venv",
-])
 
 export function loadSkillsFromDir(dir: string): SkillSpec[] {
   if (!dir || !fs.existsSync(dir)) return []
@@ -158,9 +141,25 @@ function parseFrontmatterLines(frontmatter: string): Record<string, string> {
     let value = kv[2].replace(/^["']|["']$/g, "")
     if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1)
     if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1)
-    if (!(key in out)) out[key] = value
+    // `key in out` matched INHERITED keys too (constructor/toString were
+    // silently un-settable), and `__proto__` would hit the prototype
+    // setter. Own-key check + explicit dunder skip = first-wins only for
+    // real frontmatter fields.
+    if (!Object.hasOwn(out, key) && key !== "__proto__") out[key] = value
   }
   return out
+}
+
+/**
+ * Model-facing tool id. Providers require `^[A-Za-z0-9_-]{1,64}$` — a skill
+ * folder like "My Skill" would register `skill__My Skill` and the provider
+ * 400s EVERY request (whole session dead), and `skill__` + the 64-char name
+ * cap already overflows the 64-char tool-name limit. The custom-tools
+ * sanitizer is the one rule both dynamic tool families share; the display
+ * name (frontmatter/dir) stays untouched for prompts and mentions.
+ */
+export function skillToolName(name: string): string {
+  return sanitizeToolName(`skill__${name}`)
 }
 
 export function createSkillTool(skill: SkillSpec): Tool {
@@ -171,7 +170,7 @@ export function createSkillTool(skill: SkillSpec): Tool {
   if (!skill.command) {
     const definition: ToolDefinition = {
       timeoutMs: 30_000,
-      name: `skill__${skill.name}`,
+      name: skillToolName(skill.name),
       description: `Read the '${skill.name}' skill guide: ${skill.description}`.trim(),
       parameters: { type: "object", required: [], properties: {} },
     }
@@ -185,7 +184,7 @@ export function createSkillTool(skill: SkillSpec): Tool {
   }
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
-    name: `skill__${skill.name}`,
+    name: skillToolName(skill.name),
     description: `Run the automation skill '${skill.name}': ${skill.description}`,
     parameters: {
       type: "object",
@@ -211,7 +210,12 @@ export function createSkillTool(skill: SkillSpec): Tool {
       const toRun = `${skill.command}${typeof args.args === "string" && args.args ? " " + args.args : ""}`
       const shellParts = toRun.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [toRun]
       const prog = shellParts[0].replace(/^"|"$/g, "")
-      const progArgs = shellParts.slice(1)
+      // execFile runs prog DIRECTLY (no shell): a quoted segment keeps its
+      // literal quotes unless stripped, so `node -e "a b"` arrived as the
+      // string-literal program `"a b"` — valid JS that prints nothing and
+      // exits 0. Strip argument quotes exactly like prog's (single quotes
+      // stay verbatim: cmd.exe never groups them, node scripts need them).
+      const progArgs = shellParts.slice(1).map((part) => part.replace(/^"|"$/g, ""))
       const timeoutMs = (skill.timeout ?? 120) * 1000
 
       return new Promise((resolve) => {
@@ -220,7 +224,9 @@ export function createSkillTool(skill: SkillSpec): Tool {
           child = execFile(
             prog,
             progArgs,
-            { cwd: base, env: process.env, windowsHide: true, timeout: timeoutMs, signal },
+            // User-authored skill commands run third-party code: same
+            // filtering as every other spawn — ambient secrets stay out.
+            { cwd: base, env: getSafeEnv(process.env), windowsHide: true, timeout: timeoutMs, signal },
             (err, stdout, stderr) => {
               const combined = `${stdout}${stderr ? "\n" + stderr : ""}`.trim() || "(no output)"
               if (err && (err as NodeJS.ErrnoException).code !== "ETIMEDOUT") {
@@ -262,7 +268,27 @@ export function createSkillTool(skill: SkillSpec): Tool {
 }
 
 export function createSkillTools(dir: string): Tool[] {
-  return loadSkillsFromDir(dir).map(createSkillTool)
+  return createSkillToolsFromRoots([dir])
+}
+
+/** Multi-root variant: first root wins a tool-name collision, so the
+ *  user/project dir keeps beating the bundled fleet. */
+export function createSkillToolsFromRoots(dirs: readonly string[]): Tool[] {
+  // loadSkillsFromDir dedupes by DISPLAY name only — "My Skill" and
+  // "my_skill" both sanitize to `skill__my_skill`, and a duplicate tool
+  // name in one request is a provider 400 for the whole session. First
+  // one wins (root order, then walk order, then name-sorted).
+  const seenToolNames = new Set<string>()
+  const out: Tool[] = []
+  for (const dir of dirs) {
+    for (const skill of loadSkillsFromDir(dir)) {
+      const toolName = skillToolName(skill.name)
+      if (seenToolNames.has(toolName)) continue
+      seenToolNames.add(toolName)
+      out.push(createSkillTool(skill))
+    }
+  }
+  return out
 }
 
 export function buildSkillsBlock(skills: SkillSpec[]): string {
@@ -273,7 +299,10 @@ export function buildSkillsBlock(skills: SkillSpec[]): string {
 
 export function buildSkillsMentionBlock(skills: SkillSpec[]): string {
   if (!skills || skills.length === 0) return ""
-  const names = skills.map((s) => s.name).join(", ")
+  // The hint must list the ids the model can actually CALL: a display name
+  // like "My Skill" would send it looking for `skill__My Skill`, which the
+  // provider would reject (and the registry never registers).
+  const names = skills.map((s) => skillToolName(s.name)).join(", ")
   return `Available skills: ${names}. Use skill__<name> to invoke a skill.`
 }
 
@@ -284,7 +313,7 @@ export function skillDescriptionsForPrompt(skills: SkillSpec[]): string {
 
 export type { SkillMetadata, SkillPolicy, SkillInterface, SkillDependencies, LoadedSkills } from "./skill-model.js"
 export { sanitizeSingleLine, repairFrontmatterScalarFields, validateSkillFrontmatter } from "./skill-parser.js"
-export { defaultSkillsDir } from "./skill-core.js"
+export { defaultSkillsDir, bundledSkillsDir } from "./skill-core.js"
 export { collectExplicitSkillMentions, selectSkillsFromMentions, normalizeSkillPath } from "./skill-selection.js"
 export { loadSkillsFromRoots, MemorySkillRootSnapshots } from "./skill-loading.js"
 export type { SkillRootSnapshotCache } from "./skill-loading.js"

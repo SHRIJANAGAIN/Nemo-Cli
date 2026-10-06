@@ -7,6 +7,7 @@
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext } from "../types.js"
 import { discoverAgentProfiles, type AgentProfile } from "../../agent/specialist-agents.js"
+import { companyAgentDirs, resolveCompanyState } from "../../agent/company-library.js"
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
@@ -31,7 +32,18 @@ export function createAgentCatalogTool(): Tool {
     definition,
     async execute(_id, args, _signal, _update, context: ToolContext | undefined) {
       const filterCategory = (args.category as string) || "all"
-      const profiles = discoverAgentProfiles(context?.cwd ?? process.cwd(), context?.config.agentProfileDirs)
+      const companyState = resolveCompanyState(
+        context?.config.companyDir,
+        context?.cwd ?? process.cwd(),
+        undefined,
+        context?.config ?? null,
+      )
+      const companyDirs =
+        companyState?.enabled === false ? [] : companyAgentDirs(companyState?.root, companyState?.disabled ?? [])
+      const profiles = discoverAgentProfiles(context?.cwd ?? process.cwd(), [
+        ...(context?.config.agentProfileDirs ?? []),
+        ...companyDirs,
+      ])
 
       if (profiles.length === 0) {
         return textResult("No specialist agent profiles found.")

@@ -7,7 +7,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext } from "../types.js"
+import { resolveConstrainedPath, textResult, type Tool, type ToolContext } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
 
 export interface SemanticDoc {
@@ -154,7 +154,13 @@ export function createSemanticSearchTool(): Tool {
       const query = String(args.query ?? "").trim()
       if (!query) return textResult("Missing 'query'.", /*isError*/ true)
       const cwd = ctx?.cwd ?? process.cwd()
-      const base = path.resolve(cwd, typeof args.path === "string" ? args.path : ".")
+      const rawBase = typeof args.path === "string" ? args.path : "."
+      let base: string
+      try {
+        base = resolveConstrainedPath(path.resolve(cwd, rawBase), cwd)
+      } catch (error) {
+        return textResult(error instanceof Error ? error.message : String(error), /*isError*/ true)
+      }
       const glob = typeof args.glob === "string" ? args.glob : "*"
       const topK = typeof args.top_k === "number" && Number.isFinite(args.top_k) ? args.top_k : 10
       const docs: SemanticDoc[] = []

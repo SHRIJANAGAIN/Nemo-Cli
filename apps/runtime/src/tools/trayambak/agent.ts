@@ -31,8 +31,7 @@ const definition: ToolDefinition = {
       subagent_type: {
         type: "string",
         description:
-          "The type of specialized agent to use. Valid types: general, explore, plan, coder, browser, planner. If omitted, uses 'general'.",
-        enum: ["general", "explore", "plan", "coder", "browser", "planner"],
+          "The persona the subagent BECOMES (it runs as that role): a builtin (general, explore, plan, coder, browser, planner) or any specialist profile name — see trayambak__AgentCatalog, which includes the COMPANY roster (e.g. 'Code Reviewer'). Unknown names run as a general agent. If omitted, uses 'general'.",
       },
       model: {
         type: "string",

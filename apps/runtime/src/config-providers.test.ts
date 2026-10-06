@@ -26,9 +26,9 @@ describe("config provider ids", () => {
     expect(hf.model).toBe("meta-llama/Llama-3.3-70B-Instruct")
   })
 
-  it("falls back to nvidia on unknown ids", () => {
+  it("falls back to google on unknown ids", () => {
     const bogus = loadConfig({ provider: "nope" as never, baseUrl: "", model: "" })
-    expect(bogus.provider).toBe("nvidia")
+    expect(bogus.provider).toBe("google")
   })
 
   it("keeps explicit user endpoints (never clobbers config)", () => {
@@ -150,6 +150,42 @@ describe("config provider ids", () => {
     })
     expect(cfg.hooks?.preToolUse).toEqual([{ matcher: "bash", hooks: [{ command: "check.sh", timeoutSec: 5 }] }])
     expect(cfg.hooks?.postToolUse).toBeUndefined()
+  })
+
+  it("saveConfig drops a stale file key when env mode is active (no plaintext key at rest)", async () => {
+    const fs = await import("node:fs")
+    const os = await import("node:os")
+    const path = await import("node:path")
+    const { saveConfig } = await import("./config.js")
+    const prevCwd = process.cwd()
+    const prevEnv = process.env.TRAYAMBAK_API_KEY
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-cfg-"))
+    fs.mkdirSync(path.join(dir, ".trayambak"), { recursive: true })
+    process.chdir(dir)
+    try {
+      // A key persisted before the user switched to env mode. (The `test`
+      // marker keeps these fixtures inside the no-hardcoded-secrets
+      // placeholder exemption, like the rest of the suite's fake keys.)
+      const file = path.join(dir, ".trayambak", "config.json")
+      fs.writeFileSync(file, JSON.stringify({ provider: "nvidia", apiKey: "sk-test-stale-key-at-rest" }))
+      // Env mode on: the file key is stale by definition (env wins at load),
+      // so saving anything must scrub it rather than preserve it.
+      process.env.TRAYAMBAK_API_KEY = "sk-test-live-from-env"
+      saveConfig({ provider: "nvidia" } as never)
+      const saved = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>
+      expect(saved.apiKey).toBeUndefined()
+      expect(saved.provider).toBe("nvidia")
+      // And without env mode, an explicit key still persists (login flow).
+      delete process.env.TRAYAMBAK_API_KEY
+      saveConfig({ apiKey: "sk-test-explicit-login-key" } as never)
+      const savedAgain = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>
+      expect(savedAgain.apiKey).toBe("sk-test-explicit-login-key")
+    } finally {
+      if (prevEnv === undefined) delete process.env.TRAYAMBAK_API_KEY
+      else process.env.TRAYAMBAK_API_KEY = prevEnv
+      process.chdir(prevCwd)
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it("saveConfig never wipes the file on torn reads (backs corrupt JSON aside)", async () => {

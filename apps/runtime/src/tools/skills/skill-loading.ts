@@ -45,7 +45,10 @@ export function loadSkillRoot(dir: string, cache?: SkillRootSnapshotCache): Load
   for (const file of files) {
     try {
       const raw = fs.readFileSync(file, "utf8")
-      const spec = parseSkillFile(raw, path.basename(file))
+      // Full path, not basename: parseSkillFile's fallback for SKILL.md is
+      // the PARENT DIRECTORY name — passing just the basename made every
+      // nameless SKILL.md collapse to the literal name "SKILL".
+      const spec = parseSkillFile(raw, file)
       if (spec) {
         skills.push({
           name: spec.name,

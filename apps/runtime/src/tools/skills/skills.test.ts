@@ -8,7 +8,15 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { createSkillTool, loadSkillsFromDir, parseSkillFile } from "./skills.js"
+import {
+  buildSkillsMentionBlock,
+  createSkillTool,
+  createSkillTools,
+  createSkillToolsFromRoots,
+  loadSkillsFromDir,
+  parseSkillFile,
+  skillToolName,
+} from "./skills.js"
 
 let dir: string
 beforeEach(() => {
@@ -106,5 +114,94 @@ describe("createSkillTool", () => {
     const res = await tool.execute("1", {}, undefined, undefined, { cwd: proj } as never)
     expect(res.isError).toBe(true)
     expect(res.content.map((c) => c.text).join("\n")).toMatch(/unsafe cwd|Access denied/i)
+  })
+
+  it("withholds secret-bearing env from user-authored skill commands", async () => {
+    const secretName = "TRAYAMBAK_E2E_SKILL_SECRET"
+    const secretValue = "e2e-skill-secret-abcdef"
+    const saved = process.env[secretName]
+    process.env[secretName] = secretValue
+    try {
+      const tool = createSkillTool({
+        name: "envdump",
+        description: "x",
+        command: `node -e "process.stdout.write('K=' + process.env.${secretName} + ';P=' + process.env.PATH)"`,
+        body: "",
+      })
+      const res = await tool.execute("1", {}, undefined, undefined, { cwd: dir } as never)
+      expect(res.isError).toBe(false)
+      const body = res.content.map((c) => c.text).join("\n")
+      // Absent vars read as undefined in the child: the secret never arrived.
+      expect(body).toContain("K=undefined")
+      expect(body).not.toContain(secretValue)
+      expect(body).toMatch(/;P=.+/)
+    } finally {
+      if (saved === undefined) delete process.env[secretName]
+      else process.env[secretName] = saved
+    }
+  })
+})
+
+describe("skill tool names (round 11 attack: provider-safe ids)", () => {
+  it("sanitizes display names into ids providers accept", () => {
+    // "skill__My Skill" (space) would400 EVERY model request; custom tools
+    // already sanitize, skills did not.
+    expect(skillToolName("My Skill")).toBe("skill__My_Skill")
+    expect(skillToolName("git-flow")).toBe("skill__git-flow")
+    // Provider cap is 64 chars INCLUDING the prefix (skill__ + 64 overflowed).
+    expect(skillToolName("x".repeat(100))).toMatch(/^skill__[A-Za-z0-9_-]{1,57}$/)
+    // Non-ASCII collapses to the safe alphabet, still a valid id.
+    expect(skillToolName("कौशल")).toMatch(/^skill__[A-Za-z0-9_-]+$/)
+  })
+
+  it("registers exactly one tool when two display names collide after sanitizing", () => {
+    const descOnly = "---\ndescription: Dir-named skill.\n---\nBody."
+    writeSkill("My Skill", "SKILL.md", descOnly)
+    writeSkill("My_Skill", "SKILL.md", descOnly)
+    const skills = loadSkillsFromDir(dir)
+    expect(skills).toHaveLength(2) // distinct display names both load
+
+    const tools = createSkillTools(dir)
+    // A duplicate tool name in one request is a provider 400 — first wins.
+    expect(tools.map((t) => t.definition.name)).toEqual(["skill__My_Skill"])
+  })
+
+  it("command skills get sanitized ids too", () => {
+    const tool = createSkillTool({ name: "My Skill", description: "d", command: "echo hi", body: "" })
+    expect(tool.definition.name).toBe("skill__My_Skill")
+  })
+
+  it("the mention hint lists the ids the model can actually call", () => {
+    const tools = buildSkillsMentionBlock([{ name: "My Skill", description: "d", command: "", body: "" }])
+    expect(tools).toContain("skill__My_Skill")
+    expect(tools).not.toContain("My Skill")
+  })
+
+  it("multi-root: first root wins a tool-name collision (user beats bundled)", () => {
+    const descOnly = "---\ndescription: Dir-named skill.\n---\nBody."
+    const primary = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skills-primary-"))
+    const bundled = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skills-bundled-"))
+    try {
+      const mk = (root: string, rel: string): void => {
+        const d = path.join(root, rel)
+        fs.mkdirSync(d, { recursive: true })
+        fs.writeFileSync(path.join(d, "SKILL.md"), descOnly)
+      }
+      mk(primary, "shared-skill")
+      mk(primary, "primary-only")
+      mk(bundled, "shared-skill")
+      mk(bundled, "bundled-only")
+      const tools = createSkillToolsFromRoots([primary, bundled])
+      const names = tools.map((t) => t.definition.name).sort()
+      expect(names).toEqual(["skill__bundled-only", "skill__primary-only", "skill__shared-skill"])
+      // Same single-root behaviour preserved through the multi-root path.
+      expect(createSkillToolsFromRoots([bundled]).map((t) => t.definition.name).sort()).toEqual([
+        "skill__bundled-only",
+        "skill__shared-skill",
+      ])
+    } finally {
+      fs.rmSync(primary, { recursive: true, force: true })
+      fs.rmSync(bundled, { recursive: true, force: true })
+    }
   })
 })

@@ -10,11 +10,44 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool } from "../types.js"
 
-const TODO_DIR = path.join(os.homedir(), ".trayambak", "todos")
+/**
+ * Resolved per call rather than captured at module load: `os.homedir()` is
+ * ambient, and a frozen constant both bakes in whatever HOME happened to be at
+ * import time and makes the traversal below impossible to test in isolation.
+ * Matches `sessionsDir()` in `skt/9-session/session.ts`.
+ */
+function todoDir(): string {
+  return path.join(os.homedir(), ".trayambak", "todos")
+}
+
+/**
+ * Session ids name a FILE under the todos directory, so they must be a single
+ * path segment. `../../../../.ssh/id_rsa` used to resolve straight out of it:
+ * `todo_read` parsed whatever it landed on and rendered it to the model, and the
+ * `todo` write path created or truncated the target. `sessionId` reaches here
+ * from `ToolContext`, which an embedding host or MCP server sets — so it is
+ * outside the trust boundary even though the local CLI never supplies anything
+ * hostile. Mirrors the CLI guard in `apps/cli/src/commands/todo.ts` and core's
+ * `assertSessionId`.
+ */
+const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+/**
+ * The file name a session id maps to, or null when the id is not a single path
+ * segment. Blank means the documented global-list fallback, matching what
+ * `todoFile` has always done.
+ */
+function normalizeTodoSessionId(sessionId?: string): string | null {
+  const id = sessionId && sessionId.trim() ? sessionId.trim() : "global"
+  return SESSION_ID_RE.test(id) ? id : null
+}
 
 function todoFile(sessionId?: string): string {
-  const id = sessionId && sessionId.trim() ? sessionId.trim() : "global"
-  return path.join(TODO_DIR, `${id}.json`)
+  const id = normalizeTodoSessionId(sessionId)
+  if (id === null) {
+    throw new Error(`invalid session id: ${JSON.stringify(sessionId ?? "")}`)
+  }
+  return path.join(todoDir(), `${id}.json`)
 }
 
 interface TodoItem {
@@ -173,6 +206,12 @@ export function createTodoTool(): Tool {
     async execute(_id, args, signal, _update, context) {
       if (signal?.aborted) return textResult("aborted", /*isError*/ true)
       const sessionId = context?.sessionId
+      // An unusable session id is a tool error, not a thrown exception: every
+      // other failure on this path returns an error result, and letting the
+      // throw escape would report it differently to the model.
+      if (normalizeTodoSessionId(sessionId) === null) {
+        return textResult(`Invalid session id: ${String(sessionId)}`, /*isError*/ true)
+      }
       const action = String(args.action ?? "")
       const list = load(sessionId)
 

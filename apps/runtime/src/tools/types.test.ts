@@ -3,9 +3,11 @@
  * distribution require a written license agreement with SKT AI LABS
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
+import * as fs from "fs"
+import { spawnSync } from "child_process"
 import * as os from "os"
 import * as path from "path"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { assertMutablePath, resolveConstrainedPath } from "./types.js"
 
 const home = os.homedir()
@@ -35,6 +37,88 @@ describe("resolveConstrainedPath workspace containment", () => {
     const cwd = path.join(os.tmpdir(), "ws-proj")
     expect(() => resolveConstrainedPath(outsideRoot, cwd)).toThrow(/escapes/)
   })
+})
+
+/**
+ * A junction/symlink planted INSIDE an allowed root defeats every lexical
+ * containment check: `<proj>/link/secret.txt` is textually inside the project
+ * while the bytes come from somewhere else. Windows junctions need no special
+ * privilege, so this is reachable by any local process. These tests build a
+ * real reparse point and require the realpath pass to catch it.
+ */
+describe("resolveConstrainedPath reparse-point containment", () => {
+  const made: string[] = []
+
+  afterEach(() => {
+    for (const dir of made.splice(0)) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true })
+      } catch {
+        /* best effort */
+      }
+    }
+  })
+
+  /** A directory reachable neither from the workspace nor from $HOME. */
+  function outsideDir(): string {
+    const dir = fs.mkdtempSync(path.join(path.parse(home).root, "junction-outside-"))
+    made.push(dir)
+    return dir
+  }
+
+  function makeJunction(link: string, target: string): boolean {
+    if (process.platform === "win32") {
+      const r = spawnSync("cmd", ["/c", "mklink", "/J", link, target], { stdio: "ignore", timeout: 30_000 })
+      return r.status === 0
+    }
+    try {
+      fs.symlinkSync(target, link, "dir")
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  it("refuses a file reached through a junction that leaves the allowed roots", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "junction-proj-"))
+    made.push(root)
+    const outside = outsideDir()
+    fs.writeFileSync(path.join(outside, "secret.txt"), "top secret", "utf8")
+
+    const link = path.join(root, "link")
+    if (!makeJunction(link, outside)) return // no reparse points available here
+    if (!fs.existsSync(link)) return
+
+    // Lexically this is inside the workspace...
+    expect(path.resolve(root, "link", "secret.txt").startsWith(path.resolve(root))).toBe(true)
+    // ...and the realpath pass must still refuse it.
+    expect(() => resolveConstrainedPath(path.join("link", "secret.txt"), root)).toThrow(/escapes/)
+  }, 30_000)
+
+  it("keeps a junction that stays inside the workspace usable", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "junction-inside-"))
+    made.push(root)
+    const inner = path.join(root, "inner")
+    fs.mkdirSync(inner, { recursive: true })
+
+    const link = path.join(root, "link")
+    if (!makeJunction(link, inner)) return
+    if (!fs.existsSync(link)) return
+
+    // Over-blocking here would lock legitimate in-tree links out.
+    expect(resolveConstrainedPath(path.join("link", "file.txt"), root)).toBe(path.join(link, "file.txt"))
+  }, 30_000)
+
+  it("does not let a link become a way around the credential deny list", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "junction-creds-"))
+    made.push(root)
+
+    const link = path.join(root, "keys")
+    if (!makeJunction(link, path.join(home, ".ssh"))) return
+    if (!fs.existsSync(link)) return
+
+    expect(() => resolveConstrainedPath(path.join("keys", "id_rsa"), root)).toThrow()
+  }, 30_000)
 })
 
 describe("resolveConstrainedPath credential protection", () => {

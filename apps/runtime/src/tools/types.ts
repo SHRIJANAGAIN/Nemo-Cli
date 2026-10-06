@@ -204,8 +204,7 @@ const PROTECTED_HOME_FILES = [".netrc", ".npmrc", ".git-credentials", path.join(
  * True for paths the file tools may never open. Deny wins over the `~`
  * allowance: sandbox policy never lets a deny rule be outvoted by an allow.
  */
-function isProtectedPath(resolved: string): boolean {
-  const home = os.homedir()
+function isProtectedPath(resolved: string, home: string = os.homedir()): boolean {
   for (const dir of PROTECTED_HOME_DIRS) {
     if (within(path.join(home, dir), resolved)) return true
   }
@@ -225,6 +224,53 @@ function isProtectedPath(resolved: string): boolean {
  * The workspace is not a blanket override: credential stores stay closed even
  * when the project is opened at home, because deny lists win over allow lists.
  */
+/**
+ * Resolve as much of `p` as actually exists to its real on-disk location, then
+ * re-attach the not-yet-created remainder.
+ *
+ * Containment checks that compare path STRINGS are blind to directory
+ * junctions and symlinks: `<proj>/link/secret.txt` passes every lexical test
+ * while the bytes come from somewhere else entirely (a junction needs no
+ * extra privilege on Windows and resolves for any local process). Walking up
+ * to the nearest existing ancestor keeps this correct for paths that do not
+ * exist yet, which is the normal case for a write.
+ *
+ * Deliberately total: if nothing along the chain resolves it returns the
+ * input unchanged rather than throwing, so the caller's own containment
+ * decision still stands (this function only ever supplies a real anchor).
+ */
+function realpathNearest(p: string): string {
+  let current = path.resolve(p)
+  const tail: string[] = []
+  // Each iteration strips one path segment, so this always terminates: the
+  // walk bottoms out at the filesystem root, where dirname(root) === root.
+  for (;;) {
+    try {
+      const real = fs.realpathSync(current)
+      return tail.length === 0 ? real : path.join(real, ...tail)
+    } catch {
+      const parent = path.dirname(current)
+      if (parent === current) return p
+      tail.unshift(path.basename(current))
+      current = parent
+    }
+  }
+}
+
+/**
+ * Resolve a user-supplied path against the tool cwd and reject it if it
+ * escapes the project directory (or the user home directory for `~` paths).
+ * This blocks absolute paths and `..` escapes that would otherwise allow
+ * reading/writing arbitrary files on disk.
+ *
+ * The workspace is not a blanket override: credential stores stay closed even
+ * when the project is opened at home, because deny lists win over allow lists.
+ *
+ * Containment is checked TWICE: once lexically, then again with both sides
+ * resolved through `realpathNearest`. The second pass is what stops a junction
+ * planted inside an allowed root from reading or writing outside it. Both
+ * checks must pass, so a link can only ever narrow what is reachable.
+ */
 export function resolveConstrainedPath(inputPath: string, cwd: string): string {
   const expanded = expandHome(inputPath)
   const resolved = path.resolve(cwd, expanded)
@@ -234,6 +280,20 @@ export function resolveConstrainedPath(inputPath: string, cwd: string): string {
   }
   if (isProtectedPath(resolved)) {
     throw new Error(`Access denied: protected path (${resolved})`)
+  }
+
+  // Reparse-point layer. The roots are resolved the same way as the target so
+  // a workspace that itself lives under a link (a temp dir, a redirected home)
+  // still compares equal to itself.
+  const realHome = realpathNearest(home)
+  const realCwd = realpathNearest(cwd)
+  const realResolved = realpathNearest(resolved)
+  if (!within(realCwd, realResolved) && !within(realHome, realResolved)) {
+    throw new Error(`Access denied: path escapes project directory through a link (${resolved} -> ${realResolved})`)
+  }
+  // A link is not a way around the credential deny list either.
+  if (isProtectedPath(realResolved, realHome)) {
+    throw new Error(`Access denied: protected path through a link (${resolved} -> ${realResolved})`)
   }
   return resolved
 }

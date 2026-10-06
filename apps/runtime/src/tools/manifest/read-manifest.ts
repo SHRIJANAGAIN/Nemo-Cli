@@ -7,7 +7,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext } from "../types.js"
+import { resolveConstrainedPath, textResult, type Tool, type ToolContext } from "../types.js"
 
 /** Well-known project manifest file names, in detection order. */
 const MANIFESTS: Array<{ file: string; project: string }> = [
@@ -43,7 +43,13 @@ export function createReadManifestTool(): Tool {
     definition,
     async execute(_id, args, _signal, _update, context) {
       const ctx = context as ToolContext
-      const base = path.resolve(ctx.cwd, typeof args.path === "string" ? args.path : ".")
+      const rawBase = typeof args.path === "string" ? args.path : "."
+      let base: string
+      try {
+        base = resolveConstrainedPath(path.resolve(ctx.cwd, rawBase), ctx.cwd)
+      } catch (error) {
+        return textResult(error instanceof Error ? error.message : String(error), /*isError*/ true)
+      }
       const depth = typeof args.depth === "number" ? Math.max(0, Math.floor(args.depth)) : 1
       const found: Array<{ file: string; summary: string[] }> = []
 

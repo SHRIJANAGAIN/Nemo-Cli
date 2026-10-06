@@ -17,7 +17,7 @@
 import { EventEmitter } from "node:events"
 import { PassThrough } from "node:stream"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { McpServerSpec } from "../../../../../packages/mcp/src/index.js"
+import { MCP_MAX_BUFFER_BYTES, type McpServerSpec } from "../../../../../packages/mcp/src/index.js"
 import { McpProcess } from "./mcp-runner-tool.js"
 
 interface FakeChild extends EventEmitter {
@@ -32,14 +32,18 @@ interface FakeChild extends EventEmitter {
 const ctl = vi.hoisted(() => ({
   spawnArgs: [] as Array<{ cmd: string; args: string[]; opts: { env?: Record<string, string> } }>,
   children: [] as FakeChild[],
+  /** When true the fake child never answers, so a test can drive stdout directly. */
+  mute: false,
   reset(): void {
     ctl.spawnArgs.length = 0
     ctl.children.length = 0
+    ctl.mute = false
   },
 }))
 
 /** Auto-answer every JSON-RPC request; notifications (no id) get silence. */
 function answerRequest(child: FakeChild, s: string): void {
+  if (ctl.mute) return
   let payload: { id?: number; method?: string }
   try {
     payload = JSON.parse(s) as { id?: number; method?: string }
@@ -108,6 +112,27 @@ describe("MCP child environment", () => {
     try {
       const tools = await proc.listTools()
       expect(tools).toEqual([{ name: "t", description: "d" }])
+    } finally {
+      proc.close()
+    }
+  })
+})
+
+describe("MCP stdio transport cap (#82a)", () => {
+  it("rejects an unframed stdout flood instead of buffering it", async () => {
+    ctl.mute = true
+    const proc = new McpProcess("flood", spec({ timeoutMs: 3000 }))
+    try {
+      const connecting = proc.connect()
+      // spawnStdio attaches its reader synchronously; one tick lets
+      // connect() reach the initialize wait before stdout is flooded.
+      await new Promise((r) => setTimeout(r, 10))
+      const child = ctl.children[0]
+      expect(child).toBeDefined()
+      // No newline anywhere: readline used to buffer this unboundedly
+      // (OOM class); the capped framer must reject at the boundary.
+      child!.stdout.write("x".repeat(MCP_MAX_BUFFER_BYTES + 4096))
+      await expect(connecting).rejects.toThrow(/without a frame boundary/)
     } finally {
       proc.close()
     }

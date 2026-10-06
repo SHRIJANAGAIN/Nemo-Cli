@@ -13,7 +13,7 @@ import { textResult, type Tool } from "../types.js"
 const TASKS_DIR = path.join(os.homedir(), ".trayambak")
 const TASKS_FILE = path.join(TASKS_DIR, "tasks.json")
 
-interface TaskItem {
+export interface TaskItem {
   id: string
   content: string
   status: "pending" | "in_progress" | "completed"
@@ -61,7 +61,7 @@ export function resetTasks(): void {
   idCounter = 0
 }
 
-function getTask(id: string): TaskItem | undefined {
+export function getTask(id: string): TaskItem | undefined {
   return loadStore().tasks.find((t) => t.id === id)
 }
 
@@ -71,6 +71,47 @@ function putTask(task: TaskItem): void {
   if (idx >= 0) store.tasks[idx] = task
   else store.tasks.push(task)
   saveStore(store)
+}
+
+/**
+ * The store's shared mutators. The CLI/slash `task` command used to fake
+ * these ("[Task queued]" without persisting) while `list`/`reset` read the
+ * real file — so every acknowledgement was a lie. One construction path
+ * means a "queued" answer is always true for the tools AND the commands.
+ */
+export function addTask(
+  content: string,
+  opts: { priority?: unknown; dependsOn?: unknown; batchId?: unknown } = {},
+): TaskItem {
+  const task: TaskItem = {
+    id: nextId(),
+    content,
+    status: "pending",
+    priority: isPriority(opts.priority),
+    dependsOn: Array.isArray(opts.dependsOn) ? (opts.dependsOn as string[]) : undefined,
+    batchId: opts.batchId ? String(opts.batchId) : undefined,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  putTask(task)
+  return task
+}
+
+/** Applies defined fields only; returns null when the id is not in the store.
+ *  Callers validate status before calling (the command layer owns the
+ *  user-facing message for an unknown status word). */
+export function updateTask(
+  id: string,
+  patch: { status?: TaskItem["status"]; priority?: unknown; result?: string },
+): TaskItem | null {
+  const t = getTask(id)
+  if (!t) return null
+  if (patch.status !== undefined) t.status = patch.status
+  if (patch.priority !== undefined) t.priority = isPriority(patch.priority)
+  if (patch.result !== undefined) t.result = patch.result
+  t.updatedAt = Date.now()
+  putTask(t)
+  return t
 }
 
 const taskCreateDef: ToolDefinition = {
@@ -99,19 +140,8 @@ export function createTaskCreateTool(): Tool {
     async execute(_id, args) {
       const content = String(args.content ?? "")
       if (!content) return textResult("Missing 'content'.", /*isError*/ true)
-      const id = nextId()
-      const task: TaskItem = {
-        id,
-        content,
-        status: "pending",
-        priority: isPriority(args.priority),
-        dependsOn: Array.isArray(args.dependsOn) ? (args.dependsOn as string[]) : undefined,
-        batchId: args.batchId ? String(args.batchId) : undefined,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      }
-      putTask(task)
-      return textResult(`Task ${id} created: ${content}`)
+      const task = addTask(content, { priority: args.priority, dependsOn: args.dependsOn, batchId: args.batchId })
+      return textResult(`Task ${task.id} created: ${content}`)
     },
   }
 }
@@ -143,11 +173,11 @@ export function createTaskUpdateTool(): Tool {
       if (!["pending", "in_progress", "completed"].includes(status)) {
         return textResult(`Invalid status: ${status}`, /*isError*/ true)
       }
-      t.status = status as TaskItem["status"]
-      t.updatedAt = Date.now()
-      if (args.result !== undefined) t.result = String(args.result)
-      if (args.priority !== undefined) t.priority = isPriority(args.priority)
-      putTask(t)
+      updateTask(id, {
+        status: status as TaskItem["status"],
+        priority: args.priority,
+        result: args.result !== undefined ? String(args.result) : undefined,
+      })
       return textResult(`Task ${id} → ${status}`)
     },
   }

@@ -18,6 +18,7 @@ import { loadConfig } from "./config.js"
 const savedSmall = process.env.TRAYAMBAK_SMALL_MODEL
 const savedSubagent = process.env.TRAYAMBAK_SUBAGENT_MODEL
 const savedJudge = process.env.TRAYAMBAK_JUDGE_MODEL
+const savedCompany = process.env.TRAYAMBAK_COMPANY_MODEL
 
 afterEach(() => {
   if (savedSmall === undefined) delete process.env.TRAYAMBAK_SMALL_MODEL
@@ -26,6 +27,8 @@ afterEach(() => {
   else process.env.TRAYAMBAK_SUBAGENT_MODEL = savedSubagent
   if (savedJudge === undefined) delete process.env.TRAYAMBAK_JUDGE_MODEL
   else process.env.TRAYAMBAK_JUDGE_MODEL = savedJudge
+  if (savedCompany === undefined) delete process.env.TRAYAMBAK_COMPANY_MODEL
+  else process.env.TRAYAMBAK_COMPANY_MODEL = savedCompany
 })
 
 describe("config cheap models", () => {
@@ -88,5 +91,19 @@ describe("config cheap models", () => {
     process.env.TRAYAMBAK_JUDGE_MODEL = "judge-tiny"
     const fromEnv = loadConfig({ provider: "ollama", baseUrl: "", model: "" })
     expect(fromEnv.judge_model).toBe("judge-tiny")
+  })
+
+  it("defaults companyModel to undefined (one model does everything) and reads overrides / env", () => {
+    expect(loadConfig({ provider: "ollama", baseUrl: "", model: "" }).companyModel).toBeUndefined()
+
+    const cfg = loadConfig({ provider: "ollama", baseUrl: "", model: "", companyModel: "  worker-model  " })
+    expect(cfg.companyModel).toBe("worker-model")
+
+    const blank = loadConfig({ provider: "ollama", baseUrl: "", model: "", companyModel: "   " })
+    expect(blank.companyModel).toBeUndefined()
+
+    process.env.TRAYAMBAK_COMPANY_MODEL = "company-worker"
+    const fromEnv = loadConfig({ provider: "ollama", baseUrl: "", model: "" })
+    expect(fromEnv.companyModel).toBe("company-worker")
   })
 })
