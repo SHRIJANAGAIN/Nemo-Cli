@@ -14,6 +14,9 @@ import {
   messageText,
   splitAtRows,
   splitCoversAll,
+  pruneMessages,
+  UI_MAX_MESSAGES,
+  UI_KEEP_MESSAGES,
 } from "./MessageList.js"
 import type { TrayambakMessage } from "./types.js"
 
@@ -62,6 +65,28 @@ describe("computeMessageSplit", () => {
       result: "line\n".repeat(10),
     })
     expect(estimateMessageRows(tool, 100)).toBeGreaterThan(6)
+  })
+
+  it("budgets unfolded (Ctrl+O) tool output honestly or the clip eats the answer", () => {
+    // A 300-line result collapsed previews ~12 rows; unfolded it renders
+    // ~200 of them. The old estimate kept the collapsed number in both
+    // modes, so unfolding overflowed the frame and the overflow clip ate
+    // everything below — including the live answer ("half message hide").
+    const wall = Array.from({ length: 300 }, (_, i) => `out-${i}`).join("\n")
+    const tool = msg("t1", "assistant", { toolCallId: "c1", toolName: "bash", result: wall })
+    expect(estimateMessageRows(tool, 100)).toBeLessThan(30)
+    expect(estimateMessageRows(tool, 100, /*expandOutput*/ true)).toBeGreaterThan(150)
+  })
+
+  it("evicts older rows when unfolded output alone exceeds the budget", () => {
+    const wall = Array.from({ length: 300 }, (_, i) => `out-${i}`).join("\n")
+    const tool = msg("t1", "assistant", { toolCallId: "c1", toolName: "bash", result: wall })
+    const messages = [msg("u1"), tool]
+    // Collapsed: both fit a 40-row frame.
+    expect(computeMessageSplit(messages, false, false, 40, 100).capIdx).toBe(0)
+    // Unfolded: the wall fills the frame alone — the older row prints to
+    // scrollback instead of the clip eating the live tail.
+    expect(computeMessageSplit(messages, false, false, 40, 100, /*expandOutput*/ true).capIdx).toBe(1)
   })
 
   it("counts hard newlines (a 40-line listing is ~40 rows, not ceil(chars/cols))", () => {
@@ -123,17 +148,18 @@ describe("in-frame window across height changes", () => {
       messages.push(msg(`u${i}`))
       messages.push(msg(`a${i}`, "assistant"))
     }
-    // 24 messages × ~2 rows = ~48 rows total. Every cycle: the window is a
-    // contiguous SUFFIX ending at the newest message — re-slicing on each
-    // height change can neither skip a row inside the window nor reprint
-    // scrollback (the <Static> prefix above is append-only and BORDERED:
-    // no print-index rewind, no naked escape).
-    for (const budget of [33, 63, 33, 63, 12, 63]) {
+    // 12 user rows × 4 (bubble paddingY) + 12 assistant rows × 2 = 72
+    // rows total. Every cycle: the window is a contiguous SUFFIX ending at
+    // the newest message — re-slicing on each height change can neither
+    // skip a row inside the window nor reprint scrollback (the <Static>
+    // prefix above is append-only and BORDERED: no print-index rewind,
+    // no naked escape).
+    for (const budget of [33, 72, 33, 72, 12, 72]) {
       const { capIdx } = computeMessageSplit(messages, false, false, budget, 100)
       const window = messages.slice(capIdx)
       expect(window.length).toBe(messages.length - capIdx)
       expect(window[window.length - 1]).toBe(messages[messages.length - 1])
-      if (budget >= 48) expect(capIdx).toBe(0) // generous → whole history in-frame
+      if (budget >= 72) expect(capIdx).toBe(0) // generous → whole history in-frame
       if (budget <= 12) expect(capIdx).toBeGreaterThan(0) // tight → top rows leave the window
     }
   })
@@ -222,6 +248,27 @@ describe("buildStaticItems (print-once prefix for <Static>)", () => {
     })
     const items = buildStaticItems([tool], 1, 1, new Map())
     expect(items).toEqual([tool]) // same object: no ::head id, no field stripping
+  })
+})
+
+describe("pruneMessages (UI transcript memory bound)", () => {
+  it("returns the same reference under the bound (no churn, no re-render)", () => {
+    const messages = [msg("u1"), msg("a1", "assistant")]
+    const { messages: kept, pruned } = pruneMessages(messages)
+    expect(pruned).toBe(0)
+    expect(kept).toBe(messages)
+  })
+
+  it("head-drops to KEEP with hysteresis past MAX (rare remount, never per-message)", () => {
+    const messages = Array.from({ length: UI_MAX_MESSAGES + 1 }, (_, i) => msg(`m${i}`))
+    const { messages: kept, pruned } = pruneMessages(messages)
+    expect(pruned).toBe(UI_MAX_MESSAGES + 1 - UI_KEEP_MESSAGES)
+    expect(kept).toHaveLength(UI_KEEP_MESSAGES)
+    // Tail order intact: newest rows survive, oldest go first.
+    expect(kept[0]).toBe(messages[messages.length - UI_KEEP_MESSAGES])
+    expect(kept[kept.length - 1]).toBe(messages[messages.length - 1])
+    // Settled well below MAX so the prune effect fires once, not in a loop.
+    expect(UI_KEEP_MESSAGES).toBeLessThan(UI_MAX_MESSAGES)
   })
 })
 

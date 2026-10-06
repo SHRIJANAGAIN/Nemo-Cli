@@ -6,6 +6,20 @@
 
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 import { g } from "./glyphs.js"
+import { orbitRowText } from "./thinking-ribbon.js"
+
+/**
+ * Footer version chip text.
+ *
+ * npm only accepts semver, so the S-series codename rides as the prerelease
+ * tag: "1.0.0-S1-TITANIUM". Printing that raw costs 18 columns and reads like
+ * a beta, so the chip shows the codename alone ("S1-TITANIUM") whenever a tag
+ * exists, and keeps the historic `v0.6.7` shape for a plain semver build.
+ */
+export const versionChipText = (version: string): string => {
+  const tag = /^\d+\.\d+\.\d+-(.+)$/.exec(version)?.[1]
+  return tag ? tag : `v${version}`
+}
 
 /**
  * Pure width-fitting for the status-bar Footer ("cmd size ke hisab se
@@ -25,9 +39,10 @@ import { g } from "./glyphs.js"
  *
  * Sacrifice order (what survives at each width):
  *   1. core status segments (dot+status, Mode, Tokens) — always attempted
- *   2. optionals by display priority: bg count, queue count, ctx %,
- *      bg spinner, bg hint, subagent chips, task hint — added only while
- *      they fit, keeping a floor of MIN_MODEL columns for the model name
+ *   2. optionals by display priority: bg count, queue count, scroll depth,
+ *      build chip, ctx %, silver thinking orbs, bg spinner, bg hint, subagent
+ *      chips, task hint — added only while they fit, keeping a floor of
+ *      MIN_MODEL columns for the model name
  *   3. model name — truncated with "…" only after optionals claimed space
  *   4. key hints — the longest variant (full → medium → short) that still
  *      fits in the slack left after the model; dropped entirely otherwise
@@ -39,7 +54,8 @@ import { g } from "./glyphs.js"
 
 export interface FooterSegment {
   /** Stable identity: "status" | "mode" | "tokens" | "bg" | "queue" |
-   *  "ctx" | "spinner" | "bg-hint" | "task-hint" | "hints" | "chip:<index>". */
+   *  "scroll" | "version" | "ctx" | "orbs" | "spinner" | "bg-hint" |
+   *  "task-hint" | "hints" | "chip:<index>". */
   id: string
   /** Exact displayed text — its length IS the width budget (chip icons are
    *  a 1-col placeholder char + space + label; the Footer swaps the char
@@ -58,8 +74,19 @@ export interface FooterFitInput {
   ctxText?: string
   bgText?: string
   queueText?: string
+  /** Parked-window depth, e.g. "↑ 5" — appears the moment a wheel notch
+   *  parks the transcript mid-turn, vanishes at live. */
+  scrollText?: string
+  /** Build version chip, e.g. "v0.6.7" — always attempted right after the
+   *  parked-depth chip so identity travels with it. */
+  versionText?: string
   /** bg subagent running — a 1-column spinner segment. */
   spinner?: boolean
+  /** Silver orbit chase (footer, one row only — a sphere needs height the
+   *  footer does not have). The fit only measures the row's width (one cell
+   *  per orbit cell); the Footer paints each cell with its own silver step,
+   *  recomputed from the same deterministic frame. */
+  orbs?: { frame: number; ascii: boolean }
   bgHint?: string
   taskHint?: string
   /** Chip display texts, already formatted as `<icon> <label>`. */
@@ -126,7 +153,12 @@ export const fitFooter = (input: FooterFitInput): FooterFit => {
   const optionals: FooterSegment[] = []
   if (input.bgText) optionals.push({ id: "bg", text: input.bgText })
   if (input.queueText) optionals.push({ id: "queue", text: input.queueText })
+  if (input.scrollText) optionals.push({ id: "scroll", text: input.scrollText })
+  if (input.versionText) optionals.push({ id: "version", text: input.versionText })
   if (input.ctxText) optionals.push({ id: "ctx", text: input.ctxText })
+  if (input.orbs) {
+    optionals.push({ id: "orbs", text: orbitRowText(input.orbs.frame, input.orbs.ascii) })
+  }
   if (input.spinner) optionals.push({ id: "spinner", text: g("spinnerDot") })
   if (input.bgHint) optionals.push({ id: "bg-hint", text: input.bgHint })
   ;(input.subagentLabels ?? []).forEach((label, i) => optionals.push({ id: `chip:${i}`, text: label }))

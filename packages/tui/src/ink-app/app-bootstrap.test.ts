@@ -4,9 +4,9 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { describe, expect, it, test } from "vitest"
+import { describe, expect, test } from "vitest"
 
-import { convertToAgentMessages, createAgentConfig, mouseLikelyDead } from "./app-bootstrap.js"
+import { convertToAgentMessages, createAgentConfig } from "./app-bootstrap.js"
 import type { TrayambakMessage } from "./types.js"
 
 /**
@@ -172,18 +172,5 @@ describe("convertToAgentMessages", () => {
       content: [{ type: "text", text: "ok" }],
       isError: true,
     })
-  })
-})
-
-describe("mouseLikelyDead", () => {
-  it("flags legacy Windows consoles and clears modern terminals", () => {
-    expect(mouseLikelyDead({}, "win32")).toBe(true)
-    expect(mouseLikelyDead({ WT_SESSION: "abc123" }, "win32")).toBe(false)
-    expect(mouseLikelyDead({ TERM_PROGRAM: "vscode" }, "win32")).toBe(false)
-    expect(mouseLikelyDead({ TERM_PROGRAM: "WezTerm" }, "win32")).toBe(false)
-    expect(mouseLikelyDead({ TERM_PROGRAM: "alacritty" }, "win32")).toBe(false)
-    expect(mouseLikelyDead({ TERM_PROGRAM: "mintty" }, "win32")).toBe(false)
-    expect(mouseLikelyDead({}, "linux")).toBe(false)
-    expect(mouseLikelyDead({}, "darwin")).toBe(false)
   })
 })

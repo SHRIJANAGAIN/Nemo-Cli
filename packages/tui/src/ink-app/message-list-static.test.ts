@@ -38,16 +38,22 @@ async function waitFor(sink: () => string, needle: string, ms = 4000): Promise<b
 }
 
 /** Split an accumulated ink sink into complete frames. Renders are joined
- *  by 3+ newlines; the trailing chunk may be a mid-write fragment, so it is
- *  dropped whenever at least one full frame exists. Returns per-frame
- *  "Thinking" counts. */
+ *  by 3+ newlines. Every chunk counts — including the trailing one: the
+ *  latest paint (which carries the live word) IS the trailer, so dropping it
+ *  would blind the test to exactly what it must see. Returns per-frame
+ *  shimmer-word counts (the shimmer splits the word across nested Texts, but
+ *  stripping ANSI re-joins it, so one indicator = one substring hit).
+ *  A mid-write fragment can only contribute a partial word (0 hits), never
+ *  hide a second concurrent indicator, because every complete paint carries
+ *  both. Counts "Thinking…" + "Generating…" (the two phases never
+ *  co-occur: the gate shows exactly one). */
 const frameHits = (strippedSink: string): number[] => {
   const chunks = strippedSink
     .split(/\n{3,}/)
     .map((c) => c.trim())
     .filter((c) => c.length > 0)
-  const full = chunks.length > 1 ? chunks.slice(0, -1) : chunks
-  return full.map((c) => c.split("Thinking").length - 1)
+  const countWord = (c: string, word: string): number => c.split(word).length - 1
+  return chunks.map((c) => countWord(c, "Thinking…") + countWord(c, "Generating…"))
 }
 
 const openStdio = (columns = 80): { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream; sink: () => string } => {
@@ -174,24 +180,37 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
       // Both answers on screen…
       expect(await waitFor(sink, "second answer")).toBe(true)
       expect(sink()).toContain("first answer")
-      // …but "Thinking" exactly once: pre-fix every assistant carrying
-      // thinking text re-grew a spinner below itself while a later turn
-      // streamed (completed answer + stuck ⠙ Thinking… under it).
-      const stripped = stripAnsi(sink())
-      const hits = stripped.split("Thinking").length - 1
-      expect(hits).toBe(1)
+      // …but the shimmer word exactly ONCE per frame, on the tail row only:
+      // pre-fix every assistant carrying thinking text re-grew an indicator
+      // below itself while a later turn streamed (completed answer + a stuck
+      // spinner under it).
+      // Frame-based (not whole-sink): the sink accumulates every animation
+      // frame, so whole-sink counts grow with time instead of measuring
+      // concurrent indicators.
+      // The ball paints on the orb interval — wait until one lands before
+      // counting, or the assert races the very first paint (chunk 0 above).
+      const start = Date.now()
+      while (Date.now() - start < 4000 && !frameHits(stripAnsi(sink())).some((h) => h >= 1)) {
+        await wait(25)
+      }
+      const hits = frameHits(stripAnsi(sink()))
+      expect(hits.length).toBeGreaterThan(0)
+      // Exactly one word per frame, never two; the very first paint may
+      // predate the word, so zeros are allowed, twos are not.
+      expect(hits).toContain(1)
+      expect(hits.every((h) => h <= 1)).toBe(true)
     } finally {
       instance?.unmount()
     }
   }, 15000)
 
-  it("never shows two Thinking spinners at once (tail row + bottom line)", async () => {
-    // Reported live: isLoading && isStreaming are BOTH true mid-turn, so
-    // the tail assistant row rendered "Thinking…" AND the bottom
-    // isLoading line rendered a second one. Exactly one, always.
+  it("never shows two shimmer words at once (tail row + bottom line)", async () => {
+    // Reported live: isLoading && isStreaming are BOTH true mid-turn, so the
+    // tail assistant row rendered an indicator AND the bottom isLoading line
+    // rendered a second one. Exactly one, always.
     // NOTE: asserted on the LAST frame only (last 8 sink lines) — the sink
-    // accumulates every spinner animation frame, so whole-sink substring
-    // counts grow with time instead of measuring concurrent instances.
+    // accumulates every animation frame, so whole-sink substring counts grow
+    // with time instead of measuring concurrent instances.
     const { stdin, stdout, sink } = openStdio()
     const messages: TrayambakMessage[] = [
       {
@@ -211,10 +230,10 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
         patchConsole: false,
       })
       expect(await waitFor(sink, "partial answer")).toBe(true)
-      await wait(200) // a couple of spinner ticks → several frames
+      await wait(200) // a couple of orb ticks → several frames
       const hits = frameHits(stripAnsi(sink()))
       expect(hits.length).toBeGreaterThan(0)
-      // Every complete frame carries exactly one spinner; none carries two.
+      // Every complete frame carries exactly one word; none carries two.
       expect(hits).toContain(1)
       expect(hits.every((h) => h <= 1)).toBe(true)
     } finally {
@@ -297,7 +316,8 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
     // Reported live: the newest response taller than the frame lost its
     // BOTTOM rows to the overflow clip — read downward and it vanished
     // under the input box ("input box ke niche assistant ka half response
-    // hidden"). rows=30 → rowBudget=23; this body is ~81 rows.
+    // hidden"). rows=30 → rowBudget=22 (rows−7 chrome −1 Windows-ink slack,
+    // see MessageList); this body is ~81 rows.
     const { stdin, stdout, sink } = openStdio(80)
     const lines = Array.from({ length: 80 }, (_, i) => `line-${i}`)
     lines[79] = "END-MARKER-LAST"

@@ -4,10 +4,10 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import React, { useEffect, useRef, type ReactNode } from "react"
+import React, { useEffect, useRef, useState, type ReactNode } from "react"
 import { Box, Static, Text, useStdout } from "ink"
 import { MessageRow } from "./MessageRow.js"
-import { Spinner } from "./Spinner.js"
+import { ThinkingOrbs } from "./ThinkingOrbs.js"
 import type { TrayambakMessage, AppStatus } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
 import { stringWidth, graphemes } from "./utils/stringWidth.js"
@@ -17,16 +17,6 @@ export interface MessageListProps {
   isLoading?: boolean
   isStreaming?: boolean
   extraBottomRows?: number
-  /** Wheel/PageUp offset: how many messages the frame window sits BEHIND
-   *  the live end (0 = live). App drives it from the mouse-input bus (+ the
-   *  composer's PageUp/PageDown) — mouse reporting is on for the TUI's
-   *  lifetime, so the user reads older conversation at idle AND while the
-   *  response generates — native scroll was yanked back to the live view on
-   *  every write ("ek jagah pe dubara aa jati hai jab tak pura response
-   *  complete nahi ho jata"). The print-once frontier keeps following the
-   *  LIVE split below — scrolling never re-cuts or reprints what Ink
-   *  already wrote ("old must be same"). */
-  scrollBack?: number
   /** App's turn phase: "running" = text is streaming — the bottom status
    *  line then says "Generating…" (cycling colors = the generation
    *  animation) instead of "Thinking…", and the tail row stops re-showing
@@ -45,9 +35,19 @@ export interface MessageListProps {
    *  → ONE continuous conversation box. Fresh sessions (no prefix) keep
    *  the ┌ cap. */
   onHasPrefix?: (hasPrefix: boolean) => void
+  /** Reports how many messages sit ABOVE the live frame (window start
+   *  index = capIdx), so App's footer can show the `↑ N` depth chip ("how
+   *  big is the chat upside"). Pure info — the frame itself never moves
+   *  (auto-scroll only). Value-stable → React bails out on the identical
+   *  state, no setState loop. */
+  onScrollDepth?: (depth: number) => void
   /** Ctrl+O: tool outputs render full (200-line cap) instead of head+tail
    *  preview; tool-role rows and compaction markers unfold. */
   expandOutput?: boolean
+  /** Turn start epoch ms (App sets it on turn_start): the bottom status
+   *  line shows elapsed seconds (`Thinking… 12s`) so a slow model never
+   *  reads as dead. Absent → no seconds. */
+  turnStartedAt?: number
 }
 
 /** Wrapped row count for text with hard newlines: every line contributes
@@ -56,8 +56,8 @@ export interface MessageListProps {
  *  vs ~50 real — so the budget window over-filled and the overflow clip ate
  *  the NEWEST rows (the response's tail hidden right above the input box).
  *  Over-counting only evicts older rows to scrollback (still reachable by
- *  wheeling up — they print BORDERED, as the conversation box's
- *  continuation), so the bias stays HIGH. */
+ *  the terminal's native scroll — they print BORDERED, as the conversation
+ *  box's continuation), so the bias stays HIGH. */
 function wrappedRows(text: string, width: number): number {
   if (!text) return 0
   const lines = text.split("\n")
@@ -145,8 +145,10 @@ export function splitAtRows(text: string, availRows: number, cols: number): { he
 /** Estimated rendered rows for one message (wrap + its marginTop row).
  *  Biased HIGH: over-estimating only hides older messages (they still
  *  live in scrollback), while under-estimating let the overflow clip eat
- *  the NEWEST rows. */
-export function estimateMessageRows(m: TrayambakMessage, cols: number): number {
+ *  the NEWEST rows. `expandOutput` (Ctrl+O) must be passed through: an
+ *  unfolded 200-line tool result budgets like one, or the frame overflows
+ *  and the clip eats the live answer below it. */
+export function estimateMessageRows(m: TrayambakMessage, cols: number, expandOutput = false): number {
   // TTL-expired notice (transientHidden): the frame renders it as NOTHING →
   // it must cost NO budget, or the split would evict real conversation to
   // make room for an invisible row. Flag-only — the row itself never leaves
@@ -164,13 +166,33 @@ export function estimateMessageRows(m: TrayambakMessage, cols: number): number {
     if (res) {
       const all = res.split("\n")
       const avail = Math.max(20, cols - 6) // borders + result prefix
-      const cap = Math.max(40, avail * 3)
-      rows += 1 // result block marginTop
-      for (const line of all.slice(0, 5)) {
-        const len = Math.min(line.length, cap) + (line.length > cap ? 1 : 0) + 4
-        rows += Math.max(1, Math.ceil(len / avail))
+      if (expandOutput) {
+        // Ctrl+O unfolds the ToolCallItem result to its full 200 lines:
+        // budget every shown line wrapped, exactly like the renderer (cap
+        // + 4-col bullet prefix + overflow marker), plus slack. avail stays
+        // at/below the renderer's wrap width and the cap at/below its cut,
+        // so the count is biased HIGH — the documented safe direction. The
+        // old code kept the collapsed ~10-row estimate here, so an unfolded
+        // wall of output overflowed the frame budget and the overflow clip
+        // ate everything below it, including the live answer
+        // ("assistant ka half message hide").
+        const cap = Math.max(40, (cols - 12) * 3)
+        rows += 1 // result block marginTop
+        for (const line of all.slice(0, 200)) {
+          const cut = Math.min(line.length + 4, cap) + (line.length + 4 > cap ? 1 : 0)
+          rows += Math.max(1, Math.ceil(cut / avail))
+        }
+        if (all.length > 200) rows += 1 // overflow marker line
+        rows += 2 // slack for the cols≈termWidth approximation
+      } else {
+        const cap = Math.max(40, avail * 3)
+        rows += 1 // result block marginTop
+        for (const line of all.slice(0, 5)) {
+          const len = Math.min(line.length, cap) + (line.length > cap ? 1 : 0) + 4
+          rows += Math.max(1, Math.ceil(len / avail))
+        }
+        if (all.length > 5) rows += 1 // overflow line
       }
-      if (all.length > 5) rows += 1 // overflow line
     }
     return rows + 1
   }
@@ -188,10 +210,12 @@ export function estimateMessageRows(m: TrayambakMessage, cols: number): number {
     // The plain content/thinking render paths mirror the parts path, so
     // budget whichever side is taller.
     textRows = Math.max(textRows, wrappedRows(m.content ?? "", cols), wrappedRows(m.thinking ?? "", cols))
-    return Math.max(1, textRows) + structure + 1 // margin + 1 slack
+    // User bubble padding (paddingY=1): +2 rows, same for parts-bearing rows.
+    return Math.max(1, textRows) + structure + 1 + (m.role === "user" ? 2 : 0) // margin + 1 slack
   }
   // Margin (+1) + newline-aware wrap of the content and thinking bodies.
-  return wrappedRows(m.content ?? "", cols) + wrappedRows(m.thinking ?? "", cols) + 1
+  // User bubble padding (paddingY=1): +2 rows.
+  return wrappedRows(m.content ?? "", cols) + wrappedRows(m.thinking ?? "", cols) + 1 + (m.role === "user" ? 2 : 0)
 }
 
 /** Rows Ink must keep re-rendering: live tool rows, running subagent
@@ -227,6 +251,7 @@ export function computeMessageSplit(
   isStreaming: boolean,
   rowBudget: number,
   cols: number,
+  expandOutput = false,
 ): MessageSplit {
   let firstUnstable = messages.length
   for (let i = 0; i < messages.length; i += 1) {
@@ -241,7 +266,7 @@ export function computeMessageSplit(
   let used = 0
   let capIdx = messages.length
   for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const rows = estimateMessageRows(messages[i], cols)
+    const rows = estimateMessageRows(messages[i], cols, expandOutput)
     if (used + rows > rowBudget && capIdx !== messages.length) break
     used += rows
     capIdx = i
@@ -256,6 +281,26 @@ export function computeMessageSplit(
  *  is exact and NOTHING is hidden, at ANY budget (i.e. any height). */
 export function splitCoversAll(frontier: number, capIdx: number): boolean {
   return frontier <= capIdx
+}
+
+/** UI transcript memory bound (OOM guard): run.session gets compacted by
+ *  token policy, but the visible transcript used to keep EVERY row for the
+ *  whole TUI lifetime — a heavy day (tool storms, reasoning traces) grew
+ *  the heap without bound (observed live: 4GB death). Past MAX, App drops
+ *  the oldest rows from React state and remounts Static via staticEpoch;
+ *  the dropped rows stay in terminal scrollback (already printed) and in
+ *  the session file, so nothing becomes unreachable. Sizing: worst-case
+ *  rows run ~256KB (bash cap) → 1000 rows ≈ 256MB worst case, typical rows
+ *  ~1–4KB → single-digit MB. Hysteresis (prune to KEEP, not to MAX) keeps
+ *  the rare remount from firing per message. */
+export const UI_MAX_MESSAGES = 1000
+export const UI_KEEP_MESSAGES = 750
+
+/** Head-drop the transcript when it exceeds the memory bound. Returns the
+ *  same array reference when nothing must go (no churn, no re-render). */
+export function pruneMessages<T>(messages: readonly T[]): { messages: readonly T[]; pruned: number } {
+  if (messages.length <= UI_MAX_MESSAGES) return { messages, pruned: 0 }
+  return { messages: messages.slice(-UI_KEEP_MESSAGES), pruned: messages.length - UI_KEEP_MESSAGES }
 }
 
 /** An oversized COMPLETED answer split across the scroll boundary: the head
@@ -321,37 +366,45 @@ export const MessageList = ({
   isLoading = false,
   isStreaming = false,
   extraBottomRows = 0,
-  scrollBack = 0,
   phase,
   staticEpoch = 0,
   onHasPrefix,
+  onScrollDepth,
   expandOutput = false,
+  turnStartedAt,
 }: MessageListProps): ReactNode => {
   const { stdout } = useStdout()
   const theme = useThemeColors()
 
   // In-frame height budget: root border(2) + footer(~3) + composer(~2) ≈ 7
   // chrome rows (the compact logo header is gone — it burned 2 rows per
-  // transcript; the old +1 was the "N older messages hidden" hint — gone).
+  // transcript; the old +1 was the "N older messages hidden" hint — gone)
+  // + 1 row of Windows-ink slack (root Box is height={rows-1} in App.tsx —
+  // outputHeight must stay BELOW the viewport or ink's win32 path wipes
+  // screen+scrollback and reprints the whole prefix on EVERY render:
+  // the per-token generation storm, "scrollbar stuck at 2 places / drag
+  // snaps back"). Budget tracks the box: messages area = rows-8 there.
   // The frame holds the NEWEST messages that fit rowBudget; the stable
   // prefix that falls out of the window prints ONCE to <Static> above the
   // frame — always BORDERED (│ on both edges: the conversation box's
-  // continuation, ┌ cap on the very first row), so wheel-up shows old
-  // history INSIDE a box, never naked lines floating over it. The frame
-  // itself is full terminal height (height={rows} in App.tsx), so its rows
+  // continuation, ┌ cap on the very first row), so the terminal's native
+  // scroll always shows old history INSIDE a box, never naked lines
+  // floating over it. The frame
+  // itself is full window height minus that slack (height={rows-1} in
+  // App.tsx), so its rows
   // stretch DOWN to fill the box as the conversation grows. Every row
   // wrapper is flexShrink={0} (rows never compress → gaps survive at ANY
   // width) and this Box clips (overflow="hidden"), so the transcript can
   // never paint over the footer/composer rows.
   const cols = Math.max(20, (stdout.columns || 80) - 6)
-  // Scrolled-back window (wheel / PageUp-PageDown): the budget is IDENTICAL
-  // to live — no marker line steals a row from history ("history ke liye wo
-  // hide nahi chahiye, pura show hota rahe"). The window contents alone
-  // tell the user they're scrolled back; the offset PERSISTS past turn end
-  // (App snaps to live when the next turn starts). scrollBack=0 →
-  // endIdx=messages.length, byte-identical either way.
-  const scrolled = Math.max(0, scrollBack)
-  const rowBudget = Math.max(6, (stdout.rows || 40) - 7 - extraBottomRows)
+  // The frame window shows the NEWEST messages that fit the row budget —
+  // no marker line steals a row from history ("history ke liye wo hide
+  // nahi chahiye, pura show hota rahe"). Older rows fall out the top into
+  // the print-once <Static> prefix where the terminal's NATIVE scroll
+  // reads them (no in-app window: the up-down wheel-park is removed by
+  // decision — "only auto scroll": the frame always holds the newest
+  // messages, generation included, so no scroll can hide the response).
+  const rowBudget = Math.max(6, (stdout.rows || 40) - 8 - extraBottomRows)
 
   // <Static>'s forward-only print index and the head/tail split table are
   // PER-EPOCH: a wholesale replace (/clear, new chat, session restore)
@@ -367,21 +420,22 @@ export const MessageList = ({
     splitsRef.current = new Map()
   }
 
-  const { capIdx, firstUnstable } = computeMessageSplit(messages, isLoading, isStreaming, rowBudget, cols)
+  const { capIdx, firstUnstable } = computeMessageSplit(messages, isLoading, isStreaming, rowBudget, cols, expandOutput)
 
   // Oversized COMPLETED answer: cut head/tail ONCE, permanently for this
   // epoch (Ink's static index only moves forward — a later re-cut would
   // desync what already printed). The head then prints to scrollback
   // bordered the moment the frontier reaches it; the frame keeps the tail
-  // so the response's END stays visible above the input box. Assistant AND
-  // system rows both qualify: a 54-line /themes list lost its head (with
-  // the ● marker) forever because only the tail rendered — same data-loss
-  // class as a long answer, same cure. Tool rows never qualify (they render
-  // as boxes, rendersAsText is false for them).
+  // so the response's END stays visible above the input box. ANY completed
+  // text row qualifies — assistant/system AND user: a 30-line pasted blob
+  // lost its whole head forever because only the tail rendered (the frame
+  // clips top-first, static had no frozen head to print). Tool rows,
+  // subagent cards and assistant tool-call cards never qualify (they draw
+  // their own boxes — rendersAsText is false for them, and slicing their
+  // content would corrupt the card).
   if (capIdx === messages.length - 1 && messages.length > 0) {
     const m = messages[messages.length - 1]!
     if (
-      (m.role === "assistant" || m.role === "system") &&
       rendersAsText(m) &&
       !isUnstableMessage(m, messages.length - 1, messages.length, isLoading, isStreaming) &&
       !splitsRef.current.has(m.id) &&
@@ -399,26 +453,26 @@ export const MessageList = ({
   frontierRef.current = frontier
   const staticItems = buildStaticItems(messages, frontier, capIdx, splitsRef.current)
 
-  // Frame window, live or scrolled: `scrollBack` slides the window's END
-  // back before the live messages and the split is recomputed on that
-  // prefix — the LIVE split above stays the sole driver of the print-once
-  // frontier, so scrolling never changes what Ink already wrote. Rows the
-  // scrolled frame re-shows are prefix rows printed OFF-SCREEN (the
-  // full-height root frame sits below them in the terminal buffer), so the
-  // duplicate is only reachable by NATIVE wheel-up — and mouse reporting is
-  // on for the TUI's lifetime, so native wheel and an in-app offset can
-  // never coexist. scrollBack=0 → endIdx=messages.length and
-  // frameCap=capIdx: byte-identical to the old pipeline.
-  const endIdx = messages.length - Math.min(scrolled, Math.max(0, messages.length - 1))
-  const frameCap =
-    endIdx < messages.length
-      ? computeMessageSplit(messages.slice(0, endIdx), isLoading, isStreaming, rowBudget, cols).capIdx
-      : capIdx
-  /** Is the LIVE streaming tail inside the window? A scrolled window's tail
-   *  is old conversation — it must never inherit the live row's spinner
-   *  gates ("answer done, ⠙ Thinking… stuck under it" all over again). */
-  const liveTail = endIdx === messages.length
-  const dynamicMessages = messages.slice(frameCap, endIdx)
+  // Frame window: ALWAYS the newest messages that fit the row budget, ending
+  // at the live tail (auto-scroll only — no offset state exists anywhere, so
+  // no scroll can hide the response). Rows older than the window fell out
+  // the top into the print-once prefix (see buildStaticItems above),
+  // reachable by the terminal's NATIVE scroll; the frame re-showing a prefix
+  // row would be a bottom-of-screen duplicate of scrollback content.
+  const dynamicMessages = messages.slice(capIdx)
+
+  // Elapsed-seconds ticker for the bottom status line: ticks ONLY while
+  // the tail is loading (mid-turn repaints already flow then). At
+  // idle there is deliberately no timer — zero writes, so the Windows
+  // scrollbar and native drag hold position (idle-silence contract).
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!isLoading) return
+    const timer = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(timer)
+  }, [isLoading])
+  const elapsedSuffix =
+    isLoading && turnStartedAt !== undefined ? ` ${Math.max(0, Math.floor((Date.now() - turnStartedAt) / 1000))}s` : ""
 
   // Tell App when the scrollback prefix exists so the root frame can drop
   // its TOP border — otherwise its ┌────┐ line renders between the prefix
@@ -428,6 +482,14 @@ export const MessageList = ({
   useEffect(() => {
     onHasPrefix?.(staticItems.length > 0)
   }, [staticItems.length, onHasPrefix])
+
+  // Depth chip: tell App how many messages the frame window starts below
+  // (all of them already live in the print-once prefix / scrollback).
+  // Fires only when capIdx changes (append-only growth shrinks it), and
+  // setting the same value bails out in React — no loop.
+  useEffect(() => {
+    onScrollDepth?.(capIdx)
+  }, [capIdx, onScrollDepth])
 
   // Bottom-anchored slice for a message too tall for the frame: render its
   // LAST rows in-frame with NO hint/marker row so the response's END is
@@ -440,19 +502,18 @@ export const MessageList = ({
     if (!rendersAsText(msg)) return null
     const frozen = splitsRef.current.get(msg.id)
     if (frozen) return frozen.tailText
-    if (estimateMessageRows(msg, cols) <= rowBudget) return null
+    if (estimateMessageRows(msg, cols, expandOutput) <= rowBudget) return null
     const avail = Math.max(1, rowBudget - 1) // the row's marginTop
     const { tail } = splitAtRows(messageText(msg), avail, cols)
     return tail
   }
 
-  // Bottom "Thinking…" line shows ONLY when the tail row isn't already
-  // showing one (see below). Computed here so the JSX stays declarative.
   const tail = dynamicMessages[dynamicMessages.length - 1]
-  /** Text is streaming right now (vs the pre-token reasoning phase). */
+  /** Bottom "Thinking…" line shows ONLY when the tail row isn't already
+   *  showing one (see below). `generating` = text streaming right now (vs
+   *  the pre-token reasoning phase). Computed here so JSX stays declarative. */
   const generating = phase === "running"
   const tailShowsThinking =
-    liveTail && // scrolled window → its tail is OLD, never the live spinner
     isStreaming &&
     !generating && // tokens are flowing: reasoning is over, not "Thinking…"
     !!tail &&
@@ -492,62 +553,63 @@ export const MessageList = ({
           </Box>
         )}
       </Static>
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
-        {messages.length === 0 && !isLoading && (
-          <Box flexDirection="column" alignItems="center" marginTop={2} flexShrink={0}>
-            <Text dimColor>No messages yet. Type a message to begin.</Text>
-          </Box>
-        )}
-        {/* No ↑ history marker row: it cost a budget row of HISTORY for a
+      <Box flexDirection="row" flexGrow={1}>
+        <Box flexDirection="column" flexGrow={1} overflow="hidden">
+          {messages.length === 0 && !isLoading && (
+            <Box flexDirection="column" alignItems="center" marginTop={2} flexShrink={0}>
+              <Text dimColor>No messages yet. Type a message to begin.</Text>
+            </Box>
+          )}
+          {/* No ↑ history marker row: it cost a budget row of HISTORY for a
             hint the window itself already proves ("no need see ye … pura
             show hota rahe"). Scrolled or live — the frame is all history. */}
-        {dynamicMessages.map((msg, dynIdx) => {
-          // TTL-expired notice: drop it from the LIVE frame only. The row
-          // stays in `messages` (the split/frontier index into it) and a
-          // copy already printed to <Static> keeps its scrollback content —
-          // hiding must never re-cut what Ink wrote.
-          if (msg.transientHidden) return null
-          // column + stretch: the row box defaults to a flex ROW, which sizes
-          // its child (MessageRow) to CONTENT — the tool box then hugged its
-          // 45-col header instead of filling the terminal ("jitni window
-          // width utna stretched"). As a column child, MessageRow cross-axis
-          // STRETCHES to this box's width, so every width="100%" resolves
-          // against the full frame content width.
-          const slice = dynamicSlice(msg)
-          if (slice) {
-            // Oversized answer: its BOTTOM rows only, no hint row. The frame
-            // shows the response's END (bottom-anchored) instead of letting
-            // the overflow clip eat it under the input box; its head printed
-            // BORDERED to scrollback above (wheel-up reads the whole answer
-            // as one continuous boxed message).
+          {dynamicMessages.map((msg, dynIdx) => {
+            // TTL-expired notice: drop it from the LIVE frame only. The row
+            // stays in `messages` (the split/frontier index into it) and a
+            // copy already printed to <Static> keeps its scrollback content —
+            // hiding must never re-cut what Ink wrote.
+            if (msg.transientHidden) return null
+            // column + stretch: the row box defaults to a flex ROW, which sizes
+            // its child (MessageRow) to CONTENT — the tool box then hugged its
+            // 45-col header instead of filling the terminal ("jitni window
+            // width utna stretched"). As a column child, MessageRow cross-axis
+            // STRETCHES to this box's width, so every width="100%" resolves
+            // against the full frame content width.
+            const slice = dynamicSlice(msg)
+            if (slice) {
+              // Oversized answer: its BOTTOM rows only, no hint row. The frame
+              // shows the response's END (bottom-anchored) instead of letting
+              // the overflow clip eat it under the input box; its head printed
+              // BORDERED to scrollback above (wheel-up reads the whole answer
+              // as one continuous boxed message).
+              return (
+                <Box key={msg.id} flexShrink={0} flexDirection="column">
+                  <MessageRow
+                    message={{ ...msg, content: slice, parts: undefined, thinking: undefined }}
+                    isStreaming={false}
+                    expandOutput={expandOutput}
+                  />
+                </Box>
+              )
+            }
             return (
               <Box key={msg.id} flexShrink={0} flexDirection="column">
-                <MessageRow
-                  message={{ ...msg, content: slice, parts: undefined, thinking: undefined }}
-                  isStreaming={false}
-                  expandOutput={expandOutput}
-                />
-              </Box>
-            )
-          }
-          return (
-            <Box key={msg.id} flexShrink={0} flexDirection="column">
-              {/* Thinking spinner ONLY on the tail row: MessageRow shows
+                {/* Thinking spinner ONLY on the tail row: MessageRow shows
                 "Thinking…" for any assistant carrying thinking text while
                 isStreaming — without this gate every OLD completed answer
                 re-grew a spinner below itself whenever a later turn
                 streamed (the paste's "answer done, ⠙ Thinking… stuck
                 under it"). */}
-              <MessageRow
-                message={msg}
-                isStreaming={liveTail && isStreaming && dynIdx === dynamicMessages.length - 1}
-                phase={phase}
-                expandOutput={expandOutput}
-              />
-            </Box>
-          )
-        })}
-        {/* Bottom spinner ONLY when the tail row isn't already showing one:
+                <MessageRow
+                  message={msg}
+                  isStreaming={isStreaming && dynIdx === dynamicMessages.length - 1}
+                  phase={phase}
+                  expandOutput={expandOutput}
+                />
+              </Box>
+            )
+          })}
+          {/* Bottom spinner ONLY when the tail row isn't already showing one:
           with isLoading && isStreaming both true mid-turn, the tail
           assistant row renders "Thinking…" AND this line rendered a second
           one ("2 THINKING APPEARS WHEN AI GENERATE RESPONSES"). The bottom
@@ -555,15 +617,24 @@ export const MessageList = ({
           Phase-aware: while TEXT streams (phase "running") it reads
           "Generating…" and cycleColors ANIMATES it (Footer's waiting-chip
           treatment) — the old code spun "Thinking…" through the whole
-          answer. liveTail: a scrolled window's bottom is old conversation;
-          the pulsing footer already shows the turn continuing. */}
-        {liveTail && isLoading && !tailShowsThinking && (
-          <Box marginTop={1} marginLeft={1} flexShrink={0}>
-            <Spinner color={theme.warning} cycleColors={generating}>
-              {generating ? "Generating…" : "Thinking…"}
-            </Spinner>
-          </Box>
-        )}
+          answer. */}
+          {/* Bottom shimmer ONLY when the tail row isn't already showing one:
+          the pre-first-token phase (and a non-assistant tail) has no row to
+          carry the word, so it lives here instead — exactly one per frame,
+          never two. */}
+          {isLoading && !tailShowsThinking && (
+            <Box marginTop={1} marginLeft={1} flexShrink={0}>
+              <ThinkingOrbs
+                label={generating ? "Generating…" : "Thinking…"}
+                suffix={elapsedSuffix}
+              />
+            </Box>
+          )}
+        </Box>
+        {/* No custom gutter here by decision: the Windows inbuilt scrollbar
+            owns the frame edge — a second in-app bar in the same gray read
+            as a smear/dupe next to it. Wheel/page/anchor/pill/footer-chip
+            are untouched; only the drawn bar is gone. */}
       </Box>
     </>
   )

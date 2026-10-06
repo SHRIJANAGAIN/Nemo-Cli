@@ -28,25 +28,6 @@ export const debugInputLog = (line: string): void => {
   }
 }
 
-/**
- * True when the mouse wheel almost certainly cannot reach the app: legacy
- * Windows consoles swallow wheel input instead of emitting SGR reports, so
- * the in-app history window never moves AND the terminal's own native
- * scroll smears the live frame out of view. Modern terminals (Windows
- * Terminal/WT_SESSION, VS Code, WezTerm, Alacritty, mintty) pass reports
- * through. Pure: platform + env in, boolean out.
- */
-export function mouseLikelyDead(
-  env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform,
-): boolean {
-  if (platform !== "win32") return false
-  if (env.WT_SESSION) return false
-  const term = (env.TERM_PROGRAM ?? "").toLowerCase()
-  if (term === "vscode" || term === "wezterm" || term === "alacritty" || term === "mintty") return false
-  return true
-}
-
 export function enableBracketedPaste(): () => void {
   if (process.stdout.isTTY) {
     process.stdout.write("\x1b[?2004h")

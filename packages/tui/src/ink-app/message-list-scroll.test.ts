@@ -12,19 +12,21 @@ import { MessageList } from "./MessageList.js"
 import type { TrayambakMessage } from "./types.js"
 
 /**
- * Lifetime wheel scroll + the generation animation.
+ * The live window + the generation animation.
  *
- * Contract: App enables SGR mouse reporting for the TUI's lifetime, and the
- * wheel bus slides MessageList's window back by `scrollBack` messages —
- * the frame then shows OLDER conversation ("AI generates kar raha hai aur
- * scroll ek jagah pe dubara aa jata hai" — native scroll was yanked by
- * every token write; this window can't be yanked). The print-once prefix
- * keeps following the LIVE split: scrolling never re-cuts what Ink wrote.
+ * Contract: the frame always shows the NEWEST messages that fit the row
+ * budget — the in-app wheel-park window was removed entirely ("up down
+ * totally hata do, only auto scroll"): no scrollBack offset exists, so no
+ * scroll can hide the response, and during generation the same rule holds
+ * (tokens append to the live tail and the terminal follows — that IS the
+ * auto-scroll). History reads through the terminal's NATIVE scroll over
+ * the print-once <Static> prefix (mouse reporting stays OFF app-wide).
+ * The print-once frontier follows the LIVE split only — nothing ever
+ * re-cuts what Ink already wrote ("old must be same").
  *
  * Phase-aware bottom line: phase "running" (text streaming) → "Generating…"
  * with cycling colors; anything else → the old "Thinking…". The tail row's
- * reasoning spinner stands down while tokens flow (reasoning is done), and
- * a SCROLLED window's old tail never inherits any live spinner.
+ * reasoning spinner stands down while tokens flow (reasoning is done).
  */
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -36,6 +38,16 @@ async function waitFor(sink: () => string, needle: string, ms = 4000): Promise<b
   const start = Date.now()
   while (Date.now() - start < ms) {
     if (sink().includes(needle)) return true
+    await wait(25)
+  }
+  return false
+}
+
+/** Poll a synchronous predicate (effect-fired callbacks, not frame text). */
+async function waitForFn(fn: () => boolean, ms = 4000): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < ms) {
+    if (fn()) return true
     await wait(25)
   }
   return false
@@ -61,45 +73,8 @@ const openStdio = (columns = 80): { stdin: NodeJS.ReadStream; stdout: NodeJS.Wri
   return { stdin, stdout, sink: () => captured }
 }
 
-describe("MessageList wheel scroll (scrolled window vs live tail)", () => {
-  it("scrollBack slides the window back: older tail in-frame, newest OFF-screen, frame all history", async () => {
-    const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
-      id: `m${i}`,
-      timestamp: i,
-      role: "user",
-      content: `MSG-${i}`,
-    }))
-
-    let instance: Instance | undefined
-    try {
-      instance = render(React.createElement(MessageList, { messages, scrollBack: 5 }), {
-        stdin,
-        stdout,
-        patchConsole: false,
-      })
-
-      // The window's last row is 5 messages before the live end…
-      expect(await waitFor(sink, "MSG-34")).toBe(true)
-      // No ↑ history marker row: it stole a budget row from history and
-      // said nothing the window itself doesn't prove ("no need see ye —
-      // pura show hota rahe"):
-      expect(stripAnsi(sink())).not.toContain("↑ history")
-      // …and the live newest rows are in NEITHER the frame (window slid
-      // back) NOR the printed prefix (that's the LIVE split's eviction,
-      // which stops at the current window start) — they simply aren't
-      // shown until the user returns to live:
-      expect(sink()).not.toContain("MSG-39")
-      expect(sink()).not.toContain("MSG-35")
-      // The prefix still printed above (wheel-up reads it, bordered — the
-      // scrollback contract this file must not disturb):
-      expect(sink()).toContain("MSG-0")
-    } finally {
-      instance?.unmount()
-    }
-  }, 15000)
-
-  it("scrollBack=0 is byte-identical live behavior: newest shown, NO hint row", async () => {
+describe("MessageList live window (newest always in-frame, print-once prefix)", () => {
+  it("shows the newest message in-frame and the old prefix above, NO hint row", async () => {
     const { stdin, stdout, sink } = openStdio()
     const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
@@ -115,25 +90,27 @@ describe("MessageList wheel scroll (scrolled window vs live tail)", () => {
         stdout,
         patchConsole: false,
       })
+      // The newest is always in the frame — auto-scroll only: no offset
+      // exists that could park the window off the response.
       expect(await waitFor(sink, "MSG-39")).toBe(true)
-      expect(sink()).not.toContain("scrolled back")
+      // No hint row steals a budget row from history ("pura show hota
+      // rahe") — and no "scrolled back" marker state exists at all:
+      expect(stripAnsi(sink())).not.toContain("↑ history")
+      expect(sink()).not.toContain("● live")
+      expect(sink()).not.toContain("new below")
+      // The evicted prefix printed ONCE above the frame, for the terminal's
+      // native scroll to read (the scrollback contract):
       expect(sink()).toContain("MSG-0")
     } finally {
       instance?.unmount()
     }
   }, 15000)
 
-  it("a scrolled window's old tail never inherits the live Thinking spinner", async () => {
+  it("mid-generation the SAME live rule holds: newest visible + Generating… (auto-scroll)", async () => {
     const { stdin, stdout, sink } = openStdio()
     const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) =>
-      i === 34
-        ? {
-            id: `m${i}`,
-            timestamp: i,
-            role: "assistant" as const,
-            content: `ANS-${i}`,
-            thinking: `old-reason-${i}`,
-          }
+      i === 39
+        ? { id: `m${i}`, timestamp: i, role: "assistant" as const, content: "LIVE-STREAMING-ANSWER" }
         : { id: `m${i}`, timestamp: i, role: "user" as const, content: `MSG-${i}` },
     )
 
@@ -142,30 +119,45 @@ describe("MessageList wheel scroll (scrolled window vs live tail)", () => {
       instance = render(
         React.createElement(MessageList, {
           messages,
-          scrollBack: 5,
           isLoading: true,
           isStreaming: true,
+          phase: "running",
         }),
         { stdin, stdout, patchConsole: false },
       )
-
-      // The scrolled tail (the OLD answer at index 34) renders its content…
-      expect(await waitFor(sink, "ANS-34")).toBe(true)
-      // …and rows past the printed prefix prove the FRAME slid back (MSG-33
-      // is neither in the live split's prefix [0..29) nor beyond the
-      // window): the window itself, not just scrollback, shows the old tail.
-      expect(sink()).toContain("MSG-33")
-      // …with NO "Thinking" anywhere: the tail gate is liveTail-scoped, so
-      // an old completed answer can't grow a spinner under itself just
-      // because a later turn is streaming (the regression the live-tail
-      // gate always prevented — now also enforced off-live).
-      expect(stripAnsi(sink()).split("Thinking").length - 1).toBe(0)
-      // And no bottom line either: the turn's spinner belongs over the LIVE
-      // tail only (the footer keeps pulsing to show generation continues).
-      expect(sink()).not.toContain("Generating")
-      // NO marker row steals a budget row while scrolled — history fills
-      // the frame edge to edge:
+      // The streaming answer is in-frame with its live status line — no
+      // wheel window exists that could hide it before or during a turn:
+      // generation auto-scrolls the same way everything else does.
+      expect(await waitFor(sink, "LIVE-STREAMING-ANSWER")).toBe(true)
+      expect(sink()).toContain("Generating…")
       expect(sink()).not.toContain("↑ history")
+      expect(sink()).not.toContain("● live")
+      expect(sink()).not.toContain("new below")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+
+  it("reports the window start index to onScrollDepth (the ↑N depth chip)", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+      id: `m${i}`,
+      timestamp: i,
+      role: "user",
+      content: `MSG-${i}`,
+    }))
+    const depths: number[] = []
+
+    let instance: Instance | undefined
+    try {
+      instance = render(
+        React.createElement(MessageList, { messages, onScrollDepth: (d: number) => depths.push(d) }),
+        { stdin, stdout, patchConsole: false },
+      )
+      expect(await waitFor(sink, "MSG-39")).toBe(true)
+      // Older rows evicted above the frame → the chip reports their count
+      // (pure info; the frame itself never moves):
+      expect(await waitForFn(() => depths.length > 0 && depths[depths.length - 1]! > 0)).toBe(true)
     } finally {
       instance?.unmount()
     }
@@ -227,6 +219,50 @@ describe("MessageList generation animation (phase-aware bottom line)", () => {
       instance?.unmount()
     }
   }, 15000)
+
+  it("status line carries elapsed seconds while loading (slow model never reads as dead)", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: TrayambakMessage[] = [
+      { id: "q", timestamp: 1, role: "user", content: "ELAPSED-Q" },
+      { id: "a", timestamp: 2, role: "assistant", content: "ELAPSED-A" },
+    ]
+
+    let instance: Instance | undefined
+    try {
+      instance = render(
+        React.createElement(MessageList, {
+          messages,
+          isLoading: true,
+          isStreaming: true,
+          phase: "thinking",
+          turnStartedAt: Date.now(),
+        }),
+        { stdin, stdout, patchConsole: false },
+      )
+      expect(await waitFor(sink, "ELAPSED-A")).toBe(true)
+      // "Thinking… Ns" — the seconds prove the turn is alive, not stuck:
+      expect(stripAnsi(sink())).toMatch(/Thinking… \d+s/)
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+
+  it("status line shows no seconds without a turn start (old renders unchanged)", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: TrayambakMessage[] = [{ id: "q", timestamp: 1, role: "user", content: "PLAIN-Q" }]
+
+    let instance: Instance | undefined
+    try {
+      instance = render(
+        React.createElement(MessageList, { messages, isLoading: true, phase: "thinking" }),
+        { stdin, stdout, patchConsole: false },
+      )
+      expect(await waitFor(sink, "Thinking…")).toBe(true)
+      expect(stripAnsi(sink())).not.toMatch(/\d+s/)
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
 })
 
 describe("TTL-hidden notices in the live frame", () => {
@@ -250,6 +286,137 @@ describe("TTL-hidden notices in the live frame", () => {
       // (same window, same frame) render exactly as before:
       expect(sink()).toContain("VISIBLE-BEFORE")
       expect(sink()).not.toContain("MODE-NOTICE-TEXT")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+})
+
+describe("live windows (no strip — there is no parked state to flicker)", () => {
+  const shortMessages = (): TrayambakMessage[] => [
+    ...Array.from({ length: 5 }, (_, i) => ({
+      id: `m${i}`,
+      timestamp: i,
+      role: "user" as const,
+      content: `HISTORY-${i}`,
+    })),
+    { id: "live", timestamp: 9, role: "assistant" as const, content: "LIVE-TAIL-XYZ" },
+  ]
+
+  it("a live window shows no strip (byte-identical old behavior)", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages: shortMessages() }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      expect(await waitFor(sink, "LIVE-TAIL-XYZ")).toBe(true)
+      expect(sink()).not.toContain("● live")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+
+  it("a faded (transientHidden) last row pins no strip", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: TrayambakMessage[] = [
+      ...Array.from({ length: 5 }, (_, i) => ({
+        id: `m${i}`,
+        timestamp: i,
+        role: "user" as const,
+        content: `HISTORY-${i}`,
+      })),
+      { id: "gone", timestamp: 9, role: "system" as const, content: "FADED-NOTICE", transientHidden: true },
+    ]
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      expect(await waitFor(sink, "HISTORY-0")).toBe(true)
+      expect(sink()).not.toContain("● live")
+      expect(sink()).not.toContain("FADED-NOTICE")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+})
+
+describe("MessageList has no custom gutter (Windows inbuilt owns the edge)", () => {
+  it("renders no thumb cells even when the transcript overflows", async () => {
+    // The in-app bar is gone by decision (it read as a smear next to the
+    // Windows bar in the same gray). Only the thumb glyph █ is unique to
+    // it — borders use │/─/corners everywhere, so its absence is exact:
+    // overflow content still renders, with zero drawn bar.
+    const { stdin, stdout, sink } = openStdio()
+    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+      id: `m${i}`,
+      timestamp: i,
+      role: "user" as const,
+      content: `MSG-${i}`,
+    }))
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      expect(await waitFor(sink, "MSG-39")).toBe(true)
+      expect(stripAnsi(sink())).not.toContain("█")
+      expect(sink()).toContain("MSG-0")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+})
+
+describe("MessageList live frame (no pill line)", () => {
+  it("an oversized paste prints head + tail exactly once each (no user-duplicate)", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    // 30 unique lines ≈ 31 rows > the 22-row budget (rows 30 − chrome 7 −
+    // 1 Windows-ink slack):
+    // the completed blob splits once — head to scrollback, tail in-frame.
+    // Either half printed twice would read as the user's "USER KA DUPLICATE".
+    const lines = Array.from({ length: 30 }, (_, i) => `BLOB-LINE-${String(i).padStart(2, "0")}`)
+    const messages: TrayambakMessage[] = [{ id: "blob", timestamp: 1, role: "user", content: lines.join("\n") }]
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      expect(await waitFor(sink, "BLOB-LINE-00")).toBe(true)
+      expect(await waitFor(sink, "BLOB-LINE-29")).toBe(true)
+      const frame = stripAnsi(sink())
+      for (const marker of ["BLOB-LINE-00", "BLOB-LINE-14", "BLOB-LINE-29"]) {
+        expect(frame.split(marker).length - 1).toBe(1)
+      }
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+
+  it("a live window shows no pill (byte-identical old behavior)", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: TrayambakMessage[] = [
+      { id: "q", timestamp: 1, role: "user", content: "PILL-LIVE-Q" },
+      { id: "a", timestamp: 2, role: "assistant", content: "PILL-LIVE-A" },
+    ]
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      expect(await waitFor(sink, "PILL-LIVE-A")).toBe(true)
+      expect(sink()).not.toContain("new below")
     } finally {
       instance?.unmount()
     }

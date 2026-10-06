@@ -7,13 +7,15 @@
 /**
  * Wheel/touch-scroll events parsed out of stdin by StdinSanitizer.
  *
- * App enables SGR mouse reporting (1000+1006) for the TUI's lifetime, so
- * the terminal ships clicks and wheel notches as byte sequences. Those must
- * NEVER reach Ink's key parser (it would "type" them into the composer);
- * the sanitizer strips them and re-emits wheel direction through this tiny
- * bus. Touch: terminals map touch-scroll gestures to the same wheel events
- * and taps to button reports (swallowed as no-ops), which is what makes
- * the transcript touch-scrollable.
+ * App NEVER enables SGR mouse reporting (1000/1006 — the in-app up-down
+ * window was removed by decision: auto-scroll only), so on a compliant
+ * terminal no wheel bytes ever arrive. The bus stays purely defensive: any
+ * stray reports (a crashed older build left reporting on, a weird
+ * terminal) must NEVER reach Ink's key parser (it would "type" them into
+ * the composer) — the sanitizer strips them and re-emits wheel direction on
+ * this tiny bus, where only tests/diagnostics listen. Touch: terminals map
+ * touch-scroll gestures to the same wheel events and taps to button
+ * reports (swallowed as no-ops).
  */
 
 import { appendFileSync } from "node:fs"
@@ -36,9 +38,9 @@ export const onMouseScroll = (fn: Listener): (() => void) => {
 
 /** Called by the stdin layer — never by UI code. */
 export const emitMouseScroll = (dir: MouseScrollDir): void => {
-  // Diagnostic: a MOUSE-RAW line here proves terminal wheel bytes ARRIVED
-  // and were parsed (if it's missing while wheel-scrolling does nothing,
-  // the terminal never sent reports — check ESC[?1000h was honoured).
+  // Diagnostic: a MOUSE-RAW line here proves wheel bytes ARRIVED (they
+  // never should while reporting is off — its presence means a stray/
+  // stale mode is reporting; check nothing wrote ESC[?1000h).
   if (process.env.TRAYAMBAK_DEBUG_INPUT === "1") {
     try {
       appendFileSync(path.join(tmpdir(), "trayambak-input.log"), `${new Date().toISOString()} MOUSE-RAW ${dir}\n`)

@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import React, { type ReactNode } from "react"
+import React, { type ReactNode, useEffect, useMemo, useState } from "react"
 import { Box, Text, useStdout } from "ink"
 import { Spinner } from "./Spinner.js"
 import type { StatusBarInfo, BackgroundSubagentState } from "./types.js"
@@ -12,7 +12,9 @@ import { PERMISSION_MODE_LABELS, STATUS_LABELS, formatSubagentToolcalls } from "
 import { useThemeColors } from "./themeColors.js"
 import { contextUsage } from "./sidebar-data.js"
 import { g, spinnerFrames } from "./glyphs.js"
-import { fitFooter, SEGMENT_GAP, type FooterSegment } from "./footer-fit.js"
+import { fitFooter, versionChipText, SEGMENT_GAP, type FooterSegment } from "./footer-fit.js"
+import { glyphSet } from "./glyphs.js"
+import { orbitPaint, RIBBON_TICK_MS } from "./thinking-ribbon.js"
 import { useBorderPulse } from "./use-border-pulse.js"
 
 export interface FooterProps {
@@ -45,19 +47,32 @@ function subagentLabel(item: BackgroundSubagentState): string {
   return `${label} · running`
 }
 
-/** Three-tier key hints: the fit module picks the longest that shares the
- *  line with everything else, or drops hints entirely. */
-function hintVariants(queued: number): string[] {
-  const full = "ctrl+s inject / ctrl+g subagents / ctrl+b background / ctrl+k keys / ctrl+p commands"
-  return [
-    queued > 0 ? `${full} / ctrl+x clear queue` : full,
-    "ctrl+s inject / ctrl+g sub / ctrl+b bg / ctrl+k keys",
-    "ctrl+k/ctrl+p",
-  ]
+/** Key hints: REMOVED from the footer on request — the strip competed with
+ *  the operational readout for the same columns, and every one of those keys
+ *  is still discoverable through `ctrl+k` (which key) and the command
+ *  palette. Passing no variants makes fitFooter skip the hint segment
+ *  entirely, so the space goes back to model + counts. */
+function hintVariants(): string[] {
+  return []
 }
 
 export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps): ReactNode => {
   const theme = useThemeColors()
+  // The orb ribbon owns its own tick: it only runs while a turn is in flight,
+  // so an idle footer still writes ZERO bytes (the idle-silence contract the
+  // Windows scrollbar and native drag depend on).
+  const turnActive = info.status === "thinking" || info.status === "running"
+  const [orbFrame, setOrbFrame] = useState(0)
+  useEffect(() => {
+    if (!turnActive) return
+    const timer = setInterval(() => setOrbFrame((f) => f + 1), RIBBON_TICK_MS)
+    return () => clearInterval(timer)
+  }, [turnActive])
+  const orbPaintRow = useMemo(
+    () => (turnActive ? orbitPaint(orbFrame, glyphSet() === "ascii") : []),
+    [turnActive, orbFrame],
+  )
+  const orbs = turnActive ? { frame: orbFrame, ascii: glyphSet() === "ascii" } : undefined
   // Read columns directly at render time — deliberately NOT useWindowSize():
   // a columns subscription re-renders the WHOLE tree after a width resize,
   // which paints a second full frame right behind resize-guard's
@@ -108,13 +123,16 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
     modeText: `Mode: ${modeLabel}`,
     tokenText: `Tokens: ${tokenCount}`,
     ctxText: usage.percent !== null ? `ctx ${usage.percent}%` : undefined,
+    orbs,
     bgText: bgCount > 0 ? `BG: ${bgCount}` : undefined,
-    queueText: queuedCount > 0 ? `⛓ Queue: ${queuedCount}` : undefined,
+    queueText: queuedCount > 0 ? `>> Queue: ${queuedCount}` : undefined,
+    scrollText: info.scrollDepth ? `↑ ${info.scrollDepth}` : undefined,
+    versionText: info.version ? versionChipText(info.version) : undefined,
     spinner: bgRunning || undefined,
     bgHint: bgCount > 0 ? "ctrl+b bg" : undefined,
     taskHint: info.taskHint,
     subagentLabels: activeSubagents.map((s) => `${subagentStatusIcon(s.status)} ${subagentLabel(s)}`),
-    hintVariants: hintVariants(queuedCount),
+    hintVariants: hintVariants(),
   })
 
   const renderSegment = (seg: FooterSegment, index: number): ReactNode => {
@@ -148,6 +166,25 @@ export const Footer = ({ info, backgroundSubagents, subagentTabs }: FooterProps)
         break
       case seg.id === "queue":
         content = <Text color={theme.info}>{seg.text}</Text>
+        break
+      case seg.id === "scroll":
+        content = <Text color={theme.warning}>{seg.text}</Text>
+        break
+      case seg.id === "version":
+        content = <Text dimColor>{seg.text}</Text>
+        break
+      case seg.id === "orbs":
+        // One cell per orb, each on its own silver step — the fit measured
+        // this row's width, so painting it wider would overflow the frame.
+        content = (
+          <>
+            {orbPaintRow.map((orb, i) => (
+              <Text key={i} color={orb.color} bold>
+                {orb.glyph}
+              </Text>
+            ))}
+          </>
+        )
         break
       case seg.id === "spinner":
         content = <Spinner color={theme.warning} />

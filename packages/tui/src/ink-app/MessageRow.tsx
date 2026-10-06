@@ -7,11 +7,12 @@
 import React, { type ReactNode } from "react"
 import { Box, Text } from "ink"
 import { ToolCallItem } from "./ToolCallItem.js"
-import { MarkdownBlock, MarkdownInline } from "./Markdown.js"
+import { MarkdownBlock } from "./Markdown.js"
 import { Spinner } from "./Spinner.js"
+import { ThinkingOrbs } from "./ThinkingOrbs.js"
 import { SubagentRow } from "./SubagentRow.js"
 import type { TrayambakMessage, ToolCallStatus, MessagePart, AppStatus } from "./types.js"
-import { useThemeColors } from "./themeColors.js"
+import { bubbleBackground, useThemeColors } from "./themeColors.js"
 import { hardWrapLongRuns, normalizeStairIndent } from "./text-format.js"
 import { g } from "./glyphs.js"
 
@@ -64,13 +65,39 @@ export const MessageRow = ({
     // prompts are untouched — only the marker prefix collapses.
     const content = message.content ?? ""
     const isCompactionMarker = content.startsWith("[Context auto-compaction]")
+    const isInternalNudge = content.startsWith("[internal:nudge]")
+    // Silent internal messages: auto-compaction markers & continuation nudges
+    if (isCompactionMarker || isInternalNudge) {
+      return null
+    }
     const shownContent =
       isCompactionMarker && !expandOutput ? content.split("\n")[0] + (content.includes("\n") ? " …" : "") : content
+    // Full-width user bubble (Codex-style): a panel-mixed-toward-text
+    // block fills the whole row width behind plain text — no `❯` marker,
+    // the block itself marks the turn. The accent edge runs the FULL box
+    // height, barabar (padding lives on the outer box so the bar spans
+    // text + breathing room alike). paddingY adds rows: the row budget
+    // counts them (see estimateMessageRows), so nothing below gets clipped.
+    // NO explicit width="100%": 100% + marginLeft overflows the parent's
+    // content box by exactly the margin, so the bubble's backgroundColor
+    // lands on the Static item box's right-border column and erases the │
+    // (message-list-static contract). The parent column-stretches the
+    // bubble to content−marginLeft instead — same full-width look, no
+    // overflow into the border.
     return (
-      <Box flexDirection="column" marginTop={1} marginLeft={1}>
-        <Text color={theme.primary} bold>
-          {g("prompt")} {shownContent}
-        </Text>
+      <Box
+        flexDirection="row"
+        marginTop={1}
+        marginLeft={1}
+        paddingY={1}
+        backgroundColor={bubbleBackground(theme.backgroundPanel, theme.text)}
+      >
+        <Box width={1} flexShrink={0} backgroundColor={theme.primary}>
+          <Text> </Text>
+        </Box>
+        <Box paddingX={2} flexGrow={1}>
+          <Text color={theme.text}>{shownContent}</Text>
+        </Box>
       </Box>
     )
   }
@@ -104,11 +131,12 @@ export const MessageRow = ({
 
     return (
       <Box flexDirection="column" marginTop={1} marginLeft={1}>
+        {/* Codex-style shimmer: the tail of the transcript carries the status
+            word itself shimmering while a turn streams; the footer's square
+            is the app-wide one. One animated label per frame, never two. */}
         {hasActiveThinking && isStreaming && phase !== "running" && (
           <Box flexDirection="row" marginLeft={2} marginTop={1}>
-            <Spinner color={theme.warning} wave>
-              Thinking…
-            </Spinner>
+            <ThinkingOrbs label="Thinking…" />
           </Box>
         )}
         {message.parts && message.parts.length > 0 ? (
@@ -211,7 +239,11 @@ export const MessageRow = ({
             <Text color={theme.textMuted}>
               {" — "}
               {overflowNote}
-              <MarkdownInline text={shown} color={theme.textMuted} />
+              {/* Tool output is VERBATIM: no markdown parsing. Logs, diffs,
+                  and code must reach the screen exactly as produced — an
+                  italicized `*` or re-linked `[x](y)` in a log line is
+                  rewritten data, not presentation. */}
+              {shown}
             </Text>
           ) : null}
         </Text>

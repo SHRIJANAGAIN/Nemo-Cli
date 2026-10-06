@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest"
-import { fitFooter, truncateTo, FRAME_OVERHEAD, SEGMENT_GAP } from "./footer-fit.js"
+import { fitFooter, truncateTo, versionChipText, FRAME_OVERHEAD, SEGMENT_GAP } from "./footer-fit.js"
 
 /** Reproduces the real overflow from the bug report: a 36-char model name
  *  plus every optional segment at a ~122-col terminal. */
@@ -16,7 +16,7 @@ const fullInput = (columns: number) => ({
   modeText: "Mode: ASK",
   tokenText: "Tokens: 0",
   bgText: "BG: 2",
-  queueText: "⛓ Queue: 1",
+  queueText: ">> Queue: 1",
   spinner: true,
   bgHint: "ctrl+b bg",
   taskHint: "✓ task finished — Ctrl+B to view",
@@ -148,9 +148,36 @@ describe("fitFooter", () => {
     expect(ids).toContain("spinner")
   })
 
+  it("shows the scroll-depth chip right after queue while parked, absent at live", () => {
+    // The chip appears the moment a mid-turn notch parks the window.
+    const parked = fitFooter({ ...fullInput(120), scrollText: "↑ 5", versionText: "v0.6.7", ctxText: "ctx 12%" })
+    const ids = parked.segments.map((s) => s.id)
+    expect(ids).toContain("scroll")
+    expect(parked.segments.find((s) => s.id === "scroll")?.text).toBe("↑ 5")
+    expect(ids.indexOf("queue")).toBeLessThan(ids.indexOf("scroll"))
+    expect(ids.indexOf("scroll")).toBeLessThan(ids.indexOf("ctx"))
+    // Build identity travels with it; live (neither text) stays byte-identical.
+    expect(ids).toContain("version")
+    expect(parked.segments.find((s) => s.id === "version")?.text).toBe("v0.6.7")
+    expect(ids.indexOf("scroll")).toBeLessThan(ids.indexOf("version"))
+    expect(fitFooter(fullInput(120)).segments.map((s) => s.id)).not.toContain("scroll")
+    expect(fitFooter(fullInput(120)).segments.map((s) => s.id)).not.toContain("version")
+  })
+
   it("never lets optionals push the model below its floor", () => {
     const fit = fitFooter(fullInput(120))
     expect(fit.model.length).toBeGreaterThanOrEqual(12)
+  })
+
+  it("chip shows the S-series codename, not the raw semver prerelease", () => {
+    // npm forces semver, so "1.0.0-S1-TITANIUM" is the real version string;
+    // the chip prints the codename (18 cols of prerelease noise dropped).
+    expect(versionChipText("1.0.0-S1-TITANIUM")).toBe("S1-TITANIUM")
+    // A plain semver build keeps the historic shape.
+    expect(versionChipText("0.6.7")).toBe("v0.6.7")
+    expect(versionChipText("1.0.0")).toBe("v1.0.0")
+    // A non-semver string is never mistaken for a codename.
+    expect(versionChipText("weird-build")).toBe("vweird-build")
   })
 
   it("handles absurdly narrow terminals without producing a negative fit", () => {

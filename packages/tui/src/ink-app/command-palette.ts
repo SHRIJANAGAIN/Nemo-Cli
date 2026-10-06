@@ -64,3 +64,22 @@ export function buildPaletteRows(entries: PaletteEntry[], query: string): Palett
     }))
   return [...pinned, ...base]
 }
+
+/** Minimal slash-command shape shared by the static list (types.ts) and the
+ *  dispatch registry — name + description + category. */
+export interface SlashRow {
+  name: string
+  description: string
+  category?: string
+}
+
+/** Merge two slash-command sources append-only: every primary row keeps its
+ *  place and order, secondary rows missing from primary are appended — so no
+ *  chooser can hide the other side's commands (`/provider` never reached the
+ *  palette, `/company` never reached `/help`). A name collision keeps the
+ *  primary row; both surfaces dispatch through the same runSlash path, so the
+ *  row always runs what its surface runs today. */
+export function mergeSlashRows(primary: SlashRow[], secondary: SlashRow[]): SlashRow[] {
+  const seen = new Set(primary.map((c) => c.name))
+  return [...primary, ...secondary.filter((c) => !seen.has(c.name))]
+}

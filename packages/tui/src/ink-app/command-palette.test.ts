@@ -5,7 +5,12 @@
  */
 
 import { describe, expect, it } from "vitest"
-import { buildPaletteRows, filterPaletteEntries, type PaletteEntry } from "./command-palette.js"
+import {
+  buildPaletteRows,
+  filterPaletteEntries,
+  mergeSlashRows,
+  type PaletteEntry,
+} from "./command-palette.js"
 
 const make = (id: string, over: Partial<PaletteEntry> = {}): PaletteEntry => ({
   id,
@@ -58,5 +63,27 @@ describe("buildPaletteRows", () => {
     const rows = buildPaletteRows(entries, "one")
     expect(rows.map((r) => r.rowId)).toEqual(["one"])
     expect(rows.some((r) => r.category === "Suggested")).toBe(false)
+  })
+})
+
+describe("mergeSlashRows", () => {
+  it("keeps every row from both sides — neither chooser hides the other", () => {
+    const rows = mergeSlashRows(
+      [{ name: "company", description: "company library", category: "Agent" }],
+      [
+        { name: "provider", description: "backend chooser", category: "Model" },
+        { name: "company", description: "registry duplicate", category: "Agent" },
+      ],
+    )
+    // Registry order kept; the static-only row appended; the duplicate stays single.
+    expect(rows.map((r) => r.name)).toEqual(["company", "provider"])
+    expect(rows[0]).toMatchObject({ description: "company library", category: "Agent" })
+    expect(rows[1]).toMatchObject({ description: "backend chooser", category: "Model" })
+  })
+
+  it("returns primary untouched when secondary adds nothing", () => {
+    const primary = [{ name: "agent", description: "a", category: "Agent" }]
+    expect(mergeSlashRows(primary, [])).toEqual(primary)
+    expect(mergeSlashRows([], [])).toEqual([])
   })
 })

@@ -64,6 +64,17 @@ describe("restoreMessages — pair re-merge", () => {
     expect(out).toHaveLength(2)
   })
 
+  it("restores a collapsed paste as its block (full text stays in the log)", () => {
+    const full = `go${"y".repeat(3039)}`
+    const out = restoreMessages("s", [
+      { role: "user", content: full, ts: TS, display: "[Pasted Content 3039 chars]" },
+      prose("on it"),
+    ])
+    expect(out).toHaveLength(2)
+    // The resumed transcript shows the block, never the flood.
+    expect(out[0].content).toBe("[Pasted Content 3039 chars]")
+  })
+
   it("keeps thinking that rode on the args row", () => {
     const out = restoreMessages("s", [
       user("x"),

@@ -12,6 +12,7 @@ import {
   parsePromptFile,
   loadPromptCommandsFromDir,
   loadPromptCommands,
+  bundledPromptCommandDirs,
   defaultPromptCommandDirs,
   expandPromptCommand,
 } from "./prompt-files.js"
@@ -148,5 +149,26 @@ describe("loadPromptCommandsFromDir / loadPromptCommands", () => {
     expect(dirs[0]).toBe(path.join("/proj", "commands"))
     expect(dirs[1]).toBe(path.join("/proj", ".trayambak", "commands"))
     expect(dirs[2]).toBe(path.join("/home/u", ".trayambak", "commands"))
+  })
+
+  it("bundled dirs resolve from a module dir and load with lowest precedence", () => {
+    // Fake a source checkout: <root>/commands + a module 4 deep, so the
+    // startDir seam resolves back to the fake root.
+    const root = mkTmp()
+    fs.mkdirSync(path.join(root, "commands"), { recursive: true })
+    fs.writeFileSync(path.join(root, "commands", "bundled-cmd.md"), "# B\nbundled body")
+    const fakeModuleDir = path.join(root, "packages", "tui", "src", "ink-app")
+    fs.mkdirSync(fakeModuleDir, { recursive: true })
+    const [first, second] = bundledPromptCommandDirs(fakeModuleDir)
+    expect(first).toBe(path.join(root, "assets", "commands"))
+    expect(second).toBe(path.join(root, "commands"))
+    // Project files win over bundled ones on a name collision.
+    const project = mkTmp()
+    fs.writeFileSync(path.join(project, "bundled-cmd.md"), "# P\nproject body")
+    const merged = loadPromptCommands([project, second])
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.body).toContain("project")
+    // Bundled alone still loads.
+    expect(loadPromptCommands([second]).map((c) => c.name)).toContain("bundled-cmd")
   })
 })

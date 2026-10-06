@@ -7,7 +7,6 @@
 import React, { type ReactNode } from "react"
 import { Box, Text, useStdout } from "ink"
 import { ToolUseLoader } from "./ToolUseLoader.js"
-import { MarkdownInline } from "./Markdown.js"
 import { MCPToolCallItem } from "./MCPToolCallItem.js"
 import { ExecToolCallItem } from "./ExecToolCallItem.js"
 import { SwarmToolCallItem } from "./SwarmToolCallItem.js"
@@ -229,8 +228,9 @@ export const ToolCallItem = ({
               const shownLine = clean.length > cap ? `${clean.slice(0, cap)}…` : clean
               return (
                 <Text key={i}>
-                  <Text color={theme.textMuted}>{i === 0 ? "  + " : "    "}</Text>
-                  <MarkdownInline text={shownLine || " "} color={theme.textMuted} />
+                  {/* Result lines are VERBATIM (no markdown): tool output is
+                      logs/diffs/code, never presentation to restyle. */}
+                  <Text color={theme.textMuted}>{(i === 0 ? "  + " : "    ") + (shownLine || " ")}</Text>
                 </Text>
               )
             })

@@ -11,6 +11,7 @@
  *   ./commands/              project prompts
  *   ./.trayambak/commands/   project prompts (namespaced dir)
  *   ~/.trayambak/commands/   user-wide prompts
+ *   <install>/commands       bundled prompts (always present)
  *
  * becomes `/name` in the composer. The body is a PROMPT TEMPLATE: it expands
  * with the typed arguments (`$ARGUMENTS`, `$1..$9`) and is submitted as a
@@ -43,6 +44,23 @@ export function defaultPromptCommandDirs(cwd: string, home: string = os.homedir(
     path.join(cwd, ".trayambak", "commands"),
     path.join(home, ".trayambak", "commands"),
   ]
+}
+
+/** Bundled prompt commands shipped inside the install (dist/assets/commands
+ *  in production, ./commands in a source checkout) — always present so the
+ *  chooser never depends on cwd. Appended AFTER the user/project dirs, so
+ *  user files keep winning name collisions. `startDir` is a test seam for
+ *  the module directory (ESM has no __dirname). */
+export function bundledPromptCommandDirs(startDir?: string): string[] {
+  const here = startDir ?? (typeof __dirname === "string" ? __dirname : "")
+  const out: string[] = []
+  if (here) {
+    // dist layout: <root>/dist/packages/tui/src/ink-app-esm → up 4 = dist.
+    out.push(path.resolve(here, "..", "..", "..", "..", "assets", "commands"))
+    // source layout: <root>/packages/tui/src/ink-app → up 4 = repo root.
+    out.push(path.resolve(here, "..", "..", "..", "..", "commands"))
+  }
+  return out
 }
 
 /**

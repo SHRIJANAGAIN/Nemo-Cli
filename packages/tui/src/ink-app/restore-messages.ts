@@ -120,7 +120,9 @@ export function restoreMessages(sessionId: string, history: ConversationEntry[])
       id: `restored-${sessionId}-${i}`,
       timestamp: new Date(h.ts).getTime(),
       role: h.role,
-      content: h.content,
+      // Collapsed pastes restore collapsed: the log keeps full text in
+      // `content` (model context) and the shown block in `display`.
+      content: h.display ?? h.content,
       toolName: h.toolName,
       toolCallId: h.toolCallId,
       toolStatus: status(h.toolStatus),

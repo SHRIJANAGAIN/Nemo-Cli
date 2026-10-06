@@ -4,57 +4,111 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { describe, expect, it } from "vitest"
+/**
+ * The scroll window is `endIdx = messageCount - scrollBack`. These tests pin the
+ * three properties App depends on:
+ *
+ *  1. the window never goes out of range (always ≥1 message rendered);
+ *  2. scrolling back never wraps around past either end;
+ *  3. growth ANCHORS the window — `endIdx` must not move when rows are appended
+ *     while the user is reading history. Losing this is the "history hide nahi
+ *     honi chahiye" bug: the window silently slid toward live on every tool
+ *     result.
+ */
 
-import { pageScrollOffset, scrollOffsetAfterGrowth, wheelScrollOffset } from "./scroll-math.js"
+import { describe, expect, it } from "vitest"
+import {
+  PAGE_STRIDE,
+  WHEEL_STRIDE,
+  pageScrollOffset,
+  scrollOffsetAfterGrowth,
+  wheelScrollOffset,
+} from "./scroll-math.js"
+
+const endIdx = (messageCount: number, scrollBack: number): number => messageCount - scrollBack
 
 describe("wheelScrollOffset", () => {
-  it("moves 3 messages per notch and clamps at live (0) / the first message", () => {
-    expect(wheelScrollOffset("up", 0, 40)).toBe(3)
-    expect(wheelScrollOffset("up", 3, 40)).toBe(6)
-    expect(wheelScrollOffset("up", 38, 40)).toBe(39) // max = count−1 → endIdx 1 → message 0 in frame
-    expect(wheelScrollOffset("up", 39, 40)).toBe(39)
-    expect(wheelScrollOffset("down", 5, 40)).toBe(2)
-    expect(wheelScrollOffset("down", 2, 40)).toBe(0)
-    expect(wheelScrollOffset("down", 0, 40)).toBe(0)
+  it("moves WHEEL_STRIDE messages per notch", () => {
+    expect(wheelScrollOffset("up", 0, 100)).toBe(WHEEL_STRIDE)
+    expect(wheelScrollOffset("up", 3, 100)).toBe(6)
+    expect(wheelScrollOffset("down", 6, 100)).toBe(3)
+    expect(wheelScrollOffset("down", 3, 100)).toBe(0)
   })
 
-  it("never scrolls past a lone/empty transcript (stays live)", () => {
-    expect(wheelScrollOffset("up", 0, 1)).toBe(0)
+  it("clamps at live rather than going negative", () => {
+    expect(wheelScrollOffset("down", 0, 100)).toBe(0)
+    expect(wheelScrollOffset("down", 2, 100)).toBe(0)
+  })
+
+  it("always leaves at least one message in the live frame", () => {
+    // Scrolling to the very first message must still render it.
+    expect(wheelScrollOffset("up", 98, 100)).toBe(99)
+    expect(endIdx(100, wheelScrollOffset("up", 98, 100))).toBe(1)
+    expect(endIdx(3, wheelScrollOffset("up", 99, 3))).toBe(1)
+  })
+
+  it("survives an empty or single-message transcript", () => {
     expect(wheelScrollOffset("up", 0, 0)).toBe(0)
+    expect(wheelScrollOffset("up", 0, 1)).toBe(0)
+    expect(wheelScrollOffset("down", 5, 1)).toBe(0)
+  })
+
+  it("treats a non-finite offset as live instead of propagating NaN", () => {
+    expect(wheelScrollOffset("up", Number.NaN, 50)).toBe(0)
+    expect(wheelScrollOffset("down", Number.POSITIVE_INFINITY, 50)).toBe(0)
   })
 })
 
-describe("pageScrollOffset (PageUp/PageDown stride)", () => {
-  it("jumps 10 messages per press and clamps exactly like the wheel", () => {
-    expect(pageScrollOffset("up", 0, 40)).toBe(10)
-    expect(pageScrollOffset("up", 10, 40)).toBe(20)
-    expect(pageScrollOffset("up", 35, 40)).toBe(39) // same max = count−1 → message 0 in frame
-    expect(pageScrollOffset("up", 39, 40)).toBe(39)
-    expect(pageScrollOffset("down", 25, 40)).toBe(15)
-    expect(pageScrollOffset("down", 7, 40)).toBe(0) // clamps at live, never negative
-    expect(pageScrollOffset("down", 0, 40)).toBe(0)
+describe("pageScrollOffset", () => {
+  it("moves PAGE_STRIDE messages per press", () => {
+    expect(pageScrollOffset("up", 0, 200)).toBe(PAGE_STRIDE)
+    expect(pageScrollOffset("down", PAGE_STRIDE, 200)).toBe(0)
   })
 
-  it("never pages past a lone/empty transcript (stays live)", () => {
-    expect(pageScrollOffset("up", 0, 1)).toBe(0)
-    expect(pageScrollOffset("up", 0, 0)).toBe(0)
+  it("shares the wheel's clamps", () => {
+    expect(pageScrollOffset("up", 195, 200)).toBe(199)
+    expect(pageScrollOffset("down", 0, 200)).toBe(0)
+  })
+
+  it("pages a long transcript in a few presses", () => {
+    let s = 0
+    for (let i = 0; i < 3; i++) s = pageScrollOffset("up", s, 1000)
+    expect(s).toBe(PAGE_STRIDE * 3)
+    expect(endIdx(1000, s)).toBe(970)
   })
 })
 
-describe("scrollOffsetAfterGrowth (anchored reading position)", () => {
-  it("pins the window END: +N appended rows → +N offset (endIdx unchanged)", () => {
-    // endIdx 40−5=35; ten tool rows append mid-turn → offset 15, still 35:
-    expect(scrollOffsetAfterGrowth(40, 50, 5)).toBe(15)
-    expect(50 - scrollOffsetAfterGrowth(40, 50, 5)).toBe(40 - 5)
+describe("scrollOffsetAfterGrowth", () => {
+  it("keeps endIdx pinned while the user reads history", () => {
+    // The load-bearing property: window end must not move on append.
+    const before = 10
+    const scrollBack = 4
+    const endBefore = endIdx(before, scrollBack)
+    const after = before + 1
+    const next = scrollOffsetAfterGrowth(before, after, scrollBack)
+    expect(endIdx(after, next)).toBe(endBefore)
   })
 
-  it("keeps the FIRST message readable while the transcript grows", () => {
-    expect(scrollOffsetAfterGrowth(40, 50, 39)).toBe(49) // endIdx 1 on both sides
+  it("matches a mid-turn burst of tool rows, one-for-one", () => {
+    const before = 12
+    let s = 5
+    const endBefore = endIdx(before, s)
+    // Tool rows land two per call mid-turn.
+    for (let i = 0; i < 3; i++) {
+      const prev = before + i * 2
+      s = scrollOffsetAfterGrowth(prev, prev + 2, s)
+      expect(endIdx(prev + 2, s), `burst step ${i}`).toBe(endBefore)
+    }
   })
 
-  it("leaves the LIVE window (0) and shrinks alone", () => {
-    expect(scrollOffsetAfterGrowth(40, 50, 0)).toBe(0) // live follows the turn
-    expect(scrollOffsetAfterGrowth(50, 40, 8)).toBe(8) // shrink → the epoch reset owns it
+  it("leaves a live window (0) live", () => {
+    expect(scrollOffsetAfterGrowth(10, 20, 0)).toBe(0)
+  })
+
+  it("never re-expands past the first message when the transcript shrinks", () => {
+    // /clear or a session swap shrinks the list; the offset must re-clamp into
+    // the new range rather than point past the end.
+    expect(scrollOffsetAfterGrowth(100, 3, 90)).toBe(2)
+    expect(scrollOffsetAfterGrowth(100, 0, 90)).toBe(0)
   })
 })

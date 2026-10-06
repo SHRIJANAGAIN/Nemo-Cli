@@ -12,6 +12,14 @@ import fs from "node:fs"
 import { TrayambakApp } from "../ink-app-esm/index.js"
 import { createSanitizedStdin } from "../ink-app-esm/stdin-sanitizer.js"
 import { createResizeRedrawGuard } from "../ink-app-esm/resize-guard.js"
+// keymap compiles to CJS (root package.json type=commonjs), and the flat
+// ink-app-esm/ dir carries its own {type:"module"} marker — importing the
+// CJS text that lives THERE fails the ESM static link ("does not provide an
+// export named 'setKeymap'"). The parent copy is commonjs-scope, so Node's
+// CJS→ESM lexer resolves the named exports (verified against the obfuscated
+// publish build too), and App.js already imports this same ../keymap.js —
+// one module instance, one shared active Keymap.
+import { setKeymap } from "../keymap.js"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -32,6 +40,7 @@ function loadPrompt() {
 
 const config = loadConfig()
 const prompt = loadPrompt()
+setKeymap(config.keybindings)
 process.env.TRAYAMBAK_LOGO_PATH =
   process.env.TRAYAMBAK_LOGO_PATH || path.join(here, "..", "ink-app-esm", "logo_ansi.txt")
 
@@ -120,6 +129,50 @@ if (process.env.TRAYAMBAK_TRACE === "1") {
   } catch (err) {
     process.stderr.write(`[trayambak] trace failed to start: ${err?.message ?? err}\n`)
   }
+}
+
+// Clear the terminal ONCE, before the renderer exists, so the host shell's
+// banner and prompt are not the first thing on screen — and, with ED3, are not
+// sitting at the bottom of the scrollback either.
+//
+//   2J  erase the viewport
+//   3J  erase the SCROLLBACK, which is what actually removes the banner: with
+//       2J alone it survives and reappears on the first scroll up. Terminals
+//       that do not implement ED3 ignore it and simply keep the banner.
+//   H   home the cursor
+//
+// This is a ONE-TIME startup clear, which is what makes the three requirements
+// compatible. It runs before the first render, so the renderer has no frame
+// bookkeeping to desynchronise, and nothing clears the scrollback again
+// afterwards:
+//
+//   - Repaints never erase scrollback. The renderer's flicker recovery used to
+//     wipe it on every window resize (`clearTerminal.ts` emitted ED3), deleting
+//     the transcript the UI had already printed; that path is screen-only now.
+//   - The alternate screen is NOT used. It hides the banner too, but its buffer
+//     has no scrollback at all, so the rows the UI settles into <Static> become
+//     unreachable and the history cannot be scrolled.
+//
+// Cost, stated plainly: the shell's pre-launch scrollback is erased along with
+// the banner. That is the only thing lost, and it is what "no banner" requires.
+//
+//   ?1000l ?1002l ?1003l ?1006l ?1015l
+//       turn OFF every mouse-reporting mode. This is what makes the DEVICE's
+//       own scrollbar and wheel the way history is read. The UI deliberately
+//       has no in-app scroll window: history is the terminal's, printed once
+//       through Ink's <Static>, and the frame always ends at the live tail.
+//       While ANY reporting mode is on, the terminal routes wheel and drag
+//       events to the app instead of scrolling its own buffer, so the
+//       scrollbar stops working and the transcript looks frozen. The app never
+//       enables reporting (`renderOptions` carries no mouse option), so a mode
+//       can only be left over from a run that was killed mid-flight;
+//       `mouse-input.ts` documents exactly this symptom (wheel bytes that
+//       "never should arrive" while reporting is off). Clearing it here is
+//       idempotent and costs nothing when nothing is set.
+//
+// Cursor visibility is untouched — the caret stays visible for the composer.
+if (process.stdout.isTTY === true) {
+  process.stdout.write("\x1b[2J\x1b[3J\x1b[H\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
 }
 
 const instance = render(

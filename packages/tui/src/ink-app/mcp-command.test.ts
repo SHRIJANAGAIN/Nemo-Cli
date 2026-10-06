@@ -24,7 +24,6 @@ vi.mock("../../../../apps/runtime/src/config.js", async () => {
     ...actual,
     loadConfig: vi.fn(() => ({})),
     saveConfig: vi.fn(),
-    createAgentConfig: vi.fn(() => ({ provider: "nvidia" })),
   }
 })
 
@@ -47,6 +46,7 @@ vi.mock("../../../../apps/runtime/src/tools/mcp/mcp-install.js", async () => {
 })
 
 import { runMcp, type McpDeps } from "./mcp-command.js"
+import { createAgentConfig } from "./app-bootstrap.js"
 import { loadConfig, saveConfig } from "../../../../apps/runtime/src/config.js"
 import { createMcpTools } from "../../../../apps/runtime/src/tools/mcp/mcp.js"
 import {
@@ -75,7 +75,12 @@ function harness(base: Record<string, unknown> = {}): Harness {
       rows.push(content)
       return content
     },
-    agentConfigRef: { current: { provider: "nvidia" } },
+    // Built by the REAL createAgentConfig (app-bootstrap.js, not mocked here)
+    // so the stub is a genuine 19-field TrayambakConfig. A Partial cast would
+    // satisfy the compiler but hide the fact that these tests never exercised
+    // the merge-onto-existing-config path. `current` stays non-null so line
+    // ~141's "patch merged onto a live config" assertion stays meaningful.
+    agentConfigRef: { current: createAgentConfig({ provider: "nvidia" }) },
     agentRef: { current: { sentinel: true } },
     config: null,
   }

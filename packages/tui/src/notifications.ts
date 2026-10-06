@@ -5,7 +5,7 @@
  */
 
 import { execFile, execFileSync } from "child_process"
-import type { AgentEvent } from "../../protocol/src/index"
+import type { AgentEvent } from "../../protocol/src/index.js"
 import { writeSync } from "fs"
 
 export interface NotificationConfig {

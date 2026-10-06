@@ -5,55 +5,72 @@
  */
 
 /**
- * Wheel-offset math for the in-app history window (MessageList takes the
- * offset as "messages behind the live end"; 0 = live).
+ * Scroll-window arithmetic for the conversation frame.
  *
- * Two invariants the UI must hold ("history ke liye wo hide nahi chahiye —
- * pura show hota rahe"):
- *  - a notch moves the window in fixed steps and clamps to message 0 / live;
- *  - the reading position is ANCHORED: every message appended BEHIND a
- *    scrolled window (tool rows land two-per-call mid-turn!) bumps the
- *    offset by the same delta, so endIdx = count − scrollBack — and the
- *    exact rows being read — never slide toward live and drop out of frame.
+ * App owns one number, `scrollBack`: how many messages the live frame sits
+ * BEHIND the newest message (0 = live). The frame's window therefore ends at
  *
- * Two input paths share one clamp: the WHEEL moves 3 messages per notch
- * (mouse-input bus), PageUp/PageDown jumps 10 (PromptInput's onHistoryScroll
- * — "easy scrollable": one keypress pages through history instead of a
- * wheel marathon). The offset persists across turn end (App only snaps to
- * live on the NEXT turn), so a parked reading position stays parked and
- * stays scrollable — including mid-turn, when generation keeps appending
- * behind the parked window.
+ *     endIdx = messageCount - scrollBack
  *
- * Pure functions (unit-tested in scroll-math.test.ts); App owns the state.
+ * and every function here exists to keep that window stable and in range.
+ * All are pure so the behaviour can be pinned without a terminal.
  */
 
-import type { MouseScrollDir } from "./mouse-input.js"
+/** Messages moved per wheel notch. */
+export const WHEEL_STRIDE = 3
+/** Messages moved per PageUp/PageDown press. */
+export const PAGE_STRIDE = 10
 
-/** Shared slide: `step` messages toward the first message (max =
- *  count − 1 → endIdx 1) on the way up, toward live (0) on the way down. */
-function slideOffset(dir: MouseScrollDir, scrollBack: number, messageCount: number, step: number): number {
-  const max = Math.max(0, messageCount - 1)
-  return dir === "up" ? Math.min(max, scrollBack + step) : Math.max(0, scrollBack - step)
+/**
+ * Largest offset that still leaves one message in the live frame. Scrolling so
+ * far that nothing renders would look like a hung UI, so the window always
+ * keeps the oldest message visible at the top.
+ */
+function maxOffset(messageCount: number): number {
+  return Math.max(0, messageCount - 1)
 }
 
-/** One wheel notch = 3 messages (see slideOffset for the clamps). */
-export function wheelScrollOffset(dir: MouseScrollDir, scrollBack: number, messageCount: number): number {
-  return slideOffset(dir, scrollBack, messageCount, 3)
+function clampOffset(value: number, messageCount: number): number {
+  if (!Number.isFinite(value)) return 0
+  const max = maxOffset(messageCount)
+  if (value < 0) return 0
+  if (value > max) return max
+  return Math.floor(value)
 }
 
-/** One PageUp/PageDown press = 10 messages — same clamps, bigger stride,
- *  so long transcripts page through quickly without a wheel marathon. */
-export function pageScrollOffset(dir: MouseScrollDir, scrollBack: number, messageCount: number): number {
-  return slideOffset(dir, scrollBack, messageCount, 10)
+/**
+ * One wheel notch. `dir` is the direction the user scrolled: "up" walks back
+ * into history (offset grows), "down" returns toward live (offset shrinks).
+ * Never moves while the wheel sits at either end — clamping, not wrapping.
+ */
+export function wheelScrollOffset(dir: "up" | "down", current: number, messageCount: number): number {
+  const delta = dir === "up" ? WHEEL_STRIDE : -WHEEL_STRIDE
+  return clampOffset(current + delta, messageCount)
 }
 
-/** Growth compensation: `messages` grew from prevCount to count while the
- *  window is scrolled — shift the offset by the delta so the window's END
- *  (count − offset) stays exactly where the user pinned it. Live (0) stays
- *  live (the frame should follow the turn); shrink/wholesale replaces never
- *  move it (the staticEpoch reset owns those). */
-export function scrollOffsetAfterGrowth(prevCount: number, count: number, scrollBack: number): number {
-  const delta = count - prevCount
-  if (delta <= 0 || scrollBack <= 0) return scrollBack
-  return Math.min(scrollBack + delta, Math.max(0, count - 1))
+/**
+ * One PageUp/PageDown press — a bigger stride through the same offset state,
+ * so keyboard and wheel share one clamp and one growth anchor.
+ */
+export function pageScrollOffset(dir: "up" | "down", current: number, messageCount: number): number {
+  const delta = dir === "up" ? PAGE_STRIDE : -PAGE_STRIDE
+  return clampOffset(current + delta, messageCount)
+}
+
+/**
+ * Anchor the window while the transcript grows.
+ *
+ * When scrolled back, each appended message must be matched by +1 on the
+ * offset so `endIdx` stays put — otherwise rows landing behind the window drag
+ * the history the user is reading toward live on every tool result, which is
+ * exactly the "reading window slid away" bug. Live (offset 0) stays live.
+ *
+ * Takes lengths rather than arrays because App reads the previous length from
+ * a ref during render, before the new array exists.
+ */
+export function scrollOffsetAfterGrowth(prevLen: number, nextLen: number, current: number): number {
+  if (current <= 0) return 0
+  const grew = nextLen - prevLen
+  if (grew <= 0) return clampOffset(current, nextLen)
+  return clampOffset(current + grew, nextLen)
 }

@@ -258,19 +258,39 @@ export function parseBlocks(input: string): Block[] {
     // Table: header row with pipes followed by an alignment row.
     if (line.includes("|") && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]!)) {
       flushPara()
-      const rows: string[] = []
+      const cells: string[][] = []
       let j = i
       while (j < lines.length && lines[j]!.includes("|")) {
-        if (!/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[j]!)) {
-          rows.push(
-            lines[j]!.split("|")
-              .map((cell) => cell.trim())
-              .filter((cell, idx, arr) => !(idx === 0 || idx === arr.length - 1) || cell !== "")
-              .join(" │ "),
-          )
+        const row = lines[j]!
+        if (!/^\s*\|?[\s:|-]+\|?\s*$/.test(row)) {
+          const parts = row.split("|").map((cell) => cell.trim())
+          // Drop the empty cells a leading/trailing pipe produces, but keep
+          // interior empties — blank cells must still hold their column.
+          if (parts.length > 0 && parts[0] === "") parts.shift()
+          if (parts.length > 0 && parts[parts.length - 1] === "") parts.pop()
+          cells.push(parts)
         }
         j++
       }
+      // Column-align: pad every cell to its column's widest entry so rows
+      // line up as a real table instead of ragged `│` joins. Widths use the
+      // DISPLAYED text (markers stripped by the inline parser) — measuring
+      // raw `` `code` `` would overcount by the backticks and shift that
+      // column's `│` left by 2.
+      const displayWidth = (cell: string): number =>
+        parseInlineSpans(cell).reduce((n, span) => n + span.text.length, 0)
+      const widths: number[] = []
+      for (const rowCells of cells) {
+        rowCells.forEach((cell, ci) => {
+          widths[ci] = Math.max(widths[ci] ?? 0, displayWidth(cell))
+        })
+      }
+      const rows = cells.map((rowCells) =>
+        rowCells
+          .map((cell, ci) => cell + " ".repeat(Math.max(0, (widths[ci] ?? 0) - displayWidth(cell))))
+          .join(" │ ")
+          .trimEnd(),
+      )
       blocks.push({ kind: "table", level: 0, ordered: false, lines: rows })
       i = j
       continue
@@ -376,8 +396,11 @@ export function MarkdownBlock({ text }: { text: string }): ReactNode {
             return (
               <Box key={idx} flexDirection="column" marginTop={1}>
                 {block.lines.map((line, li) => (
+                  // Cells run through the inline parser: a `` `code` `` or
+                  // `**bold**` inside a cell must render styled, never with
+                  // its markers on screen (the raw-`|` screenshot class).
                   <Text key={li} color={theme.textMuted}>
-                    {line || " "}
+                    {line ? <MarkdownInline text={line} color={theme.textMuted} /> : " "}
                   </Text>
                 ))}
               </Box>

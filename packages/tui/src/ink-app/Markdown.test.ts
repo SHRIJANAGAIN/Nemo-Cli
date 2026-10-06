@@ -122,6 +122,13 @@ describe("parseBlocks", () => {
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "code"])
   })
 
+  it("drops the alignment row and column-aligns table cells", () => {
+    const blocks = parseBlocks(["| a | b |", "|---|---|", "| 1 | longer |", "", "p"].join("\n"))
+    const table = blocks.find((b) => b.kind === "table")
+
+    expect(table?.lines).toEqual(["a │ b", "1 │ longer"])
+  })
+
   it("ignores inline markers inside fenced code", () => {
     const blocks = parseBlocks(["```", "**not bold**", "```"].join("\n"))
     const code = blocks.find((b) => b.kind === "code")
