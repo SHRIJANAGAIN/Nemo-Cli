@@ -119,9 +119,18 @@ export function padLogoToTheme(art: string, backgroundHex: string, width: number
   return art
     .split("\n")
     .map((line) => {
-      const fill = target - visibleCells(line)
-      if (fill <= 0) return line
-      return `${line}\x1b[48;2;${sgr}m${" ".repeat(fill)}\x1b[0m`
+      // Split off the row-closing reset FIRST: the banner's trailing spaces sit
+      // BEFORE it, so a `$`-anchored trim never matched them. Keeping them and
+      // appending the themed fill on top ran each row long by exactly their
+      // count (26 + 22 + 87 = 135 cells on a 114-wide frame) and pushed every
+      // row into truncation — the stray "…" on each line.
+      const closer = /\x1b\[0m$/.exec(line)
+      const body = closer ? line.slice(0, closer.index) : line
+      const reset = closer ? "\x1b[0m" : ""
+      const trimmed = body.replace(/[ \t]+$/, "")
+      const fill = target - visibleCells(trimmed)
+      if (fill <= 0) return `${trimmed}${reset}`
+      return `${trimmed}\x1b[48;2;${sgr}m${" ".repeat(fill)}${reset}`
     })
     .join("\n")
 }

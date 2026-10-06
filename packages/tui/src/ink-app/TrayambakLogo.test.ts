@@ -216,6 +216,30 @@ describe("padLogoToTheme", () => {
     expect(padded).toContain("\x1b[48;2;26;27;38m")
   })
 
+  it("replaces the row's own uncoloured trailing spaces, never stacks on them", async () => {
+    // The bug this pins: the banner's trailing spaces sit BEFORE the closing
+    // reset, so they survived the trim and the themed fill landed on top of
+    // them — each row ran long by their count and every row got an ellipsis.
+    const { padLogoToTheme } = await import("./TrayambakLogo.js")
+    const withTrailing = `\x1b[38;2;1;2;3m\x1b[48;2;4;5;6m\u2580\x1b[0m${" ".repeat(20)}\x1b[0m`
+    const padded = padLogoToTheme(withTrailing, "#1a1b26", 20)
+    const visible = padded.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")
+    expect([...visible].length).toBe(19)
+    // Exactly ONE themed fill, and it reaches the end of the row.
+    expect(padded.match(/\x1b\[48;2;26;27;38m/g)).toHaveLength(1)
+    expect(padded.endsWith("\x1b[0m")).toBe(true)
+  })
+
+  it("makes every row of the real banner the same width (no ragged rows)", async () => {
+    const { padLogoToTheme } = await import("./TrayambakLogo.js")
+    const real = fs.readFileSync(ANSI_LOGO, "utf8").trimEnd()
+    const widths = padLogoToTheme(real, "#1a1b26", 114)
+      .split("\n")
+      .map((l) => [...l.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")].length)
+    expect(new Set(widths).size).toBe(1)
+    expect(widths[0]).toBe(113)
+  })
+
   it("leaves rows whose art already spans the width untouched", async () => {
     const { padLogoToTheme } = await import("./TrayambakLogo.js")
     // Real ink cells across the whole row (no uncoloured remainder).
