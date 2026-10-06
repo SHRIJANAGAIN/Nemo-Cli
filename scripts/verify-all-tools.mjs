@@ -30,8 +30,17 @@
  * TRAYAMBAK_LICENSE_SERVER at it BEFORE loadConfig(), so the REAL
  * serverVerifyLicenseKey / serverCanUsePentest / reportToolUsage path runs
  * end-to-end — product code untouched, only the remote end is in-process.
- * Section 5 then re-probes the gate NEGATIVE (no key / unreachable server)
- * so a gate that silently stops gating can never pass this script.
+ * Developer mode (since 2026-10-01): gatePentest now checks
+ * config.developerMode.enabled BEFORE the license check, so a harness that
+ * leaves devmode OFF never reaches the gate this script exists to prove —
+ * every probe returns the devmode refusal instead of a license one. This
+ * script therefore turns devmode on after loadConfig() (harness-local only;
+ * the shipped default remains OFF) and section 5 additionally re-probes
+ * devmode OFF, so BOTH gates are proven fail-closed.
+ *
+ * Section 5 then re-probes the gates NEGATIVE (devmode off / no key /
+ * unreachable server) so a gate that silently stops gating can never pass
+ * this script.
  *
  * Isolation: chdir into a fresh sandbox with a local .trayambak/ (configDir()
  * is cwd-based) and HOME/USERPROFILE/TRAYAMBAK_HOME pointed at it too, so no
@@ -118,6 +127,12 @@ const { getSecurityToolRegistry } = await import(
 )
 
 const config = loadConfig()
+// Harness-local devmode: gatePentest refuses when developerMode.enabled is
+// not true, and it refuses BEFORE consulting the license — so with devmode
+// off this script could never reach the license gate it was written to
+// prove. Enable it here only; the product default stays OFF and section 5
+// re-probes devmode OFF to assert that control directly.
+config.developerMode = { ...config.developerMode, enabled: true }
 
 // Permission stub: record everything, DENY everything except the one exact
 // harmless echo probe used by the positive battery. No empty-args probe may
@@ -187,6 +202,15 @@ function defIssues(d) {
 }
 
 const EXEC_TIMEOUT_MS = 8000
+// First-spawn budget, deliberately separate from the hang budget. The Windows
+// AppContainer path pays one-time initialization on its first real spawn
+// (PowerShell shim start, cached helper DLL load, NTFS icacls grants whose
+// own bounds are $topTimeoutMs=8000 / $grantBudgetMs=20000) measured at
+// 8.0s cold, 2.9s warm, 45ms once the journal converges. Charging that
+// against EXEC_TIMEOUT_MS reports a false HANG for a perfectly healthy tool,
+// so the warm-up below gets its own ceiling — still finite, so a genuinely
+// stuck spawn fails loudly instead of blocking the script.
+const SHELL_WARMUP_TIMEOUT_MS = 60_000
 function withTimeout(promise, ms, label) {
   let timer = null
   const timeout = new Promise((_resolve, reject) => {
@@ -196,12 +220,12 @@ function withTimeout(promise, ms, label) {
 }
 
 /** Run one tool with given args. States: ok | grace | throw | hang | malformed. */
-async function exec(tool, args) {
+async function exec(tool, args, timeoutMs = EXEC_TIMEOUT_MS) {
   const started = Date.now()
   try {
     const result = await withTimeout(
       Promise.resolve().then(() => tool.execute("verify-1", args, undefined, undefined, toolContext)),
-      EXEC_TIMEOUT_MS,
+      timeoutMs,
       tool.definition.name,
     )
     const ms = Date.now() - started
@@ -260,6 +284,25 @@ for (const meta of PENTEST_META) {
 
 // ── 2. Positive paths: real invocations with valid args (all sandbox-local) ─
 const byName = new Map(tools.map((t) => [t.definition.name, t]))
+
+// Warm the shell path BEFORE the positive battery times it. The first real
+// spawn carries the one-time sandbox initialization cost described at
+// SHELL_WARMUP_TIMEOUT_MS; running it here (with that larger ceiling) spends
+// the cold cost once, so checkPos below measures the steady-state tool
+// (~45ms) rather than the initializer. The SAME permission-granted command
+// is used, because requestPermission denies every other bash command and a
+// denied warm-up would never spawn at all. A hang here IS a failure — just
+// against the initialization budget, not the hang budget.
+const bashForWarmup = byName.get("bash")
+if (bashForWarmup) {
+  const warmStarted = Date.now()
+  const warm = await exec(bashForWarmup, { command: PERMISSION_ECHO_PROBE }, SHELL_WARMUP_TIMEOUT_MS)
+  console.log(`\nshell warm-up: ${warm.state} in ${Date.now() - warmStarted}ms`)
+  if (warm.state === "hang") {
+    fail("warm:bash", `first spawn never finished within ${SHELL_WARMUP_TIMEOUT_MS}ms`)
+  }
+}
+
 console.log("\npositive paths:")
 
 async function checkPos(label, name, args, expect = []) {
@@ -446,10 +489,11 @@ if (runTool) {
   }
 }
 
-// ── 5. The gate itself: unlicensed / unreachable must refuse fail-closed ────
-// Rebuild a toolset with no key (and one pointed at a dead license server)
-// and prove the choke still refuses — otherwise a gate that silently stops
-// gating would sail through sections 1–4 with everything "working".
+// ── 5. The gates themselves: devmode-off / unlicensed / unreachable must ───
+// refuse fail-closed. Rebuild a toolset with devmode off, then with no key,
+// then pointed at a dead license server, and prove each choke still refuses
+// — otherwise a gate that silently stops gating would sail through sections
+// 1-4 with everything "working".
 async function gateProbe(label, overrides, expectRe) {
   const probeConfig = { ...config, ...overrides }
   const probe = createDefaultTools(
@@ -476,6 +520,13 @@ async function gateProbe(label, overrides, expectRe) {
   }
   console.log(`  ok  ${label}`)
 }
+// Devmode is the OUTER gate: with it off, the license key is never consulted
+// (offline-quiet by design). Prove it refuses before adding the key back.
+await gateProbe(
+  "refuses when developer mode is off",
+  { developerMode: { ...config.developerMode, enabled: false } },
+  /developer mode is OFF/i,
+)
 await gateProbe("refuses without a key", { licenseKey: undefined }, /refused: no license/i)
 await gateProbe(
   "refuses when the license server is unreachable",
