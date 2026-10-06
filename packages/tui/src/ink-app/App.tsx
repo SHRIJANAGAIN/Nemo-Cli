@@ -3793,7 +3793,7 @@ export const TrayambakApp = ({
               <WelcomeScreen
                 modelName={activeModel}
                 cwd={config?.cwd ?? bootConfig.cwd}
-                fillRows={Math.max(0, Math.min(rows - 22, 40))}
+                fillRows={Math.max(0, Math.min(rows - 27, 30))}
                 width={Math.max(20, (stdout?.columns ?? 80) - 4)}
               />
             ) : null}
