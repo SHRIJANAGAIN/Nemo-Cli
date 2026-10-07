@@ -187,6 +187,10 @@ export class GoogleProvider implements Provider {
       })
       req.on("error", (err) => {
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
+          // The watchdog bounds time-to-first-byte of THIS attempt; the retry
+          // has its own. A stale timer would reject the outer promise at 60s
+          // even while the healthy retry is streaming.
+          clearTimeout(firstByteTimer)
           setTimeout(() => {
             this.postGenerate(payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)
@@ -255,7 +259,7 @@ export class GoogleProvider implements Provider {
     let stop: StopReason = "end_turn"
     const fr = (cand.finishReason ?? "").toUpperCase()
     if (toolCalls.length > 0) stop = "tool_use"
-    else if (fr === "MAX_TOKENS") stop = "length"
+    else if (fr === "MAX_TOKENS" || fr === "INCOMPLETE") stop = "length"
     else if (fr === "SAFETY" || fr === "BLOCKED" || fr === "PROHIBITED_CONTENT") stop = "error"
     return { role: "assistant", content: parts, stopReason: stop }
   }

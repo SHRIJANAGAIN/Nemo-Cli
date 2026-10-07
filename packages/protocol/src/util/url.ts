@@ -29,9 +29,16 @@ export function normalizeUrls(text: string): string {
       const afterScheme = stripped.indexOf("//") + 2
       const slashPos = stripped.indexOf("/", afterScheme)
       const rawHost = slashPos === -1 ? stripped.slice(afterScheme) : stripped.slice(afterScheme, slashPos)
-      const colon = rawHost.indexOf(":")
-      const rawHostname = colon === -1 ? rawHost : rawHost.slice(0, colon)
-      if (rawHostname === parsed.hostname) return match
+      // Drop userinfo (user[:password]@) — only the hostname is compared and
+      // replaced. The old code took the whole authority: a no-port userinfo
+      // made the comparison fail and silently DELETED the credentials, and a
+      // userinfo with a colon split at that colon and spliced the punycode
+      // host into the credentials ("https://example.com:secret@example.com").
+      const at = rawHost.lastIndexOf("@")
+      const hostPart = at === -1 ? rawHost : rawHost.slice(at + 1)
+      const colon = hostPart.indexOf(":")
+      const rawHostname = colon === -1 ? hostPart : hostPart.slice(0, colon)
+      if (!rawHostname || rawHostname === parsed.hostname) return match
       return stripped.replace(rawHostname, parsed.hostname) + tail
     } catch {
       return match

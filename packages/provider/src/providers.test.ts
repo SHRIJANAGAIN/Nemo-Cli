@@ -628,4 +628,74 @@ describe("temperature clamping (per-backend ceilings)", () => {
     const gen = bodies[0]?.generationConfig as Record<string, unknown> | undefined
     expect(gen?.temperature).toBe(2)
   }, 15000)
+
+  it("google maps INCOMPLETE (Gemini length condition) to length, not end_turn", async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: "partial" }] }, finishReason: "INCOMPLETE" }] }),
+      )
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const p = createGoogleProvider({
+        baseUrl: `http://127.0.0.1:${port}`,
+        model: "gemini-2.5-flash",
+        apiKey: "k",
+      })
+      const msg = await p.chat({ messages: [{ role: "user", content: "hi" }] })
+      expect(msg.stopReason).toBe("length")
+    } finally {
+      server.close()
+    }
+  }, 15000)
+
+  it("llama-cpp maps max_tokens/incomplete finish reasons to length, not end_turn", async () => {
+    for (const reason of ["max_tokens", "incomplete"]) {
+      const server = http.createServer((_req, res) => {
+        res.writeHead(200, { "Content-Type": "text/event-stream" })
+        res.end(
+          `data: {"choices":[{"delta":{"content":"partial answer"},"index":0}]}\n\n` +
+            `data: {"choices":[{"finish_reason":"${reason}","index":0}]}\n\n` +
+            "data: [DONE]\n\n",
+        )
+      })
+      await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+      const port = (server.address() as AddressInfo).port
+      try {
+        const p = createLlamaCppProvider({ baseUrl: `http://127.0.0.1:${port}`, model: "m" })
+        const msg = await p.chat({ messages: [{ role: "user", content: "hi" }] })
+        expect(msg.stopReason).toBe("length")
+      } finally {
+        server.close()
+      }
+    }
+  }, 15000)
+
+  it("does not duplicate reasoning-only streams into a text part (nvidia + llama-cpp)", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"thinking hard"},"index":0}]}\n\n' +
+      'data: {"choices":[{"delta":{"reasoning_content":"still at it"},"index":0}]}\n\n' +
+      'data: {"choices":[{"finish_reason":"length","index":0}]}\n\n' +
+      "data: [DONE]\n\n"
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" })
+      res.end(sse)
+    })
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as AddressInfo).port
+    try {
+      for (const make of [createNvidiaProvider, createLlamaCppProvider]) {
+        const p = make({ baseUrl: `http://127.0.0.1:${port}`, model: "m" } as Parameters<typeof make>[0])
+        const msg = await p.chat({ messages: [{ role: "user", content: "hi" }] })
+        const textParts = msg.content.filter((c) => c.type === "text")
+        expect(textParts).toHaveLength(0)
+        const thinking = msg.content.filter((c) => c.type === "thinking")
+        expect(thinking.length).toBeGreaterThan(0)
+      }
+    } finally {
+      server.close()
+    }
+  }, 15000)
 })

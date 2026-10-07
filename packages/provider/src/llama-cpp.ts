@@ -14,6 +14,7 @@ import type {
   ToolCallPart,
   ToolDefinition,
 } from "../../protocol/src/index.js"
+import { stopReasonFromWire } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
 import { clampTemperature } from "./types.js"
 import { expandWireMessages } from "./vision.js"
@@ -200,7 +201,7 @@ export class LlamaCppProvider implements Provider {
               const json = JSON.parse(payload)
               this.handleDelta(json, text, thinking, toolBuffer, callbacks)
               if (json.choices?.[0]?.finish_reason) {
-                stopReason = mapFinishReason(json.choices[0].finish_reason)
+                stopReason = stopReasonFromWire(json.choices[0].finish_reason)
               }
             } catch {
               // ignore malformed keep-alive lines
@@ -209,11 +210,6 @@ export class LlamaCppProvider implements Provider {
         })
 
         res.on("end", () => {
-          if (text.length === 0 && thinking.length > 0) {
-            const fullText = thinking.join("")
-            callbacks?.onText?.(fullText)
-            text.push(fullText)
-          }
           const content = this.assembleContent(text, thinking, toolBuffer)
           settle(() => resolve({ role: "assistant", content, stopReason }))
         })
@@ -244,6 +240,10 @@ export class LlamaCppProvider implements Provider {
         // server closed the connection before sending anything. Retry once
         // silently - the request never started, so nothing is duplicated.
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
+          // The watchdog bounds time-to-first-byte of THIS attempt; the retry
+          // has its own. A stale timer would reject the outer promise at 60s
+          // even while the healthy retry is streaming.
+          clearTimeout(firstByteTimer)
           setTimeout(() => {
             this.postJson(path, payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)

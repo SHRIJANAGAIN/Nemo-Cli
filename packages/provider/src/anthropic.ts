@@ -297,6 +297,10 @@ export class AnthropicProvider implements Provider {
       })
       req.on("error", (err) => {
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
+          // The watchdog bounds time-to-first-byte of THIS attempt; the retry
+          // has its own. A stale timer would reject the outer promise at 60s
+          // even while the healthy retry is streaming.
+          clearTimeout(firstByteTimer)
           setTimeout(() => {
             this.postMessages(payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)

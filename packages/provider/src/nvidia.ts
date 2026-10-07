@@ -371,11 +371,6 @@ export class NvidiaProvider implements Provider {
         })
 
         res.on("end", () => {
-          if (text.length === 0 && thinking.length > 0) {
-            const fullText = thinking.join("")
-            callbacks?.onText?.(fullText)
-            text.push(fullText)
-          }
           const content = this.assembleContent(text, thinking, toolBuffer)
           settle(() => resolve({ role: "assistant", content, stopReason }))
         })
@@ -405,6 +400,10 @@ export class NvidiaProvider implements Provider {
       })
       req.on("error", (err) => {
         if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
+          // The watchdog bounds time-to-first-byte of THIS attempt; the retry
+          // has its own. A stale timer would reject the outer promise at 60s
+          // even while the healthy retry is streaming.
+          clearTimeout(firstByteTimer)
           setTimeout(() => {
             this.postJson(path, payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
           }, 250)
