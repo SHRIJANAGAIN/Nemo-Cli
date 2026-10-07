@@ -322,10 +322,12 @@ function sectionLines(raw: string, section: string): string[] {
     .map((l) => l.trim())
     .filter((l) => l && l !== "]" && !l.startsWith("[") && !l.startsWith("#"))
     .map((l) => {
-      const eq = l.split(/\s*=\s*/, 1)[0].trim()
-      return eq.startsWith('"') || eq.startsWith("'") || eq.includes("==")
-        ? l.split(/\s+/)[0].replace(/^["']|["']$/g, "")
-        : l.replace(/^["']|["']$/g, "")
+      // `key = value` lines (Cargo/INI): report the KEY only, like the go.mod /
+      // npm / pyproject siblings. The old code split with `split(/\s*=\s*/, 1)`
+      // — a LIMIT of 1 means "stop after one element", i.e. no split at all —
+      // so `serde = "1"` came back whole with its dangling quote attached.
+      const key = l.split(/\s*=\s*/)[0].trim()
+      return key.replace(/^["']|["']$/g, "").trim()
     })
     .filter(Boolean)
 }

@@ -71,7 +71,7 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
       files.push(current)
       continue
     }
-    if (line.startsWith("+++ ")) {
+    if (line.startsWith("+++ ") && !hunk) {
       if (current) {
         const p = line.slice(4).trim().replace(/^b\//, "")
         if (p === "/dev/null") current.kind = "deleted"
@@ -79,7 +79,7 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
       }
       continue
     }
-    if (line.startsWith("--- ")) {
+    if (line.startsWith("--- ") && !hunk) {
       if (current) {
         const p = line.slice(4).trim().replace(/^a\//, "")
         if (p === "/dev/null") current.kind = "added"

@@ -203,6 +203,9 @@ export class AgentRegistry {
     }
     this.activeAgents.clear()
     this.threadPaths.clear()
+    // removeAgent() releases the nickname on single removal; killAll has to do
+    // the same or every reset in a process burns one ("Agent the 2nd", ...).
+    this.usedNicknames.clear()
     this.totalCount = 0
   }
 

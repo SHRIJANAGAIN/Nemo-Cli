@@ -57,6 +57,27 @@ function readAgentCard(file: string, fallback: string): { name: string; descript
   return { name: fields.name ?? fallback, description: fields.description ?? "" }
 }
 
+/**
+ * Resolve an advertised agent NAME to its source file. Discovery uses the
+ * frontmatter name; the file itself may be named anything (e.g. agents with
+ * descriptive filenames). Returns null when no shelf file advertises `name`.
+ */
+function findAgentFile(source: string, name: string): string | null {
+  const agentsDir = path.join(source, "agents")
+  let files: string[] = []
+  try {
+    files = fs.readdirSync(agentsDir)
+  } catch {
+    return null
+  }
+  for (const file of files) {
+    if (!file.endsWith(".md")) continue
+    const card = readAgentCard(path.join(agentsDir, file), path.basename(file, ".md"))
+    if (card && card.name === name) return path.join(agentsDir, file)
+  }
+  return null
+}
+
 /** List every installable entry on the shelf. Pure apart from fs. */
 export function scanMarketplace(source: string): MarketplaceEntry[] {
   const out: MarketplaceEntry[] = []
@@ -118,8 +139,11 @@ export function installMarketplaceEntry(
     copyDirFiltered(from, to)
     return { ok: true, message: `Installed skill '${name}' → ${to}` }
   }
-  const from = path.join(source, "agents", `${name}.md`)
-  if (!fs.existsSync(from)) return { ok: false, error: `Agent '${name}' is not on the shelf.` }
+  // scanMarketplace advertises the FRONTMATTER name (readAgentCard), which may
+  // differ from the file's base name — resolve the advertised name to its
+  // actual file instead of assuming `<name>.md` exists on the shelf.
+  const from = findAgentFile(source, name)
+  if (!from) return { ok: false, error: `Agent '${name}' is not on the shelf.` }
   const to = path.join(trayambakDir, "agents", `${name}.md`)
   if (fs.existsSync(to)) return { ok: false, error: `Agent '${name}' is already installed (remove it first).` }
   fs.mkdirSync(path.dirname(to), { recursive: true })

@@ -102,13 +102,34 @@ function nextMemId(entries: MemoryEntry[]): string {
 
 function parseMemoryMd(raw: string): MemoryEntry[] {
   const entries: MemoryEntry[] = []
-  const blocks = raw.split(/^### /m).filter((b) => b.trim().length > 0)
+  // serializeMemoryMd prepends a prose header whose fenced schema block
+  // contains a literal `### MEM-YYYYMMDD-NNN` line — splitting the WHOLE file
+  // fed the header text and the schema fragment back as phantom entries (the
+  // store grew by two junk rows per save, and they were injected into prompts
+  // like real memories). Real entries only live below the "## Active entries"
+  // marker; parse from there (legacy hand-written files without the marker
+  // fall back to the whole raw text).
+  const marker = "## Active entries"
+  const start = raw.indexOf(marker)
+  const body = start >= 0 ? raw.slice(start) : raw
+  const blocks = body.split(/^### /m).filter((b) => {
+    if (b.trim().length === 0) return false
+    // The section under the marker STARTS with the preamble ("## Active
+    // entries" + the do-not-edit comment) which parses as a block with a junk
+    // id. Keep only blocks whose id is a real entry id — the tool writes
+    // mem_<rand> (save) or MEM-<digits> (nextMemId).
+    const blockId = b.match(/^([^\n]+)\n/)?.[1]?.trim() ?? ""
+    return /^(mem_[a-z0-9]+|MEM-\d+)$/.test(blockId)
+  })
   for (const block of blocks) {
     const idMatch = block.match(/^([^\n]+)\n/)
     const id = idMatch ? idMatch[1].trim() : `mem_${Math.random().toString(36).slice(2, 9)}`
     const categoryMatch = block.match(/- category:\s*(\w+)/)
     const createdMatch = block.match(/- created:\s*([^\n]+)/)
-    const bodyMatch = block.match(/- category:[^\n]+\n(?:- [^\n]+\n){6}\n?([\s\S]*)/)
+    // The serializer writes FIVE metadata keys after `category` (confidence,
+    // source, last_used, use_count, tags); the old {6} never matched, so the
+    // metadata block leaked into `content`.
+    const bodyMatch = block.match(/- category:[^\n]+\n(?:- [^\n]+\n){5}\n?([\s\S]*)/)
     const content = bodyMatch ? bodyMatch[1].trim() : block.replace(/^[^\n]+\n/, "").trim()
     const category = (categoryMatch?.[1] as MemoryEntry["category"]) ?? "context"
     const timestamp = createdMatch?.[1]?.trim() ?? new Date().toISOString()

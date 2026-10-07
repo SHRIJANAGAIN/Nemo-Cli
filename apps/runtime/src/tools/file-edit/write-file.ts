@@ -66,7 +66,11 @@ export function createWriteFileTool(): Tool {
 
         fs.mkdirSync(path.dirname(target), { recursive: true })
         fs.writeFileSync(target, content, "utf8")
-        const lines = content.split("\n").length
+        // A trailing newline is a TERMINATOR, not an empty final element —
+        // count like read_file does (`wc -l` semantics) so both tools agree
+        // on how many lines the same file has. Empty file = 0 lines.
+        const parts = content.split("\n")
+        const lines = content === "" ? 0 : content.endsWith("\n") ? parts.length - 1 : parts.length
         // LSP-lite: surface syntax errors in the written file immediately.
         const note = await syntaxNote(target, content)
         return textResult(`Wrote ${lines} lines to ${rawPath}${note}`)

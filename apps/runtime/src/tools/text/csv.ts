@@ -85,9 +85,12 @@ export function createCsvTool(): Tool {
         required: ["file"],
       },
     },
-    async execute(_id, args) {
+    async execute(_id, args, _signal, _update, context) {
       try {
-        const p = resolveConstrainedPath(String(args.file), process.cwd())
+        // Respect the tool context (worktree/subdir sessions) like the sibling
+        // text tools — resolving against process.cwd() failed sessions whose
+        // cwd is a subtree of the repo root.
+        const p = resolveConstrainedPath(String(args.file), context?.cwd ?? process.cwd())
         const capped = readFileTextCapped(p)
         let src = capped.text
         if (capped.truncated) {

@@ -138,7 +138,15 @@ function parseFrontmatterLines(frontmatter: string): Record<string, string> {
     if (!kv) continue
     const key = kv[1].trim()
     if (!key) continue
-    let value = kv[2].replace(/^["']|["']$/g, "")
+    let value = kv[2]
+    // YAML inline comment rule: `#` cuts the value when it starts the value
+    // or follows whitespace (`cwd: ./scripts # optional`). A `#` inside a
+    // quoted string ("https://x.test/p#frag") has a non-space before it and
+    // survives. Without this, `timeout: 60 # seconds` parsed as NaN and the
+    // documented `cwd: ./scripts # optional` kept its comment.
+    const hash = value.search(/(?:^|\s)#/)
+    if (hash >= 0) value = value.slice(0, hash).trimEnd()
+    value = value.replace(/^["']|["']$/g, "")
     if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1)
     if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1)
     // `key in out` matched INHERITED keys too (constructor/toString were

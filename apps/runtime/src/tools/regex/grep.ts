@@ -188,7 +188,12 @@ export function createGrepTool(): Tool {
             skippedLong > 0 ? ` (${skippedLong} over-long line(s) skipped — see MAX_TEST_LINE_LENGTH)` : ""
           return textResult(`No matches for /${pattern}/ in ${base}${skipped}`)
         }
-        const hasMore = total > maxResults
+        // Both loops break AT the cap (`total >= maxResults`, `results.length >=
+        // maxResults`), so `total > maxResults` could NEVER be true and the
+        // model was told a truncated search was complete. Match the ripgrep
+        // path's `matchCount >= maxResults` contract: reaching the cap means
+        // more matches may exist beyond it.
+        const hasMore = total >= maxResults
         const header = `Found ${total} match(es)${hasMore ? " (more matches available)" : ""}`
         return textResult(`${header}\n${results.join("\n")}`)
       } catch (error) {

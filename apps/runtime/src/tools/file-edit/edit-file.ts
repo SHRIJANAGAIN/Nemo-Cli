@@ -102,7 +102,11 @@ export function createEditFileTool(): Tool {
             /*isError*/ true,
           )
         }
-        const updated = replaceAll ? original.split(oldStr).join(newStr) : original.replace(oldStr, newStr)
+        // split().join() replaces literally; String.replace interprets $& $` $' $$
+        // in the replacement as pattern escapes. The single-occurrence path must
+        // replace only the FIRST hit, so use a function replacer (its return
+        // value is inserted literally) to keep both paths pattern-free.
+        const updated = replaceAll ? original.split(oldStr).join(newStr) : original.replace(oldStr, () => newStr)
         fs.writeFileSync(target, updated, "utf8")
         // LSP-lite: surface syntax errors in the edited file immediately
         // (semantic type checking lives in the `diagnostics` tool).

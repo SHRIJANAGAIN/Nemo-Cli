@@ -44,10 +44,17 @@ export function walkFiles(root: string, onFile: (filePath: string, rel: string) 
   visit(root, 0)
 }
 
-/** Simple glob matcher supporting * and **. */
+/** Simple glob matcher supporting *, **, and ?. */
 export function matchGlob(pattern: string, name: string): boolean {
   const regex = pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    // `?` is NOT in the meta-escape class above, so a bare `?` used to fall
+    // straight into the RegExp as a quantifier — `file?.txt` became "e
+    // optional" (fil.txt falsely matched, file1.txt missed). Glob semantics:
+    // ? = any single char. The ripgrep backend already did this; the Node
+    // fallback now agrees. Must run BEFORE `\*\*\/` introduces its own `?`
+    // in the `(?:.*/)?` rewrite, or that quantifier gets clobbered too.
+    .replace(/\?/g, "[^/]")
     .replace(/\*\*\//g, "(?:.*/)?")
     .replace(/\*\*/g, ".*")
     .replace(/\*/g, "[^/]*")

@@ -156,7 +156,12 @@ export class SearchNode {
 
   bestCandidate(): ScoredCandidate | null {
     if (this.candidates.length === 0) return null
-    return [...this.candidates].sort((a, b) => b.score - a.score)[0]
+    // Prefer an ALIVE candidate: the search loop expands the best candidate,
+    // and a dead pick can never progress. Only fall back to dead candidates
+    // when nothing is alive (e.g. the end-of-search "best so far" report).
+    const alive = this.candidates.filter((c) => !c.dead)
+    const pool = alive.length > 0 ? alive : this.candidates
+    return [...pool].sort((a, b) => b.score - a.score)[0]
   }
 
   aliveCandidates(): ScoredCandidate[] {
@@ -255,7 +260,13 @@ export class SotaReasoningEngine {
       if (!bestNode) break
 
       const parentCandidate = bestNode.bestCandidate()
-      if (!parentCandidate || parentCandidate.dead) continue
+      // bestCandidate() prefers an alive candidate, so a dead pick here means
+      // NOTHING on this node is expandable — break instead of `continue`,
+      // which re-picked the same dead candidate forever (no await, no depth
+      // increment — a hard synchronous spin that even the abort signal
+      // couldn't interrupt).
+      if (!parentCandidate) break
+      if (parentCandidate.dead) break
 
       for (const candidate of bestNode.aliveCandidates()) {
         if (candidate.needsRecheck) {
