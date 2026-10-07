@@ -10,6 +10,7 @@ import * as os from "os"
 import * as path from "path"
 import { createYamlTool, parseYamlComment } from "./yaml.js"
 import type { ToolResult } from "../../../../../packages/protocol/src/index.js"
+import type { ToolContext } from "../types.js"
 
 const scalar = (node: unknown): string | undefined => (node as { scalar?: string }).scalar
 
@@ -50,6 +51,45 @@ describe("parseYamlComment", () => {
   it("unescapes \\n inside double-quoted scalars", () => {
     const doc = parseYamlComment('path: "line1\\nline2"')
     expect(scalar(doc.mapEntries?.[0]?.value)).toBe("line1\nline2")
+  })
+
+  it("keeps backslash sequences literal inside single-quoted scalars", () => {
+    // YAML single quotes do NOT process escapes: 'a\nb' is the 4-char text.
+    const doc = parseYamlComment("msg: 'no\\nbreak'")
+    expect(scalar(doc.mapEntries?.[0]?.value)).toBe("no\\nbreak")
+  })
+
+  it("keeps a # that is part of the value (URL fragments) instead of stripping it", () => {
+    const doc = parseYamlComment("url: https://example.com/x#frag")
+    expect(scalar(doc.mapEntries?.[0]?.value)).toBe("https://example.com/x#frag")
+  })
+
+  it("keeps every field of a multi-key list item (CI step shape)", () => {
+    const doc = parseYamlComment(["jobs:", "  - name: build", "    command: go build", "    env: prod"].join("\n"))
+    const jobs = doc.mapEntries?.find((e) => e.key === "jobs")?.value
+    expect(jobs?.kind).toBe("list")
+    const item = jobs?.listItems?.[0]
+    expect(item?.mapEntries?.map((e) => e.key)).toEqual(["name", "command", "env"])
+    expect(scalar(item?.mapEntries?.[1]?.value)).toBe("go build")
+    expect(scalar(item?.mapEntries?.[2]?.value)).toBe("prod")
+  })
+
+  it("attaches nested sub-maps inside a list item", () => {
+    const doc = parseYamlComment(["steps:", "  - name: build", "    with:", '      go: "1.21"'].join("\n"))
+    const steps = doc.mapEntries?.find((e) => e.key === "steps")?.value
+    const item = steps?.listItems?.[0]
+    expect(item?.mapEntries?.map((e) => e.key)).toEqual(["name", "with"])
+    const withMap = item?.mapEntries?.find((e) => e.key === "with")?.value
+    expect(withMap?.kind).toBe("map")
+    expect(scalar(withMap?.mapEntries?.[0]?.value)).toBe("1.21")
+  })
+
+  it("parses nested blocks indented with more than two spaces", () => {
+    const doc = parseYamlComment(["root:", "    child:", "        value: 42"].join("\n"))
+    const root = doc.mapEntries?.find((e) => e.key === "root")?.value
+    const child = root?.mapEntries?.find((e) => e.key === "child")
+    expect(child?.key).toBe("child")
+    expect(scalar(child?.value.mapEntries?.[0]?.value)).toBe("42")
   })
 
   it("parses nested maps and scalar lists", () => {
@@ -166,6 +206,29 @@ describe("yaml tool", () => {
     fs.writeFileSync(path.join(tmp, "blank.yaml"), "", "utf8")
     const res = await run({ file: "blank.yaml" })
     expect(textOf(res)).toBe("(empty)")
+  })
+
+  it("renders a multi-key list item with its fields inline", async () => {
+    fs.writeFileSync(path.join(tmp, "ci.yaml"), "steps:\n  - name: build\n    command: go build\n", "utf8")
+    const res = await run({ file: "ci.yaml" })
+    expect(res.isError).toBe(false)
+    expect(textOf(res)).toBe("steps:\n  - name: build\n    command: go build")
+  })
+
+  it("resolves relative file paths against the tool context cwd", async () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-yaml-cwd-"))
+    try {
+      fs.writeFileSync(path.join(other, "c.yaml"), "name: ok\n", "utf8")
+      const res = await createYamlTool().execute("call-1", { file: "c.yaml" }, undefined, undefined, {
+        cwd: other,
+      } as ToolContext)
+      expect(res.isError).toBe(false)
+      expect(textOf(res)).toBe("name: ok")
+      // The process working directory must not be consulted for the file.
+      expect(fs.existsSync(path.join(process.cwd(), "c.yaml"))).toBe(false)
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true })
+    }
   })
 
   it("fails with a clear error for a missing file", async () => {

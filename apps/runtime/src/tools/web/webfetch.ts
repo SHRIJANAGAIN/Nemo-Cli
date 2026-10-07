@@ -44,8 +44,8 @@ function sanitizeHtml(html: string): string {
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
     .replace(/&#x27;/gi, "'")
-    .replace(/&#x60;/gi, "'")
-    .replace(/&#96;/gi, "'")
+    .replace(/&#x60;/gi, "`")
+    .replace(/&#96;/gi, "`")
     .replace(/&#8216;/gi, "'")
     .replace(/&#8217;/gi, "'")
     .replace(/&#8220;/gi, '"')
@@ -94,8 +94,19 @@ const definition: ToolDefinition = {
   },
 }
 
-function buildCacheKey(target: string, method: string, body?: string): string {
-  return `${method}:${target}:${body ?? ""}`
+function buildCacheKey(
+  target: string,
+  method: string,
+  body: string | undefined,
+  format: string,
+  headers: Record<string, string>,
+  maxBytes: number,
+): string {
+  const canonicalHeaders = Object.keys(headers)
+    .sort()
+    .map((k) => `${k.toLowerCase()}:${headers[k]}`)
+    .join("|")
+  return `${method}:${format}:${maxBytes}:${canonicalHeaders}:${target}:${body ?? ""}`
 }
 
 export function createWebFetchTool(): Tool {
@@ -141,7 +152,7 @@ export function createWebFetchTool(): Tool {
         }
       })()
 
-      const cacheKey = buildCacheKey(target, method, body)
+      const cacheKey = buildCacheKey(target, method, body, format, extraHeaders, maxBytes)
       if (method === "GET" && cacheTtl > 0) {
         const cached = CACHE.get(cacheKey)
         if (cached && Date.now() - cached.timestamp < cacheTtl) {
@@ -341,15 +352,21 @@ function fetchWithRedirect(
           callback(new Error(`Redirect blocked: ${hopBlock}`), "", null, {}, null)
           return
         }
-        let redirectBody: string | undefined
+        // HTTP redirect semantics: 307/308 repeat the exact method with the
+        // ORIGINAL body; 301/302/303 downgrade POST to GET (303 forces GET;
+        // HEAD stays HEAD) and drop the body. The redirect RESPONSE body is
+        // just drained — it must never become the next request's payload,
+        // and the original body must survive 307/308 intact.
+        const hopMethod = status === 307 || status === 308 ? method : method === "HEAD" ? "HEAD" : "GET"
+        const hopBody = status === 307 || status === 308 ? body : undefined
         const chunks: Buffer[] = []
         res.on("data", (c) => chunks.push(c))
         res.on("end", () => {
-          redirectBody = Buffer.concat(chunks).toString("utf8")
+          void chunks
           fetchWithRedirect(
             redirectParsed,
-            method,
-            redirectBody,
+            hopMethod,
+            hopBody,
             extraHeaders,
             redirectCount + 1,
             maxBytes,
@@ -402,18 +419,14 @@ function fetchWithRedirect(
           return
         }
 
-        let final: string
-        if (isHtml) {
-          final = sanitizeHtml(buf.toString("utf8"))
-        } else {
-          final = buf.toString("utf8")
-        }
+        // The raw body is passed up; format handling (html/text/markdown)
+        // happens in execute so `format=html` can genuinely keep the HTML.
         const resHeaders: Record<string, string> = {}
         for (const [k, v] of Object.entries(res.headers)) {
           if (typeof v === "string") resHeaders[k] = v
           else if (Array.isArray(v)) resHeaders[k] = v.join(",")
         }
-        callback(null, final, status, resHeaders, parsed.toString())
+        callback(null, buf.toString("utf8"), status, resHeaders, parsed.toString())
       })
       res.on("error", (err) => callback(err, "", null, {}, null))
     },

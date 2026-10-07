@@ -32,10 +32,14 @@ const net = vi.hoisted(() => {
   const routes = new Map<string, MockResponse | MockResponse[]>()
   const requests: string[] = []
   const requestHeaders: Array<Record<string, string>> = []
+  const requestMethods: string[] = []
+  const requestBodies: string[] = []
   return {
     routes,
     requests,
     requestHeaders,
+    requestMethods,
+    requestBodies,
     /** How many of the http(s) mock factories ran — never reset: if this
      *  stays 0 the suite would silently talk to the real network. */
     factoryHits: 0,
@@ -43,6 +47,8 @@ const net = vi.hoisted(() => {
       routes.clear()
       requests.length = 0
       requestHeaders.length = 0
+      requestMethods.length = 0
+      requestBodies.length = 0
     },
     /** First matching route wins; arrays consume in order and repeat the
      *  last entry; unmatched URLs get an empty 200. */
@@ -118,8 +124,9 @@ function buildHttpModule(): { get: unknown; request: unknown } {
       deliver(url, onResp, req)
     }
     req.setTimeout = (): MockReq => req
-    req.write = (): void => {
-      /* request body is irrelevant — routing is URL-based */
+    req.write = (chunk: string): void => {
+      /* request bodies are recorded so redirect/method semantics are testable */
+      if (chunk !== "") net.requestBodies.push(String(chunk))
     }
     req.destroy = (): void => {
       /* teardown is a no-op: the scheduled deliver still runs */
@@ -132,12 +139,13 @@ function buildHttpModule(): { get: unknown; request: unknown } {
     get: (rawUrl: unknown, _opts: unknown, onResp: (res: MockRes) => void): MockReq =>
       makeReq(String(rawUrl), onResp, /*autoStart*/ true),
     request: (
-      opts: { hostname?: string; port?: number | string; path?: string; headers?: Record<string, string> },
+      opts: { hostname?: string; port?: number | string; path?: string; headers?: Record<string, string>; method?: string },
       onResp: (res: MockRes) => void,
     ): MockReq => {
       const port = opts.port ? `:${opts.port}` : ""
       const url = `http://${opts.hostname ?? "localhost"}${port}${opts.path ?? "/"}`
       net.requestHeaders.push(opts.headers ?? {})
+      net.requestMethods.push(opts.method ?? "GET")
       return makeReq(url, onResp, /*autoStart*/ false)
     },
   }
@@ -259,8 +267,8 @@ describe("web_fetch response handling", () => {
     })
     const tool = createWebFetchTool()
     const res = await tool.execute("t1", { url: "http://site.test/htmlpage", format: "html" }, undefined)
-    expect(firstText(res)).toContain("Headline Four")
-    expect(firstText(res)).not.toContain("<h1>")
+    // format=html promises the raw page, not the stripped text
+    expect(firstText(res)).toContain("<h1>Headline Four</h1>")
   })
 
   it("runs the sanitizer for format=text on HTML", async () => {
@@ -335,6 +343,14 @@ describe("web_fetch response handling", () => {
     const res = await tool.execute("t1", { url: "http://site.test/long", max_bytes: 100 }, undefined)
     expect(firstText(res)).toContain("[truncated to 100 bytes]")
   })
+
+  it("decodes &#96; and &#x60; as a backtick, not an apostrophe", async () => {
+    net.routes.set("/bt", { status: 200, headers: { "content-type": "text/html" }, body: "a&#96;b &#x60;c" })
+    const tool = createWebFetchTool()
+    const res = await tool.execute("t1", { url: "http://site.test/bt", format: "text" }, undefined)
+    expect(res.isError).toBe(false)
+    expect(firstText(res)).toContain("a`b `c")
+  })
 })
 
 describe("web_fetch cache", () => {
@@ -366,6 +382,45 @@ describe("web_fetch cache", () => {
     const second = await tool.execute("t1", { url: "http://site.test/hook", method: "post" }, undefined)
     expect(firstText(second)).not.toContain("(cached)")
     expect(net.requests.filter((u) => u.includes("/hook"))).toHaveLength(2)
+  })
+
+  it("never serves a cache entry to a call with a different format", async () => {
+    net.routes.set("/fmt-cache", {
+      status: 200,
+      headers: { "content-type": "text/html" },
+      body: "<p>Formatted</p>",
+    })
+    const tool = createWebFetchTool()
+    const html = await tool.execute("t1", { url: "http://site.test/fmt-cache", format: "html" }, undefined)
+    expect(firstText(html)).toContain("<p>Formatted</p>")
+    const markdown = await tool.execute("t1", { url: "http://site.test/fmt-cache", format: "markdown" }, undefined)
+    expect(markdown.isError).toBe(false)
+    expect(firstText(markdown)).not.toContain("(cached)")
+    expect(net.requests.filter((u) => u.includes("/fmt-cache"))).toHaveLength(2)
+  })
+
+  it("never serves a cached response to a call with different headers", async () => {
+    net.routes.set("/authed", "secret data")
+    const tool = createWebFetchTool()
+    const one = await tool.execute(
+      "t1",
+      { url: "http://site.test/authed", headers: '{"Authorization":"Bearer s3cr3t"}' },
+      undefined,
+    )
+    expect(firstText(one)).toContain("secret data")
+    // An anonymous call must not receive the body fetched with credentials.
+    const two = await tool.execute("t1", { url: "http://site.test/authed" }, undefined)
+    expect(firstText(two)).not.toContain("(cached)")
+    expect(net.requests.filter((u) => u.includes("/authed"))).toHaveLength(2)
+  })
+
+  it("never serves a cached truncated body to a call asking for more bytes", async () => {
+    net.routes.set("/big-cache", "A".repeat(300))
+    const tool = createWebFetchTool()
+    await tool.execute("t1", { url: "http://site.test/big-cache", max_bytes: 50 }, undefined)
+    const two = await tool.execute("t1", { url: "http://site.test/big-cache", max_bytes: 200 }, undefined)
+    expect(firstText(two)).not.toContain("(cached)")
+    expect(net.requests.filter((u) => u.includes("/big-cache"))).toHaveLength(2)
   })
 })
 
@@ -438,6 +493,37 @@ describe("web_fetch redirects, retries, and failures", () => {
     const res = await pending
     expect(res.isError).toBe(true)
     expect(firstText(res)).toBe("aborted")
+  })
+
+  it("downgrades to GET and drops the body on 301/302/303 redirects", async () => {
+    net.routes.set("/redir", { status: 302, headers: { location: "/dest" }, body: "redirect-page" })
+    net.routes.set("/dest", { status: 200, headers: { "content-type": "text/plain" }, body: "ok" })
+    const tool = createWebFetchTool()
+    const res = await tool.execute(
+      "t1",
+      { url: "http://site.test/redir", method: "POST", body: "payload" },
+      undefined,
+    )
+    expect(res.isError).toBe(false)
+    expect(firstText(res)).toContain("ok")
+    // The follow-up hop must be a GET with no request body — not a POST that
+    // replays the redirect response page as its payload.
+    expect(net.requestMethods).toEqual(["POST", "GET"])
+    expect(net.requestBodies).toEqual(["payload"])
+  })
+
+  it("preserves method and body on 307/308 redirects", async () => {
+    net.routes.set("/keeps", { status: 307, headers: { location: "/dest2" }, body: "redirect-page" })
+    net.routes.set("/dest2", { status: 200, headers: { "content-type": "text/plain" }, body: "ok" })
+    const tool = createWebFetchTool()
+    const res = await tool.execute(
+      "t1",
+      { url: "http://site.test/keeps", method: "PUT", body: "data" },
+      undefined,
+    )
+    expect(res.isError).toBe(false)
+    expect(net.requestMethods).toEqual(["PUT", "PUT"])
+    expect(net.requestBodies).toEqual(["data", "data"])
   })
 })
 
