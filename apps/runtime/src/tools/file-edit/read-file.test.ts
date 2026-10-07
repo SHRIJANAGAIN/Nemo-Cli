@@ -82,13 +82,39 @@ describe("read_file bounded read (#75)", () => {
     const dir = scratch("rf-small-")
     fs.writeFileSync(path.join(dir, "a.txt"), "one\ntwo\nthree\n", "utf8")
     const out = await read(dir, { path: "a.txt" })
-    // Trailing newline yields a final empty element; that split behaviour is
-    // pre-existing and unchanged — the point here is that a small file is read
-    // whole and is never labelled as truncated.
-    expect(out).toContain("(4 lines)")
+    // The trailing newline is a terminator, not a phantom 4th line: the file
+    // is three lines and must come back as three, with no invented "4 | " row.
+    expect(out).toContain("(3 lines)")
     expect(out).toContain("one")
     expect(out).toContain("three")
+    expect(out).not.toContain("    4 | ")
     expect(out).not.toContain("capped")
+  })
+
+  it("counts a file WITHOUT a trailing newline the same way", async () => {
+    const dir = scratch("rf-nonl-")
+    fs.writeFileSync(path.join(dir, "b.txt"), "one\ntwo\nthree", "utf8")
+    const out = await read(dir, { path: "b.txt" })
+    expect(out).toContain("(3 lines)")
+    expect(out).not.toContain("    4 | ")
+  })
+
+  it("preserves a REAL blank final line without inventing an extra one", async () => {
+    const dir = scratch("rf-blank-")
+    // "one\n\n" is a one-line file followed by a genuinely blank second line.
+    fs.writeFileSync(path.join(dir, "c.txt"), "one\n\n", "utf8")
+    const out = await read(dir, { path: "c.txt" })
+    expect(out).toContain("(2 lines)")
+    expect(out).toContain("    2 | ")
+    expect(out).not.toContain("    3 | ")
+  })
+
+  it("reads an empty file as zero lines, not a phantom line 1", async () => {
+    const dir = scratch("rf-empty-")
+    fs.writeFileSync(path.join(dir, "d.txt"), "", "utf8")
+    const out = await read(dir, { path: "d.txt" })
+    expect(out).toContain("(0 lines)")
+    expect(out).not.toContain("    1 | ")
   })
 
   it("caps an oversized file at 50 KB and never materialises the whole thing", async () => {
@@ -116,7 +142,7 @@ describe("read_file bounded read (#75)", () => {
     expect(out).toContain("l2")
     expect(out).toContain("l3")
     expect(out).not.toContain("l4")
-    expect(out).toContain("3 more lines")
+    expect(out).toContain("2 more lines")
   })
 
   it("refuses a path outside the workspace before reading anything", async () => {

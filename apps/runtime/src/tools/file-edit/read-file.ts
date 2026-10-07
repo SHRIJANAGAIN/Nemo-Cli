@@ -122,7 +122,14 @@ export function createReadFileTool(): Tool {
         // working in, and noteOpen can never throw.
         noteOpen(target)
 
-        const lines = raw.split("\n")
+        // A trailing newline is a TERMINATOR, not an empty final line, but
+        // `split("\n")` turns "a\nb\n" into ["a","b",""] — a phantom line that
+        // invents both a numbered row and a line count the file does not have
+        // (wc -l says 2, the reply said 3 and printed "3 | "). Strip the
+        // terminator before splitting; a genuinely blank file or a real blank
+        // last line survives this.
+        const lineSource = raw.endsWith("\n") ? raw.slice(0, -1) : raw
+        const lines = lineSource.length === 0 ? [] : lineSource.split("\n")
         const slice = lines.slice(offset - 1, offset - 1 + limit)
         const numbered = slice.map((line, i) => `${String(offset + i).padStart(5)} | ${line}`).join("\n")
         // A byte-truncated prefix has no knowable total, so only the

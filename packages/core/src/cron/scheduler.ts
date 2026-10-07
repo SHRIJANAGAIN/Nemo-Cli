@@ -36,6 +36,8 @@ export class PulseScheduler {
   private jobs: Map<string, CronJob> = new Map()
   private tickTimer: ReturnType<typeof setInterval> | null = null
   private running = false
+  /** Occurrences already fired (by job id), so one due `nextRunAt` fires once. */
+  private firedAt: Map<string, string> = new Map()
 
   constructor(config: PulseConfig) {
     this.jobsFile = config.jobsFile
@@ -123,6 +125,13 @@ export class PulseScheduler {
       if (!job.enabled) continue
       const next = job.nextRunAt ? Date.parse(job.nextRunAt) : null
       if (next && now >= next && now - next <= this.catchupWindowMs) {
+        // One OCCURRENCE fires once. Without this a job whose `nextRunAt` is
+        // already due re-fires on EVERY tick inside the catchup window (a 60s
+        // tick runs a due job ~3 times before the window lapses). The caller
+        // advances `nextRunAt` after the run; until it does, the same
+        // occurrence must not be handed to `onTick` again.
+        if (this.firedAt.get(job.id) === job.nextRunAt) continue
+        this.firedAt.set(job.id, job.nextRunAt ?? "")
         onTick(job)
       }
     }

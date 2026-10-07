@@ -79,6 +79,22 @@ describe("splitPinned", () => {
     expect(rest).toHaveLength(1)
   })
 
+  it("pins the task statement even when the session opens with an assistant turn", () => {
+    // A resumed/continued session opens with a recap assistant turn and only
+    // THEN the user's actual instruction. The instruction must survive into
+    // the reduce step verbatim, not be paraphrased by a chunk summary.
+    const { pinned, rest } = splitPinned([assistant("recap of where we were"), user("THE REAL TASK"), assistant("done")])
+    expect(pinned.map((m) => m.content)).toEqual(["recap of where we were", "THE REAL TASK"])
+    expect(rest.map((m) => m.content)).toEqual(["done"])
+    expect(pinned[1]?.content).toBe("THE REAL TASK")
+  })
+
+  it("only pins the system prefix when no user message exists anywhere", () => {
+    const { pinned, rest } = splitPinned([{ role: "system", content: "rules" }, assistant("a"), assistant("b")])
+    expect(pinned.map((m) => m.role)).toEqual(["system"])
+    expect(rest).toHaveLength(2)
+  })
+
   it("stops at the FIRST user turn, not a later one", () => {
     const { rest } = splitPinned([user("first"), assistant("a"), user("second")])
     expect(rest.map((m) => m.content)).toEqual(["a", "second"])

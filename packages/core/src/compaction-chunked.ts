@@ -85,20 +85,23 @@ export function splitPinned(messages: readonly ChunkableMessage[]): {
 } {
   const pinned: ChunkableMessage[] = []
   let index = 0
-  while (index < messages.length) {
-    const message = messages[index]
-    if (!message) break
-    if (message.role === "system") {
-      pinned.push(message)
+  while (index < messages.length && messages[index]?.role === "system") {
+    pinned.push(messages[index] as ChunkableMessage)
+    index++
+  }
+  // The task statement is "everything up to AND INCLUDING the first user
+  // message". A conversation that opens with an assistant turn — a resumed or
+  // continued session, a queued follow-up — still has its task statement
+  // somewhere ahead; pinning only the system prefix lets that one instruction
+  // be paraphrased by a chunk summary, which is precisely the failure this
+  // module exists to prevent. Only when NO user message exists at all (no task
+  // to preserve) do we stop at the system prefix.
+  const firstUser = messages.findIndex((m, i) => i >= index && m.role === "user")
+  if (firstUser >= 0) {
+    while (index <= firstUser) {
+      pinned.push(messages[index] as ChunkableMessage)
       index++
-      continue
     }
-    // Include the opening user turn, then stop: later turns are history.
-    if (pinned.some((m) => m.role === "user") === false && message.role === "user") {
-      pinned.push(message)
-      index++
-    }
-    break
   }
   return { pinned, rest: messages.slice(index) }
 }

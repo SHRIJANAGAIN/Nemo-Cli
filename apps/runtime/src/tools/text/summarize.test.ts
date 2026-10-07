@@ -10,6 +10,7 @@ import * as os from "os"
 import * as path from "path"
 import { createExtractTool, createSummarizeTool } from "./summarize.js"
 import type { ToolResult } from "../../../../../packages/protocol/src/index.js"
+import type { ToolContext } from "../types.js"
 
 describe("summarize and extract byte caps", () => {
   let tmp = ""
@@ -56,5 +57,35 @@ describe("summarize and extract byte caps", () => {
     const res = await runSum({})
     expect(res.isError).toBe(true)
     expect(textOf(res)).toContain("Provide either a file or inline text")
+  })
+})
+
+describe("summarize and extract resolve against the tool context cwd", () => {
+  const textOf = (res: ToolResult): string => (res.content[0] as { text: string }).text
+
+  it("reads a relative file from ctx.cwd even when process.cwd() points elsewhere", async () => {
+    // read_file honours ctx.cwd; these two used process.cwd() instead, so the
+    // same relative path meant different files depending on which tool ran it.
+    // The project dir is NOT the process cwd here — only the context says where
+    // the workspace is.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sumz-ctx-"))
+    try {
+      fs.writeFileSync(path.join(dir, "doc.txt"), "Alpha beta gamma delta epsilon. Hello world.", "utf8")
+      const ctx = { cwd: dir, config: {}, permissions: {} } as unknown as ToolContext
+      const res = await createSummarizeTool().execute("call-1", { file: "doc.txt" }, undefined, undefined, ctx)
+      expect(res.isError, textOf(res)).toBe(false)
+      expect(textOf(res)).toContain("Alpha")
+      const ext = await createExtractTool().execute(
+        "call-1",
+        { file: "doc.txt", pattern: "Alpha" },
+        undefined,
+        undefined,
+        ctx,
+      )
+      expect(ext.isError, textOf(ext)).toBe(false)
+      expect(textOf(ext)).toContain("Alpha")
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

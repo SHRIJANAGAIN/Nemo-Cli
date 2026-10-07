@@ -129,8 +129,9 @@ describe("PulseScheduler ticking", () => {
     await sleep(90)
     s.stop()
 
-    expect(fired.length).toBeGreaterThanOrEqual(1)
-    expect(new Set(fired)).toEqual(new Set([due.id]))
+    // Fires ONCE per occurrence: several ticks land inside the catchup window,
+    // but the SAME due `nextRunAt` must not re-fire the job on each of them.
+    expect(fired).toEqual([due.id])
   })
 
   it("ignores jobs that have never been scheduled", async () => {

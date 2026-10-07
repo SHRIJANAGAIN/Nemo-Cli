@@ -81,7 +81,12 @@ export function truncateOutput(
   const preview = lines.slice(-Math.max(1, Math.floor(maxLines / 2)))
   let previewText = preview.join("\n")
   if (Buffer.byteLength(previewText, "utf8") > maxBytes) {
-    previewText = previewText.slice(previewText.length - maxBytes)
+    // Keep the TAIL of the preview within the byte budget. String `.slice`
+    // counts UTF-16 code units, not bytes, so it can hand back a string that
+    // still exceeds maxBytes for multibyte text — and can land mid-surrogate,
+    // emitting a lone `\uD83D` that no encoder round-trips. Walk code points
+    // from the end and stop by byte weight instead.
+    previewText = takeTailBytes(previewText, maxBytes)
   }
 
   let outputPath: string | undefined
@@ -102,6 +107,27 @@ export function truncateOutput(
     : `\n\n[output truncated: showing last ${preview.length} lines of ${lines.length}]`
 
   return { text: previewText + note, truncated: true, outputPath }
+}
+
+/**
+ * The last `maxBytes` BYTES of `text`, cut on code-point boundaries.
+ *
+ * `String.prototype.slice` counts UTF-16 units, so `slice(len - maxBytes)`
+ * over-returns for multibyte text (an emoji is 2 units / 4 bytes) and can
+ * split a surrogate pair. Walking code points from the end and adding their
+ * UTF-8 weights keeps the guarantee the caller made: the preview fits.
+ */
+function takeTailBytes(text: string, maxBytes: number): string {
+  const chars = Array.from(text)
+  let bytes = 0
+  let start = chars.length
+  for (let i = chars.length - 1; i >= 0; i--) {
+    const weight = Buffer.byteLength(chars[i] ?? "", "utf8")
+    if (bytes + weight > maxBytes) break
+    bytes += weight
+    start = i
+  }
+  return chars.slice(start).join("")
 }
 
 /** Remove truncation files older than 7 days (SKT AI LABS truncate.ts pattern). */
@@ -148,8 +174,10 @@ export function assertMutablePath(filepath: string): void {
   const dir = parts.at(-2)
   // Legacy state dirs from pre-rebrand installs: their agent-manager.json
   // must stay tool-protected (`.trayambak` is covered by
-  // PROTECTED_METADATA_DIRS below with the generic message).
-  if (file === "agent-manager.json" && [".kilo", ".SKT AI LABS"].includes(dir ?? "")) {
+  // PROTECTED_METADATA_DIRS below with the generic message). Folded like the
+  // metadata check, so `.KILO/agent-manager.json` cannot slip past on a
+  // case-sensitive host while `.kilo/…` is protected.
+  if (file === "agent-manager.json" && [".kilo", ".skt ai labs"].includes((dir ?? "").toLowerCase())) {
     throw new Error("Do not edit Agent Manager state directly. Use the agent_manager tool.")
   }
   const folded = parts.map((seg) => seg.toLowerCase())

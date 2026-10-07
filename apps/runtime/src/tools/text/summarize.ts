@@ -58,14 +58,21 @@ export function createSummarizeTool(): Tool {
         required: [],
       },
     },
-    async execute(_id, args) {
+    async execute(_id, args, _signal, _update, context) {
       try {
         let text: string
         let truncated = false
         let totalBytes = 0
         if (typeof args.text === "string") text = args.text
         else if (typeof args.file === "string") {
-          const p = resolveConstrainedPath(String(args.file), process.cwd())
+          // Resolve against the CONTEXT cwd, exactly like read_file: tools run
+          // in a workspace the runtime sets, not in whatever directory the CLI
+          // process happened to spawn from. Skipping the context here made
+          // `summarize` read against process.cwd() while every sibling tool
+          // honoured ctx.cwd — the same call behaved differently depending on
+          // which tool ran it.
+          const base = context?.cwd ?? process.cwd()
+          const p = resolveConstrainedPath(String(args.file), base)
           const capped = readFileTextCapped(p)
           text = capped.text
           truncated = capped.truncated
@@ -110,9 +117,10 @@ export function createExtractTool(): Tool {
         required: ["file"],
       },
     },
-    async execute(_id, args) {
+    async execute(_id, args, _signal, _update, context) {
       try {
-        const p = resolveConstrainedPath(String(args.file), process.cwd())
+        const base = context?.cwd ?? process.cwd()
+        const p = resolveConstrainedPath(String(args.file), base)
         const capped = readFileTextCapped(p)
         const text = capped.text
         const note = capped.truncated

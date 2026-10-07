@@ -18,6 +18,7 @@ import {
   prune,
   rankByFrecency,
   recordOpen,
+  sameStorePath,
   saveFrecency,
   touchAndRank,
   frecencyStorePath,
@@ -150,6 +151,43 @@ describe("recordOpen", () => {
   it("does not let a backwards clock pin an entry to the top forever", () => {
     const entries = recordOpen([{ path: "a.ts", opens: 1, lastOpened: NOW + DAY }], "a.ts", NOW)
     expect(entries[0]?.lastOpened).toBe(NOW + DAY)
+  })
+})
+
+describe("sameStorePath + case-insensitive identity", () => {
+  it("treats case variants as the same file when the flag says the fs is case-insensitive", () => {
+    expect(sameStorePath("C:\\Proj\\Foo.ts", "c:\\proj\\foo.ts", true)).toBe(true)
+    expect(sameStorePath("Foo.ts", "foo.ts", true)).toBe(true)
+    expect(sameStorePath("Foo.ts", "foo.txt", true)).toBe(false)
+  })
+
+  it("treats case variants as DISTINCT on a case-sensitive filesystem", () => {
+    expect(sameStorePath("Foo.ts", "foo.ts", false)).toBe(false)
+  })
+
+  it("merges a case-variant re-open on the host's real filesystem behaviour", () => {
+    // Resolved tool paths keep the caller's casing, so on Windows/macOS the
+    // same file can enter the store twice. recordOpen must collapse it there
+    // (and keep the two rows separate on Linux, where they ARE two files).
+    const insensitive = process.platform === "win32" || process.platform === "darwin"
+    const next = recordOpen([{ path: "C:\\Proj\\Foo.ts", opens: 1, lastOpened: NOW }], "c:\\proj\\foo.ts", NOW)
+    expect(next).toHaveLength(insensitive ? 1 : 2)
+    // And the dedupe window must hold across the case variant: an immediate
+    // re-open does NOT bump the count.
+    expect(next[0]?.opens).toBe(1)
+  })
+
+  it("mergeFrecency applies the same identity rule to case variants", () => {
+    const insensitive = process.platform === "win32" || process.platform === "darwin"
+    const merged = mergeFrecency(
+      [{ path: "C:\\Proj\\Foo.ts", opens: 1, lastOpened: NOW }],
+      [{ path: "c:\\proj\\foo.ts", opens: 4, lastOpened: NOW + DAY }],
+    )
+    expect(merged).toHaveLength(insensitive ? 1 : 2)
+    if (insensitive) {
+      expect(merged[0]?.opens).toBe(4)
+      expect(merged[0]?.lastOpened).toBe(NOW + DAY)
+    }
   })
 })
 

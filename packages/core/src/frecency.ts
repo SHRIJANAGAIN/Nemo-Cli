@@ -99,6 +99,24 @@ export function rankByFrecency(entries: readonly FrecencyEntry[], options: Frece
 }
 
 /**
+ * Whether two store rows name the SAME file.
+ *
+ * The resolved path keeps the caller's casing, and Windows/macOS filesystems
+ * are case-insensitive by default: `notesOpen` of `C:\Proj\Foo.ts` then
+ * `c:\proj\foo.ts` are one file, and recording two rows would split the
+ * working set (and let a case variant dodge the dedupe window). On a
+ * case-sensitive filesystem (Linux) the two ARE distinct files and must not
+ * merge. The flag is explicit so the rule is testable on any host.
+ */
+export function sameStorePath(a: string, b: string, caseInsensitive = isCaseInsensitiveFs()): boolean {
+  return caseInsensitive ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
+function isCaseInsensitiveFs(): boolean {
+  return process.platform === "win32" || process.platform === "darwin"
+}
+
+/**
  * Count an open, returning the next store.
  *
  * The dedupe window is the reason this is not just `opens + 1`. A clock that
@@ -110,14 +128,14 @@ export function recordOpen(
   target: string,
   now: number = Date.now(),
 ): FrecencyEntry[] {
-  const existing = entries.find((e) => e.path === target)
+  const existing = entries.find((e) => sameStorePath(e.path, target))
   if (!existing) {
     return prune([...entries, { path: target, opens: 1, lastOpened: now }])
   }
   const withinWindow = now - existing.lastOpened < OPENS_DEDUPE_MS
   return prune(
     entries.map((e) =>
-      e.path === target
+      sameStorePath(e.path, target)
         ? {
             path: e.path,
             opens: withinWindow ? e.opens : e.opens + 1,
@@ -144,13 +162,17 @@ export function prune(entries: readonly FrecencyEntry[], max: number = MAX_ENTRI
 export function mergeFrecency(a: readonly FrecencyEntry[], b: readonly FrecencyEntry[]): FrecencyEntry[] {
   const byPath = new Map<string, FrecencyEntry>()
   for (const entry of [...a, ...b]) {
-    const seen = byPath.get(entry.path)
+    // A merge must apply the same identity rule as recordOpen: on a
+    // case-insensitive filesystem "Foo.ts" and "foo.ts" are the same file and
+    // merging them as two rows would hand the ranker a split working set.
+    const key = isCaseInsensitiveFs() ? entry.path.toLowerCase() : entry.path
+    const seen = byPath.get(key)
     if (!seen) {
-      byPath.set(entry.path, entry)
+      byPath.set(key, entry)
       continue
     }
-    byPath.set(entry.path, {
-      path: entry.path,
+    byPath.set(key, {
+      path: seen.path,
       opens: Math.max(seen.opens, entry.opens),
       lastOpened: Math.max(seen.lastOpened, entry.lastOpened),
     })
