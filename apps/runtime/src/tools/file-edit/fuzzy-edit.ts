@@ -155,19 +155,30 @@ function matchLineTrimmed(content: string, needle: string): EditMatch[] {
   if (wanted.filter((l) => l.length > 0).length < 2) return []
   const hay = linesWithOffsets(content)
   const out: EditMatch[] = []
-  for (let i = 0; i < wanted.length; i++) {
-    let end = -1
-    for (let j = i; j < Math.min(hay.length, i + wanted.length * 3); j++) {
-      if (trimLine(hay[j]?.text ?? "") === wanted[j - i]) {
-        end = j
-        continue
+  // Every hay line whose trimmed form equals the needle's FIRST line is a
+  // candidate start — the window must cover the whole file, not just the
+  // first `wanted.length` rows, or a re-flowed block deep in a large file
+  // could never be found at this tier.
+  for (let i = 0; i < hay.length; i++) {
+    if (trimLine(hay[i]?.text ?? "") !== wanted[0]) continue
+    // The needle's remaining lines may be scattered across the window (edits
+    // insert drifted junk between them), but ALL of them must appear, in
+    // order. Requiring the full run is what makes the span honest: a partial
+    // run would truncate the match to the lines found and apply a replacement
+    // that claims to cover more than it did — silent corruption.
+    let k = 0
+    let last = -1
+    const limit = Math.min(hay.length, i + wanted.length * 3)
+    for (let j = i; j < limit; j++) {
+      if (trimLine(hay[j]?.text ?? "") === wanted[k]) {
+        last = j
+        k++
+        if (k === wanted.length) break
       }
-      break
     }
-    if (end === -1) continue
+    if (k < wanted.length || last === -1) continue
     const start = hay[i]?.start ?? 0
-    const last = hay[end]
-    const stop = (last?.end ?? start) + 1
+    const stop = (hay[last]?.end ?? start) + 1
     out.push({ tier: "line-trimmed", start, end: stop, text: content.slice(start, stop), confidence: 0.7 })
   }
   return out

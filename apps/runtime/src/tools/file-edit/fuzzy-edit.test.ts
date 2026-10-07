@@ -135,6 +135,36 @@ describe("line-trimmed tier", () => {
     const m = matchEdit(messy, needle, { minConfidence: 0.1 })
     expect(m).not.toBeNull()
   })
+
+  it("refuses a partial run instead of matching a truncated span", () => {
+    // Only the first needle line matches; the second is absent. Truncating the
+    // span to the first line would apply a replacement that claims to cover
+    // both lines while leaving the file's own second line in place.
+    const src = "  foo(a)\nbar\nbaz"
+    expect(matchEdit(src, "foo(a)\nqux")).toBeNull()
+    expect(applyEdit(src, "foo(a)\nqux", "replacement")).toBeNull()
+  })
+
+  it("matches a needle whose lines are separated by drifted junk", () => {
+    const src = ["start", "\t\tfoo(a)", "// drifted comment", "endCall()"].join("\n")
+    const m = matchEdit(src, "foo(a)\nendCall()")
+    expect(m?.tier).toBe("line-trimmed")
+    expect(src.slice(m!.start, m!.end)).toBe("\t\tfoo(a)\n// drifted comment\nendCall()")
+  })
+
+  it("finds matches deep in the file, not only in the first few lines", () => {
+    // The needle's two lines sit at lines 41 and 43 of a 60-line file with a
+    // drifted line between them — far beyond the needle's own length, where the
+    // old implementation stopped searching.
+    const lines = Array.from({ length: 60 }, (_, i) => `  line ${i}`)
+    lines[40] = "  targetA()"
+    lines[42] = "  targetB()"
+    const src = lines.join("\n")
+    const m = matchEdit(src, "targetA()\ntargetB()")
+    expect(m?.tier).toBe("line-trimmed")
+    // Span covers through the last matched line's terminator (module semantics).
+    expect(src.slice(m!.start, m!.end)).toBe("  targetA()\n  line 41\n  targetB()\n")
+  })
 })
 
 describe("block-anchor tier", () => {

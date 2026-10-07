@@ -10,6 +10,7 @@ import * as os from "os"
 import * as path from "path"
 import { applyUnifiedPatch, createDiffTool, createPatchTool, diffLines, unifiedDiff } from "./diff.js"
 import type { ToolResult } from "../../../../../packages/protocol/src/index.js"
+import type { ToolContext } from "../types.js"
 
 const ops = (a: string[], b: string[]): string[] => diffLines(a, b).map((o) => `${o.op}${o.line}`)
 
@@ -111,6 +112,32 @@ describe("applyUnifiedPatch", () => {
   it("throws when the patch has no @@ hunks and is not a replacement", () => {
     expect(() => applyUnifiedPatch("content", "not a patch")).toThrow("no @@ hunks found in patch")
   })
+
+  it("keeps correct hunk line numbers after a prior hunk inserted lines", () => {
+    const a = ["1", "3", "4", "5", "6", "7", "9"]
+    const b = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    const patch = unifiedDiff("a.txt", "b.txt", a, b)
+    // The first hunk inserts "2" after old line 1; the second hunk therefore
+    // starts at OLD line 4 (a-lines 4..7) — not at the raw op index 5.
+    expect(patch).toContain("@@ -1,3 +1,4 @@")
+    expect(patch).toContain("@@ -4,4 +5,5 @@")
+  })
+
+  it("round-trips a generated multi-hunk patch", () => {
+    const a = ["1", "3", "4", "5", "6", "7", "9"]
+    const b = ["1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    const patch = unifiedDiff("a.txt", "b.txt", a, b)
+    expect(applyUnifiedPatch(a.join("\n"), patch)).toBe(b.join("\n"))
+  })
+
+  it("round-trips a patch whose hunks contain empty (blank) lines", () => {
+    const a = ["a", "", "b"]
+    const b = ["a", "", "X"]
+    const patch = unifiedDiff("a.txt", "b.txt", a, b)
+    // Block-bounded edits commonly include a blank context line; dropping it
+    // would misalign every following op in the hunk.
+    expect(applyUnifiedPatch(a.join("\n"), patch)).toBe(b.join("\n"))
+  })
 })
 
 describe("diff and patch tools", () => {
@@ -202,6 +229,51 @@ describe("diff and patch tools", () => {
     const res = await runPatch({ file: "missing.txt", patch: "@@ -1,1 +1,1 @@\n l1" })
     expect(res.isError).toBe(true)
     expect(textOf(res).startsWith("patch failed:")).toBe(true)
+  })
+})
+
+describe("diff and patch tools resolve against the tool context cwd", () => {
+  const textOf = (res: ToolResult): string => (res.content[0] as { text: string }).text
+
+  it("diff reads files under context.cwd, not process.cwd()", async () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-diff-cwd-"))
+    try {
+      fs.writeFileSync(path.join(other, "a.txt"), "one\n", "utf8")
+      fs.writeFileSync(path.join(other, "b.txt"), "two\n", "utf8")
+      const res = await createDiffTool().execute(
+        "call-1",
+        { file_a: "a.txt", file_b: "b.txt" },
+        undefined,
+        undefined,
+        { cwd: other } as ToolContext,
+      )
+      expect(res.isError).toBe(false)
+      const lines = textOf(res).split("\n")
+      expect(lines[0]).toBe("--- a.txt")
+      expect(lines[1]).toBe("+++ b.txt")
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true })
+    }
+  })
+
+  it("patch writes under context.cwd, not process.cwd()", async () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-patch-cwd-"))
+    try {
+      fs.writeFileSync(path.join(other, "a.txt"), "l1\nl2", "utf8")
+      const res = await createPatchTool().execute(
+        "call-1",
+        { file: "a.txt", patch: "@@ -1,2 +1,2 @@\n l1\n-l2\n+L2" },
+        undefined,
+        undefined,
+        { cwd: other } as ToolContext,
+      )
+      expect(res.isError).toBe(false)
+      expect(fs.readFileSync(path.join(other, "a.txt"), "utf8")).toBe("l1\nL2")
+      // The process working directory must not receive the write.
+      expect(fs.existsSync(path.join(process.cwd(), "a.txt"))).toBe(false)
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true })
+    }
   })
 })
 

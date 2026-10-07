@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import type { Tool, ToolResult } from "../types.js"
+import type { Tool, ToolResult, ToolContext } from "../types.js"
 import { textResult, resolveConstrainedPath } from "../types.js"
 import { readFileTextExact } from "./capped-read.js"
 import * as fs from "fs"
@@ -86,7 +86,15 @@ export function unifiedDiff(fileA: string, fileB: string, a: string[], b: string
     const hunk = ops.slice(start, Math.min(ops.length, end))
     const aStart = hunk.filter((o) => o.op !== "+").length
     const bStart = hunk.filter((o) => o.op !== "-").length
-    lines.push(`@@ -${Math.max(1, start + 1)},${aStart} +${Math.max(1, start + 1)},${bStart} @@`)
+    // The header's line numbers are OLD/NEW file coordinates, not indexes into
+    // the op array: a "+"/insertion consumes only a new line and a "-"/deletion
+    // only an old one, so `start + 1` is only valid for the FIRST hunk (before
+    // any change has skewed the two counters). Computing the coordinates from
+    // the ops preceding `start` keeps every hunk — not just the first — aligned
+    // with the file lines, so the produced patch actually applies.
+    const aLine = ops.slice(0, start).filter((o) => o.op !== "+").length + 1
+    const bLine = ops.slice(0, start).filter((o) => o.op !== "-").length + 1
+    lines.push(`@@ -${aLine},${aStart} +${bLine},${bStart} @@`)
     for (const h of hunk) lines.push(h.op + h.line)
     k = end + 1
   }
@@ -110,14 +118,17 @@ export function createDiffTool(): Tool {
         required: ["file_a"],
       },
     },
-    async execute(_id, args) {
+    async execute(_id, args, _signal, _update, context) {
       try {
-        const pa = resolveConstrainedPath(String(args.file_a), process.cwd())
+        // Relative paths must resolve against the tool's own cwd, which can
+        // differ from the CLI's process.cwd() (session in a worktree/subdir).
+        const cwd = (context as ToolContext | undefined)?.cwd ?? process.cwd()
+        const pa = resolveConstrainedPath(String(args.file_a), cwd)
         const aText = readFileTextExact(pa)
         let bText: string
         if (typeof args.text_b === "string") bText = args.text_b
         else if (typeof args.file_b === "string")
-          bText = readFileTextExact(resolveConstrainedPath(String(args.file_b), process.cwd()))
+          bText = readFileTextExact(resolveConstrainedPath(String(args.file_b), cwd))
         else return textResult("Provide either file_b or text_b to diff against.", /*isError*/ true)
         return textResult(
           unifiedDiff(String(args.file_a), String(args.file_b ?? "<text>"), aText.split(/\r?\n/), bText.split(/\r?\n/)),
@@ -146,7 +157,10 @@ export function applyUnifiedPatch(content: string, patch: string): string {
       hunks.push(cur)
       continue
     }
-    if (cur && /^[ +-]/.test(l) && l.length > 1 && l[0] !== "\\") {
+    if (cur && /^[ +-]/.test(l) && l[0] !== "\\") {
+      // Length-1 op lines are EMPTY content (" " = blank context, "+"/"-" =
+      // blank added/removed line). Dropping them would misalign every op that
+      // follows inside the hunk, so they are applied like any other line.
       cur.ops.push({ op: l[0], text: l.slice(1) })
     }
   }
@@ -215,8 +229,11 @@ export function createPatchTool(): Tool {
         },
       },
     },
-    async execute(_id, args) {
+    async execute(_id, args, _signal, _update, context) {
       const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+      // Relative paths must resolve against the tool's own cwd, which can
+      // differ from the CLI's process.cwd() (session in a worktree/subdir).
+      const cwd = (context as ToolContext | undefined)?.cwd ?? process.cwd()
       const multiInput = args.files !== undefined
       if (multiInput && args.file !== undefined) {
         return textResult("Provide either 'file' + 'patch' or 'files', not both.", /*isError*/ true)
@@ -246,7 +263,7 @@ export function createPatchTool(): Tool {
           const patch = (entry as { patch: string }).patch
           let resolved: string
           try {
-            resolved = resolveConstrainedPath(file, process.cwd())
+            resolved = resolveConstrainedPath(file, cwd)
           } catch (e) {
             return textResult(`patch failed for ${file}: ${errText(e)}`, /*isError*/ true)
           }
@@ -266,7 +283,7 @@ export function createPatchTool(): Tool {
         }
         let resolved: string
         try {
-          resolved = resolveConstrainedPath(String(args.file), process.cwd())
+          resolved = resolveConstrainedPath(String(args.file), cwd)
         } catch (e) {
           return textResult(`patch failed: ${errText(e)}`, /*isError*/ true)
         }
