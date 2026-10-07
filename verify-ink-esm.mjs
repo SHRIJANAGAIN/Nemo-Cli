@@ -69,6 +69,22 @@ for (const { file, expect } of ENTRY_POINTS) {
   }
 }
 
+/**
+ * NOTE: there is deliberately no "no specifier may escape this root" check here.
+ * App.js legitimately reaches ../../../../apps/runtime/* and ../../skt/*, which
+ * land on the CommonJS build and are served fine by Node's CJS-ESM interop.
+ * Failing those would be a false alarm — an earlier version of this file did
+ * exactly that and had to be backed out.
+ *
+ * What that means is that a static rule CANNOT catch the flattened-module bug:
+ * the broken specifier and the working ones look identical until the code is
+ * run. The obfuscated publish build is where they diverge, because
+ * cjs-module-lexer stops recognising the CJS named exports once they are
+ * obfuscated, so an ESM import of a flattened module's CJS twin dies with
+ * "does not provide an export named ...". The real backstop for that is
+ * scripts/verify-pack.mjs, which loads the PUBLISHED entry points.
+ */
+
 if (failures.length > 0) {
   console.error(`\nink ESM smoke test FAILED:\n  ${failures.join("\n  ")}`)
   process.exit(1)

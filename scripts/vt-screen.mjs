@@ -4,7 +4,9 @@
  * viewport) so oracles can assert what the USER sees, not what bytes left the
  * process. Handles cursor moves, ED/EL, SGR (ignored), OSC (skipped), autowrap
  * with deferred wrap, scrolling, ED3 (scrollback clear — Ink's clearTerminal
- * uses ESC[2J ESC[3J ESC[H), and width/height resize with hard-line reflow.
+ * uses ESC[2J ESC[3J ESC[H), ESC[?1049h/l alternate-buffer swap (primary
+ * scrollback frozen, alt-buffer scroll discards), and width/height resize
+ * with hard-line reflow.
  *
  * Used by smoke-screen-replay.mjs and smoke-model-turn.mjs.
  */
@@ -15,13 +17,19 @@ export function createScreen(cols0, rows0) {
   const blank = () => Array(cols).fill(" ")
   let grid = Array.from({ length: rows }, blank)
   let scrollback = []
+  let altActive = false
+  let primaryGrid = null
+  let primaryCursor = null
   let row = 0,
     col = 0,
     pendingWrap = false,
     autowrap = true
   const scroll = () => {
     const off = grid.shift()
-    scrollback.push(off.join("").replace(/\s+$/, ""))
+    // The alternate buffer has NO scrollback: rows pushed off its top are
+    // discarded (that is exactly why clones cannot strand there). The
+    // primary buffer keeps its scrollback as usual.
+    if (!altActive) scrollback.push(off.join("").replace(/\s+$/, ""))
     grid.push(blank())
   }
 
@@ -67,7 +75,34 @@ export function createScreen(cols0, rows0) {
       return Number.isFinite(v) && v !== 0 ? v : d
     }
     if (priv) {
-      if (final === "h" || final === "l") return // private modes: paste/sync/cursor/alt-screen — ignore
+      // ?1049h/l — the alternate-screen dance (ink-repl's --alt-screen path).
+      // Entering swaps in a BLANK viewport (cursor home, primary state saved);
+      // leaving restores both. While active, scroll() discards instead of
+      // accumulating, so the primary scrollback is frozen for the whole
+      // session — the property the no-clone claim rests on.
+      if ((final === "h" || final === "l") && params.some((p) => p.replace("?", "") === "1049")) {
+        if (final === "h" && !altActive) {
+          altActive = true
+          primaryGrid = grid
+          primaryCursor = { row, col, pendingWrap }
+          grid = Array.from({ length: rows }, blank)
+          row = 0
+          col = 0
+          pendingWrap = false
+        } else if (final === "l" && altActive) {
+          altActive = false
+          if (primaryGrid) grid = primaryGrid
+          primaryGrid = null
+          if (primaryCursor) {
+            row = primaryCursor.row
+            col = primaryCursor.col
+            pendingWrap = primaryCursor.pendingWrap
+          }
+          primaryCursor = null
+        }
+        return
+      }
+      if (final === "h" || final === "l") return // private modes: paste/sync/cursor — ignore
       if (final === "J" && n(0) === 3) return // scrollback clear — no grid effect
     }
     switch (final) {
@@ -257,6 +292,12 @@ export function createScreen(cols0, rows0) {
   // new rows blank at the bottom. Called BEFORE emitting stdout's resize
   // event — matching the real order (terminal reflows, then app is notified).
   const resizeTo = (newCols, newRows) => {
+    // Hostile sizes must not kill the oracle: a real terminal never reports
+    // zero/negative geometry, and a zero step below would spin the chunk
+    // loop forever (i += 0 → RangeError: Invalid array length). Clamp to a
+    // 1x1 floor instead — matching what a real terminal can actually be.
+    newCols = Math.max(1, newCols | 0)
+    newRows = Math.max(1, newRows | 0)
     const chunk = (line) => {
       if (line.length <= newCols) return [line]
       const parts = []
@@ -269,7 +310,12 @@ export function createScreen(cols0, rows0) {
     for (const l of grid.map((r) => r.join(""))) vp.push(...chunk(l))
     cols = newCols
     rows = newRows
-    if (vp.length > rows) sb.push(...vp.splice(0, vp.length - rows))
+    if (vp.length > rows) {
+      const overflow = vp.splice(0, vp.length - rows)
+      // Reflow overflow in the alternate buffer is discarded, never archived:
+      // the primary scrollback stays frozen for the whole alt session.
+      if (!altActive) sb.push(...overflow)
+    }
     while (vp.length < rows) vp.push("")
     grid = Array.from({ length: rows }, blank)
     vp.forEach((r, i) => {

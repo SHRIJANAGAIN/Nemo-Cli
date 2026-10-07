@@ -185,6 +185,23 @@ describe("discoverCustomToolFiles / customToolDirs", () => {
     const root = tempRoot("trayambak-ct-empty-")
     expect(discoverCustomToolFiles(customToolDirs(root, tempRoot("trayambak-ct-h2-")))).toEqual([])
   })
+
+  it("never follows symlinks out of the tool dirs", () => {
+    const root = tempRoot("trayambak-ct-link-")
+    const home = tempRoot("trayambak-ct-link-home-")
+    const outside = tempRoot("trayambak-ct-link-out-")
+    write(path.join(root, ".trayambak", "tools"), "real.js", "")
+    const outsideFile = path.join(outside, "evil.js")
+    fs.writeFileSync(outsideFile, "")
+    const link = path.join(root, ".trayambak", "tools", "link.js")
+    try {
+      fs.symlinkSync(outsideFile, link)
+    } catch {
+      return // no link privilege on this host — nothing to assert
+    }
+    const found = discoverCustomToolFiles(customToolDirs(root, home))
+    expect(found).toEqual([path.join(root, ".trayambak", "tools", "real.js")])
+  })
 })
 
 describe("loadCustomTools", () => {

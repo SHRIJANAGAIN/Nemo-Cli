@@ -41,13 +41,24 @@ describe("token_budget parseTokenBudget", () => {
   })
 
   it("rejects garbage with a reason instead of throwing", () => {
-    for (const bad of [undefined, "", "   ", "lots", "-5k", "0", "0 tokens", "0 turns", "2.5 turns?"]) {
+    for (const bad of [undefined, "", "   ", "lots", "-5k", "2.5 turns?"]) {
       const result = parseTokenBudget(bad)
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.reason.length).toBeGreaterThan(0)
     }
     expect(parseTokenBudget(Number.NaN).ok).toBe(false)
     expect(parseTokenBudget(Number.POSITIVE_INFINITY).ok).toBe(false)
+    expect(parseTokenBudget(-5).ok).toBe(false)
+  })
+
+  it("accepts zero as refuse-before-first-turn (never fail-open to unlimited)", () => {
+    // Audit #41: "0"/"0k" used to be garbage → warning → NO budget →
+    // unlimited run. Zero now parses and the loop refuses loudly.
+    expect(parseTokenBudget("0")).toEqual({ ok: true, budget: { kind: "tokens", tokens: 0 } })
+    expect(parseTokenBudget("0k")).toEqual({ ok: true, budget: { kind: "tokens", tokens: 0 } })
+    expect(parseTokenBudget("0 tokens")).toEqual({ ok: true, budget: { kind: "tokens", tokens: 0 } })
+    expect(parseTokenBudget("0 turns")).toEqual({ ok: true, budget: { kind: "turns", turns: 0 } })
+    expect(parseTokenBudget(0)).toEqual({ ok: true, budget: { kind: "tokens", tokens: 0 } })
   })
 
   it("rejects dollar budgets and says pricing is not wired", () => {

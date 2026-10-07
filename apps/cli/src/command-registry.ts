@@ -96,6 +96,12 @@ export const GLOBAL_FLAGS: CommandFlag[] = [
     placeholder: "<spec>",
   },
   { name: "dev", type: "boolean", description: "Enable developer mode with advanced controls", aliases: ["dev-mode"] },
+  {
+    name: "alt-screen",
+    type: "boolean",
+    description:
+      "Alternate screen mode (default ON: codex-style — resizes and repaints can never leave scrollback clones, native history scroll unavailable). Forces it over an ambient opt-out; --no-alt-screen restores inline terminal scrollback (clones possible)",
+  },
   // No `--dump-system-prompt` flag, on purpose: the built system prompt is the
   // agent's core secret and must never be writable to stdout, a log or a CI
   // artifact. See the note in index.ts.

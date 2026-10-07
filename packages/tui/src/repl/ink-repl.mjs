@@ -12,6 +12,7 @@ import fs from "node:fs"
 import { TrayambakApp } from "../ink-app-esm/index.js"
 import { createSanitizedStdin } from "../ink-app-esm/stdin-sanitizer.js"
 import { createResizeRedrawGuard } from "../ink-app-esm/resize-guard.js"
+import { enterAltScreen, leaveAltScreen, resolveAltScreen } from "../ink-app-esm/app-bootstrap.js"
 // keymap compiles to CJS (root package.json type=commonjs), and the flat
 // ink-app-esm/ dir carries its own {type:"module"} marker — importing the
 // CJS text that lives THERE fails the ESM static link ("does not provide an
@@ -131,9 +132,50 @@ if (process.env.TRAYAMBAK_TRACE === "1") {
   }
 }
 
+// Alternate screen (codex-style --alt-screen / TRAYAMBAK_ALT_SCREEN): the
+// whole TUI runs on the terminal's alternate buffer, which HAS no scrollback
+// — resizes, over-height paints and stale erases can only ever disturb the
+// live viewport, so clones are structurally impossible there. That is the
+// entire reason codex never clones, and it is why this is now the DEFAULT
+// path: scripts/diag-boot-clone.mjs reproduces the inline shrink clone
+// (37 stray rows into scrollback) and shows the same run clean under
+// ?1049h. The price is paid by the default path too: with no scrollback the
+// device scrollbar and wheel go dead and history that leaves the frame
+// cannot be scrolled back to. --no-alt-screen / TRAYAMBAK_ALT_SCREEN=0
+// restores inline mode (terminal scrollback, clones included) explicitly.
+const useAltScreen = resolveAltScreen({ env: process.env })
+const altScreenActive = useAltScreen && process.stdout.isTTY === true
+if (altScreenActive) {
+  // Any abnormal end must restore the main buffer first, or the shell is left
+  // staring at a frozen app screen. Normal exit goes through onExit below;
+  // these cover crash/kill paths (no-ops unless we actually entered).
+  const leaveAndExit = (code) => {
+    try {
+      leaveAltScreen(process.stdout.write.bind(process.stdout))
+    } catch {}
+    process.exit(code)
+  }
+  process.once("uncaughtException", (err) => {
+    try {
+      process.stderr.write(`${err?.stack ?? err}\n`)
+    } catch {}
+    leaveAndExit(1)
+  })
+  process.once("unhandledRejection", (reason) => {
+    try {
+      process.stderr.write(`${reason}\n`)
+    } catch {}
+    leaveAndExit(1)
+  })
+  process.once("SIGINT", () => leaveAndExit(130))
+  process.once("SIGTERM", () => leaveAndExit(143))
+}
+
 // Clear the terminal ONCE, before the renderer exists, so the host shell's
 // banner and prompt are not the first thing on screen — and, with ED3, are not
-// sitting at the bottom of the scrollback either.
+// sitting at the bottom of the scrollback either. This is the INLINE path's
+// clear (the explicit --no-alt-screen opt-out); the default alternate-screen
+// path opens a fresh blank buffer instead and skips all of this.
 //
 //   2J  erase the viewport
 //   3J  erase the SCROLLBACK, which is what actually removes the banner: with
@@ -149,9 +191,13 @@ if (process.env.TRAYAMBAK_TRACE === "1") {
 //   - Repaints never erase scrollback. The renderer's flicker recovery used to
 //     wipe it on every window resize (`clearTerminal.ts` emitted ED3), deleting
 //     the transcript the UI had already printed; that path is screen-only now.
-//   - The alternate screen is NOT used. It hides the banner too, but its buffer
-//     has no scrollback at all, so the rows the UI settles into <Static> become
-//     unreachable and the history cannot be scrolled.
+//   - The alternate screen is now the DEFAULT. It hides the banner too, but
+//     its buffer has no scrollback at all, so the rows the UI settles into
+//     <Static> cannot be scrolled back to once they leave the frame — the
+//     price paid for frames that reflow can never duplicate. --no-alt-screen
+//     / TRAYAMBAK_ALT_SCREEN=0 runs this inline path instead: real terminal
+//     scrollback, and the reflow clones it can strand (diag-boot-clone
+//     reproduces both sides).
 //
 // Cost, stated plainly: the shell's pre-launch scrollback is erased along with
 // the banner. That is the only thing lost, and it is what "no banner" requires.
@@ -172,7 +218,15 @@ if (process.env.TRAYAMBAK_TRACE === "1") {
 //
 // Cursor visibility is untouched — the caret stays visible for the composer.
 if (process.stdout.isTTY === true) {
-  process.stdout.write("\x1b[2J\x1b[3J\x1b[H\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
+  if (altScreenActive) {
+    // Fresh blank buffer: no banner to clear, no scrollback to nuke (there is
+    // none). Still switch off stale mouse-reporting modes — those survive
+    // from killed runs and would eat the wheel either way.
+    enterAltScreen(process.stdout.write.bind(process.stdout))
+    process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
+  } else {
+    process.stdout.write("\x1b[2J\x1b[3J\x1b[H\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
+  }
 }
 
 const instance = render(
@@ -181,6 +235,14 @@ const instance = render(
     modelName: config.model ?? "trayambak Fable 5",
     permissionMode: "ask",
     onExit: () => {
+      // process.exit skips React's unmount cleanup, so restore the main
+      // buffer (+ caret) first when alt-screen is active. Inline mode needs
+      // nothing: its frame IS scrollback history.
+      if (altScreenActive) {
+        try {
+          leaveAltScreen(process.stdout.write.bind(process.stdout))
+        } catch {}
+      }
       process.exit(0)
     },
     initialPrompt: prompt,

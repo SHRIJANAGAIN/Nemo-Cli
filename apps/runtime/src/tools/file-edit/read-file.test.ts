@@ -7,7 +7,7 @@
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, describe, expect, it } from "vitest"
 import { createReadFileTool } from "./read-file.js"
 import { loadFrecency, type FrecencyEntry } from "../../../../../packages/core/src/frecency.js"
 import type { ToolContext } from "../types.js"
@@ -29,11 +29,16 @@ function scratch(prefix: string): string {
 // `read_file` records each successful read into the frecency store, which lives
 // in the per-user state dir. Without this the suite would write into the
 // developer's real ~/.trayambak on every run, so the store is redirected into a
-// throwaway directory. Set at module scope so every test in this file inherits
-// it; vitest isolates the module registry per file, so nothing else observes it.
-process.env.TRAYAMBAK_STATE_DIR = scratch("trayambak-readfile-state-")
+// throwaway directory.
+const STATE_DIR = path.join(os.tmpdir(), "trayambak-readfile-state")
+process.env.TRAYAMBAK_STATE_DIR = STATE_DIR
 
 afterEach(() => {
+  // Both halves matter: the scratch dirs AND the state dir. Removing only the
+  // scratch dirs leaves the store behind, because the next `noteOpen` re-creates
+  // it with mkdirSync and nothing ever cleans that copy up — a temp dir leaked per
+  // test, invisible in the suite output.
+  fs.rmSync(STATE_DIR, { recursive: true, force: true })
   for (const dir of dirs.splice(0)) {
     try {
       fs.rmSync(dir, { recursive: true, force: true })
@@ -41,6 +46,10 @@ afterEach(() => {
       /* best effort */
     }
   }
+})
+
+afterAll(() => {
+  fs.rmSync(STATE_DIR, { recursive: true, force: true })
 })
 
 function ctxFor(cwd: string): ToolContext {
@@ -117,12 +126,12 @@ describe("read_file bounded read (#75)", () => {
   })
 })
 
-describe("frecency recording", () => {
-  /** The store the tool wrote, read back through the real loader. */
-  function store(): FrecencyEntry[] {
-    return loadFrecency(path.join(process.env.TRAYAMBAK_STATE_DIR ?? "", "frecency.json"))
-  }
+/** The store the tool wrote, read back through the real loader. */
+function store(): FrecencyEntry[] {
+  return loadFrecency(path.join(process.env.TRAYAMBAK_STATE_DIR ?? "", "frecency.json"))
+}
 
+describe("frecency recording", () => {
   it("records a successful read so the file can rank later", async () => {
     const dir = scratch("rf-frec-hit-")
     fs.writeFileSync(path.join(dir, "wanted.ts"), "export const a = 1\n", "utf8")
@@ -161,5 +170,59 @@ describe("frecency recording", () => {
     fs.writeFileSync(path.join(dir, "scanned.ts"), "x\n", "utf8")
     for (let i = 0; i < 6; i++) await read(dir, { path: "scanned.ts" })
     expect(store().find((e) => e.path.endsWith("scanned.ts"))?.opens).toBe(1)
+  })
+})
+
+describe("binary refusal", () => {
+  it("refuses a PNG by name and format instead of returning mojibake", async () => {
+    const dir = scratch("rf-bin-png-")
+    fs.writeFileSync(path.join(dir, "shot.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    const out = await read(dir, { path: "shot.png" })
+    expect(out).toContain("not text")
+    expect(out).toContain("PNG")
+    expect(out).not.toContain("�")
+  })
+
+  it("refuses a .docx and points at where the prose actually lives", async () => {
+    const dir = scratch("rf-bin-docx-")
+    fs.writeFileSync(
+      path.join(dir, "brief.docx"),
+      Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.from("word/document.xml")]),
+    )
+    const out = await read(dir, { path: "brief.docx" })
+    expect(out).toContain("not text")
+    expect(out).toContain("word/document.xml")
+  })
+
+  it("catches a PDF that is lying about its .txt extension", async () => {
+    const dir = scratch("rf-bin-pdf-")
+    fs.writeFileSync(path.join(dir, "notes.txt"), Buffer.from("%PDF-1.7\nbinary junk"))
+    const out = await read(dir, { path: "notes.txt" })
+    expect(out).toContain("PDF")
+  })
+
+  it("does not refuse an ordinary source file", async () => {
+    const dir = scratch("rf-bin-text-")
+    fs.writeFileSync(path.join(dir, "ok.ts"), "export const a = 1\n", "utf8")
+    const out = await read(dir, { path: "ok.ts" })
+    expect(out).toContain("export const a = 1")
+  })
+
+  it("does not record a refused binary in frecency — it is not a file being worked on", async () => {
+    const dir = scratch("rf-bin-frec-")
+    fs.writeFileSync(path.join(dir, "logo.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]))
+    const before = store().length
+    await read(dir, { path: "logo.png" })
+    expect(store()).toHaveLength(before)
+  })
+
+  it("handles a large file without loading it whole to inspect its head", async () => {
+    // 8 MB of PNG-like bytes: the probe must read only the head, or this is an
+    // out-of-memory kill on exactly the input the bounded read exists for.
+    const dir = scratch("rf-bin-big-")
+    const head = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    fs.writeFileSync(path.join(dir, "huge.png"), Buffer.concat([head, Buffer.alloc(8 * 1024 * 1024)]))
+    const out = await read(dir, { path: "huge.png" })
+    expect(out).toContain("PNG")
   })
 })

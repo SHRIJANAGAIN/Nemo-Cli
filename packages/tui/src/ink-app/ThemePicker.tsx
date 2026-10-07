@@ -54,6 +54,15 @@ function CodePreview({ accent }: { accent: string }): ReactNode {
  *  Code port). The LIVE count comes from fitLayout(). */
 const MAX_VISIBLE = 12
 
+/**
+ * Rows the full banner occupies. Read from the asset rather than hardcoded
+ * from memory: logo_ansi.txt is generated (scripts/make-logo-hex.mjs), so the
+ * height changes whenever the mark's proportions do, and a stale constant here
+ * silently eats list rows. Asserted against the real file in
+ * theme-picker-layout.test.ts.
+ */
+export const FULL_LOGO_ROWS = 8
+
 /** In-frame row budget: the picker renders inside App's fixed-height
  *  bordered root (border 2) plus its own paddingY (2), so only rows-4
  *  lines exist to paint. Ink's Box defaults to flexShrink:1, so content
@@ -76,9 +85,14 @@ function fitLayout(rows: number): { logoCompact: boolean; showPreview: boolean; 
   }
   // Priority: full logo > a usable list > the preview box. The preview
   // only earns its 10 rows when >= 6 themes remain visible beside it.
+  // FULL_LOGO_ROWS tracks logo_ansi.txt and must not be guessed: the mark is
+  // procedural now, so its height is a property of the asset, not of this
+  // component. Over- or under-stating it either squeezes the list (theme rows
+  // vanish behind the logo) or wastes rows, and both show up as a picker whose
+  // ▼ count and preview disagree with what is on screen.
   return (
-    pick(10, /*showPreview*/ true, 6) ??
-    pick(10, /*showPreview*/ false, 1) ??
+    pick(FULL_LOGO_ROWS, /*showPreview*/ true, 6) ??
+    pick(FULL_LOGO_ROWS, /*showPreview*/ false, 1) ??
     pick(1, /*showPreview*/ true, 6) ??
     pick(1, /*showPreview*/ false, 1) ?? { logoCompact: true, showPreview: false, visible: 1 }
   )

@@ -130,6 +130,28 @@ describe("runAgentLoop budget enforcement", () => {
     expect(payload?.used).toBe(81)
   }, 15000)
 
+  it("refuses before the first provider call on a zero token budget (#41)", async () => {
+    // Audit repro: "0"/"0k" used to warn-and-unlimit, so message_start +
+    // turn_start fired AND an API call went out. Zero now parses, and the
+    // top-of-turn check refuses with zero provider invocations.
+    const { provider, calls } = makeToolLoopProvider()
+    const { events } = await runLoop(baseConfig({ budget: "0 tokens", maxTurns: 50 }), provider)
+
+    expect(calls()).toBe(0)
+    const exhausted = events.filter((e) => e.type === "budget_exhausted")
+    expect(exhausted).toHaveLength(1)
+    expect(events[events.length - 1]?.type).toBe("agent_end")
+  }, 15000)
+
+  it("refuses before the first provider call on a zero turn budget (#41)", async () => {
+    const { provider, calls } = makeToolLoopProvider()
+    const { events } = await runLoop(baseConfig({ budget: "0 turns", maxTurns: 50 }), provider)
+
+    expect(calls()).toBe(0)
+    expect(events.some((e) => e.type === "budget_exhausted")).toBe(true)
+    expect(events[events.length - 1]?.type).toBe("agent_end")
+  }, 15000)
+
   it("runs normally with a -1 (unlimited) budget", async () => {
     const { provider, calls } = makeToolLoopProvider()
     const { events } = await runLoop(baseConfig({ budget: "-1", maxTurns: 5 }), provider)
@@ -237,6 +259,13 @@ describe("budget config loading", () => {
     expect(loadConfig({ budget: "1.5M" }).budget).toBe("1.5M")
     expect(loadConfig({ budget: "40 turns" }).budget).toBe("40 turns")
     expect(loadConfig({ budget: "-1" }).budget).toBe("-1")
+  })
+
+  it("keeps an explicit zero budget (refuse, never warn-and-unlimit)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(loadConfig({ budget: "0" }).budget).toBe("0")
+    expect(loadConfig({ budget: "0 turns" }).budget).toBe("0 turns")
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("ignoring budget"))
   })
 
   it("warns and falls back to no budget on an invalid spec (never throws)", () => {

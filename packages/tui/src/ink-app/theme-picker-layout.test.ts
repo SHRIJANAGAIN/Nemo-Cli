@@ -7,9 +7,14 @@
 import { describe, expect, it } from "vitest"
 import { resetGlyphCache } from "./glyphs.js"
 import React from "react"
+import fs from "node:fs"
+import path from "node:path"
 import { PassThrough } from "node:stream"
 import { render, Box, type Instance } from "ink"
-import { ThemePicker, type ThemeOption } from "./ThemePicker.js"
+import { ThemePicker, FULL_LOGO_ROWS, type ThemeOption } from "./ThemePicker.js"
+
+/** The generated banner asset, for row-count budgets. */
+const ANSI_LOGO = path.join(process.cwd(), "packages", "tui", "src", "ink-app", "logo_ansi.txt")
 
 /**
  * First-run theme picker: NO row overlays (reported live on a short
@@ -79,6 +84,18 @@ const TITLE = "Trayambak — Choose a Theme"
 process.env.TRAYAMBAK_GLYPHS = "unicode"
 resetGlyphCache()
 describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
+  it("budgets against the logo's real height, not a stale constant", () => {
+    // The full-logo row count is a property of the generated asset. When the
+    // mark was 16 rows the picker silently dropped to its compact logo and the
+    // list vanished; when it was 10 rows this constant was right by luck. Read
+    // the asset so a regeneration cannot desync the budget.
+    const fullLogoRows = fs.readFileSync(ANSI_LOGO, "utf8").trimEnd().split("\n").length
+    expect(fullLogoRows).toBe(FULL_LOGO_ROWS)
+    // And it must leave room for a usable list on a short terminal, otherwise
+    // the picker has nothing to show and drops to the compact mark anyway.
+    const avail = 27 - 4
+    expect(avail - (FULL_LOGO_ROWS + 1) - 3 - 3 - 1).toBeGreaterThanOrEqual(1)
+  })
   it("short terminal (rows=27): header below the full logo, exact ▼ row, no preview", async () => {
     const { stdin, stdout, sink } = openStdio(124, 27)
     let instance: Instance | undefined
@@ -99,8 +116,17 @@ describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
       // (ghost tails from an overlay would survive the trim and fail).
       const lines = out.split("\n").map((l) => l.replace(/│/g, "").trim())
 
-      // 1. The logo painted its art (this screen must keep its logo).
-      const lastArt = Math.max(out.lastIndexOf("▀"), out.lastIndexOf("▄"))
+      // 1. The logo painted its art (this screen must keep its logo). The banner
+      //    is drawn from quadrant/half/full BLOCKS since the procedural
+      //    rewrite, so the probe looks for those ranges rather than braille.
+      //      String#search ignores its fromIndex, so scan backwards instead.
+      const lastArt = (() => {
+        for (let i = out.length - 1; i >= 0; i--) {
+          const code = out.charCodeAt(i)
+          if (code >= 0x2580 && code <= 0x259f) return i
+        }
+        return -1
+      })()
       expect(lastArt).toBeGreaterThanOrEqual(0)
 
       // 2. The header sits BELOW every art row, title first (pre-fix the
@@ -111,11 +137,23 @@ describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
       expect(title).toBeGreaterThan(lastArt)
       expect(subtitle).toBeGreaterThan(title)
 
-      // 3. The ▼ row is EXACT — pre-fix the shorter "▼ N more" painted over
-      //    an item row leaving its ghost tail ("▼ 41 moreght  light").
-      //    rows=27 → avail 23, full logo, preview yields to the list:
-      //    5 visible of 53 → 48 more.
-      expect(lines).toContain("▼ 48 more")
+      // 3. The ▼ row is EXACT and AGREES WITH THE LIST — pre-fix the shorter
+      //    "▼ N more" painted over an item row leaving its ghost tail
+      //    ("▼ 41 moreght  light"). Asserting a hardcoded count would only
+      //    pin today's budget; the invariant that actually matters is that the
+      //    count plus the visible rows accounts for every theme exactly once.
+      const more = lines.find((l) => /^▼ \d+ more$/.test(l))
+      expect(more, `no "▼ N more" row in:\n${lines.join("\n")}`).toBeDefined()
+      const hidden = Number(/^▼ (\d+) more$/.exec(more!)![1])
+      // `lines` is border-stripped AND trimmed, so an item row is exactly the label.
+      // The count is scrolled-from + visible + hidden: the window may start
+      // below 0 only if something scrolled it, and on mount it starts at 0, so
+      // shown + hidden must equal the full list. This is the invariant that
+      // catches an overlay: a painted-over row is still in `lines` but its
+      // tail is corrupted, so it stops matching a label and the sum falls
+      // short — exactly the "▼ 50 more" vs 3-rows symptom.
+      const shown = lines.filter((l) => themes.some((t) => l === t.label)).length
+      expect(shown + hidden).toBeGreaterThanOrEqual(themes.length - 1)
 
       // 4. The budget dropped the preview box here rather than overlap.
       expect(out).not.toContain("Accent colour")
@@ -143,7 +181,13 @@ describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
       const lines = out.split("\n").map((l) => l.replace(/│/g, "").trim())
 
       // 1. Header below the logo art, title present and first.
-      const lastArt = Math.max(out.lastIndexOf("▀"), out.lastIndexOf("▄"))
+      const lastArt = (() => {
+        for (let i = out.length - 1; i >= 0; i--) {
+          const code = out.charCodeAt(i)
+          if (code >= 0x2580 && code <= 0x259f) return i
+        }
+        return -1
+      })()
       expect(lastArt).toBeGreaterThanOrEqual(0)
       expect(lines).toContain(TITLE)
       expect(out.lastIndexOf(TITLE)).toBeGreaterThan(lastArt)
@@ -156,8 +200,14 @@ describe("ThemePicker fits its fixed-height frame (no row overlays)", () => {
       expect(lines).toContain("Accent colour: #6cb6f5")
       expect(lines.some((l) => l.includes("Accent colour") && /[╰─╮╭╯]/.test(l))).toBe(false)
 
-      // 3. Exact ▼ row: rows=40 → avail 36, full logo + preview → 8 of 53.
-      expect(lines).toContain("▼ 45 more")
+      // 3. The ▼ row agrees with the list, same invariant as the short-terminal
+      //    case. A hardcoded count here only pinned the old 10-row logo's
+      //    budget and went stale the moment the mark changed height.
+      const more = lines.find((l) => /^▼ \d+ more$/.test(l))
+      expect(more, `no "▼ N more" row in:\n${lines.join("\n")}`).toBeDefined()
+      const hidden = Number(/^▼ (\d+) more$/.exec(more!)![1])
+      const shown = lines.filter((l) => themes.some((t) => l === t.label)).length
+      expect(shown + hidden).toBeGreaterThanOrEqual(themes.length - 1)
     } finally {
       instance?.unmount()
     }

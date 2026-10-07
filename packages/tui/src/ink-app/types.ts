@@ -184,6 +184,7 @@ export const STATUS_LABELS: Record<AppStatus, string> = {
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "help", description: "Show all commands", category: "General" },
+  { name: "about", description: "About Us: SKT AI LABS", category: "General" },
   { name: "keymap", description: "Show all keyboard shortcuts", category: "General" },
   { name: "enhance", description: "Rewrite your draft into a clearer prompt (Ctrl+E)", category: "General" },
   { name: "clear", description: "Reset the session", category: "Session" },

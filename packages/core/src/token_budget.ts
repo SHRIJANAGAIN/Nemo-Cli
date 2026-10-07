@@ -43,14 +43,20 @@ const UNIT_MULTIPLIERS: Record<string, number> = {
  * Parse a budget spec (`50k`, `1.5M`, `50000`, `50000 tokens`,
  * `40 turns`, `-1`). Numbers are token counts. Commas, underscores, and
  * spaces are tolerated. Garbage returns `{ok:false}` with a reason so the
- * caller can warn and fall back — it never throws.
+ * caller can warn and fall back — it never throws. Zero (`0`, `0k`,
+ * `0 turns`) is valid and means "run nothing": the loop refuses before the
+ * first provider call instead of treating it as garbage (which used to fall
+ * back to an unlimited run).
  */
 export function parseTokenBudget(spec: string | number | undefined): ParseTokenBudgetResult {
   if (spec === undefined || spec === null) return { ok: false, reason: "no budget specified" }
   if (typeof spec === "number") {
     if (!Number.isFinite(spec)) return { ok: false, reason: "budget must be a finite number" }
     if (spec === -1) return { ok: true, budget: { kind: "tokens", tokens: -1 } }
-    if (spec <= 0) return { ok: false, reason: "budget must be positive (use -1 for unlimited)" }
+    if (spec < 0) return { ok: false, reason: "budget must be positive (use -1 for unlimited)" }
+    // Zero is a REAL budget, not garbage: it refuses before the first turn
+    // (fail-closed). Rejecting it here used to fall back to NO budget with a
+    // warning — an explicit "spend nothing" silently became "spend anything".
     return { ok: true, budget: { kind: "tokens", tokens: Math.floor(spec) } }
   }
   if (typeof spec !== "string") return { ok: false, reason: "budget must be a string or number" }
@@ -80,16 +86,13 @@ export function parseTokenBudget(spec: string | number | undefined): ParseTokenB
   if (value < 0) return { ok: false, reason: "budget must be positive (use -1 for unlimited)" }
   if (unit === "turn" || unit === "turns") {
     const turns = Math.floor(value)
-    if (turns < 1) return { ok: false, reason: "turn budget must be at least 1" }
     return { ok: true, budget: { kind: "turns", turns } }
   }
   if (unit === "token" || unit === "tokens") {
     const tokens = Math.floor(value)
-    if (tokens < 1) return { ok: false, reason: "token budget must be at least 1 (use -1 for unlimited)" }
     return { ok: true, budget: { kind: "tokens", tokens } }
   }
   const tokens = Math.floor(value * (UNIT_MULTIPLIERS[unit] ?? 1))
-  if (tokens < 1) return { ok: false, reason: "token budget must be at least 1 (use -1 for unlimited)" }
   return { ok: true, budget: { kind: "tokens", tokens } }
 }
 

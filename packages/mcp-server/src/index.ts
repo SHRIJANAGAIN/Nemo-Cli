@@ -50,17 +50,17 @@ const TOOLS: McpToolDef[] = [
   },
   {
     name: "write_file",
-    description: "Write a file",
+    description: "Write a file (not executed via MCP — refused, use the CLI tools instead)",
     inputSchema: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } } },
   },
   {
     name: "grep",
-    description: "Search file contents",
+    description: "Search file contents (not executed via MCP — refused, use the CLI tools instead)",
     inputSchema: { type: "object", properties: { pattern: { type: "string" } } },
   },
   {
     name: "glob",
-    description: "Find files by glob",
+    description: "Find files by glob (not executed via MCP — refused, use the CLI tools instead)",
     inputSchema: { type: "object", properties: { pattern: { type: "string" } } },
   },
 ]

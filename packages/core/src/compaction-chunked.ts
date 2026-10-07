@@ -36,6 +36,15 @@ export interface ChunkableMessage {
   readonly content: unknown
   /** Present on an assistant tool call and on its matching result. */
   readonly toolCallId?: string
+  /**
+   * Every call this message opens.
+   *
+   * An assistant turn routinely emits SEVERAL tool calls in one message, and a
+   * single `toolCallId` cannot express that. Tracking one id made the chunker
+   * believe the group was resolved as soon as the first result arrived, so the
+   * remaining calls could be split from their results.
+   */
+  readonly toolCallIds?: readonly string[]
   /** True for the assistant message that CARRIES the tool call. */
   readonly hasToolCalls?: boolean
 }
@@ -94,22 +103,12 @@ export function splitPinned(messages: readonly ChunkableMessage[]): {
   return { pinned, rest: messages.slice(index) }
 }
 
-/**
- * True when `message` closes a tool pair that opened earlier in `seen`.
- *
- * A `tool_result` refers back to a `tool_call` by id. If the call is not already
- * inside the current chunk, the result must move with it — which is why the
- * chunker grows the previous chunk instead of splitting the pair.
- */
-function closesOpenPair(message: ChunkableMessage, seenCallIds: ReadonlySet<string>): boolean {
-  if (message.role !== "tool" && !message.toolCallId) return false
-  if (message.role !== "tool") return false
-  return message.toolCallId !== undefined && !seenCallIds.has(message.toolCallId)
-}
-
-/** True when this message OPENS a pair whose result has not arrived yet. */
-function opensPair(message: ChunkableMessage): boolean {
-  return message.hasToolCalls === true && typeof message.toolCallId === "string"
+/** Every call id this message opens. */
+function openedIds(message: ChunkableMessage): string[] {
+  const ids: string[] = []
+  if (Array.isArray(message.toolCallIds)) ids.push(...message.toolCallIds.filter((id) => typeof id === "string"))
+  if (typeof message.toolCallId === "string" && !ids.includes(message.toolCallId)) ids.push(message.toolCallId)
+  return ids
 }
 
 /**
@@ -118,6 +117,13 @@ function opensPair(message: ChunkableMessage): boolean {
  * Greedy by token budget rather than fixed message counts, because message sizes
  * vary by three orders of magnitude (a one-line ack vs a pasted file) and a
  * count-based split would produce wildly uneven chunks.
+ *
+ * The pairing invariant is enforced as a RULE, not as a repair. The earlier
+ * version tried to FIX splits after the fact by pushing a stray result back into
+ * the previous chunk — which silently rewrote a chunk that had already been
+ * emitted and counted, and with more than one call in flight did not fire at all.
+ * Overrunning the budget slightly is a far smaller failure than an orphan, so a
+ * boundary is only taken when nothing is outstanding.
  */
 export function chunkMessages(messages: readonly ChunkableMessage[], options: ChunkOptions = {}): Chunk[] {
   const estimate = options.estimate ?? defaultEstimate
@@ -127,48 +133,40 @@ export function chunkMessages(messages: readonly ChunkableMessage[], options: Ch
   const chunks: Chunk[] = []
   let current: ChunkableMessage[] = []
   let currentTokens = 0
-  /** Call ids opened inside the chunk being built. */
-  let openCallIds = new Set<string>()
+  /**
+   * Calls opened but not yet answered. Deliberately NOT reset by `flush`: it spans
+   * chunks on purpose, because forbidding a boundary while a pair is in flight is
+   * the entire mechanism.
+   */
+  const unresolved = new Set<string>()
 
   const flush = (): void => {
     if (current.length === 0) return
     chunks.push({ index: chunks.length, total: 0, messages: current, estimatedTokens: currentTokens })
     current = []
     currentTokens = 0
-    openCallIds = new Set()
   }
 
   for (const message of messages) {
     const size = estimate(message)
 
-    // A tool RESULT whose call is not in this chunk belongs to the previous one:
-    // push it back there rather than orphaning it.
-    if (closesOpenPair(message, openCallIds) && current.length === 0 && chunks.length > 0) {
-      const previous = chunks[chunks.length - 1]
-      if (previous) {
-        chunks[chunks.length - 1] = {
-          ...previous,
-          messages: [...previous.messages, message],
-          estimatedTokens: previous.estimatedTokens + size,
-        }
-      }
-      continue
-    }
-
-    // A call opens a pair; its result must land in the same chunk, so a chunk
-    // holding an unresolved call is sealed rather than extended later.
-    const hasUnresolvedCall = openCallIds.size > 0 && !message.toolCallId
-
-    if (current.length > 0 && (currentTokens + size > budget || hasUnresolvedCall)) {
+    const isResult = message.role === "tool" && message.toolCallId !== undefined
+    const overBudget = currentTokens + size > budget
+    // A tool RESULT also blocks a boundary: its call may be in an earlier chunk.
+    const blocked = unresolved.size > 0 || isResult
+    if (current.length > 0 && overBudget && !blocked) {
       flush()
     }
+
     // One message larger than the budget still gets its own chunk rather than
     // being dropped or split mid-JSON.
     current.push(message)
     currentTokens += size
-    if (opensPair(message) && message.toolCallId) openCallIds.add(message.toolCallId)
-    if (message.toolCallId && message.role === "tool") openCallIds.delete(message.toolCallId)
-    if (currentTokens >= hardCap) flush()
+    for (const id of openedIds(message)) unresolved.add(id)
+    if (isResult && message.toolCallId !== undefined) unresolved.delete(message.toolCallId)
+    // Only a fully resolved chunk is sealed early by the hard cap; otherwise a
+    // multi-call group would be torn in half at an arbitrary point.
+    if (currentTokens >= hardCap && unresolved.size === 0) flush()
   }
   flush()
 

@@ -106,6 +106,16 @@ function optionalPort(raw: string | undefined, fallback?: number): number | unde
 }
 
 /**
+ * Tri-state strict-parser boolean: "true" → true, "false" (via --no-*) →
+ * false, absent → undefined so ambient env (TRAYAMBAK_ALT_SCREEN) still
+ * applies downstream instead of being clobbered by a default.
+ */
+function optionalBoolean(raw: string | undefined): boolean | undefined {
+  if (raw === undefined) return undefined
+  return raw === "true"
+}
+
+/**
  * Journal rows as they exist on disk. `MistakeEntry` is the canonical shape,
  * but legacy journals also carry `status`/`title`/`description`/`id` aliases
  * that this path still reads, so every field is optional here.
@@ -468,6 +478,7 @@ async function main(): Promise<void> {
         sessionFile: target.file,
         modelPath: flags["model-path"],
         port: optionalPort(flags.port),
+        altScreen: optionalBoolean(flags["alt-screen"]),
         useInk: true,
       })
       return
@@ -535,6 +546,7 @@ async function main(): Promise<void> {
         sessionFile: flags.session,
         modelPath: flags["model-path"],
         port: optionalPort(flags.port),
+        altScreen: optionalBoolean(flags["alt-screen"]),
         useInk: true,
       })
       return
@@ -549,6 +561,7 @@ async function main(): Promise<void> {
         sessionFile: flags.session,
         modelPath: flags["model-path"],
         port: optionalPort(flags.port),
+        altScreen: optionalBoolean(flags["alt-screen"]),
         useInk: true,
       })
       return

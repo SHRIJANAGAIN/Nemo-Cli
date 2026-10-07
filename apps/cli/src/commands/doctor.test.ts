@@ -51,6 +51,10 @@ const ENV_KEYS = [
   "TRAYAMBAK_MAX_TURNS",
   "TRAYAMBAK_NATIVE_TOOLS",
   "TRAYAMBAK_SHELL_COMMAND",
+  // AGENTS.md: config tests must not depend on ambient env. Without this,
+  // an exported TRAYAMBAK_HOME points global config resolution outside the
+  // sandbox and the developer's own overrides reach the defaults assertions.
+  "TRAYAMBAK_HOME",
 ] as const
 
 const configFile = (): string => path.join(tmp, ".trayambak", "config.json")
@@ -115,12 +119,20 @@ beforeAll(async () => {
   process.env.USERPROFILE = home
   process.env.HOME = home
   doctor = await import("./doctor.js")
-  process.env.USERPROFILE = savedUserprofile
-  process.env.HOME = savedHome
+  // USERPROFILE/HOME stay sandboxed for the WHOLE file (restored in
+  // afterAll), not just during import: infoCommand resolves the global
+  // config at print time, so restoring here let the developer's real
+  // ~/.trayambak/config.json (provider/baseUrl/model overrides) bleed into
+  // the "prints the defaults" assertions and made this suite fail on any
+  // machine that had ever customized its profile.
 }, 60_000)
 
 afterAll(() => {
   process.chdir(originalCwd)
+  if (savedUserprofile === undefined) delete process.env.USERPROFILE
+  else process.env.USERPROFILE = savedUserprofile
+  if (savedHome === undefined) delete process.env.HOME
+  else process.env.HOME = savedHome
   for (const dir of [home]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true })
@@ -171,7 +183,13 @@ afterEach(async () => {
 describe("infoCommand", () => {
   it("prints version, runtime and the resolved config", () => {
     fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ version: "9.9.9" }), "utf8")
-    writeConfig({ model: "info-model", nativeTools: false, maxTurns: 42 })
+    // baseUrl is pinned EXPLICITLY at the project layer. The old
+    // expectation ("integrate.api.nvidia.com") asserted a value this test
+    // never set — it leaked in from DEFAULTS or the machine's profile and
+    // went red the moment defaults flipped (DEFAULTS.baseUrl is Gemini
+    // now). A project-level value proves the same printout path and can't
+    // drift. Note sanitizeConfig strips a trailing "/v1", so don't pin one.
+    writeConfig({ model: "info-model", baseUrl: "https://doctor-assert.example/api", nativeTools: false, maxTurns: 42 })
 
     doctor.infoCommand()
 
@@ -179,7 +197,7 @@ describe("infoCommand", () => {
     expect(out).toContain(`node      v${process.versions.node}`)
     expect(out).toContain(`platform  ${process.platform} ${process.arch}`)
     expect(out).toContain(`cwd       ${tmp}`)
-    expect(out).toContain("baseUrl   https://integrate.api.nvidia.com")
+    expect(out).toContain("baseUrl   https://doctor-assert.example/api")
     expect(out).toContain("model     info-model")
     expect(out).toMatch(/^shell\s+\S.*$/m)
     expect(out).toContain("maxTurns  42")

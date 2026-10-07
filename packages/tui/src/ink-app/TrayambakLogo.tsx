@@ -16,6 +16,8 @@ export interface TrayambakLogoProps {
    *  background so no terminal-black box shows beside the mark (see
    *  padLogoToTheme). 0 disables the padding. */
   width?: number
+  /** Idle animation clock in ms (see logoShimmer). 0 renders the art as-is. */
+  phaseMs?: number
 }
 
 function loadLogo(): string {
@@ -69,7 +71,7 @@ function getLogo(): string {
 }
 
 /** Line count of the active banner (0 when absent) — lets overlays budget
- *  their height BEFORE rendering (the file banner is 10 lines; a missing
+ *  their height BEFORE rendering (the file banner is 8 lines; a missing
  *  logo renders null, and callers must not assume either). */
 export function logoLineCount(): number {
   const logo = getLogo()
@@ -128,14 +130,74 @@ export function padLogoToTheme(art: string, backgroundHex: string, width: number
       const body = closer ? line.slice(0, closer.index) : line
       const reset = closer ? "\x1b[0m" : ""
       const trimmed = body.replace(/[ \t]+$/, "")
+      // Re-assert the theme background after EVERY reset inside the row.
+      //
+      // The banner sets a new foreground before every ink cell and starts each
+      // with \x1b[0m, which also clears the BACKGROUND. Any blank cell after
+      // one of those resets therefore fell back to the terminal's default
+      // backdrop — black — and painted a black rectangle through the mark. It
+      // was invisible while the art was a lone hexagon in a sea of padding;
+      // with the lockup's wordmark it became a black band behind the letters,
+      // because the gaps BETWEEN glyphs are blanks too, not just the trailing
+      // run this function used to fill.
+      //
+      // Setting the background once per cell after each reset makes every blank
+      // in the row themed. Ink cells keep their own foreground and do not care
+      // what the background is.
+      const themed = trimmed.replace(
+        /\x1b\[0m/g,
+        `\x1b[0m\x1b[48;2;${sgr}m`,
+      )
       const fill = target - visibleCells(trimmed)
-      if (fill <= 0) return `${trimmed}${reset}`
-      return `${trimmed}\x1b[48;2;${sgr}m${" ".repeat(fill)}${reset}`
+      if (fill <= 0) return `${themed}${reset}`
+      return `${themed}${" ".repeat(fill)}${reset}`
     })
     .join("\n")
 }
 
-export function TrayambakLogo({ compact = false, width = 0 }: TrayambakLogoProps): ReactNode {
+/**
+ * Idle twinkle for the wordmark + starfield banner.
+ *
+ * Every ink cell breathes on its own phase, derived from its position (a
+ * small integer hash, so the pattern is stable frame to frame), and the
+ * amplitude follows the cell's own brightness: dim steel barely moves while
+ * near-white sparks flash. The wordmark body sits between — a slow metallic
+ * breathing under a twinkling sky, never a light show. Returns the art
+ * unchanged at phase 0.
+ */
+export const LOGO_SHIMMER_PERIOD_MS = 6000
+const TWINKLE_AMPLITUDE = 0.22
+
+export function logoShimmer(art: string, phaseMs: number): string {
+  if (phaseMs <= 0) return art
+  const wave = (phaseMs % LOGO_SHIMMER_PERIOD_MS) / LOGO_SHIMMER_PERIOD_MS
+  return art
+    .split("\n")
+    .map((line, row) => {
+      let col = 0
+      return line.replace(
+        /\x1b\[38;2;(\d+);(\d+);(\d+)m([\u2580-\u258f\u2590-\u259f])/g,
+        (_all, rs, gs, bs, cell) => {
+          const [r, g, b] = [Number(rs), Number(gs), Number(bs)]
+          const at = col
+          col += 1
+          // Position-hashed phase: neighbours twinkle out of step, which is
+          // what reads as stars rather than a travelling band.
+          const phase = (((at * 7 + row * 13) % 10) + 10) % 10 / 10
+          const t = (phase + wave) % 1
+          // Brighter cells twinkle harder: luminance 1 → full amplitude,
+          // luminance 0 → half. The wordmark breathes, the sparks flash.
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+          const k = 1 + TWINKLE_AMPLITUDE * (0.5 + luminance * 0.5) * Math.sin(t * Math.PI * 2)
+          const scale = (v: number): number => Math.max(0, Math.min(255, Math.round(v * k)))
+          return `\x1b[38;2;${scale(r)};${scale(g)};${scale(b)}m${cell}`
+        },
+      )
+    })
+    .join("\n")
+}
+
+export function TrayambakLogo({ compact = false, width = 0, phaseMs = 0 }: TrayambakLogoProps): ReactNode {
   const theme = useThemeColors()
 
   if (compact) {
@@ -169,7 +231,7 @@ export function TrayambakLogo({ compact = false, width = 0 }: TrayambakLogoProps
     // theme background independently.
     return (
       <Box flexDirection="column" width="100%">
-        {padLogoToTheme(logo, theme.background, width)
+        {padLogoToTheme(logoShimmer(logo, phaseMs), theme.background, width)
           .split("\n")
           .map((line, index) => (
             <Text key={index} wrap="truncate">

@@ -22,6 +22,7 @@
  */
 
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
@@ -248,11 +249,49 @@ async function main() {
     names.delete("__esModule")
     return names
   }
+  // Exports an ESM `import {X}` can actually receive. Node's CJS lexer only
+  // synthesises a named export from a top-level ASSIGNMENT it can read
+  // literally — `exports.X =`, `exports['X'] =`, `module.exports.X =`,
+  // `Object.defineProperty(exports,'X')`, or an ESM export declaration. A mere
+  // READ (e.g. `function f(a = exports['X'])`) or a computed key
+  // (`exports[_0x(0x1)] =`) is invisible to it, so a "does the name appear
+  // anywhere" check happily passes a file whose import dies at startup —
+  // exactly how 1.0.0-S1-TITANIUM shipped a CLI that crashed with "does not
+  // provide an export named 'GLOBAL_SHORTCUTS'" (scripts/diag-publish-linkage.mjs
+  // reproduces it).
+  const providedExportAssignments = (src) => {
+    const names = new Set()
+    for (const m of src.matchAll(/exports\.([A-Za-z_$][\w$]*)\s*=[^=]/g)) names.add(m[1])
+    for (const m of src.matchAll(/exports\[['"]([^'"]+)['"]\]\s*=[^=]/g)) names.add(m[1])
+    for (const m of src.matchAll(/module\.exports\.([A-Za-z_$][\w$]*)\s*=[^=]/g)) names.add(m[1])
+    for (const m of src.matchAll(/module\.exports\s*=\s*\{([^}]*)\}/g)) {
+      for (const key of m[1].matchAll(/['"]?([A-Za-z_$][\w$]*)['"]?\s*:/g)) names.add(key[1])
+      for (const sh of m[1].split(",")) {
+        const t = sh.trim()
+        if (/^[A-Za-z_$][\w$]*$/.test(t)) names.add(t)
+      }
+    }
+    // `Object['defineProperty'](…)` is the obfuscated spelling of the same
+    // call — accept both so a string-array-free file still verifies.
+    for (const m of src.matchAll(/defineProperty['"]?\]?\s*\(\s*exports\s*,\s*['"]([^'"]+)['"]/g))
+      names.add(m[1])
+    for (const m of src.matchAll(/export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/g))
+      names.add(m[1])
+    for (const m of src.matchAll(/export\s*\{([^}]*)\}/g)) {
+      for (const w of m[1].split(",")) {
+        const segs = w.trim().split(/\s+as\s+/)
+        const t = segs[segs.length - 1].trim().replace(/^type\s+/, "")
+        if (/^[A-Za-z_$][\w$]*$/.test(t)) names.add(t)
+      }
+    }
+    names.delete("__esModule")
+    return names
+  }
   const verifyExports = (src, obf) => {
     if (/export\s*\*/.test(src)) return true // gate leniency: star membership unknowable
-    const expected = providedExports(src)
+    const expected = providedExportAssignments(src)
     if (expected.size === 0) return true
-    const got = providedExports(obf)
+    const got = providedExportAssignments(obf)
     return [...expected].every((n) => got.has(n))
   }
 
@@ -280,6 +319,45 @@ async function main() {
     // survived; otherwise retry that file with the string array off (see
     // providedExports/verifyExports above). Single obfuscation in the
     // common case — the fallback re-runs only broken files.
+    // Last resort for a CJS file whose export SPELLINGS the obfuscator does
+    // not preserve (e.g. `module.exports = {...}` rewritten as
+    // `module['exports'] = {...}`): load the obfuscated output with require()
+    // and compare the ACTUAL exported keys against the source. Spelling checks
+    // are static by necessity, but require() is what CJS consumers really get —
+    // and for a leaf asset with no static ESM importers (a renderer script
+    // loaded as a window global, tested via require) it is the true linkage
+    // contract. Node's cjs-module-lexer cannot see through the bracket
+    // spelling either, so this fallback is gated to files with no ESM syntax:
+    // anything ESM-imported keeps failing loud above. A require that throws
+    // (DOM globals at top level, etc.) also fails loud — never silently.
+    const verifyExportsByRequire = (rel, finalCode, obfuscated) => {
+      if (/^\s*import[\s{*"]/m.test(obfuscated) || /^\s*export\s/m.test(obfuscated)) return false
+      const expected = providedExportAssignments(finalCode)
+      if (expected.size === 0) return true
+      const tmp = path.join(
+        fs.mkdtempSync(path.join(os.tmpdir(), "publish-linkage-")),
+        "check.cjs",
+      )
+      try {
+        fs.writeFileSync(tmp, obfuscated, "utf8")
+        const loaded = require(tmp)
+        const got = new Set(Object.keys(loaded ?? {}))
+        return [...expected].every((n) => got.has(n))
+      } catch {
+        return false
+      } finally {
+        try {
+          delete require.cache[require.resolve(tmp)]
+        } catch {
+          /* already gone */
+        }
+        try {
+          fs.rmSync(path.dirname(tmp), { recursive: true, force: true })
+        } catch {
+          /* best effort */
+        }
+      }
+    }
     const writeVerified = (file, finalCode, options, firstObfuscated) => {
       if (verifyExports(finalCode, firstObfuscated)) {
         fs.writeFileSync(file, firstObfuscated, "utf8")
@@ -291,9 +369,17 @@ async function main() {
         ...options,
         stringArray: false,
       }).getObfuscatedCode()
-      if (!verifyExports(finalCode, retry)) throw new Error(`linkage still broken without stringArray: ${rel}`)
-      fs.writeFileSync(file, retry, "utf8")
-      console.log(`publish: stringArray off for ${rel} (linkage-safe fallback).`)
+      if (verifyExports(finalCode, retry)) {
+        fs.writeFileSync(file, retry, "utf8")
+        console.log(`publish: stringArray off for ${rel} (linkage-safe fallback).`)
+        return
+      }
+      if (verifyExportsByRequire(rel, finalCode, retry)) {
+        fs.writeFileSync(file, retry, "utf8")
+        console.log(`publish: require-verified ${rel} (CJS runtime linkage intact).`)
+        return
+      }
+      throw new Error(`linkage still broken without stringArray: ${rel}`)
     }
     for (const file of files) {
       try {

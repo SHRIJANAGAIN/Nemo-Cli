@@ -26,14 +26,27 @@ const h = vi.hoisted(() => {
   // Real AgentEvent shapes, not invented ones: `session/update` forwards only
   // events that map to an ACP SessionUpdate, so `{type:"text"}` would be
   // dropped and every assertion below would see zero updates.
-  const defaultRun = (_prompt: string, _model: string | undefined, emit: (event: unknown) => void): Promise<void> => {
+  // `signal` mirrors Agent.run's 3rd parameter so tests can observe the
+  // session/cancel → AbortSignal wiring (production passes it through).
+  type RunImpl = (
+    prompt: string,
+    model: string | undefined,
+    emit: (event: unknown) => void,
+    signal?: AbortSignal,
+  ) => Promise<void>
+  const defaultRun: RunImpl = (_prompt, _model, emit) => {
     emit({ type: "message_update", delta: { text: "chunk" } })
     return Promise.resolve()
   }
 
   const state = {
     loadConfigCalls: [] as Array<Record<string, unknown>>,
-    runs: [] as Array<{ prompt: string; model: string | undefined; emit: (event: unknown) => void }>,
+    runs: [] as Array<{
+      prompt: string
+      model: string | undefined
+      emit: (event: unknown) => void
+      signal?: AbortSignal
+    }>,
     agentCreates: [] as Array<{ config: { model?: string } }>,
     runImpl: defaultRun,
     transcripts: [] as Array<{ id: string; state: Record<string, unknown> }>,
@@ -71,9 +84,9 @@ vi.mock("../../../apps/runtime/src/index.js", () => ({
     constructor(options: { config: { model?: string } }) {
       this.config = options.config
     }
-    run(prompt: string, emit: (event: unknown) => void): Promise<void> {
-      h.runs.push({ prompt, model: this.config.model, emit })
-      return h.runImpl(prompt, this.config.model, emit)
+    run(prompt: string, emit: (event: unknown) => void, signal?: AbortSignal): Promise<void> {
+      h.runs.push({ prompt, model: this.config.model, emit, signal })
+      return h.runImpl(prompt, this.config.model, emit, signal)
     }
   },
 }))
@@ -375,6 +388,60 @@ describe("ACP server prompt and cancel", () => {
     expect(messages().find((m) => m.id === 5)?.result).toEqual({
       sessionId: "cancel-1",
       stopReason: "cancelled",
+    })
+  })
+
+  it("cancel aborts the in-flight run, and an idle cancel poisons nothing", async () => {
+    runAcpServer()
+    let seenSignal: AbortSignal | undefined
+    let aborted = false
+    h.runImpl = (_prompt, _model, emit, signal) => {
+      seenSignal = signal
+      return new Promise<void>((resolve) => {
+        signal?.addEventListener("abort", () => {
+          aborted = true
+          emit({ type: "message_end", message: { role: "assistant", content: [], stopReason: "aborted" } })
+          resolve()
+        })
+      })
+    }
+
+    // Deliberately not awaited: the prompt must still be in flight below.
+    sendLine({ jsonrpc: "2.0", id: 11, method: "prompt", params: { sessionId: "kill-1", prompt: "go" } })
+    await flush()
+    expect(seenSignal).toBeDefined() // the run received cancel's AbortSignal
+
+    await sendLine({ jsonrpc: "2.0", id: 12, method: "cancel", params: { sessionId: "kill-1" } })
+    expect(messages().find((m) => m.id === 12)?.result).toEqual({ ok: true })
+    // The run stops where it stands (was: cosmetic — events were hidden
+    // while the model kept generating to completion, tokens spent).
+    expect(aborted).toBe(true)
+    expect(seenSignal?.aborted).toBe(true)
+    await flush()
+    expect(messages().find((m) => m.id === 11)?.result).toEqual({
+      sessionId: "kill-1",
+      stopReason: "cancelled",
+    })
+
+    // An idempotent cancel AFTER completion must not poison the next
+    // prompt (was: the flag lingered with no run to clear it, so this
+    // prompt's events were suppressed from the first delta and its reply
+    // was mislabeled "cancelled").
+    await sendLine({ jsonrpc: "2.0", id: 13, method: "cancel", params: { sessionId: "kill-1" } })
+    expect(messages().find((m) => m.id === 13)?.result).toEqual({ ok: true })
+    h.runImpl = (_prompt, _model, emit) => {
+      emit({ type: "message_update", delta: { text: "clean" } })
+      return Promise.resolve()
+    }
+    await sendLine({ jsonrpc: "2.0", id: 14, method: "prompt", params: { sessionId: "kill-1", prompt: "again" } })
+
+    const cleanChunk = messages()
+      .filter((m) => m.method === "session/update")
+      .find((m) => JSON.stringify(m.params).includes("clean"))
+    expect(cleanChunk).toBeDefined() // not suppressed
+    expect(messages().find((m) => m.id === 14)?.result).toEqual({
+      sessionId: "kill-1",
+      stopReason: "end_turn",
     })
   })
 

@@ -28,6 +28,9 @@ import { listTranscripts, createTranscript, readState } from "../../session-back
 
 const PROTOCOL_VERSION = 1
 
+/** Sessions with a prompt in flight → its abort controller (see `cancel`). */
+const activePrompts = new Map<string, AbortController>()
+
 /** Ref'd keep-alive tick: effectively infinite, well under Node's 2^31-1 ms timer cap. */
 const KEEP_ALIVE_TICK_MS = 1 << 30
 /** How long the server outlives stdin EOF; see runAcpServer. */
@@ -185,25 +188,34 @@ async function handlePrompt(id: number | string | undefined, params: Record<stri
   // servers + skills — so an ACP session actually connects what the config
   // declares; the constructor path skipped buildOptionalTools entirely (#62).
   const agent = await Agent.create({ config })
+  // Wired to session/cancel: cancel now aborts the RUN (the loop honors
+  // AbortSignal) instead of only hiding its events while the model kept
+  // burning tokens to completion.
+  const controller = new AbortController()
+  activePrompts.set(sessionId, controller)
   // The assistant's own stopReason must drive the reply: an errored run
   // answered "end_turn" was half the silent-failure defect (the other
   // half is toSessionUpdate forwarding the error text).
   let assistantStopReason: string | undefined
   try {
-    await agent.run(prompt, (event) => {
-      if (cancelled.has(sessionId)) return
-      if (
-        isRecord(event) &&
-        event.type === "message_end" &&
-        isRecord(event.message) &&
-        typeof event.message.stopReason === "string"
-      ) {
-        assistantStopReason = event.message.stopReason
-      }
-      const update = toSessionUpdate(event)
-      if (update === undefined) return
-      notify("session/update", { sessionId, update })
-    })
+    await agent.run(
+      prompt,
+      (event) => {
+        if (cancelled.has(sessionId)) return
+        if (
+          isRecord(event) &&
+          event.type === "message_end" &&
+          isRecord(event.message) &&
+          typeof event.message.stopReason === "string"
+        ) {
+          assistantStopReason = event.message.stopReason
+        }
+        const update = toSessionUpdate(event)
+        if (update === undefined) return
+        notify("session/update", { sessionId, update })
+      },
+      controller.signal,
+    )
     // Read the cancel flag BEFORE clearing it — deleting first made
     // `stopReason: "cancelled"` unreachable (every reply said "end_turn",
     // even mid-cancel ones).
@@ -223,8 +235,10 @@ async function handlePrompt(id: number | string | undefined, params: Record<stri
   } finally {
     // Clear on every exit (success *and* failure): a flag leaked past a
     // rejected run would suppress all events of the next prompt on this
-    // session and mislabel it "cancelled".
+    // session and mislabel it "cancelled". The controller goes with it so
+    // a later cancel can't abort a prompt that no longer exists.
     cancelled.delete(sessionId)
+    activePrompts.delete(sessionId)
   }
 }
 
@@ -305,10 +319,23 @@ async function dispatch(req: RpcRequest): Promise<void> {
     case "prompt":
       await handlePrompt(req.id, params)
       break
-    case "cancel":
-      if (typeof params.sessionId === "string") cancelled.add(params.sessionId)
+    case "cancel": {
+      const sid = typeof params.sessionId === "string" ? params.sessionId : undefined
+      const controller = sid === undefined ? undefined : activePrompts.get(sid)
+      if (sid !== undefined && controller !== undefined) {
+        // Prompt in flight: suppress its remaining events AND abort the
+        // run itself — the old flag-only cancel let the model keep
+        // generating to completion (tokens spent, answer discarded).
+        cancelled.add(sid)
+        controller.abort()
+      }
+      // No prompt in flight: nothing to cancel. Setting the flag here
+      // anyway would poison the NEXT prompt on the session — its events
+      // suppressed from the first delta and its reply mislabeled
+      // "cancelled". Cancel is idempotent per ACP, so still ack.
       send(req.id, { ok: true })
       break
+    }
     default:
       sendError(req.id, -32601, `unknown method: ${req.method}`)
   }

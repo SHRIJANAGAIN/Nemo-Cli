@@ -17,7 +17,7 @@
 
 import fs from "node:fs"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const OUT = path.join(ROOT, "publish")
@@ -219,11 +219,22 @@ function collectFileImports(code) {
 }
 
 function collectFileExports(code) {
+  // ASSIGNMENTS ONLY, deliberately. An ESM `import {X}` of a CJS file is
+  // served by Node's cjs-module-lexer, which synthesises a named export only
+  // from a top-level assignment it can read literally (`exports.X =`,
+  // `exports['X'] =`, `module.exports.X =`, `Object.defineProperty(exports,'X')`)
+  // or an ESM export declaration. A read (`function f(a = exports['X'])`) or a
+  // computed key (`exports[_0x(0x1)] =`) is invisible to it — counting those
+  // as "provided" let this gate pass a tree that then died at startup with
+  // "does not provide an export named 'GLOBAL_SHORTCUTS'".
   const names = new Set()
   let star = false
-  for (const m of code.matchAll(/exports\.([A-Za-z_$][\w$]*)/g)) names.add(m[1])
-  for (const m of code.matchAll(/exports\[['"]([^'"]+)['"]\]/g)) names.add(m[1])
-  for (const m of code.matchAll(/defineProperty\(\s*exports\s*,\s*['"]([^'"]+)['"]/g)) names.add(m[1])
+  for (const m of code.matchAll(/exports\.([A-Za-z_$][\w$]*)\s*=[^=]/g)) names.add(m[1])
+  for (const m of code.matchAll(/exports\[['"]([^'"]+)['"]\]\s*=[^=]/g)) names.add(m[1])
+  for (const m of code.matchAll(/module\.exports\.([A-Za-z_$][\w$]*)\s*=[^=]/g)) names.add(m[1])
+  // `Object['defineProperty'](…)` is the obfuscated spelling of the same call.
+  for (const m of code.matchAll(/defineProperty['"]?\]?\s*\(\s*exports\s*,\s*['"]([^'"]+)['"]/g))
+    names.add(m[1])
   for (const m of code.matchAll(/module\.exports\s*=\s*\{([^}]*)\}/g)) {
     for (const key of m[1].matchAll(/['"]?([A-Za-z_$][\w$]*)['"]?\s*:/g)) names.add(key[1])
     for (const sh of m[1].split(",")) {
@@ -323,6 +334,44 @@ function resolveRelative(fromFile, spec) {
       ? fail("module linkage: no static imports found — gate is blind, investigate")
       : undefined
 }
+
+// --- 11. PUBLISHED entry points actually load --------------------------------
+// Static linkage above CANNOT catch the flattened-module bug, because the
+// broken specifier and the legitimate CJS-interop ones are indistinguishable
+// without running them. They only diverge once the code is obfuscated:
+// cjs-module-lexer stops recognising the named exports of a CJS module whose
+// body has been rewritten, so an ESM import of a flattened module's CJS twin
+// dies at launch with
+//
+//   SyntaxError: The requested module '../keybindings.js' does not provide an
+//   export named 'GLOBAL_SHORTCUTS'
+//
+// A plain `npm run build` stays green through all of that, which is why this
+// shipped. Only the PUBLISHED tree shows it, so only the published tree is
+// loaded here. App.js is included deliberately: it transitively pulls in the
+// whole ink-app surface, so one import exercises the real graph.
+async function checkPublishedModulesLoad() {
+  const dir = path.join(OUT, "dist", "packages", "tui", "src", "ink-app-esm")
+  if (!fs.existsSync(dir)) return undefined
+  const targets = ["WhichKey.js", "Spinner.js", "keybindings.js", "keymap.js", "App.js"]
+  const failures = []
+  for (const file of targets) {
+    const full = path.join(dir, file)
+    if (!fs.existsSync(full)) {
+      failures.push(`${file}: missing from publish/`)
+      continue
+    }
+    try {
+      await import(pathToFileURL(full).href)
+    } catch (err) {
+      failures.push(`${file}: ${String(err.message).split("\n")[0]}`)
+    }
+  }
+  if (failures.length === 0) ok(`published modules load: ${targets.length} obfuscated entry points imported`)
+  else fail(`published modules load:\n    ${failures.join("\n    ")}`)
+}
+
+await checkPublishedModulesLoad()
 
 // --- report --------------------------------------------------------------
 console.log(checks.join("\n"))

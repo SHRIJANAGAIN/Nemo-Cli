@@ -8,7 +8,7 @@
 // enable/disable, agent-config defaults, transcript -> AgentMessage conversion, and
 // the terminal ROWS hook. Split out of App.tsx so they are unit-testable without
 // mounting the component (see app-bootstrap.test.ts).
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useStdout } from "ink"
 import { appendFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -201,4 +201,232 @@ export const useTerminalRows = (): number => {
     }
   }, [stdout])
   return rows
+}
+
+/**
+ * Below this the window cannot host the TUI at all (minimized-to-taskbar
+ * transiently reports 0x0; a sub-letterbox window fits nothing readable).
+ * Sizes under the floor are REFUSED so paints keep the last good geometry
+ * instead of collapsing: a collapsed paint shrinks every erase count with
+ * it, and the restore repaint then erases only those few rows — leaving the
+ * rest of the viewport as permanent residue that no later repaint touches
+ * (each one erases exactly what it paints). A too-big paint into a hidden
+ * window is harmless; a too-small paint poisons every paint after it.
+ */
+export const MIN_USABLE_COLUMNS = 20
+export const MIN_USABLE_ROWS = 10
+
+/**
+ * Live console size via syscall, bypassing Node's cached columns/rows.
+ *
+ * Those cached values only refresh when a 'resize' event arrives — and on
+ * some consoles no event ever arrives (verified live: a window stretched
+ * mid-run never emitted once, columns/rows frozen at launch size). The app
+ * then paints a launch-size frame into a smaller window forever, and every
+ * repaint scrolls clones into scrollback. getWindowSize() asks the OS
+ * directly instead, so it sees the real window with or without events.
+ * Null when unavailable (pipes, tests) or when the answer is nonsense.
+ */
+export interface LiveWindowSize {
+  columns: number
+  rows: number
+}
+
+export function readLiveWindowSize(
+  stdout: { getWindowSize?: () => unknown } | undefined | null,
+): LiveWindowSize | null {
+  try {
+    const raw = stdout?.getWindowSize?.()
+    if (!Array.isArray(raw)) return null
+    const columns = Math.floor(Number(raw[0]))
+    const rows = Math.floor(Number(raw[1]))
+    if (!Number.isFinite(columns) || !Number.isFinite(rows)) return null
+    // Zero/negative is dead air, and anything under the usable floor is a
+    // transient (minimize reports 0x0; letterbox sizes fit nothing) — refuse
+    // both so callers keep last-good geometry instead of collapsing paints.
+    if (columns < MIN_USABLE_COLUMNS || rows < MIN_USABLE_ROWS) return null
+    return { columns, rows }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Overwrite Node's cached columns/rows with syscall truth. Returns true when
+ * anything changed. This is what makes Ink's own layout (Yoga widths, wrap,
+ * erase math — all read the cache, never the syscall) see the real window on
+ * consoles where 'resize' never fires. Emits NO events itself: calling this
+ * mid-render and emitting there would nest an Ink render inside React's, so
+ * the poll loop owns event emission and render paths only ever assign.
+ */
+export function syncWindowSizeCache(stdout: {
+  columns?: number
+  rows?: number
+  getWindowSize?: () => unknown
+}): boolean {
+  const live = readLiveWindowSize(stdout)
+  if (!live) return false
+  if (stdout.columns === live.columns && stdout.rows === live.rows) return false
+  stdout.columns = live.columns
+  stdout.rows = live.rows
+  return true
+}
+
+/**
+ * True between a terminal resize and 200ms of quiet after it. While set, the
+ * welcome screen paints NARROW chrome (unpadded logo, no fill rows): full-width
+ * rows are what a shrink-drag re-flows into scrollback, and fewer of them
+ * means proportionally less residue. Borders/footer/composer stay full-width
+ * (cheap to keep, small damage), so a drag leaves stray rows, not frames.
+ * Restores automatically at settle; the guard's own settle blank then wipes
+ * the viewport and the next tick repaints full beauty in place.
+ */
+export function useResizingFlag(settleMs = 200): boolean {
+  const { stdout } = useStdout()
+  const [resizing, setResizing] = useState(/*resizing*/ false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => {
+    if (!stdout) return undefined
+    const onResize = (): void => {
+      setResizing(/*resizing*/ true)
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => {
+        timer.current = undefined
+        setResizing(/*resizing*/ false)
+      }, settleMs)
+    }
+    stdout.on("resize", onResize)
+    return () => {
+      stdout.removeListener("resize", onResize)
+      if (timer.current) clearTimeout(timer.current)
+    }
+  }, [stdout, settleMs])
+  return resizing
+}
+
+/**
+ * Alternate-screen mode (codex-style): run the TUI on the terminal's alternate
+ * buffer instead of inline.
+ *
+ * Why this exists: every resize-clone mechanism in this file fights the same
+ * physics — inline rows live in scrollback, so re-flow, over-height paints
+ * and stale erases can all strand copies there permanently. The alternate
+ * buffer HAS no scrollback, so clones are structurally impossible there:
+ * resizes, overflows and stale erases can only ever disturb the live
+ * viewport, which the next repaint fixes. That is the entire reason codex
+ * never clones.
+ *
+ * The price is real: with no scrollback the device scrollbar and wheel go
+ * dead for the session, and history that scrolls out of the frame cannot be
+ * scrolled back to — there is no in-app scroll window either (rollouts stay
+ * listable/resumable, but the terminal transcript is not replayed). That
+ * trade was accepted deliberately: clone-free rendering beat scroll-back
+ * history, so the alternate buffer is the DEFAULT. Inline mode survives as
+ * an explicit opt-out (`--no-alt-screen` / TRAYAMBAK_ALT_SCREEN=0) for
+ * users who would rather have terminal scrollback than clone-free frames.
+ */
+export const ALT_SCREEN_ENTER = "[?1049h"
+export const ALT_SCREEN_LEAVE = "[?1049l[?25h"
+
+const ALT_TRUTHY = new Set(["1", "true", "yes", "y", "on"])
+
+/**
+ * Should this launch use the alternate screen? Explicit CLI flag wins, then
+ * the environment, then ON (default-on since the top-clone fix: the alternate
+ * buffer is the only surface where reflow cannot strand frames — verified by
+ * scripts/diag-boot-clone.mjs --prod --alt --shrink). Pure (unit-tested) —
+ * the flag arrives as the strict parser's "true"/"false"/absent strings,
+ * never a real boolean.
+ */
+export function resolveAltScreen(input: {
+  flag?: string | boolean | undefined
+  env?: Record<string, string | undefined>
+}): boolean {
+  if (typeof input.flag === "boolean") return input.flag
+  if (typeof input.flag === "string") return ALT_TRUTHY.has(input.flag.trim().toLowerCase())
+  const raw = input.env?.TRAYAMBAK_ALT_SCREEN
+  if (raw === undefined) return true
+  return ALT_TRUTHY.has(raw.trim().toLowerCase())
+}
+
+/** Write the enter sequence. TTY check lives with the caller (ink-repl.mjs):
+ *  emitting 1049h into a pipe would corrupt piped output with an escape the
+ *  reader never asked for. */
+export function enterAltScreen(write: (chunk: string) => unknown): void {
+  write(ALT_SCREEN_ENTER)
+}
+
+/**
+ * Write the leave sequence. Restores the main buffer AND the caret: the app
+ * hides the hardware caret for its lifetime and process.exit skips React's
+ * unmount cleanup, so without the ?25h the shell would come back caret-less.
+ */
+export function leaveAltScreen(write: (chunk: string) => unknown): void {
+  write(ALT_SCREEN_LEAVE)
+}
+
+/**
+ * Live viewport height for frame sizing. Prefer the terminal's CURRENT row
+ * count over the React-state one.
+ *
+ * Why this exists: Ink re-renders on resize from its OWN listener, which runs
+ * before this hook's setState lands — so the first post-resize render still
+ * sees the OLD height. A root height / fill budget derived from that stale
+ * value describes a window that no longer exists: after a shrink the frame is
+ * taller than the viewport, every repaint writes past the last row, the
+ * console scrolls, and full frames stack up in scrollback (reported live as
+ * the same Welcome screen copy-pasted after every resize). Node has already
+ * updated stdout.rows by the time any listener runs, so reading it at render
+ * time is fresh where state is one render behind. `|| fallback` keeps the
+ * 0/undefined reattach behaviour (never height 0).
+ */
+export function liveViewportRows(stdoutRows: number | undefined, stateRows: number): number {
+  return stdoutRows || stateRows
+}
+
+/**
+ * Rows of ThemeFill below the welcome status block. Calibrated so the whole
+ * idle frame EXACTLY fills the viewport: root border 2 + welcome block 13
+ * (padding 2 + 8-row lockup + margin 1 + clock 1 + cwd 1) + footer 3 + composer
+ * 2 = 20, so fill = viewport - 21 with the root's one row of slack (height =
+ * rows - 1) taken by the frame itself. An exact fit never scrolls; anything
+ * taller scrolls once per repaint and clones into scrollback.
+ */
+export function welcomeFillRows(viewportRows: number): number {
+  return Math.max(0, Math.min(viewportRows - 21, 30))
+}
+
+/**
+ * Below this viewport height the full 8-row lockup no longer fits the idle
+ * frame (20 fixed rows need 21), so the welcome screen falls back to its
+ * one-line compact mark instead of overflowing — an overflowing frame scrolls
+ * on every repaint and that scroll IS the clone mechanism. Same trade the
+ * theme picker already makes (FULL_LOGO_ROWS vs its 1-row compact logo).
+ */
+export const WELCOME_COMPACT_BELOW_ROWS = 22
+
+export function welcomeLogoCompact(viewportRows: number): boolean {
+  return viewportRows < WELCOME_COMPACT_BELOW_ROWS
+}
+
+/**
+ * Settle-reprint handler slot (framework-free bridge from the resize guard
+ * to App).
+ *
+ * The guard sees every resize but owns no React state; App owns
+ * setStaticEpoch but mounts after Ink's own resize listener. A prop would
+ * arrive too late and an event would race, so they meet here: App registers
+ * a callback on mount (unregisters on unmount), and the guard invokes it —
+ * synchronously inside its settle — when a reprint is due. Same module
+ * instance on both sides (both live in ink-app-esm), so there is exactly
+ * one slot, never two owners.
+ */
+let settleReprintHandler: (() => void) | undefined
+
+export function registerSettleReprintHandler(handler: (() => void) | undefined): void {
+  settleReprintHandler = handler
+}
+
+export function requestSettleReprint(): void {
+  settleReprintHandler?.()
 }

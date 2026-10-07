@@ -7,8 +7,9 @@
 import * as fs from "fs"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
-import { PathChangedError, identityOf, openVerified, readVerifiedPrefix } from "./verified-read.js"
+import { PathChangedError, identityOf, openVerified, readVerifiedPrefix, type VerifiedHandle } from "./verified-read.js"
 import { noteOpen } from "../../../../../packages/core/src/frecency.js"
+import { binaryReadMessage, detectBinaryFd } from "../text/binary-detect.js"
 
 const MAX_BYTES = 50 * 1024
 const MAX_LINES = 500
@@ -26,13 +27,23 @@ const MAX_LINES = 500
  * renamed over the approved path between validation and open cannot be read
  * in its place. See `./verified-read.ts`.
  */
-function readPrefix(target: string, maxBytes: number, expected: ReturnType<typeof identityOf>): string {
-  const handle = openVerified(target, expected)
-  try {
-    return readVerifiedPrefix(handle.fd, handle.identity, maxBytes)
-  } finally {
-    fs.closeSync(handle.fd)
-  }
+/**
+ * Probe the binary format off the SAME verified descriptor the read will use.
+ *
+ * Probing by path opened the file a second time, so the bytes that decided
+ * "binary / text" could be different from the bytes then read — a TOCTOU window
+ * reopened right after #121 closed it. One open, one identity check, one set of
+ * bytes. Returns null when the file is fine to read as text.
+ */
+function binaryRefusal(handle: VerifiedHandle, size: number, label: string): string | null {
+  const info = detectBinaryFd(handle.fd, size)
+  // A recognised format is refused at any size — we know exactly what it is. An
+  // unrecognised NUL-heavy file is usually a sparse hole or a truncated write,
+  // and #75 guarantees those still yield a bounded prefix plus an explicit
+  // truncation notice, which is already actionable.
+  const recognised = info.format !== undefined && info.format !== "utf16"
+  if (!recognised && size > MAX_BYTES) return null
+  return binaryReadMessage(info, label)
 }
 
 const definition: ToolDefinition = {
@@ -90,11 +101,20 @@ export function createReadFileTool(): Tool {
         const expected = identityOf(stat)
         const truncated = stat.size > MAX_BYTES
         let raw: string
+        // One descriptor for the whole operation: probe AND read. Decoding a
+        // binary file as UTF-8 does not throw — it returns U+FFFD per invalid
+        // byte — so a .docx/.pdf used to come back as a screenful of `�` that
+        // looks like content. Refuse with the format named instead.
+        const handle = openVerified(target, expected)
         try {
-          raw = readPrefix(target, truncated ? MAX_BYTES : Math.max(1, stat.size), expected)
+          const refusal = binaryRefusal(handle, stat.size, target)
+          if (refusal) return textResult(refusal, /*isError*/ true)
+          raw = readVerifiedPrefix(handle.fd, handle.identity, truncated ? MAX_BYTES : Math.max(1, stat.size))
         } catch (error) {
           if (error instanceof PathChangedError) return textResult(error.message, /*isError*/ true)
           throw error
+        } finally {
+          fs.closeSync(handle.fd)
         }
 
         // A read is a genuine "open" for frecency ranking. Fire-and-forget after

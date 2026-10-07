@@ -31,7 +31,12 @@ function result(id: string): ChunkableMessage {
 
 /** Every tool pair inside a chunk, to prove none was split. */
 function orphanedIds(chunk: Chunk): string[] {
-  const calls = new Set(chunk.messages.filter((m) => m.hasToolCalls).map((m) => m.toolCallId))
+  const calls = new Set<string>()
+  for (const message of chunk.messages) {
+    if (!message.hasToolCalls) continue
+    if (Array.isArray(message.toolCallIds)) for (const id of message.toolCallIds) calls.add(id)
+    if (typeof message.toolCallId === "string") calls.add(message.toolCallId)
+  }
   const orphans: string[] = []
   for (const message of chunk.messages) {
     if (message.role !== "tool") continue
@@ -99,6 +104,55 @@ describe("chunkMessages", () => {
     const chunks = chunkMessages(messages, { maxChunkTokens: 400 })
     expect(chunks.length).toBeGreaterThan(1)
     for (const chunk of chunks) expect(orphanedIds(chunk)).toEqual([])
+  })
+
+  it("keeps a MULTI-call assistant message with all of its results", () => {
+    // One assistant turn emitting several parallel calls, then the results. The
+    // previous version tracked a single id, so it believed the group was resolved
+    // after the first result and split the rest away from their calls.
+    const messages: ChunkableMessage[] = [
+      { role: "assistant", content: "parallel", hasToolCalls: true, toolCallIds: ["a", "b", "c"] },
+      { role: "tool", content: "ra", toolCallId: "a" },
+      { role: "tool", content: "rb", toolCallId: "b" },
+      { role: "tool", content: "rc", toolCallId: "c" },
+    ]
+    const chunks = chunkMessages(messages, { maxChunkTokens: 1 })
+    for (const chunk of chunks) expect(orphanedIds(chunk)).toEqual([])
+  })
+
+  it("does not orphan a call whose results arrive across a would-be boundary", () => {
+    // Two calls in flight when the budget runs out, then both results.
+    const messages: ChunkableMessage[] = [
+      user(`pad ${"x".repeat(400)}`),
+      { role: "assistant", content: "two", hasToolCalls: true, toolCallIds: ["p", "q"] },
+      { role: "tool", content: "rp", toolCallId: "p" },
+      { role: "tool", content: "rq", toolCallId: "q" },
+      user("after"),
+    ]
+    const chunks = chunkMessages(messages, { maxChunkTokens: 50 })
+    for (const chunk of chunks) expect(orphanedIds(chunk)).toEqual([])
+    expect(chunks.flatMap((c) => c.messages)).toEqual(messages)
+  })
+
+  it("overruns the budget rather than orphan, when the two demands conflict", () => {
+    // The invariant wins: an orphaned result is unrecoverable, an oversized chunk
+    // is merely suboptimal.
+    const messages: ChunkableMessage[] = [
+      user(`filler ${"z".repeat(300)}`),
+      { role: "assistant", content: "big", hasToolCalls: true, toolCallIds: ["z"] },
+      { role: "tool", content: `huge result ${"y".repeat(600)}`, toolCallId: "z" },
+    ]
+    const chunks = chunkMessages(messages, { maxChunkTokens: 100 })
+    for (const chunk of chunks) expect(orphanedIds(chunk)).toEqual([])
+  })
+
+  it("survives a call that never gets a result without dropping messages", () => {
+    const messages: ChunkableMessage[] = [
+      { role: "assistant", content: "dangling", hasToolCalls: true, toolCallIds: ["never"] },
+      user("after"),
+    ]
+    const chunks = chunkMessages(messages, { maxChunkTokens: 1 })
+    expect(chunks.flatMap((c) => c.messages)).toEqual(messages)
   })
 
   it("preserves every message across chunks — no silent loss", () => {

@@ -17,8 +17,12 @@
  *    afterwards. The renderer's flicker recovery used to emit ED3 on every
  *    resize, deleting the printed transcript; that path is screen-only now
  *    (`trayambak-ink/core/clearTerminal.ts`).
- *  - The alternate screen is never used. Its buffer has no scrollback at all, so
- *    rows the UI settles into <Static> become unreachable.
+ *  - The alternate screen IS the default (clone-free frames beat scroll-back
+ *    history), reached only through the TTY-gated resolveAltScreen gate —
+ *    no raw 1049 literal may appear in the entry file. Its buffer has no
+ *    scrollback at all, so rows the UI settles into <Static> cannot be
+ *    scrolled back to: --no-alt-screen / TRAYAMBAK_ALT_SCREEN=0 restores
+ *    the inline path (and the reflow clones it can strand) explicitly.
  *
  * The repl tree is excluded from vitest discovery, so this lives one level up
  * and reads the entrypoint by path.
@@ -39,10 +43,14 @@ function rawEscapeWrites(): string[] {
 }
 
 describe("ink-repl startup clear", () => {
-  it("writes exactly one escape sequence, and it is the startup clear", () => {
+  it("writes exactly the two known escape sequences, both pre-render", () => {
     // A second writer is how the frame got desynchronised from the renderer
-    // before; one deliberate write, or none.
-    expect(rawEscapeWrites()).toHaveLength(1)
+    // before; deliberate writes only, or none. The two literals are the
+    // inline path's startup clear and the alt-screen path's mouse-off tail —
+    // the 1049h/l sequences themselves live in app-bootstrap (single source)
+    // and are only ever reached through enter/leaveAltScreen, so no raw 1049
+    // literal may appear here (asserted below).
+    expect(rawEscapeWrites()).toHaveLength(2)
   })
 
   it("turns OFF every mouse-reporting mode so the device scrollbar keeps working", () => {
@@ -62,14 +70,32 @@ describe("ink-repl startup clear", () => {
   })
 
   it("erases the viewport, homes the cursor, and clears scrollback", () => {
-    const seq = rawEscapeWrites()[0] ?? ""
+    // The full clear is the default path's literal (the alt path writes only
+    // its mouse-off tail; the 1049h comes from the helper, asserted above).
+    const seq = rawEscapeWrites().find((s) => s.includes("[2J")) ?? ""
     expect(seq).toContain("[2J")
     expect(seq).toContain("[3J")
     expect(seq).toContain("[H")
   })
 
-  it("never takes the alternate screen — that buffer has no scrollback", () => {
+  it("takes the alternate screen only through the resolved gate, never a raw literal", () => {
+    // No raw 1049 literal may live in this file: the sequences belong to
+    // app-bootstrap (ALT_SCREEN_ENTER/LEAVE) and are only reachable through
+    // enter/leaveAltScreen, so a future edit cannot half-wire a new path.
     expect(rawEscapeWrites().some((seq) => seq.includes("1049"))).toBe(false)
+    // The gate itself: flag/env-resolved (default ON), and only on a TTY
+    // (1049h into a pipe would corrupt piped output with an escape the reader
+    // never asked for).
+    expect(source).toContain("resolveAltScreen({ env: process.env })")
+    expect(source).toContain("process.stdout.isTTY === true")
+    expect(source).toContain("enterAltScreen(")
+    // Every exit restores the main buffer: normal exit, crash, and kill. A
+    // stuck alternate buffer leaves the shell staring at a frozen app screen.
+    expect(source).toContain("leaveAltScreen(")
+    expect(source).toContain('process.once("uncaughtException"')
+    expect(source).toContain('process.once("unhandledRejection"')
+    expect(source).toContain('process.once("SIGINT"')
+    expect(source).toContain('process.once("SIGTERM"')
   })
 
   it("claims the terminal before the first render, so there is no frame state to desync", () => {
@@ -88,9 +114,14 @@ describe("ink-repl startup clear", () => {
     expect(rawEscapeWrites().some((seq) => seq.includes("[?25"))).toBe(false)
   })
 
-  it("carries no exit-path restore scaffolding — nothing to restore", () => {
-    expect(source).not.toContain("restoreTerminal")
+  it("carries exit-path restore scaffolding ONLY for the alt-screen buffer", () => {
+    // Inline path restores nothing (its frame IS scrollback history). The
+    // alt-screen path must restore the main buffer on every abnormal end, or
+    // a crash/kill leaves the shell staring at a frozen app screen — hence
+    // crash/kill handlers, but no generic process.on("exit") hook (it cannot
+    // write reliably and would only add a second writer).
     expect(source).not.toContain('process.on("exit"')
+    expect(source).toContain("leaveAltScreen(")
   })
 
   it("states the cost it accepts, so nobody is surprised by it later", () => {

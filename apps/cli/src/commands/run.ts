@@ -21,6 +21,13 @@ export interface RunOptions {
   modelPath?: string
   port?: number
   useInk?: boolean
+  /**
+   * Alternate-screen TUI (codex-style, no scrollback clones). Tri-state:
+   * true forces it on, false forces it off, undefined inherits ambient
+   * TRAYAMBAK_ALT_SCREEN (resolver then defaults ON) so an env-only user
+   * is never clobbered by the flag.
+   */
+  altScreen?: boolean
 }
 
 export const NVIDIA_STATIC_MODELS = [
@@ -163,6 +170,14 @@ export async function runCommand(options: RunOptions): Promise<void> {
         TRAYAMBAK_SESSION_ID: options.sessionId ?? "",
         TRAYAMBAK_MODEL_PATH: options.modelPath ?? "",
         TRAYAMBAK_PORT: options.port != null ? String(options.port) : "",
+        // Tri-state on purpose (see RunOptions.altScreen): only an explicit
+        // flag touches the variable, so ambient TRAYAMBAK_ALT_SCREEN survives
+        // when the flag is absent — and --no-alt-screen actively disables it.
+        ...(options.altScreen === true
+          ? { TRAYAMBAK_ALT_SCREEN: "1" }
+          : options.altScreen === false
+            ? { TRAYAMBAK_ALT_SCREEN: "0" }
+            : {}),
       },
       stdio: "inherit",
     })

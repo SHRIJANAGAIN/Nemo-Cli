@@ -11,7 +11,6 @@ import { TrayambakLogo } from "./TrayambakLogo.js"
 import { ThemeFill } from "./ThemeFill.js"
 
 export interface WelcomeScreenProps {
-  modelName?: string
   permissionMode?: string
   cwd?: string
   tokenCount?: number
@@ -20,11 +19,15 @@ export interface WelcomeScreenProps {
   fillRows?: number
   /** Usable width in cells for those fill rows. */
   width?: number
+  /** One-line mark instead of the full lockup on short viewports: the 8-row
+   *  banner no longer fits the idle frame there, and an overflowing frame
+   *  scrolls on every repaint (that scroll is the clone mechanism). */
+  logoCompact?: boolean
 }
 
-/** Idle-home animation: the clock line breathes through the brand hues
- *  (~0.5 s per step) so the first screen isn't a frozen poster. The TIME is
- *  what changes each tick, so it stays honest wall-clock time, not a loop. */
+/** Idle-home tick (~0.5 s): advances the live clock and drives the starfield
+ *  twinkle, so the first screen isn't a frozen poster. The TIME is what
+ *  changes each tick, so it stays honest wall-clock time, not a loop. */
 const WELCOME_CYCLE_MS = 500
 
 /** Live local clock under the logo — replaces the old static
@@ -59,28 +62,19 @@ export function formatDate(date: Date): string {
   return `${WEEKDAYS[date.getDay()]} ${MONTHS[date.getMonth()]} ${date.getDate()}`
 }
 
-/** Shorten a long absolute path for the status line: keep the drive/root so
- *  the path is never mistaken for a different folder, elide the middle, and
- *  keep the newest `maxSegments` FOLDERS after the root (a shown root spends
- *  one of them). Pure (unit-tested) — no cwd guessing in the render. */
-export function shortPath(cwd: string | undefined, maxSegments = 3): string {
+/** Direct folder name of a path — the only part worth showing on a status
+ *  line. A full path ("C:\Users\engli\my-project") is noise here: the footer
+ *  already carries the full context, and the eye only wants to know WHICH
+ *  folder it is in. Pure (unit-tested) — no cwd guessing in the render. */
+export function shortPath(cwd: string | undefined): string {
   if (!cwd) return ""
   const trimmed = cwd.replace(/[\\/]+$/, "")
   if (!trimmed) return ""
-  const sep = trimmed.includes("\\") ? "\\" : "/"
-  const parts = trimmed.split(sep).filter(Boolean)
-  if (parts.length <= maxSegments) return trimmed
-  // A short first segment is a drive/root ("C:", "/"); anything longer is a
-  // real folder name and must never be promoted to a root.
-  const hasRoot = parts[0]!.length <= 3
-  const root = hasRoot ? parts[0]! : ""
-  const folders = hasRoot ? parts.slice(1) : parts
-  const keep = Math.max(1, hasRoot ? maxSegments - 1 : maxSegments)
-  const tail = folders.slice(-keep).join(sep)
-  return root ? `${root}${sep}...${sep}${tail}` : `...${sep}${tail}`
+  const parts = trimmed.split(/[\\/]+/).filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1]! : trimmed
 }
 
-export function WelcomeScreen({ modelName, cwd, fillRows = 0, width = 80 }: WelcomeScreenProps): ReactNode {
+export function WelcomeScreen({ cwd, fillRows = 0, width = 80, logoCompact = false }: WelcomeScreenProps): ReactNode {
   const theme = useThemeColors()
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -91,8 +85,6 @@ export function WelcomeScreen({ modelName, cwd, fillRows = 0, width = 80 }: Welc
     }, WELCOME_CYCLE_MS)
     return () => clearInterval(timer)
   }, [])
-  const welcomeColors = [theme.info, theme.primary, theme.accent, theme.success]
-  const color = welcomeColors[Math.floor(now.getTime() / WELCOME_CYCLE_MS) % welcomeColors.length]
   const dir = shortPath(cwd)
   return (
     <Box flexDirection="column" paddingX={1} paddingY={1}>
@@ -100,21 +92,20 @@ export function WelcomeScreen({ modelName, cwd, fillRows = 0, width = 80 }: Welc
           its truncate can never claim a border column, and the banner's own
           raster decides where the mark sits. Everything below is left-aligned
           to match it — logo and the status block share one column. */}
-      <TrayambakLogo compact={false} width={width} />
+      <TrayambakLogo compact={logoCompact} width={width} phaseMs={now.getTime()} />
 
+      {/* Time + folder only, all in silver. The model name is deliberately NOT
+          repeated here: the footer chip already states it on every frame, and
+          two copies of the same fact read as clutter. The clock stays a solid
+          silver (no hue cycling) — the twinkling starfield above carries the
+          motion, so the status block reads as calm metal. */}
       <Box flexDirection="column" alignItems="flex-start" marginTop={1}>
-        <Text bold color={color}>
+        <Text bold color={theme.text}>
           {formatDate(now)} {formatClock(now)}
         </Text>
-        {modelName ? (
-          <Text color={theme.textMuted}>
-            {"model  "}
-            {modelName}
-          </Text>
-        ) : null}
         {dir ? (
           <Text color={theme.textMuted}>
-            {"cwd    "}
+            {"Directory  "}
             {dir}
           </Text>
         ) : null}

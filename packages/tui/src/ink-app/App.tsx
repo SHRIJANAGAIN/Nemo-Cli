@@ -44,12 +44,19 @@ import { WhichKey, type WhichKeyAction } from "./WhichKey.js"
 import { cycleMode, enterMode, exitMode, formatModeStack, isPermissionMode } from "./mode-stack.js"
 import { CTRL_C_EXIT_WINDOW_MS, resolveCtrlCPress } from "./keys.js"
 import { formatKeymapMessage } from "../keybindings.js"
+import { formatAbout } from "./about.js"
 import {
   convertToAgentMessages,
   createAgentConfig,
   debugInputLog,
   enableBracketedPaste,
+  liveViewportRows,
+  registerSettleReprintHandler,
+  syncWindowSizeCache,
+  useResizingFlag,
   useTerminalRows,
+  welcomeFillRows,
+  welcomeLogoCompact,
   type TrayambakAppProps,
 } from "./app-bootstrap.js"
 import { createSessionPickerActions } from "./session-picker-actions.js"
@@ -175,6 +182,14 @@ export const TrayambakApp = ({
    *  index and the NEW history prints from item 0 (never continuing the
    *  previous session's scrollback). */
   const [staticEpoch, setStaticEpoch] = useState(0)
+  // Same remount for resize-settle rebuilds (pi's fullRender(true), ported):
+  // after a shrink the guard wipes viewport AND scrollback (3J), and this
+  // reprints the transcript from item 0 so history survives clean instead of
+  // cloned. No-op when nothing was wiped — same messages, same split.
+  useEffect(() => {
+    registerSettleReprintHandler(() => setStaticEpoch((e) => e + 1))
+    return () => registerSettleReprintHandler(undefined)
+  }, [])
   /** True once MessageList has a scrollback prefix (see its onHasPrefix
    *  prop): the root frame then drops its TOP border so the evicted
    *  segment's │ walls continue into the frame's — ONE continuous
@@ -1601,6 +1616,11 @@ export const TrayambakApp = ({
       case "help":
         addSystemMessage(slashHelpText)
         break
+      case "about":
+        // Founding story, dates and the first model: one source of truth in
+        // about.ts so this text cannot drift between surfaces.
+        addSystemMessage(formatAbout(), { ttlMs: 30_000 })
+        break
       case "keymap":
         addSystemMessage(formatKeymapMessage())
         break
@@ -3016,6 +3036,26 @@ export const TrayambakApp = ({
    *  in scrollback, torn border walls mid-reprint, scrollbar jumping). One
    *  spare row keeps every repaint an in-place update. */
   const rows = useTerminalRows()
+  // Live geometry for everything sized in rows: Ink re-renders on resize from
+  // its own listener BEFORE useTerminalRows' setState lands, so `rows` above
+  // is the OLD window for exactly one render. Sizing the frame from it paints
+  // a taller-than-viewport frame that scrolls on every repaint and stacks
+  // clones in scrollback — see liveViewportRows. stdout.rows is already fresh
+  // in that same render, so it wins whenever it is nonzero.
+  //
+  // The sync below covers consoles where 'resize' never fires at all (verified
+  // live): Node's cached columns/rows then freeze at launch size and every
+  // reader — Ink's layout included — paints blind. Refreshing the cache from
+  // the syscall at render start means no paint ever uses a stale window, even
+  // with zero events. Assign-only here, never emit: emitting mid-render would
+  // nest an Ink render inside React's. The guard's poll loop owns emission.
+  syncWindowSizeCache(stdout)
+  const viewportRows = liveViewportRows(stdout?.rows, rows)
+  // Narrow chrome while a resize is settling: full-width rows are what a
+  // shrink-drag re-flows into scrollback, so the welcome block paints short
+  // (unpadded logo, no fills) until quiet. Borders/footer/composer stay —
+  // cheap rows, small damage — and full beauty returns on the next tick.
+  const resizing = useResizingFlag()
 
   const statusBarInfo: StatusBarInfo = {
     model: activeModel,
@@ -3647,7 +3687,7 @@ export const TrayambakApp = ({
       flexDirection="column"
       // One row below the viewport (see the rows comment above): a
       // full-height frame trips Ink's win32 wipe+reprint on every render.
-      height={Math.max(1, rows - 1)}
+      height={Math.max(1, viewportRows - 1)}
       // "Blue outline, halka rounded corners": round → ╭╮╰╯ caps, and the
       // brand-blue primary paints the conversation box's outline (the
       // theme's grey border only backs the inner tool boxes now). While a
@@ -3790,11 +3830,13 @@ export const TrayambakApp = ({
               check let any one of them kill the WelcomeScreen forever
               (observed live: logging in hid the logo on every boot). */}
             {!messages.some((m) => m.role !== "system") ? (
+              /* No modelName prop: the footer chip already names the active
+                 model on every frame, so a second copy here was noise. */
               <WelcomeScreen
-                modelName={activeModel}
                 cwd={config?.cwd ?? bootConfig.cwd}
-                fillRows={Math.max(0, Math.min(rows - 27, 30))}
-                width={Math.max(20, (stdout?.columns ?? 80) - 4)}
+                fillRows={resizing ? 0 : welcomeFillRows(viewportRows)}
+                width={resizing ? 0 : Math.max(20, (stdout?.columns ?? 80) - 4)}
+                logoCompact={welcomeLogoCompact(viewportRows)}
               />
             ) : null}
             {messages.length === 0 ? null : (

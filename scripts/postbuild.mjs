@@ -143,3 +143,17 @@ if (smoke.status !== 0) {
   console.error("postbuild: ink ESM smoke test failed — see above.")
   process.exit(1)
 }
+
+// --- 5. Desktop renderer assets -------------------------------------------
+// The Electron app's UI is plain HTML/CSS/JS that tsc never sees, and
+// publish ships dist/ only — so the renderer must ride along in dist.
+// (main.ts prefers this copy and falls back to the source tree in dev.)
+const rendererSrc = path.join(ROOT, "apps", "desktop", "renderer")
+const rendererDst = path.join(DIST, "apps", "desktop", "renderer")
+if (fs.existsSync(rendererSrc)) {
+  fs.mkdirSync(rendererDst, { recursive: true })
+  for (const asset of fs.readdirSync(rendererSrc)) {
+    fs.copyFileSync(path.join(rendererSrc, asset), path.join(rendererDst, asset))
+  }
+  console.log("postbuild: desktop renderer copied.")
+}

@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import React, { useEffect, useRef, useState, type ReactNode } from "react"
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Box, Static, Text, useStdout } from "ink"
 import { MessageRow } from "./MessageRow.js"
 import { ThinkingOrbs } from "./ThinkingOrbs.js"
@@ -451,7 +451,17 @@ export const MessageList = ({
   // one, never re-printing what Ink already wrote.
   const frontier = Math.max(frontierRef.current, Math.min(firstUnstable, capIdx))
   frontierRef.current = frontier
-  const staticItems = buildStaticItems(messages, frontier, capIdx, splitsRef.current)
+  // Memoized so the ARRAY IDENTITY survives idle re-renders (the 500ms clock,
+  // the cursor blink). Ink's <Static> compares `items` and, on a fresh array
+  // it treats the output as "new static content" → log.clear() → a full-frame
+  // reprint at the cursor every single tick, which stacks a frame clone per
+  // repaint. A stable reference lets Ink's forward-only print index sit still
+  // so only the live tail repaints. Splits are cached in splitsRef, so this
+  // recomputes exactly when the printed prefix really changed.
+  const staticItems = useMemo(
+    () => buildStaticItems(messages, frontier, capIdx, splitsRef.current),
+    [messages, frontier, capIdx],
+  )
 
   // Frame window: ALWAYS the newest messages that fit the row budget, ending
   // at the live tail (auto-scroll only — no offset state exists anywhere, so

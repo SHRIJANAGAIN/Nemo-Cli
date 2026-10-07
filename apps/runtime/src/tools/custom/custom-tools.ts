@@ -229,6 +229,11 @@ export function discoverCustomToolFiles(dirs: readonly string[]): string[] {
       }
       for (const entry of entries) {
         if (entry.isDirectory()) continue
+        // Symlinks (file or dir) are never followed: a link smuggles code
+        // from outside the reviewed tool dirs into the import (same class
+        // as the skill-walker junction guard). `isDirectory()` is false for
+        // links, so this needs its own check.
+        if (entry.isSymbolicLink()) continue
         if (!TOOL_EXTENSIONS.test(entry.name)) continue
         files.push(path.join(full, entry.name))
       }

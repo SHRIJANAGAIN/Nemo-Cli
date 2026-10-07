@@ -90,7 +90,18 @@ function assert(cond, label) {
   }
 }
 
-const welcomePresent = () => stripAnsi(sink).includes("Welcome To Trayambak CLI")
+// The welcome marker: the status block's "Tue Oct 7 15:32:04" line (weekday +
+// month + day + clock) — rendered ONLY by WelcomeScreen while messages.length
+// === 0. The old grep target "Welcome To Trayambak CLI" stopped existing when
+// that banner line was replaced by the live clock, which made this oracle
+// vacuously false at boot and vacuously TRUE after Enter (a swallowed Enter
+// would have passed). Kept as an OR so restoring the banner re-validates.
+const welcomeMarker =
+  /(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d{2}:\d{2}:\d{2}/
+const welcomePresent = () => {
+  const text = stripAnsi(sink)
+  return text.includes("Welcome To Trayambak CLI") || welcomeMarker.test(text)
+}
 
 // Boot the app and confirm the fresh-session state we're about to disturb.
 await wait(600)

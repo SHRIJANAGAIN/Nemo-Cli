@@ -120,7 +120,24 @@ export function createExtractTool(): Tool {
           : ""
         const lines = text.split(/\r?\n/)
         if (Array.isArray(args.lines)) {
-          const [s, e] = args.lines as number[]
+          // `Array.isArray` is true for `[]`, and destructuring `[]` or `["5"]`
+          // yields undefined bounds. `Math.max(0, undefined - 1)` is NaN and
+          // `slice(NaN, NaN)` is `[]`, so the model asked for a line range and got
+          // an empty reply with NO error — the worst shape of failure, because
+          // there is nothing to react to and it reads as "this file has no such
+          // lines" rather than "your argument was malformed".
+          const range = args.lines as unknown[]
+          if (range.length !== 2 || !range.every((n) => typeof n === "number" && Number.isFinite(n))) {
+            return textResult(
+              `Invalid 'lines': expected exactly two numbers [start, end], got ${JSON.stringify(args.lines)}.`,
+              /*isError*/ true,
+            )
+          }
+          const s = range[0] as number
+          const e = range[1] as number
+          if (s > e) {
+            return textResult(`Invalid 'lines': start ${s} is after end ${e}.`, /*isError*/ true)
+          }
           return textResult(lines.slice(Math.max(0, s - 1), Math.min(lines.length, e)).join("\n") + note)
         }
         if (typeof args.heading === "string") {

@@ -85,7 +85,13 @@ const checkScreen = (screen, label) => {
     ok = false
     reasons.push(`O4: viewport top = ${JSON.stringify(top)}`)
   }
-  if (!bottom.startsWith("╰")) {
+  // O4b: the frame's bottom cap must anchor the viewport. The root Box is
+  // deliberately `height={rows-1}` (App.tsx win32 fix: a full-height frame
+  // trips Ink's wipe+reprint), so the cap sits at rows-2 and the last row is
+  // a blank slack row — accept exactly that shape, nothing looser.
+  const slack = bottom.trim() === ""
+  const capAbove = (vp[vp.length - 2] ?? "").startsWith("╰")
+  if (!bottom.startsWith("╰") && !(slack && capAbove)) {
     ok = false
     reasons.push(`O4b: viewport bottom = ${JSON.stringify(bottom)}`)
   }

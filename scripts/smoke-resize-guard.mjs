@@ -7,17 +7,21 @@
  * accumulate in scrollback with drifting indents (stacked logos).
  *
  * The guard (registered BEFORE Ink's own resize listener, so it runs first)
- * must, on a width change only:
+ * must, on a width change or a height SHRINK:
  *   1. blank the viewport + home the cursor (ESC[2J ESC[H);
  *   2. reset Ink's line bookkeeping (log.reset + lastOutput = '');
  * and Ink must then repaint the full frame from (0,0), with any repeat
  * paint in the window being an in-place rewrite (cursor-up) at the CURRENT
- * width — never an appended stack of stale frames, no reliance on the
+ * geometry — never an appended stack of stale frames, no reliance on the
  * stale erase. (Ink legitimately repaints on cursor-blink ticks; those
  * count as the same live frame, not a second one.)
  *
- * Height-only resizes must NOT blank (no re-flow happens; blanking there
- * would just flicker).
+ * Height GROWTH must NOT blank: the frame keeps its top row and grows
+ * downward inside the taller window (no re-flow, no scroll) — blanking
+ * there would just flicker. A height SHRINK must blank: the frame is
+ * painted rows-1 tall, so a shorter window leaves it OUTLIVING the window
+ * and every repaint scrolls another copy into scrollback (the boot-clone
+ * leak reported live: dozens of identical Welcome frames stacked up).
  *
  * Run: node scripts/smoke-resize-guard.mjs
  */
@@ -38,7 +42,14 @@ const stripAnsi = (text) =>
     .replace(/\x1b[=>]/g, "")
 
 const BLANK = "\x1b[2J\x1b[H"
-const WELCOME = "Welcome To Trayambak CLI"
+// Frame anchor: the composer placeholder row. The old "Welcome To Trayambak
+// CLI" banner line was deliberately replaced by the live clock
+// (WelcomeScreen.tsx formatClock) — that literal no longer renders, and
+// anchoring on it failed this smoke's boot check and cascaded 5 fails
+// against a healthy build. The composer row appears exactly once per frame
+// and spans the frame width, which is what the stack/stale-width checks
+// below measure (same anchor diag-boot-frame-leak.mjs counts).
+const ANCHOR = "Ask Trayambak to do anything"
 
 let failures = 0
 const check = (ok, label) => {
@@ -83,8 +94,8 @@ resizeGuard.attach(instance)
 // missing content rather than on the resize behaviour under test.
 {
   const deadline = Date.now() + 10_000
-  while (Date.now() < deadline && !stripAnsi(sink).includes(WELCOME)) await wait(100)
-  check(stripAnsi(sink).includes(WELCOME), "boot completes within 10s (welcome frame renders)")
+  while (Date.now() < deadline && !stripAnsi(sink).includes(ANCHOR)) await wait(100)
+  check(stripAnsi(sink).includes(ANCHOR), "boot completes within 10s (welcome frame renders)")
 }
 
 // ── 1. Width DEcrease: must blank + full repaint ───────────────────────
@@ -98,16 +109,16 @@ check(blankAt !== -1, "width decrease → viewport blanked (ESC[2J ESC[H)")
 if (blankAt !== -1) {
   const repaint = post.slice(blankAt + BLANK.length)
   check(
-    stripAnsi(repaint).includes(WELCOME),
+    stripAnsi(repaint).includes(ANCHOR),
     "width decrease → full frame repainted after the blank (no stale-erase reliance)",
   )
-  const welcomes = (stripAnsi(post).match(new RegExp(WELCOME, "g")) ?? []).length
+  const welcomes = (stripAnsi(post).match(new RegExp(ANCHOR, "g")) ?? []).length
   // Detail: border/welcome line widths show whether the extra frame is a
   // stale-width (pre-resize) render or a second post-resize render.
   const postLines = stripAnsi(post).split("\n")
   const detail = JSON.stringify({
     borders: postLines.filter((l) => l.startsWith("╭")).map((l) => l.length),
-    welcomes: postLines.filter((l) => l.includes(WELCOME)).map((l) => l.length),
+    welcomes: postLines.filter((l) => l.includes(ANCHOR)).map((l) => l.length),
   })
   // A repeat welcome is fine ONLY as an in-place rewrite: Ink legitimately
   // re-paints on cursor-blink/state ticks, but every repeat after the first
@@ -116,7 +127,7 @@ if (blankAt !== -1) {
   // erase counts → stacked logos) — an append has no rewind, and its
   // remnants keep the OLD width.
   const rawPost = post
-  const welcomeRe = new RegExp(WELCOME, "g")
+  const welcomeRe = new RegExp(ANCHOR, "g")
   let prevEnd = 0
   let seen = 0
   let stacked = false
@@ -126,7 +137,7 @@ if (blankAt !== -1) {
     prevEnd = wm.index + wm[0].length
     seen++
   }
-  const welcomeWidths = postLines.filter((l) => l.includes(WELCOME)).map((l) => l.length)
+  const welcomeWidths = postLines.filter((l) => l.includes(ANCHOR)).map((l) => l.length)
   const staleWidth = welcomeWidths.some((w) => w !== stdout.columns)
   check(
     !stacked && !staleWidth && welcomes >= 1,
@@ -144,16 +155,77 @@ blankAt = post.indexOf(BLANK)
 check(blankAt !== -1, "width increase → viewport blanked (Ink's own handler never does this)")
 if (blankAt !== -1) {
   const repaint = post.slice(blankAt + BLANK.length)
-  check(stripAnsi(repaint).includes(WELCOME), "width increase → full frame repainted after the blank")
+  check(stripAnsi(repaint).includes(ANCHOR), "width increase → full frame repainted after the blank")
 }
 
-// ── 3. Height-only resize: must NOT blank (no re-flow → no desync) ─────
+// ── 2b. Width DRAG (rapid changes): one blank, re-homes, no stacked frames ──
+// The live report: every terminal drag stacked one clean cloned frame behind
+// the live one. A drag fires many resize events inside one rate-limit window;
+// the first blanks, and every skipped one used to leave Ink repainting from
+// the bottom cursor with a stale line count — past a shrink that scrolls, so
+// each skipped repaint pushed rows into scrollback. Width shrinks now blank
+// on EVERY step (never throttled: the terminal-side re-flow push lands before
+// the app can paint a byte, so only a blank that arrives first preempts it);
+// blank-less re-homing remains for growth inside the rate limit.
+// Exactly one blank per shrink step plus the settle blank, no append.
+mark = sink.length
+for (const w of [230, 210, 190, 170]) {
+  stdout.columns = w
+  stdout.emit("resize")
+}
+// The settle blank lands at +150ms and only the app's 500ms idle tick puts
+// the frame back (by design: "blank now, clean frame straight back"). The
+// capture must therefore span a FULL tick past the settle (worst case a tick
+// fired just before the drag, so the next one is at +500ms) or the snapshot
+// races an intentionally empty screen and reads tops=0. 900ms gives margin.
+await wait(900)
+post = sink.slice(mark)
+{
+  // Every shrink step blanks unconditionally (a narrower window re-flows
+  // full-width rows and the surplus scrolls terminal-side — only a blank
+  // that lands first preempts it), plus the settle blank 150ms after the
+  // last event (the wait below covers it). Nothing throttled, nothing
+  // re-homed on a shrink drag.
+  const blanks = post.split(BLANK).length - 1
+  check(blanks === 5, `width drag → blank per shrink step + settle blank (got ${blanks})`)
+  const welcomeRe = new RegExp(ANCHOR, "g")
+  let prevEnd = 0
+  let seen = 0
+  let stacked = false
+  let wm
+  while ((wm = welcomeRe.exec(post)) !== null) {
+    if (seen > 0 && !/\x1b\[[0-9]*[AB]|\x1b\[2J|\x1b\[H/.test(post.slice(prevEnd, wm.index))) stacked = true
+    prevEnd = wm.index + wm[0].length
+    seen++
+  }
+  // Re-homes (ESC[H without erase) are allowed separators: they reposition
+  // without scrolling, so a repeat after one is an overwrite, not an append.
+  // Intermediate widths paint superseded frames whose rows legitimately appear
+  // in the bytes, so only the simulator — viewport plus scrollback — can say
+  // whether the user saw one frame or a stack. Fresh simulator starting at
+  // the drag's first blank (which wipes the viewport), so anything in its
+  // scrollback at the end came from the drag itself.
+  const { createScreen } = await import("./vt-screen.mjs")
+  const screen = createScreen(230, 40)
+  screen.write(post)
+  const full = screen.snapshotFull()
+  const isRootTop = (line) => {
+    const t = line.trimEnd()
+    if (!t.startsWith("╭")) return false
+    return [...t].length >= Math.floor(170 * 0.8)
+  }
+  const tops = full.filter(isRootTop).length
+  const anchors = full.filter((l) => l.includes(ANCHOR)).length
+  check(tops === 1 && anchors === 1, `width drag → simulator shows exactly one frame, empty scrollback (tops=${tops} anchors=${anchors})`)
+}
+
+// ── 3. Height GROWTH: must NOT blank (frame grows down; no re-flow) ──────
 mark = sink.length
 stdout.rows = 48 // INCREASE: the frame must grow downward to fill it
 stdout.emit("resize")
 await wait(300)
 post = sink.slice(mark)
-check(!post.includes(BLANK), "height-only resize → no blank (avoids needless flicker)")
+check(!post.includes(BLANK), "height growth → no blank (avoids needless flicker)")
 // ...and the frame must actually reach the new bottom. Root height is
 // {rows - 1} by deliberate design (App.tsx: ONE slack row below the
 // viewport keeps ink 7.1.1's win32 path off the fullscreen clear-storm —
@@ -182,6 +254,20 @@ check(!post.includes(BLANK), "height-only resize → no blank (avoids needless f
   )
 }
 
+// ── 3b. Height SHRINK: MUST blank — the frame-outlives-window clone leak ──
+// The frame is painted rows-1 tall, so a shorter window leaves it taller
+// than the window: every later repaint writes past the last row, the
+// console scrolls, and a copy of the frame lands in scrollback per repaint
+// (the live report: dozens of identical Welcome frames stacked right after
+// startup — the start-up settle is exactly one of these shrinks). The
+// anchor re-homes the next paint at the new geometry.
+mark = sink.length
+stdout.rows = 40 // SHRINK from 48
+stdout.emit("resize")
+await wait(300)
+post = sink.slice(mark)
+check(post.includes(BLANK), "height shrink → viewport blanked (frame-outlives-window clone leak)")
+
 // ── 4. Subsequent renders still work (counters not left broken) ────────
 mark = sink.length
 instance.rerender(
@@ -192,7 +278,7 @@ instance.rerender(
 await wait(300)
 post = stripAnsi(sink.slice(mark))
 check(
-  post.length === 0 || post.includes(WELCOME) || post.includes("TRAYAMBAK"),
+  post.length === 0 || post.includes(ANCHOR) || post.includes("TRAYAMBAK"),
   "post-resize re-render still emits a coherent frame",
 )
 

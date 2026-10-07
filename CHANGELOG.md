@@ -5,17 +5,361 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 ## [Unreleased]
 
+- **Welcome screen is now wordmark + starfield: the T is gone, silver stars
+  twinkle above TRAYAMBAK CLI.** The hexagon ring and T monogram are retired —
+  the wordmark alone carries the brand, and the S1-TITANIUM identity lives in
+  metal and stars. The sky is a seeded scatter (same stars every regeneration;
+  an unseeded field would wander and fail its own tests), tiered dim steel to
+  spark white. The idle animation is now a true twinkle: each cell breathes on
+  a position-hashed phase, scaled by its own brightness, so sparks flash while
+  the letters breathe. The `cwd` label is now `Directory`, and the clock is a
+  steady silver — the sky carries the motion, the status block stays calm
+  metal. Pinned by starfield composition tests, twinkle-gradient tests, and a
+  Directory-label render test.
+
+- **Resize settle now clears scrollback and reprints the transcript (pi's
+  `fullRender(true)`, ported).** Viewport blanks alone cannot reach scrollback
+  damage: reflow splits and one over-tall paint push rows there terminal-side,
+  before any app paint. So after any shrink settles, the guard wipes viewport
+  AND scrollback (ED3) and App remounts Static via the existing `staticEpoch`
+  — the transcript reprints from item 0, history survives clean instead of
+  cloned. Order is load-bearing (paint-before-clear would be wiped, clear
+  without reprint would eat history); growth-only settles stay quiet.
+  Framework-free bridge (no props/events across the mount boundary), same
+  no-owner stand-down as the blank, debounced by the existing settle.
+
+- **Fixed: minimize-to-taskbar leaves permanent viewport residue.** Minimizing
+  transiently reports 0x0 / letterbox sizes; accepting one collapses every
+  paint (and every erase count with it), and the restore repaint then erases
+  only those few rows — the rest sits as residue no later repaint touches.
+  Sizes under 20x10 are now refused so paints keep last-good geometry (a
+  too-big paint into a hidden window is harmless; a too-small one poisons
+  everything after it). Pinned by floor unit tests.
+
+- **Fixed (top clone): the TUI now runs on the terminal's alternate buffer by
+  default, codex-style — `--alt-screen` / `TRAYAMBAK_ALT_SCREEN` to force it,
+  `--no-alt-screen` / `TRAYAMBAK_ALT_SCREEN=0` to opt out.** This is the
+  answer to "why does codex never clone": the alternate buffer has no
+  scrollback, so resizes, over-height paints and stale erases can only ever
+  disturb the live viewport — clones are structurally impossible there, no
+  per-case fixes needed. Reproduced both sides with
+  `scripts/diag-boot-clone.mjs`: the inline run's width shrink strands a
+  full frame (37 rows) into scrollback where no `2J` can reach it, while the
+  same run under `?1049h` ends with the primary scrollback untouched (0
+  rows) and exactly one frame on screen. The price, stated plainly: with no
+  scrollback the device scrollbar and wheel go dead for the session, and
+  history that leaves the frame cannot be scrolled back to (rollouts stay
+  listable/resumable). Inline mode — terminal scrollback, clones included —
+  is reachable only by explicit opt-out.
+  Wiring: `--alt-screen` / `--no-alt-screen` on run/chat/resume (tri-state —
+  absent inherits ambient env, else the resolver's default ON), translated to env for the spawned REPL;
+  direct `ink-repl` users set the env var. Entry/exit is TTY-gated (never into
+  a pipe), skips the scrollback-nuking startup clear (fresh blank buffer),
+  always restores the main buffer plus caret — normal exit, crash
+  (uncaughtException/unhandledRejection print then exit 1), and SIGINT/SIGTERM
+  — so a killed run can never strand the shell in the alt buffer. Pinned by
+  resolver unit tests and entry-point source assertions.
+
+- **Known issue: PowerShell 5.1 under Windows Terminal never delivers window
+  resizes to console apps.** Verified live: stretching the window emits zero
+  `resize` events and freezes both `columns`/`rows` and the `getWindowSize()`
+  syscall at launch size — while the same Node one-liner in `cmd.exe` tracks
+  resizes fine, and `$Host.UI.RawUI.WindowSize` tracks fine. The app then
+  paints a launch-size frame into a smaller window on every repaint, stacking
+  intact clones into scrollback. This is the host's plumbing, not the app's:
+  no in-app code can fit a window the OS never reports. Workaround: run the
+  CLI from `cmd.exe` (verified) or PowerShell 7. The 250ms syscall poll and
+  render-time cache refresh stay in place — they converge instantly on hosts
+  where the syscall moves, and are silent no-ops elsewhere.
+
+- **New: Trayambak Desktop — an Electron chat app over the same Agent the
+  CLI, TUI, and ACP server run.** `npm run desktop` builds and launches it
+  (`npm run desktop:quick` when dist is current): context-isolated renderer
+  with no Node access, a typed IPC bridge (single-flight prompts,
+  cancel-aborts-the-run, one agent per workspace with a folder picker),
+  assistant text rendered as markdown while tool output stays verbatim,
+  links protocol-limited, `window.open` denied to the system browser. The
+  bridge contract and the exact renderer markdown bytes the app loads are
+  unit-tested with no Electron in the test loop; postbuild stages the
+  renderer into dist/ so publish ships it.
+
+- **Fixed: ACP `session/cancel` never aborted the run, and an idle cancel
+  poisoned the next prompt.** Attack-round finding: the handler only set a
+  suppression flag, so the model kept generating to completion (tokens
+  spent, answer discarded) — and a cancel arriving with no prompt in
+  flight left the flag set, so the NEXT prompt on that session had its
+  events suppressed from the first delta and its reply mislabeled
+  `cancelled`. Each in-flight prompt now owns an `AbortController` that
+  `session/cancel` actually aborts (the run stops where it stands and
+  replies `cancelled`), while a cancel with no prompt in flight is a
+  no-op — still idempotently acknowledged per ACP. Pinned by a new test
+  covering abort-on-cancel and idle-cancel idempotency; the three
+  existing cancel pins pass unchanged.
+
+- **Fixed: the `doctor` info test asserted a baseUrl the test never set.**
+  It pinned the NVIDIA literal while resolution actually comes from
+  DEFAULTS/the machine profile — ambient profile or a default flip (now
+  Gemini) could turn it red on any customized machine, exactly the
+  home-dir dependency AGENTS.md forbids. It now pins an explicit
+  project-level `baseUrl` (which also dodges `sanitizeConfig`'s trailing
+  `/v1` strip), sandboxes HOME/USERPROFILE for the whole file instead of
+  only during import, and clears ambient `TRAYAMBAK_HOME` through the
+  existing env-key loop.
+
+- **Fixed: resize clones on consoles where 'resize' never fires.** Verified
+  live on the reporter's box: stretching the whole window emits zero resize
+  events — the app only learns the window size at launch, then paints a
+  launch-size frame into a smaller window forever, and every 500ms repaint
+  scrolls intact clones into scrollback. No event-driven code (guard, Ink,
+  React state) can ever see the change there, so the guard now polls the
+  `getWindowSize()` syscall every 250ms and emits a synthetic resize on real
+  change: Ink, the guard listener, and React state follow the exact same path
+  as a real event. Silent where unsupported (no syscall: pipes, tests) or
+  unchanged, and a strict no-op where the syscall itself never moves (then
+  nothing in-app can know the window — same as before, never worse). Render
+  paths additionally refresh Node's cache from the syscall at paint time
+  (assign-only, never emit mid-render), so Ink's own layout — which reads the
+  cache, never the syscall — cannot lay out for a dead window. Pinned by unit tests on the syscall readers plus a poll test proving
+  the synthetic event anchors end to end, and by the render-fit tests proving
+  no paint exceeds the live window.
+
+- **Fixed: resizing the terminal stacked full Welcome frames in scrollback
+  (the "resize clones").** Root cause, verified by rendering the old sizing
+  into a shrunk window: Ink re-renders on resize from its OWN listener, which
+  runs before `useTerminalRows`' setState lands — so the first post-resize
+  render sized the root frame and the welcome fill from React state describing
+  a window that no longer exists. After any shrink that frame is taller than
+  the viewport, and on Windows that is not just a scroll: Ink takes its
+  `clearTerminal` wipe+reprint path for every frame at or above viewport
+  height, which is exactly the stacked copy-paste frames (with torn borders)
+  the codebase already knew from the boot leak. The 500ms idle clock then
+  repeated the wipe on every tick, so one resize kept cloning until the next
+  restart.
+
+  The frame is now sized from live geometry (`liveViewportRows`: `stdout.rows`
+  is already fresh in that same render, React state is one render behind —
+  the same pattern MessageList already used for its row budget), the welcome
+  fill is recalibrated so the idle frame EXACTLY fills the viewport (never
+  above it), and below 22 rows the welcome screen falls back to its one-line
+  compact mark instead of overflowing (the theme picker's trade, applied to
+  the welcome screen). The logo asset also lost its 4 blank edge rows (12 → 8
+  rows, `FULL_LOGO_ROWS` follows the asset as before), which were dead frame
+  budget pushing short viewports past the window.
+
+  Pinned by: unit tests on the budget helpers, render tests proving a real
+  idle frame (real logo, real fill math) fits viewports from 20 to 40 rows —
+  including the exact failure, a live 27-row window with state still holding
+  40 — and a source assertion that App wires height, fill and compactness off
+  the live value. A negative control rendering the old state-driven sizing
+  measured 77 screen rows into a 27-row window, i.e. the clone mechanism
+  itself.
+
+  A second, independent clone source lived in the resize guard itself: a drag
+  fires many resize events inside one rate-limit window, and every skipped
+  event left Ink repainting from the bottom cursor with a stale line count —
+  past a shrink that scrolls, stacking one clean cloned frame per drag behind
+  the live one. The policy is now split by damage potential: a width shrink
+  ALWAYS blanks (a narrower window re-flows full-width rows terminal-side and
+  only a blank that lands first preempts the scroll — never throttled, strobe
+  cost bounded by the drag itself), while growth and height-only shrinks keep
+  the throttled blank and skipped events re-home the cursor so their repaints
+  overwrite from the top. Baselines move on every genuine change so the next
+  event compares fresh. Finally, while a resize is settling the welcome block
+  paints narrow chrome (unpadded logo, no fill rows): full-width rows are what
+  a shrink-drag re-flows into scrollback, so fewer of them means
+  proportionally less residue — borders/footer/composer stay, and full beauty
+  returns on the next tick after quiet.
+
+- **Fixed: a black band painted straight through the logo's wordmark.** The
+  banner sets a new foreground before every ink cell, and the `\x1b[0m` that
+  precedes each one also clears the BACKGROUND. Any blank cell after such a
+  reset therefore fell back to the terminal's default backdrop — black. It went
+  unnoticed while the art was a lone hexagon floating in a sea of trailing
+  padding, because `padLogoToTheme` filled that trailing run and the few
+  interior gaps were too small to notice. With the lockup's wordmark across the
+  row it became a solid black rectangle behind the letters, since the gaps
+  BETWEEN glyphs are blanks too, not just the trailing ones.
+
+  `padLogoToTheme` now re-asserts the theme background after every reset inside
+  a row, so every blank in the banner is themed. Two new tests pin it: one
+  asserts the exact payload for an interior gap, and one walks the real lockup
+  tracking whether a background is active and fails on any blank that is not —
+  verified by reverting the fix and watching four tests fail.
+
+  A third test renders the whole welcome screen with the real baked banner and
+  does the same walk over Ink's output, because a correctly themed payload can
+  still be dropped by the renderer.
+
+- **The logo is now a full lockup: hexagon + a complete T monogram, with the
+  TRAYAMBAK CLI wordmark in silver alongside.** The wordmark is set from a
+  hand-drawn 5-row bitmap font and emitted as runs of full blocks — no
+  sampling, so the letterforms are crisp by construction rather than crisp by
+  luck. It is silver (an all-metal palette, lit from the upper right), replacing
+  the blue gradient and the cyan monogram accent: every one of the 165 inked
+  cells is now near-neutral, which the tests assert rather than assume.
+
+  The monogram is sized to FILL the ring's inner opening. The earlier T had a
+  narrow bar and a short stem, which read as a bar with a tail rather than a
+  letter; the bar is now 56% of the circumradius and the stem runs from the
+  bar's centreline down to the ring's lower inner flat, sharing a full row with
+  the bar so the joint cannot seam.
+
+  Height is unchanged at 12 rows — that is a budget, not a preference, since the
+  theme picker drops to a compact mark below ~28 terminal rows.
+
+- **Fixed: the published CLI crashed on every launch with
+  `SyntaxError: The requested module '../keybindings.js' does not provide an
+  export named 'GLOBAL_SHORTCUTS'`.** `fix-esm-imports.js` rewrote a flattened
+  module's specifier back onto its CommonJS twin. Only
+  `../ui/theme.js` was ever special-cased; every other `../x.js` was returned
+  unchanged, so `WhichKey.js` and `App.js` kept pointing at
+  `dist/packages/tui/src/keybindings.js` — which exists, so every path-existence
+  check passed, while the actual import died.
+
+  It survived because it is **not reproducible on a plain build**. Node's
+  CJS-ESM interop serves those named exports, so `npm run build` is green. The
+  obfuscator rewrites `exports.GLOBAL_SHORTCUTS =` to
+  `exports['GLOBAL_SHORTCUTS']=`, and `cjs-module-lexer` — which decides what a
+  CJS module exposes to ESM — only sometimes recognises the *chained* form
+  `exports['A']=exports['B']=void 0`. So the failure is build-dependent, which
+  is why it reached a release.
+
+  Three fixes, each closing a hole the previous one left open:
+
+  - **Rebase flattened specifiers.** A `../x.js` that resolves *outside* the flat
+    ESM root, and whose basename the flatten actually copied across, becomes
+    `./x.js`. The ESM build no longer depends on interop at all, so the outcome
+    is deterministic.
+  - **`destDir` is now absolute.** Every containment test compared it against
+    `path.resolve()` output, so the comparison never matched and the guard
+    silently degraded to "rewrite every `../`". That broke the surviving
+    `ink-app` subdirectories — `UserToolResultMessage/` imports
+    `../MessageResponse.js` and is correct.
+  - **Membership, not `existsSync`.** Asking "does that basename exist at the
+    root?" has a dangerous wrong answer on a case-insensitive filesystem:
+    `ink-app/Spinner.tsx` and `ui/spinner.ts` are both `spinner.js`, and
+    `existsSync` answered for the wrong one — rebasing the wave spinner onto its
+    own sibling. The set is now built from what the copy loop actually wrote.
+
+    That set was briefly built with an `existsSync` filter, which silently
+    emptied it: the nested tree is deleted before the filter runs, so every
+    source path was already gone. The guard then looked correct and fired on
+    nothing.
+
+  **Backstop:** `verify-pack` now imports the five obfuscated entry points,
+  including `App.js`, which transitively pulls in the whole ink-app graph. A
+  static rule cannot catch this class — the broken specifier and the working
+  `apps/runtime` interop imports are indistinguishable until the code runs — so
+  the gate runs the published code. Note what is deliberately NOT there: an
+  earlier attempt failed the build on any specifier leaving the ESM root, which
+  flagged `App.js -> ../../../../apps/runtime/*`, and those are fine.
+
+- **The logo is drawn from maths now, not from a photo — the dotted,
+  unstructured look is gone for good.** `skt-icon.jpeg` is retired as the
+  source. Rasterising it could never ship a clean mark, and the reason was
+  structural rather than a tuning problem: JPEG is lossy and resampling adds
+  more error, so every pixel on the silhouette rim is genuinely uncertain and
+  ANY threshold splits them arbitrarily. That is why the edges kept growing
+  single-dot spikes and single-dot bites — the spikes were noise, not shape.
+  Braille made it worse rather than better: 4 pixels per cell magnifies that
+  rim noise 4x. Three consecutive fixes (box sampling the source footprint, a
+  CLOSE+OPEN pass on the mask, retuning the ramp) each moved the noise
+  somewhere else instead of removing it, because there was never structure there
+  to recover — just a thresholded photograph.
+
+  `scripts/make-logo-hex.mjs` now draws a **hexagon ring around a T monogram**
+  procedurally: an exact signed-distance hexagon (Inigo Quilez's fold) with a
+  cyan T inside it. No image, no threshold, no noise — the same inputs always
+  produce the same glyphs, so the mark cannot regress at another terminal size
+  or after an icon edit. Three details carry it:
+
+  - **Layout is in physical units**, not dot coordinates. A terminal cell is
+    twice as tall as it is wide, so laying out in raw dots squashes every curve
+    into an ellipse.
+  - **Glyphs come from quadrant blocks (U+2596..U+259F), half blocks and the
+    full block**, whose solid corners meet across cell boundaries — that is what
+    makes the ring read as one continuous stroke instead of a dot matrix. The
+    glyph table is explicit: there are 16 quadrant patterns but the range only
+    defines 10, so `0x2596 + bits` walks off the end of it and prints filled
+    and empty squares.
+  - **Every stroke is snapped to a whole cell, and each stroke's centre is
+    ODD.** A stroke of 2.1 units is 5% wider than one cell, so its edges land a
+    fraction inside every row; an even-centred stroke does the same. Both
+    printed the horizontal bar as slivers rather than blocks.
+
+  Colour: steel→silver ring, cyan monogram. At 12 rows it fits the theme
+  picker's fixed frame with a usable list — at 16 rows the picker dropped to its
+  compact mark and the list vanished, so `FULL_LOGO_ROWS` is now asserted
+  against the real asset. The three raster scripts are deleted rather than
+  deprecated, and `logoShimmer` was retargeted at the new glyph ranges: it still
+  matched braille, so the idle animation had silently become a no-op.
+
+- **Logo corners are clean now — no more single-dot spikes or bites on the
+  silhouette.** Two independent causes. First, the pixel dump took a SINGLE
+  source sample per output pixel while downsampling a ~1000px icon to 112, so
+  each probe jumped ~9px and landed on the icon's anti-aliased rim at random;
+  one dot lit while its neighbour did not, which is what produced the ragged
+  corners. It now box-averages the true source footprint, so each cell measures
+  its own area. Second, the mask gets a morphological CLOSE (fills 1px notches,
+  rounds concave corners) then OPEN (drops 1px spikes, rounds convex corners) —
+  rim features thinner than ~2px are exactly what reads as noise at this size.
+  Both directions of the fix are pinned: the asset must have ZERO dots detached
+  from the silhouette, and the outer rows must not flood. The first erode pass
+  counted out-of-grid neighbours as ink, which weakened it at the border and let
+  the dilate ending OPEN grow a fresh ring of ink there — top and bottom rows
+  rendered solid across the full width (14 rows instead of 12). Erode now treats
+  outside as background, making it the exact inverse of dilate.
+
+- **Logo recoloured to blue + silver only, on a diagonal gradient.** The mark
+  was mapped from the icon's own luminance, but that shading is nearly flat
+  through the body (mean 0.43..0.54), so the ramp collapsed 358 of 401 cells
+  onto the dark navy stop and the mark read as a dark blob. The gradient is now
+  positional — navy lower-left, brand blue through the middle, silver
+  upper-right, i.e. one light source implied from the top-right — with the
+  source luminance demoted to a 0.22-weight modulation so the icon's texture
+  survives without driving the gradient. A 0.55 gamma bend keeps the dark end
+  small. Brand colours only: deep navy, brand blue, desaturated silver.
+
+- **The welcome status block shows the folder NAME, not the path, and no longer
+  repeats the model.** `shortPath` now returns the direct directory name
+  (`trayambak`, not `C:\Users\engli\trayambak`) — the footer chip already
+  carries the full context, so the path was noise in a narrow column. The
+  `modelName` prop and its line under the logo are gone for the same reason:
+  the footer names the active model on every frame. Under the logo: live clock,
+  then the folder name. Both facts are pinned by render tests against a real
+  Ink frame, not just the pure helper.
+
+- **Logo is now a BRAILLE render (`U+2800`..`U+28FF`) with a subtle idle
+  shimmer.** A half-block cell (`▀`) carries one pixel column and two rows,
+  which is why the mark stair-stepped along every edge no matter how the
+  raster was tuned; a braille cell carries two columns and four rows — 4x the
+  detail at the SAME terminal width. It also reads as a deliberate dot-matrix
+  identity rather than a generic block logo, and it matches the silver orbs
+  already in the UI. The eye is left as the enclosed background the source
+  actually draws (the white ring dissolved into the paper background at any
+  block resolution, which is what produced the ragged "bite" and then the fake
+  pupil). `logoShimmer` breathes a slow diagonal highlight (±14%, 6s period)
+  driven by the welcome screen's existing tick, so idle repaint cost is
+  unchanged. Pinned by 24 logo tests plus the theme-picker layout probes,
+  which now look for braille instead of half-blocks.
+
 - **Logo rebuilt from `skt-icon.jpeg`, and the black box around it is gone.**
-  The banner is now re-rasterized from the reference icon (`scripts/make-logo.ps1`,
-  11 rows × 48 cols, two vertical pixels per row via U+2580) so the cloud, the
-  eye ring and the stem all read cleanly. Two earlier attempts are recorded as
-  wrong turns worth keeping: deleting the baked backgrounds shredded the mark
-  (a ▀ cell holds two vertical pixels, so a blank bottom half = stripes), and
-  keeping them left a black rectangle — every row ended in a reset, so the
-  untouched remainder fell back to the terminal's black instead of the theme.
-  `padLogoToTheme` now paints each row's remainder with the active theme
-  background. Pinned by 15 logo tests (`hexToSgr`, `padLogoToTheme`, raster
-  shape, per-row reset).
+  Pipeline is `scripts/make-logo-grid.ps1` (pixel dump — PowerShell only because
+  System.Drawing is the only decoder here) feeding `scripts/make-logo.mjs`
+  (silhouette + colour, in Node where it is testable): 64 cols × 14 rows, two
+  vertical pixels per row via U+2580, so the cloud, the eye ring and the stem
+  all read. The mask is reduced by COVERAGE (a cell is ink only when at least
+  2 of its 4 samples are) — "any ink pixel" turned every anti-aliased edge
+  pixel into a full cell and produced the speckled, stair-stepped silhouette.
+  Four wrong turns are recorded because each shipped a broken mark: deleting
+  the baked backgrounds shredded it (a ▀ cell holds two vertical pixels); keeping
+  them painted a black rectangle (every row ends in a reset, so the remainder
+  fell back to the terminal's black — `padLogoToTheme` now paints it with the
+  theme); a brightness test for "paper background" deleted the eye, because the
+  ring is white too — the silhouette is now found by flood fill from the border,
+  on a 2x grid, with the cutoff at true white so the fill cannot leak through
+  the ring's anti-aliased pixels; and 3-of-4 coverage kept the edges but
+  dissolved the one-cell-thick ring. Pinned by 20 logo tests.
 - **FIXED: the app never painted the theme background ("background is
   always black").** The root frame carried no `backgroundColor`, so Ink
   rendered on the terminal's own backdrop and every `/theme` looked identical.
