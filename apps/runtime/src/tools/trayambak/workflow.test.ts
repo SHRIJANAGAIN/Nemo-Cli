@@ -10,6 +10,7 @@ import * as path from "path"
 import { describe, expect, it } from "vitest"
 import {
   createRunWorkflowTool,
+  executeWorkflow,
   executeWorkflowResumed,
   loadWorkflowRun,
   saveWorkflowRun,
@@ -52,6 +53,27 @@ describe("validateWorkflow", () => {
       { id: "a", action: "y" },
     ]
     expect(validateWorkflow(d).some((e) => e.includes("Duplicate"))).toBe(true)
+  })
+
+  it("reports missing steps as a validation error instead of crashing", () => {
+    // validateWorkflow read `def.steps.length` AFTER the Array.isArray miss had
+    // already pushed its error — a JSON workflow without `steps` threw a
+    // TypeError out of the tool instead of returning the validation report.
+    const errors = validateWorkflow({ name: "x", description: "y" } as WorkflowDefinition)
+    expect(errors.some((e) => e.includes("at least one step"))).toBe(true)
+  })
+})
+
+describe("executeWorkflow (steps-less definition)", () => {
+  it("does not crash on a definition missing steps", () => {
+    const res = executeWorkflow({ name: "x", description: "y" } as WorkflowDefinition, { prompt: "" })
+    expect(res.results).toHaveLength(0)
+  })
+
+  it("does not crash in the resumed executor either", () => {
+    const res = executeWorkflowResumed({ name: "x", description: "y" } as WorkflowDefinition, { prompt: "" })
+    expect(res.results).toHaveLength(0)
+    expect(res.reused).toBe(0)
   })
 })
 

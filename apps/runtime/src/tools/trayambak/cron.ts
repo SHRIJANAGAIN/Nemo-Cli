@@ -55,14 +55,21 @@ function matchField(field: string, value: number): boolean {
 }
 
 function computeNextFire(cron: string, from: Date = new Date()): number {
-  for (let i = 0; i < 60 * 24 * 7; i++) {
+  // Scan a full 4-year leap cycle minute-by-minute. The old 7-day horizon
+  // missed rare-but-valid expressions (Feb 29, leap-year combos) and pulled
+  // them to the +24h fallback — which then re-missed on every reschedule, so
+  // the job fired EVERY DAY (the round-13 garbage-cron bug, in disguise, for
+  // crons that pass validation). Impossible dates (Feb 30) fall out to a
+  // far-future sentinel: they can never match, so they must never fire.
+  const horizonMs = 4 * 366 * 24 * 60 * 60 * 1000
+  for (let i = 0; i < 60 * 24 * 366 * 4; i++) {
     const candidate = new Date(from.getTime() + i * 60_000)
     candidate.setSeconds(0, 0)
     if (cronMatches(cron, candidate)) {
       return candidate.getTime()
     }
   }
-  return from.getTime() + 24 * 60 * 60 * 1000
+  return from.getTime() + horizonMs
 }
 
 /* ───────────────────── create-time validation ───────────────────── */

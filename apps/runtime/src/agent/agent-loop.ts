@@ -687,7 +687,9 @@ async function executeToolCalls(
     // advances) — fall back to serial instead of dropping work.
     const limit = Math.max(1, Number.isFinite(rawLimit) ? (rawLimit as number) : 1)
     for (let i = 0; i < calls.length; i += limit) {
-      const batch = await Promise.all(calls.slice(i, i + limit).map((c) => runOneTool(c, run, state, maxToolCalls)))
+      const batch = await Promise.all(
+        calls.slice(i, i + limit).map((c) => runOneTool(c, run, state, maxToolCalls)),
+      )
       for (const r of batch) if (r) results.push(r)
     }
   }
@@ -827,8 +829,14 @@ async function runOneTool(
     }
   }
   state.distinctTools.add(call.name)
-  await respectRate(run.config, state, run.signal)
+  // Reserve the tool-call slot SYNCHRONOUSLY, before any await. A Promise.all
+  // batch starts every member before ANY of them reaches the increment below
+  // respectRate, so with maxToolCalls=1 two parallel calls both passed the
+  // guard at once and ran past the limit. Incrementing here (after the last
+  // sync guard, before the first await) makes guard+reservation atomic: the
+  // first member to check reserves, the rest land on the skip-message path.
   state.toolCalls++
+  await respectRate(run.config, state, run.signal)
   state.callTimes.push(Date.now())
   await run.emit({ type: "tool_execution_start", toolCallId: call.id, toolName: call.name, args: call.arguments })
 

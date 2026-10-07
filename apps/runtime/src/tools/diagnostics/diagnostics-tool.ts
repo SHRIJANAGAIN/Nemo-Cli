@@ -28,7 +28,8 @@ import {
   type Diagnostic,
 } from "./tsc-diagnostics.js"
 
-const TSC_TIMEOUT_MS = 45_000
+const TSC_TIMEOUT_MS = 25_000
+export { TSC_TIMEOUT_MS }
 const CACHE_TTL_MS = 10_000
 const MAX_TSC_OUTPUT_BYTES = 20 * 1024 * 1024
 const MAX_STDERR_BYTES = 1024 * 1024

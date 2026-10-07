@@ -79,6 +79,21 @@ function slugify(text: string): string {
     .slice(0, 40)
 }
 
+/**
+ * Resolve the completions endpoint for an OpenAI-compatible base URL.
+ * The old code rebuilt the URL from `url.origin`, DROPPING any path the
+ * operator set on the base (…/v1, a reverse-proxy prefix), and gave
+ * non-NVIDIA hosts bare `/chat/completions` — missing the OpenAI-compatible
+ * `/v1` — so e.g. `https://api.openai.com/v1` hit a 404. Preserve the base
+ * and append the standard endpoint (or reuse an already-full one).
+ */
+export function buildCompletionsUrl(baseUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, "")
+  if (/\/chat\/completions$/.test(base)) return base
+  if (/\/v1$/.test(base)) return `${base}/chat/completions`
+  return `${base}/v1/chat/completions`
+}
+
 async function callProvider(
   config: { baseUrl: string; apiKey: string; model: string },
   prompt: string,
@@ -97,9 +112,7 @@ async function callProvider(
   const url = new URL(config.baseUrl)
   const lib = url.protocol === "https:" ? https : http
 
-  const isNvidia = url.hostname.includes("nvidia") || url.hostname.includes("integrate.api")
-  const endpoint = isNvidia ? "/v1/chat/completions" : "/chat/completions"
-  const finalUrl = `${url.origin}${endpoint}`
+  const finalUrl = buildCompletionsUrl(config.baseUrl)
 
   return new Promise((resolve, reject) => {
     const req = lib.request(

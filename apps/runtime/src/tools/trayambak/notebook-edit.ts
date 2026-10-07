@@ -60,12 +60,16 @@ export function createNotebookEditTool(): Tool {
           /*isError*/ true,
         )
       }
-      const cell = notebook.cells.find((c) => c.id === cellId)
+      const cell = Array.isArray(notebook.cells) ? notebook.cells.find((c) => c.id === cellId) : undefined
       if (!cell) return textResult(`Cell not found: ${cellId}`, /*isError*/ true)
       const newSource = String(args.new_source ?? "")
       const cellType = args.cell_type ? String(args.cell_type) : (cell.cell_type ?? "code")
       cell.cell_type = cellType
-      cell.source = newSource.split("\n").map((line) => line + "\n")
+      // nbformat `source` rule: every line EXCEPT the last carries "\n". The
+      // old `.map(line => line + "\n")` also newline-terminated the final
+      // line, so a round trip silently grew the cell ("a\nb" → "a\nb\n").
+      const lines = newSource.split("\n")
+      cell.source = lines.map((line, idx) => (idx === lines.length - 1 ? line : `${line}\n`))
       fs.writeFileSync(target, JSON.stringify(notebook, null, 1), "utf8")
       return textResult(`Edited cell ${cellId} in ${rawPath}.`)
     },

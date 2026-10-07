@@ -40,10 +40,13 @@ export function validateWorkflow(def: WorkflowDefinition): string[] {
   if (!def.name || typeof def.name !== "string") errors.push("Workflow 'name' is required and must be a string.")
   if (!def.description || typeof def.description !== "string")
     errors.push("Workflow 'description' is required and must be a string.")
-  if (!Array.isArray(def.steps) || def.steps.length === 0) errors.push("Workflow must have at least one step.")
-  if (def.steps.length > MAX_WORKFLOW_STEPS) errors.push(`Workflow steps exceed maximum of ${MAX_WORKFLOW_STEPS}.`)
+  // Normalize BEFORE touching `.length`: a JSON workflow without `steps` used
+  // to crash here (`def.steps.length` on undefined) instead of reporting it.
+  const steps = Array.isArray(def.steps) ? def.steps : []
+  if (steps.length === 0) errors.push("Workflow must have at least one step.")
+  if (steps.length > MAX_WORKFLOW_STEPS) errors.push(`Workflow steps exceed maximum of ${MAX_WORKFLOW_STEPS}.`)
   const seen = new Set<string>()
-  for (const step of def.steps) {
+  for (const step of steps) {
     if (!step.id || typeof step.id !== "string") errors.push("Each step must have a string 'id'.")
     if (seen.has(step.id)) errors.push(`Duplicate step id: '${step.id}'.`)
     seen.add(step.id)
@@ -69,8 +72,10 @@ export function executeWorkflow(
   )
   const results: Array<{ stepId: string; output: string; error?: string }> = []
 
-  for (let i = 0; i < def.steps.length && i < boundedMax; i++) {
-    const step = def.steps[i]
+  const steps = Array.isArray(def.steps) ? def.steps : []
+
+  for (let i = 0; i < steps.length && i < boundedMax; i++) {
+    const step = steps[i]
     try {
       const output = `[Step ${step.id}] Action: ${step.action}${step.prompt ? ` | Prompt: ${step.prompt.slice(0, 200)}` : ""}${step.tool ? ` | Tool: ${step.tool}` : ""}${step.args ? ` | Args: ${JSON.stringify(step.args).slice(0, 200)}` : ""}`
       results.push({ stepId: step.id, output })
@@ -163,8 +168,10 @@ export function executeWorkflowResumed(
   let reused = 0
   let prefixBroken = false
 
-  for (let i = 0; i < def.steps.length && i < boundedMax; i++) {
-    const step = def.steps[i] as WorkflowStep
+  const steps = Array.isArray(def.steps) ? def.steps : []
+
+  for (let i = 0; i < steps.length && i < boundedMax; i++) {
+    const step = steps[i] as WorkflowStep
     const hit = prefixBroken ? undefined : cached[i]
     if (hit && hit.stepId === step.id && hit.hash === stepHash(step) && !hit.error) {
       results.push({ stepId: step.id, output: hit.output })

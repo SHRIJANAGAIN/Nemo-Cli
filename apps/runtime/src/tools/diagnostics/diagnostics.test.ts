@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 
 import type { ToolContext } from "../types.js"
-import { collectDiagnostics, createDiagnosticsTool, resetDiagnosticsCache, resolveTscBin } from "./diagnostics-tool.js"
+import { collectDiagnostics, createDiagnosticsTool, resetDiagnosticsCache, resolveTscBin, TSC_TIMEOUT_MS } from "./diagnostics-tool.js"
 import {
   DIAGNOSTICS_MAX_PER_FILE,
   diagnosticsPathKey,
@@ -362,5 +362,17 @@ describe("collectDiagnostics + diagnostics tool (real tsc)", () => {
     const ctx = { cwd: dir } as unknown as ToolContext
     const result = await tool.execute("call-1", { refresh: true }, controller.signal, undefined, ctx)
     expect(resultText(result)).toContain("Diagnostics unavailable: aborted")
+  })
+})
+
+describe("diagnostics tool timing contract", () => {
+  it("kills tsc before the harness rejects the tool", () => {
+    // The loop's withTimeout rejects the tool's promise at its declared
+    // timeoutMs WITHOUT aborting the signal, so the internal tsc timer is the
+    // only thing that kills the child. When it exceeded the tool's own budget
+    // the friendly "tsc timed out" path could never fire — the harness killed
+    // the tool first, leaving the child running ~15s extra, orphaned.
+    const tool = createDiagnosticsTool()
+    expect(TSC_TIMEOUT_MS).toBeLessThan(tool.definition.timeoutMs ?? 0)
   })
 })

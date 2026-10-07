@@ -30,4 +30,20 @@ describe("trayambak__Agent subagent_type (company personas must pass)", () => {
     expect(seen).toBe("Code Reviewer")
     expect(result.content.map((p) => ("text" in p ? p.text : "")).join("")).toContain("ok")
   })
+
+  it("does not force a throwaway worktree when no isolation is requested", async () => {
+    // The engine's own default is "inherit" (agent.ts: `task.isolation ??
+    // "inherit"`) — ordinary subagents edit the SHARED working tree. The tool
+    // used to default `?? "worktree"`, so every bare subagent request ran in
+    // a git worktree that was removed in `finally` — all its file edits
+    // silently vanished from the parent's tree.
+    let seen: string | undefined = "unset"
+    const tool = createAgentTool(async (params) => {
+      seen = params.isolation
+      return "ok"
+    })
+    const result = await tool.execute("id", { description: "d", prompt: "p" }, undefined, undefined, undefined)
+    expect(seen).toBeUndefined()
+    expect(result.content.map((p) => ("text" in p ? p.text : "")).join("")).toContain("ok")
+  })
 })

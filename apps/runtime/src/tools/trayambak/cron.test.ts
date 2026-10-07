@@ -4,7 +4,7 @@
  * PRIVATE LIMITED. See LICENSE for the full terms.
  */
 
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { createCronCreateTool, createCronDeleteTool, listCronJobs, tickCronJobs } from "./cron.js"
 import type { ToolContext } from "../types.js"
 
@@ -121,5 +121,24 @@ describe("CronCreate rejects invalid expressions (round 13)", () => {
       if (job) ids.push(job.id)
     }
     await cleanup(ids)
+  })
+})
+
+describe("CronCreate: rare-but-valid expressions do not become daily misfires", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("schedules leap-day (Feb 29) far in the future instead of +24h", async () => {
+    // Round 13 stopped GARBAGE crons from becoming silent daily jobs via the
+    // +24h fallback of computeNextFire's 7-day scan, but a VALID rare
+    // expression (`0 0 29 2 *` in a non-leap year) still missed the scan and
+    // pulled forward to +24h — the job then re-missed and fired EVERY DAY.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-01T12:00:00Z"))
+    const id = await createJob("0 0 29 2 *", `leap-${Date.now()}`)
+    const job = listCronJobs().find((j) => j.id === id)
+    expect(job?.nextFireAt ?? 0).toBeGreaterThan(Date.now() + 100 * 24 * 60 * 60 * 1000)
+    await cleanup([id])
   })
 })

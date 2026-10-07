@@ -8,7 +8,7 @@ import { describe, expect, it, afterEach } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { saveAgentProfile, type GeneratedAgent } from "./generate-agent.js"
+import { buildCompletionsUrl, saveAgentProfile, type GeneratedAgent } from "./generate-agent.js"
 
 /**
  * Regression: `saveAgentProfile` joined a model-controlled `identifier`
@@ -87,5 +87,20 @@ describe("saveAgentProfile containment", () => {
     }
     expect(text).toContain("model: some-model injected: true")
     expect(text).toContain("You are a test agent.")
+  })
+})
+
+describe("buildCompletionsUrl", () => {
+  it("keeps the base URL path and the /v1 endpoint for OpenAI-compatible servers", () => {
+    // The old code rebuilt from `url.origin`, dropping any base path, and
+    // gave non-NVIDIA hosts bare `/chat/completions` — every operator who set
+    // a `…/v1` base (OpenAI's own, proxies) hit a 404.
+    expect(buildCompletionsUrl("http://localhost:8080")).toBe("http://localhost:8080/v1/chat/completions")
+    expect(buildCompletionsUrl("https://api.openai.com/v1")).toBe("https://api.openai.com/v1/chat/completions")
+    expect(buildCompletionsUrl("https://proxy.example/llm/v1")).toBe("https://proxy.example/llm/v1/chat/completions")
+    expect(buildCompletionsUrl("https://integrate.api.nvidia.com/v1")).toBe(
+      "https://integrate.api.nvidia.com/v1/chat/completions",
+    )
+    expect(buildCompletionsUrl("https://host.example/v1/")).toBe("https://host.example/v1/chat/completions")
   })
 })

@@ -67,7 +67,7 @@ export function createAgentTool(
       const prompt = (args.prompt as string) ?? ""
       const subagentType = (args.subagent_type as string) ?? "general"
       const model = (args.model as string) ?? undefined
-      const isolation = (args.isolation as string) ?? "worktree"
+      const isolation = (args.isolation as string) ?? undefined
       const background = (args.background as boolean) ?? false
 
       if (!prompt) {
@@ -79,7 +79,7 @@ export function createAgentTool(
         return textResult(result)
       }
 
-      const summary = `[Subagent '${description}' requested]\n  - Type: ${subagentType}\n  - Model: ${model ?? "inherited"}\n  - Isolation: ${isolation}\n  - Background: ${background ? "yes" : "no"}\n  - Prompt: ${prompt.slice(0, 200)}${prompt.length > 200 ? "..." : ""}`
+      const summary = `[Subagent '${description}' requested]\n  - Type: ${subagentType}\n  - Model: ${model ?? "inherited"}\n  - Isolation: ${isolation ?? "inherit"}\n  - Background: ${background ? "yes" : "no"}\n  - Prompt: ${prompt.slice(0, 200)}${prompt.length > 200 ? "..." : ""}`
 
       const devDir = path.join(_context?.cwd ?? process.cwd(), ".trayambak", "dev")
       try {

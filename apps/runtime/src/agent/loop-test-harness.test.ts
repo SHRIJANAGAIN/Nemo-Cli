@@ -133,3 +133,31 @@ describe("loop-test-harness: assertProviderCalls", () => {
     expect(() => assertProviderCalls(2, 2)).not.toThrow()
   })
 })
+
+describe("loop-test-harness: maxToolCalls against a parallel batch", () => {
+  it("caps one turn's parallel flood at maxToolCalls instead of running all", async () => {
+    // runOneTool's guard (`state.toolCalls >= maxToolCalls`) is compared when
+    // each call STARTS, but every call in a Promise.all batch starts before
+    // ANY of them increments `state.toolCalls` — with maxToolCalls=1 and a
+    // 2-call batch, both sailed past the guard and executed.
+    const executed: string[] = []
+    const scripted = makeScriptedProvider([
+      () => ({
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "c1", name: "probe", arguments: { n: 1 } },
+          { type: "toolCall", id: "c2", name: "probe", arguments: { n: 2 } },
+        ],
+        stopReason: "tool_use",
+      }),
+      textReply("done"),
+    ])
+
+    const { providerCalls } = await runTestLoop("go", testBaseConfig({ maxToolCalls: 1 }), scripted, {
+      tools: [probeTool("probe", executed)],
+    })
+
+    expect(executed).toHaveLength(1)
+    assertProviderCalls(providerCalls(), 2)
+  })
+})
