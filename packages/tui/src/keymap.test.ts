@@ -124,6 +124,24 @@ describe("toKeyId", () => {
     expect(toKeyId("hello", key())).toBeUndefined()
     expect(toKeyId("", key())).toBeUndefined()
   })
+
+  it("keeps modifiers on named keys (alt+backspace, alt+left, ctrl+home…)", () => {
+    // The declared defaults include alt+backspace / alt+left / ctrl+home /
+    // ctrl+end / home / end; before this, every named-key branch returned
+    // before inspecting modifiers, so alt+backspace produced "backspace"
+    // (firing the WRONG action) and home/end could never be produced at all.
+    expect(toKeyId("\x7f", key({ backspace: true, meta: true }))).toBe("alt+backspace")
+    expect(toKeyId("\x1b[D", key({ leftArrow: true, meta: true }))).toBe("alt+left")
+    expect(toKeyId("\x1b[C", key({ rightArrow: true, ctrl: true }))).toBe("ctrl+right")
+    expect(toKeyId("\x7f", key({ backspace: true }))).toBe("backspace")
+  })
+
+  it("emits home and end keys (declared defaults that could never fire)", () => {
+    expect(toKeyId("", key({ home: true }))).toBe("home")
+    expect(toKeyId("", key({ end: true }))).toBe("end")
+    expect(toKeyId("", key({ home: true, ctrl: true }))).toBe("ctrl+home")
+    expect(toKeyId("", key({ end: true, ctrl: true }))).toBe("ctrl+end")
+  })
 })
 
 describe("Keymap defaults", () => {
@@ -171,6 +189,20 @@ describe("overrides", () => {
     const km = new Keymap({ overrides: { "tui.permission.toggle": ["ctrl+alt+t"] } })
     expect(km.matchesInput("tui.permission.toggle", "t", key({ ctrl: true, meta: true }))).toBe(true)
     expect(km.matchesInput("tui.permission.toggle", "p", key({ ctrl: true }))).toBe(false)
+  })
+
+  it("fires a modifier+named-key override through a real Ink event", () => {
+    // alt+backspace must reach the bound action, not collapse onto the plain
+    // "backspace" chord and fire the wrong action.
+    const km = new Keymap({ overrides: { "tui.input.deleteWordBackward": ["alt+backspace"] } })
+    expect(km.matchesInput("tui.input.deleteWordBackward", "\x7f", key({ backspace: true, meta: true }))).toBe(true)
+    expect(km.matchesInput("tui.input.deleteWordBackward", "\x7f", key({ backspace: true }))).toBe(false)
+  })
+
+  it("routes the default alt+backspace to deleteWordBackward, not plain backspace", () => {
+    const km = new Keymap()
+    expect(km.matchesInput("tui.input.deleteWordBackward", "\x7f", key({ backspace: true, meta: true }))).toBe(true)
+    expect(km.matchesInput("tui.input.backspace", "\x7f", key({ backspace: true, meta: true }))).toBe(false)
   })
 
   it("normalises override spelling so case and padding do not matter", () => {

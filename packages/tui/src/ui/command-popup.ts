@@ -93,13 +93,17 @@ export class CommandPopup {
       const selected = isFocused && i === this.selectedIndex
       const prefix = selected ? "> " : "  "
       const matchIndices = (item as CommandItem & { _matchIndices?: number[] })._matchIndices
-      const highlighted = matchIndices?.length ? CommandPopup.highlightName(item.name, matchIndices) : item.name
-      const padded = highlighted.padEnd(24)
+      // Pad the PLAIN name to the fixed label width, then highlight. padEnd
+      // counts UTF-16 units, so highlighting first made the ~15 escape bytes
+      // per match eat the padding budget — the label field shrank and the
+      // description column slid left only on name-matched rows.
+      const padded = item.name.padEnd(24)
+      const highlighted = matchIndices?.length ? CommandPopup.highlightName(padded, matchIndices) : padded
       const desc = item.description || ""
       if (selected) {
-        lines.push("\x1b[47m\x1b[30m" + prefix + padded + "\x1b[0m \x1b[2m" + desc + "\x1b[0m")
+        lines.push("\x1b[47m\x1b[30m" + prefix + highlighted + "\x1b[0m \x1b[2m" + desc + "\x1b[0m")
       } else {
-        lines.push(prefix + padded + " \x1b[2m" + desc + "\x1b[0m")
+        lines.push(prefix + highlighted + " \x1b[2m" + desc + "\x1b[0m")
       }
     }
 

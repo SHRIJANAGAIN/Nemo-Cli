@@ -290,7 +290,7 @@ export class TerminalUI {
 
     const titleText = ` ${title} `
 
-    const pad = Math.max(0, w - titleText.length - 2)
+    const pad = Math.max(0, w - titleText.length)
 
     const titleRow = `│${this.c(accent, this.c("bold", titleText))}${"─".repeat(pad)}│`
 
@@ -349,7 +349,7 @@ export class TerminalUI {
 
     const titleText = ` ${title} `
 
-    const titlePad = width - titleText.length - 2
+    const titlePad = width - titleText.length
 
     const titleLeft = Math.max(1, Math.floor(titlePad / 2))
 
@@ -900,7 +900,11 @@ export class TerminalUI {
 
     this.separator()
 
-    const visible = this.transcriptBuffer.slice(-rows + 4)
+    // Header + separator + blank + footer occupy 4 rows. `slice(-rows + 4)`
+    // inverted the moment rows <= 4: a negative slice becomes "from index N"
+    // (rows=4 → slice(0) → the WHOLE buffer printed), overflowing the screen.
+    const keep = rows - 4
+    const visible = keep <= 0 ? [] : this.transcriptBuffer.slice(-keep)
 
     for (const line of visible) {
       this.line(line.slice(0, cols))

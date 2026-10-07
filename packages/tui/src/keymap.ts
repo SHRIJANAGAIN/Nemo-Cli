@@ -82,21 +82,31 @@ export function isChordSequence(raw: string): boolean {
 export function toKeyId(input: string, key: Key): string | undefined {
   // Named keys first: Ink reports `input` as a control character for these
   // (e.g. "\r" for Enter), so inspecting `input` before these would misread them.
-  if (key.return) return "enter"
-  if (key.escape) return "escape"
-  if (key.upArrow) return "up"
-  if (key.downArrow) return "down"
-  if (key.leftArrow) return "left"
-  if (key.rightArrow) return "right"
-  if (key.backspace) return "backspace"
+  // Modifiers are inspected for named keys too: the declared defaults include
+  // alt+backspace / alt+left / ctrl+home / ctrl+end, and returning the bare
+  // name made alt+backspace collapse onto the plain "backspace" chord — the
+  // key fired the WRONG action, and home/end could never be produced at all.
+  const mods: string[] = []
+  if (key.ctrl) mods.push("ctrl")
+  if (key.meta) mods.push("alt")
+  const named = (name: string): string => (mods.length > 0 ? `${mods.join("+")}+${name}` : name)
+  if (key.return) return named("enter")
+  if (key.escape) return named("escape")
+  if (key.upArrow) return named("up")
+  if (key.downArrow) return named("down")
+  if (key.leftArrow) return named("left")
+  if (key.rightArrow) return named("right")
+  if (key.backspace) return named("backspace")
   // Ink builds these two flags from a single `keypress.name` string
   // (`use-input.js`: `backspace: name === 'backspace'`, `delete: name === 'delete'`),
   // so they are mutually exclusive — no both-flags branch is needed.
-  if (key.delete) return "delete"
+  if (key.delete) return named("delete")
   // Lowercase to match `normalizeChord`, or a config entry for "pagedown" could
   // never match what we emit here.
-  if (key.pageDown) return "pagedown"
-  if (key.pageUp) return "pageup"
+  if (key.pageDown) return named("pagedown")
+  if (key.pageUp) return named("pageup")
+  if (key.home) return named("home")
+  if (key.end) return named("end")
   if (key.tab) return key.shift ? "shift+tab" : "tab"
 
   // A multi-character chunk is paste content, never a chord. Letting it fall
@@ -104,12 +114,10 @@ export function toKeyId(input: string, key: Key): string | undefined {
   if (input.length !== 1) return undefined
 
   const ch = input.toLowerCase()
-  const mods: string[] = []
-  if (key.ctrl) mods.push("ctrl")
-  if (key.meta) mods.push("alt")
+  // `mods` carries the ctrl/alt flags collected above; shift only applies to
+  // letters (an uppercase input arrives with shift held — fold it back to the
+  // base letter so "ctrl+shift+z" and a typed "Z" cannot both claim one action).
   if (key.shift && ch >= "a" && ch <= "z") mods.push("shift")
-  // Shift+letter arrives as an uppercase char; fold it back to the base letter
-  // so "ctrl+shift+z" and a typed "Z" cannot both claim one action.
   return [...mods, ch].join("+")
 }
 

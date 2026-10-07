@@ -47,6 +47,25 @@ describe("CommandPopup.render", () => {
     expect(lines[0]).not.toContain("\x1b[1;38;5;33m")
   })
 
+  it("keeps the description column aligned when a name is highlighted", () => {
+    // Highlighting wraps name chars in escapes; padEnd(24) counts the escapes
+    // as columns, so a name-matched row's label field visibly shrank and its
+    // description slid left of a description-matched row's.
+    const p = new CommandPopup()
+    const lines = p.render(
+      [
+        { name: "reload", description: "Reload config" },
+        { name: "build", description: "rebuild project" },
+      ],
+      "re",
+      { width: 60, height: 10 },
+      false,
+    )
+    expect(lines).toHaveLength(2)
+    const colOf = (l: string, needle: string): number => plain(l).indexOf(needle)
+    expect(colOf(lines[0]!, "Reload config")).toBe(colOf(lines[1]!, "rebuild project"))
+  })
+
   it("returns a placeholder line when nothing matches", () => {
     const p = new CommandPopup()
     const lines = p.render(ITEMS, "zzz", { width: 80, height: 10 }, true)

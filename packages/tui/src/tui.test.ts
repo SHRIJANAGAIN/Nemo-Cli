@@ -543,6 +543,15 @@ describe("dialogs: renderPopup", () => {
     const result = renderPopup("T", [], { width: 30 })
     expect(result).toContain("T")
   })
+
+  it("clips body lines wider than the box so the right border stays intact", () => {
+    // terminal-ui.popup hard-clips over-wide rows; this copy used to let them
+    // overflow, shoving the right border N columns past the other rows.
+    const out = renderPopup("TITLE", ["short", "y".repeat(200)], { width: 40 })
+    const strip = (l: string): string => l.replace(/\x1b\[[0-9;]*m/g, "").replace(/\uFEFF/g, "")
+    const widths = out.split("\n").map((l) => strip(l).length)
+    expect(new Set(widths).size).toBe(1)
+  })
 })
 
 describe("dialogs: renderDiff", () => {
@@ -703,6 +712,39 @@ describe("ApprovalManager 4-choice chooser", () => {
     mgr.cancelAll("shutdown")
     expect(await promise).toBeNull()
     expect(mgr.getPendingApprovals().length).toBe(0)
+  })
+})
+
+describe("TerminalUI: popup box and transcript sizing", () => {
+  it("renders the popup title row at the same width as the box borders", () => {
+    const cap = captureStdout()
+    try {
+      const ui = new TerminalUI({ useColor: true })
+      ui.popup("SETTINGS", ["hello world"])
+      const strip = (l: string): string => l.replace(/\x1b\[[0-9;]*m/g, "").replace(/\uFEFF/g, "")
+      const widths = cap.output.filter((l) => l.trim().length > 0).map((l) => strip(l).length)
+      expect(new Set(widths).size).toBe(1)
+    } finally {
+      cap.restore()
+    }
+  })
+
+  it("shows no body lines when the terminal has 4 rows or fewer", () => {
+    // Header + separator + blank + footer take 4 rows; with rows <= 4 the old
+    // slice(-rows + 4) flipped from "tail" to "index N" and dumped the whole
+    // buffer — the transcript overflowed the screen.
+    const originalRows = process.stdout.rows
+    Object.defineProperty(process.stdout, "rows", { value: 4, configurable: true })
+    const cap = captureStdout()
+    try {
+      const ui = new TerminalUI({ useColor: false })
+      const msgs = Array.from({ length: 50 }, (_, i) => ({ role: "user" as const, content: `line-${i}` }))
+      ui.enterTranscriptMode(msgs)
+      expect(cap.output.join("")).not.toContain("line-49")
+    } finally {
+      cap.restore()
+      Object.defineProperty(process.stdout, "rows", { value: originalRows, configurable: true })
+    }
   })
 })
 

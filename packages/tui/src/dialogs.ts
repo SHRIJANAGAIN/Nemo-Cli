@@ -52,7 +52,10 @@ export function renderPopup(
   out.push(COLOR[accent] + "│" + COLOR.reset + pad(width - 2) + COLOR[accent] + "│" + COLOR.reset)
   for (const line of lines) {
     const vis = visibleWidth(line)
-    const inner = " " + line + pad(Math.max(0, width - 4 - vis)) + " "
+    // Clip rows wider than the box (terminal-ui.popup does this; without it a
+    // long LSP root path shoved the right border columns past the other rows).
+    const body = vis > width - 4 ? sliceByWidth(line, width - 4) : line
+    const inner = " " + body + pad(Math.max(0, width - 4 - visibleWidth(body))) + " "
     out.push(COLOR[accent] + "│" + COLOR.reset + inner + COLOR[accent] + "│" + COLOR.reset)
   }
   out.push(COLOR[accent] + "│" + COLOR.reset + pad(width - 2) + COLOR[accent] + "│" + COLOR.reset)
