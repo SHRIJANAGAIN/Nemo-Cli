@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -63,7 +63,7 @@ const snap = (): {
 // Glyphs under test render through glyphs.ts, which auto-selects ASCII on
 // plain Windows consoles (this CI/dev box) — assertions below pin Unicode
 // shapes, so force unicode mode here. resetGlyphCache covers shared workers.
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 resetGlyphCache()
 describe("ToolCallItem running-border pulse", () => {
   it("keeps re-rendering a running box (border colour cycles)", async () => {

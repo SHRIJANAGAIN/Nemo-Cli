@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /** Deterministic task slate (hermes evals/readtool port, model-free).
@@ -23,7 +23,7 @@ import { Session } from "../session/session.js"
 import { createWriteFileTool } from "./file-edit/write-file.js"
 import { createEditFileTool } from "./file-edit/edit-file.js"
 import { createReadFileTool } from "./file-edit/read-file.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 
 interface ScriptStep {
   name: string
@@ -50,7 +50,7 @@ function scriptedProvider(steps: ScriptStep[]): { provider: never; chats: () => 
   return { provider, chats: () => chats }
 }
 
-function taskCfg(dir: string): TrayambakConfig {
+function taskCfg(dir: string): NemoConfig {
   return {
     maxTurns: 6,
     maxRetries: 0,
@@ -61,11 +61,11 @@ function taskCfg(dir: string): TrayambakConfig {
     maxDistinctToolCalls: 1000,
     cwd: dir,
     permissions: { mode: "default", rules: [], askByDefault: false },
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 }
 
 function tmpWorkspace(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-eval-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-eval-"))
   return dir
 }
 

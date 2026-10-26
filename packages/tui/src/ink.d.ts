@@ -34,6 +34,18 @@ declare module "ink" {
     space?: boolean
     pageUp?: boolean
     pageDown?: boolean
+    // Lockstep with node_modules/ink 7.1.1 (hooks/use-input.d.ts): b0118f3's
+    // keymap home/end handling typechecked green against the real package
+    // (typecheck:ink) but went red here, because this shim lagged behind.
+    // Whenever ink's Key grows a flag, this file must grow it too or
+    // `npm run typecheck` diverges from typecheck:ink again.
+    home?: boolean
+    end?: boolean
+    super?: boolean
+    hyper?: boolean
+    capsLock?: boolean
+    numLock?: boolean
+    eventType?: "press" | "repeat" | "release"
   }
 
   export const render: (node: React.ReactNode, options?: Record<string, unknown>) => Instance

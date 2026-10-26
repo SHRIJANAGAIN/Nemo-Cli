@@ -40,7 +40,7 @@ Auto-analyze project and generate PM2 service commands.
 project/
 ├── ecosystem.config.cjs              # PM2 config
 ├── {backend}/start.cjs               # Python wrapper (if applicable)
-└── .trayambak/
+└── .nemo/
     ├── commands/
     │   ├── pm2-all.md                # Start all + monit
     │   ├── pm2-all-stop.md           # Stop all
@@ -226,16 +226,16 @@ Based on `$ARGUMENTS`, execute init:
 1. Scan project for services
 2. Generate `ecosystem.config.cjs`
 3. Generate `{backend}/start.cjs` for Python services (if applicable)
-4. Generate command files in `.trayambak/commands/`
-5. Generate script files in `.trayambak/scripts/`
-6. **Update project TRAYAMBAK.md** with PM2 info (see below)
+4. Generate command files in `.nemo/commands/`
+5. Generate script files in `.nemo/scripts/`
+6. **Update project NEMO.md** with PM2 info (see below)
 7. **Display completion summary** with terminal commands
 
 ---
 
-## Post-Init: Update TRAYAMBAK.md
+## Post-Init: Update NEMO.md
 
-After generating files, append PM2 section to project's `TRAYAMBAK.md` (create if not exists):
+After generating files, append PM2 section to project's `NEMO.md` (create if not exists):
 
 ````markdown
 ## PM2 Services
@@ -257,7 +257,7 @@ pm2 resurrect                    # Restore saved list
 ```
 ````
 
-**Rules for TRAYAMBAK.md update:**
+**Rules for NEMO.md update:**
 
 - If PM2 section exists, replace it
 - If not exists, append to end
@@ -278,7 +278,7 @@ After all files generated, output:
 |------|------|------|
 | {port} | {name} | {type} |
 
-**Trayambak Commands:** /pm2-all, /pm2-all-stop, /pm2-{port}, /pm2-{port}-stop, /pm2-logs, /pm2-status
+**Nemo Commands:** /pm2-all, /pm2-all-stop, /pm2-{port}, /pm2-{port}-stop, /pm2-logs, /pm2-status
 
 **Terminal Commands:**
 ## First time (with config file)

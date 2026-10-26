@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -16,7 +16,7 @@
  *    because there is no conversation to talk into and nothing to roleplay
  *    out of. The extraction request never reaches the wire.
  *
- * 2. SECRET VALUE REQUESTS — "print exact TRAYAMBAK_API_KEY" burned the full
+ * 2. SECRET VALUE REQUESTS — "print exact NEMO_API_KEY" burned the full
  *    180s probe timeout with no refusal at all. Credential-value requests are
  *    now refused instantly, with a pointer to the safe alternative (presence
  *    checks and rotation, never the value itself).
@@ -85,11 +85,11 @@ const EXTRACTION_REPLY =
  * phrasing must keep working — only reveal-intent is refused.
  */
 const SECRET_VALUE_PATTERNS: RegExp[] = [
-  // "$-expansion and printenv: "echo $TRAYAMBAK_API_KEY", "printenv OPENAI_KEY".
+  // "$-expansion and printenv: "echo $NEMO_API_KEY", "printenv OPENAI_KEY".
   // Non-secret counters ($MAX_TOKENS, $LIMIT_*) are defused by name prefix.
   /\b(?:echo|print|printf|printenv|env)\s+\$(?!\{?(?:MAX|MIN|COUNT|SIZE|LENGTH|BUDGET|LIMIT|WINDOW|TIMEOUT)[A-Za-z0-9_]*\}?)[A-Za-z_][A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Za-z0-9_]*\}?/i,
   // Known env names behind a reveal verb, defused before docs/path/setup tails.
-  /\b(?:print|echo|show|reveal|display|dump|output|give\s+me|tell\s+me|read\s+out|printenv)\b[^.!?\n]{0,60}\b(?:TRAYAMBAK_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|NVIDIA_API_KEY|GITHUB_TOKEN|API_KEY)\b(?!\s+(?:path|location|file|docs?|documentation|example|format|name|setup|config|rotation|policy)\b)/i,
+  /\b(?:print|echo|show|reveal|display|dump|output|give\s+me|tell\s+me|read\s+out|printenv)\b[^.!?\n]{0,60}\b(?:NEMO_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|NVIDIA_API_KEY|GITHUB_TOKEN|API_KEY)\b(?!\s+(?:path|location|file|docs?|documentation|example|format|name|setup|config|rotation|policy)\b)/i,
   // Value intent + generic secret noun: "the exact api key", "raw token".
   /\b(?:exact|actual|raw|literal|verbatim|current)\s+(?:value\s+of\s+(?:the\s+)?)?(?:api[ _-]?key|apikey|access[ _-]?token|auth[ _-]?token|token|secret|password|credential)\b/i,
   /\bvalue\s+of\s+(?:the\s+)?(?:api[ _-]?key|apikey|token|secret|password|credential)\b/i,
@@ -98,15 +98,15 @@ const SECRET_VALUE_PATTERNS: RegExp[] = [
   // Bare reveal with an object: "show me the token", "give me my api key" —
   // defused only for aggregate/stats nouns so "token usage" stays normal.
   /\b(?:show|give|tell|print|reveal|display|dump|read\s+out)\s+(?:me\s+)?(?:my|the|your)?\s*(?:exact\s+|actual\s+)?(?:api[ _-]?key|apikey|access[ _-]?token|auth[ _-]?token|token|secret|password|credential)s?(?!\s+(?:count|usage|budget|limit|limits|stats|status|cost|price|docs?|documentation|example|format|name|path|location|policy)\b)/i,
-  // Question form: "what is my api key" / "what's my TRAYAMBAK_API_KEY" —
+  // Question form: "what is my api key" / "what's my NEMO_API_KEY" —
   // defused before purpose questions.
-  /\bwhat(?:'s|\s+is|\s+are)\s+(?:my|the|your)\s+(?:exact\s+|actual\s+|current\s+)?(?:TRAYAMBAK_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|NVIDIA_API_KEY|GITHUB_TOKEN|api[ _-]?key|apikey|access[ _-]?token|auth[ _-]?token|password|secret)(?!\s+(?:used|for|means|mean|do|does|is|are|look)\b)/i,
+  /\bwhat(?:'s|\s+is|\s+are)\s+(?:my|the|your)\s+(?:exact\s+|actual\s+|current\s+)?(?:NEMO_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|NVIDIA_API_KEY|GITHUB_TOKEN|api[ _-]?key|apikey|access[ _-]?token|auth[ _-]?token|password|secret)(?!\s+(?:used|for|means|mean|do|does|is|are|look)\b)/i,
 ]
 
 const SECRET_REPLY =
   "I won't print credential values — not even yours. Values typed into a terminal end up in " +
   "scrollback, logs, and session recordings. To check whether a key is configured, run " +
-  "`trayambak login status` (it reports presence only). To set or rotate one, use `trayambak login` " +
+  "`nemo login status` (it reports presence only). To set or rotate one, use `nemo login` " +
   "or your environment variables — I can wire placeholders into config files without ever displaying " +
   "the secret."
 

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -11,7 +11,7 @@
  * The split this bridges: a session's TRANSCRIPT lives in its own JSON file
  * (`Session.save`/`Session.load`, which `Agent` already uses via `sessionFile`),
  * while the session LIST lives in one metadata file
- * (`~/.trayambak/sessions.json`) that records id/name/status and nothing else.
+ * (`~/.nemo/sessions.json`) that records id/name/status and nothing else.
  * Resuming by id therefore had no path to the conversation at all — the command
  * resolved the id, set `status: "active"`, and returned text. The model started
  * from an empty session and never saw the earlier turns.
@@ -39,9 +39,9 @@ export interface TranscriptTarget {
 
 /** Directory holding one transcript file per session id. */
 export function sessionsDir(): string {
-  const explicit = process.env.TRAYAMBAK_SESSIONS_DIR
+  const explicit = process.env.NEMO_SESSIONS_DIR
   if (explicit && !isRemoteUncPath(explicit)) return explicit
-  return path.join(os.homedir(), ".trayambak", "sessions")
+  return path.join(os.homedir(), ".nemo", "sessions")
 }
 
 /**

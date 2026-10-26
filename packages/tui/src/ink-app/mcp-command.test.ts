@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * `/mcp` contract tests (mcp-command.ts).
@@ -76,7 +80,7 @@ function harness(base: Record<string, unknown> = {}): Harness {
       return content
     },
     // Built by the REAL createAgentConfig (app-bootstrap.js, not mocked here)
-    // so the stub is a genuine 19-field TrayambakConfig. A Partial cast would
+    // so the stub is a genuine 19-field NemoConfig. A Partial cast would
     // satisfy the compiler but hide the fact that these tests never exercised
     // the merge-onto-existing-config path. `current` stays non-null so line
     // ~141's "patch merged onto a live config" assertion stays meaningful.

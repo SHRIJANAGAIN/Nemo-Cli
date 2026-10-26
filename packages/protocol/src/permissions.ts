@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 export type AgentMode = "default" | "coder" | "yolo" | "browser" | "planner"
@@ -14,7 +14,7 @@ export interface PermissionRule {
   allow: boolean
 }
 
-/** Tri-state wildcard rule (SKT AI LABS-style). Evaluated layer by layer, first match wins. */
+/** Tri-state wildcard rule (Shrijan-style). Evaluated layer by layer, first match wins. */
 export interface PermissionRuleV2 {
   /** Tool name glob — "*" matches every tool, "write_*" matches prefixed tools. */
   tool: string
@@ -32,7 +32,7 @@ export interface PermissionConfig {
   mode: AgentMode
   rules: PermissionRule[]
   askByDefault: boolean
-  /** User-authored tri-state rules (persisted via `trayambak config set`). Evaluated before the legacy rules. */
+  /** User-authored tri-state rules (persisted via `nemo config set`). Evaluated before the legacy rules. */
   rulesV2?: PermissionRuleV2[]
   /** Live UI mode (read-only | plan | ask | auto-approve | full-access). Set by the TUI at runtime. */
   uiMode?: PermissionUIMode

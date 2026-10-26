@@ -1,7 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 import { Tui, Rect } from "../tui/terminal"
@@ -29,7 +32,7 @@ export interface ChatWidgetOptions {
  * ChatWidget renders the scrollable message stream in the upper portion
  * of the terminal, including assistant text, tool-call spans, and streaming.
  *
- * Ported from TRAYAMBAK TUI `chatwidget.rs`  adapted for the Trayambak Terminal
+ * Ported from Codex TUI `chatwidget.rs`  adapted for the Nemo Terminal
  * abstraction.
  */
 export class ChatWidget {
@@ -131,7 +134,7 @@ export class ChatWidget {
       let currentY = y
       for (const msg of visibleMessages) {
         if (currentY >= y + h) break
-        const roleLabel = msg.role === "user" ? "You" : "Trayambak"
+        const roleLabel = msg.role === "user" ? "You" : "Nemo"
         const prefix = msg.role === "user" ? "\x1b[36m" : "\x1b[32m"
         const lines = this.wrapText(`${roleLabel}: ${msg.content}`, w)
         for (const line of lines) {

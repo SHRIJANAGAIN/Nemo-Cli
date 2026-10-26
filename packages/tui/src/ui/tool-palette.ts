@@ -1,11 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 /**
- * Shared palette + key shortcut constants ported from the Trayambak Code
+ * Shared palette + key shortcut constants ported from the Codex
  * reference TUI (`history_cell/mcp.rs` and `exec_cell/render.rs`):
  *
  *  - Bullet: success = green bold, failure = red bold, in-progress = spinner
@@ -23,6 +26,7 @@
  */
 
 import { paint, fg, DIM, RESET, getTheme, type Theme, type Rgb } from "./theme"
+import { formatDuration } from "../ink-app/duration-text"
 
 export type ToolStatus = "success" | "failure" | "running"
 
@@ -101,7 +105,7 @@ export function resultLine(ok: boolean, exitCode?: number, durationMs?: number):
   const mark = ok
     ? `${PALETTE.success}${PALETTE.bold}\u2713${PALETTE.reset}`
     : `${PALETTE.failure}${PALETTE.bold}\u2717${PALETTE.reset}${exitCode !== undefined ? ` (${exitCode})` : ""}`
-  const dur = durationMs !== undefined ? `${PALETTE.dim} \u2022 ${durationMs}ms${PALETTE.reset}` : ""
+  const dur = durationMs !== undefined ? `${PALETTE.dim} • ${formatDuration(durationMs)}${PALETTE.reset}` : ""
   return mark + dur
 }
 

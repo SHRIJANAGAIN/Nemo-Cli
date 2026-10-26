@@ -1,4 +1,4 @@
-# Trayambak CLI — production image (Linux-first; Windows/macOS via npm)
+# Nemo CLI — production image (Linux-first; Windows/macOS via npm)
 FROM node:20-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -21,7 +21,7 @@ RUN npm ci --omit=dev --ignore-scripts || npm install --omit=dev --ignore-script
 # read-only for the app, which is what we want (no self-mutation of
 # installed deps as a non-root user). The directory entry itself goes to
 # `node` so the CLI can still drop caches/logs next to its working dir,
-# and HOME (/home/node) is already owned by `node` for ~/.trayambak state.
+# and HOME (/home/node) is already owned by `node` for ~/.nemo state.
 RUN chown node:node /app
 # Everything after this line runs unprivileged; a compromised container
 # process no longer starts as root.

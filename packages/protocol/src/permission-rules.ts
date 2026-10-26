@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Permission ruleset engine (ported from SKT AI LABS Code's permission system).
+ * Permission ruleset engine (ported from Shrijan Code's permission system).
  *
  * Layers, highest precedence first:
  *   1. full-access mode — nothing blocks, everything is allowed. The user
@@ -74,6 +74,24 @@ export const FORCE_ASK_RULES: ReadonlyArray<PermissionRuleV2> = [
   { tool: "*", pattern: "rd /s /q", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "rd /q /s", action: "ask", reason: "recursive delete (Windows)" },
   { tool: "*", pattern: "find / -delete", action: "ask", reason: "recursive delete" },
+  // `find` deletes whatever its predicate matches, from any starting point —
+  // `find / -delete` alone gated the absolute-root spelling and let the far
+  // more common `find . -name '*.log' -delete` through. `-exec rm`/`unlink`
+  // are the same operation spelled with a sub-command instead of `-delete`.
+  { tool: "*", pattern: "find * -delete", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "find * -exec rm", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "find * -exec unlink", action: "ask", reason: "recursive delete" },
+  // Order matters for a SUBSTRING matcher and `*` cannot match an empty string
+  // (measured: `git clean *f*d*` fails on `-xdf`, because nothing sits between
+  // the `f` and the `d`). So the force/directory combinations are listed
+  // explicitly rather than papered over with one clever glob. `git clean -n`
+  // (dry run, destroys nothing) is deliberately absent.
+  { tool: "*", pattern: "git clean *f*d*", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean -xdf", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean -d -f", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean -f -d", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean --dir --force", action: "ask", reason: "recursive delete" },
+  { tool: "*", pattern: "git clean --force --dir", action: "ask", reason: "recursive delete" },
   { tool: "*", pattern: "git clean -fdx", action: "ask", reason: "recursive delete" },
   { tool: "*", pattern: "git clean -fd", action: "ask", reason: "recursive delete" },
 
@@ -256,6 +274,17 @@ export const IRREVERSIBLE_FORCE_ASK_REASONS: ReadonlySet<string> = new Set([
   "recursive force delete",
   "recursive delete (Windows)",
   "recursive delete (PowerShell)",
+  // Plain-POSIX deletion. Its three siblings are already in this set, so its
+  // absence was an oversight rather than a decision: `find / -delete`,
+  // `git clean -fdx` and `git clean -fd` were measured returning `allow` under
+  // auto-approve. `git clean -fdx` in particular discards every untracked file
+  // in the worktree, which is unrecoverable and easy to run by accident.
+  "recursive delete",
+  // Windows disk format. `format ` (reason "disk format") was already gated and
+  // AGENTS.md names `format` in the always-ask list, but `format.com` — the
+  // form cmd.exe actually dispatches to — carried its own reason string and was
+  // therefore never gated. Formatting a volume destroys it.
+  "disk format (Windows)",
   "disk format",
   "filesystem format",
   "partition table write",
@@ -482,8 +511,8 @@ function deriveUIMode(config: PermissionConfig): PermissionUIMode {
  *
  * `memory`, `todo`, and `artifact` are multi-action: each exposes read
  * actions alongside actions that create, overwrite, or delete files on disk
- * (`memory.save` -> `~/.trayambak/memory/memory.json`; `todo.write` ->
- * `~/.trayambak/todos/`; `artifact.create` -> `<cwd>/skt/10-upload/artifacts/`
+ * (`memory.save` -> `~/.nemo/memory/memory.json`; `todo.write` ->
+ * `~/.nemo/todos/`; `artifact.create` -> `<cwd>/nemo/10-upload/artifacts/`
  * — and its manager even `mkdirSync`s in the constructor). The read-only gate
  * used to match on the tool NAME alone, so `artifact create` was `allow` in
  * read-only mode and really did write `1.json` + `manifest.json` into the
@@ -590,7 +619,7 @@ export function evaluatePermission(
 
   // 2) Read-only & plan mode: mutating tools are denied outright (and
   //    hidden from the model); only known-safe read-only tools pass.
-  //    SKT AI LABS's plan mode is exactly this deny-list — the agent can explore
+  //    Shrijan's plan mode is exactly this deny-list — the agent can explore
   //    but never modify — plus plan instructions appended to the system
   //    prompt by the agent loop, so it produces a plan for approval.
   if (uiMode === "read-only" || uiMode === "plan") {

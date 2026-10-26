@@ -1,4 +1,4 @@
-export * as TrayambakIndexing from "./indexing"
+export * as NemoIndexing from "./indexing"
 
 export interface IndexingConfig {
   readonly enabled: boolean

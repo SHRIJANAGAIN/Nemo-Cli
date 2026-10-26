@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -15,20 +15,20 @@ import { loadConfig } from "./config.js"
  * and restored around each case.
  */
 
-const savedSmall = process.env.TRAYAMBAK_SMALL_MODEL
-const savedSubagent = process.env.TRAYAMBAK_SUBAGENT_MODEL
-const savedJudge = process.env.TRAYAMBAK_JUDGE_MODEL
-const savedCompany = process.env.TRAYAMBAK_COMPANY_MODEL
+const savedSmall = process.env.NEMO_SMALL_MODEL
+const savedSubagent = process.env.NEMO_SUBAGENT_MODEL
+const savedJudge = process.env.NEMO_JUDGE_MODEL
+const savedCompany = process.env.NEMO_COMPANY_MODEL
 
 afterEach(() => {
-  if (savedSmall === undefined) delete process.env.TRAYAMBAK_SMALL_MODEL
-  else process.env.TRAYAMBAK_SMALL_MODEL = savedSmall
-  if (savedSubagent === undefined) delete process.env.TRAYAMBAK_SUBAGENT_MODEL
-  else process.env.TRAYAMBAK_SUBAGENT_MODEL = savedSubagent
-  if (savedJudge === undefined) delete process.env.TRAYAMBAK_JUDGE_MODEL
-  else process.env.TRAYAMBAK_JUDGE_MODEL = savedJudge
-  if (savedCompany === undefined) delete process.env.TRAYAMBAK_COMPANY_MODEL
-  else process.env.TRAYAMBAK_COMPANY_MODEL = savedCompany
+  if (savedSmall === undefined) delete process.env.NEMO_SMALL_MODEL
+  else process.env.NEMO_SMALL_MODEL = savedSmall
+  if (savedSubagent === undefined) delete process.env.NEMO_SUBAGENT_MODEL
+  else process.env.NEMO_SUBAGENT_MODEL = savedSubagent
+  if (savedJudge === undefined) delete process.env.NEMO_JUDGE_MODEL
+  else process.env.NEMO_JUDGE_MODEL = savedJudge
+  if (savedCompany === undefined) delete process.env.NEMO_COMPANY_MODEL
+  else process.env.NEMO_COMPANY_MODEL = savedCompany
 })
 
 describe("config cheap models", () => {
@@ -41,34 +41,34 @@ describe("config cheap models", () => {
 
   it("accepts explicit values from overrides", () => {
     const cfg = loadConfig({
-      provider: "openai",
+      provider: "nvidia",
       baseUrl: "",
       model: "",
-      small_model: "gpt-4o-mini",
-      subagent_model: "gpt-4o-mini",
+      small_model: "nvidia/llama-3.3-70b-instruct",
+      subagent_model: "nvidia/llama-3.3-70b-instruct",
     })
 
-    expect(cfg.small_model).toBe("gpt-4o-mini")
-    expect(cfg.subagent_model).toBe("gpt-4o-mini")
+    expect(cfg.small_model).toBe("nvidia/llama-3.3-70b-instruct")
+    expect(cfg.subagent_model).toBe("nvidia/llama-3.3-70b-instruct")
   })
 
   it("trims values and folds blanks to undefined", () => {
     const cfg = loadConfig({
-      provider: "openai",
+      provider: "nvidia",
       baseUrl: "",
       model: "",
-      small_model: "  gpt-4o-mini  ",
+      small_model: "  nvidia/llama-3.3-70b-instruct  ",
       subagent_model: "   ",
     })
 
-    expect(cfg.small_model).toBe("gpt-4o-mini")
+    expect(cfg.small_model).toBe("nvidia/llama-3.3-70b-instruct")
     expect(cfg.subagent_model).toBeUndefined()
   })
 
-  it("reads TRAYAMBAK_SMALL_MODEL / TRAYAMBAK_SUBAGENT_MODEL like TRAYAMBAK_MODEL", () => {
-    process.env.TRAYAMBAK_SMALL_MODEL = "tiny"
-    process.env.TRAYAMBAK_SUBAGENT_MODEL = "worker"
-    const cfg = loadConfig({ provider: "openai", baseUrl: "", model: "" })
+  it("reads NEMO_SMALL_MODEL / NEMO_SUBAGENT_MODEL like NEMO_MODEL", () => {
+    process.env.NEMO_SMALL_MODEL = "tiny"
+    process.env.NEMO_SUBAGENT_MODEL = "worker"
+    const cfg = loadConfig({ provider: "nvidia", baseUrl: "", model: "" })
 
     expect(cfg.small_model).toBe("tiny")
     expect(cfg.subagent_model).toBe("worker")
@@ -88,7 +88,7 @@ describe("config cheap models", () => {
     const blank = loadConfig({ provider: "ollama", baseUrl: "", model: "", judge_model: "   " })
     expect(blank.judge_model).toBeUndefined()
 
-    process.env.TRAYAMBAK_JUDGE_MODEL = "judge-tiny"
+    process.env.NEMO_JUDGE_MODEL = "judge-tiny"
     const fromEnv = loadConfig({ provider: "ollama", baseUrl: "", model: "" })
     expect(fromEnv.judge_model).toBe("judge-tiny")
   })
@@ -102,7 +102,7 @@ describe("config cheap models", () => {
     const blank = loadConfig({ provider: "ollama", baseUrl: "", model: "", companyModel: "   " })
     expect(blank.companyModel).toBeUndefined()
 
-    process.env.TRAYAMBAK_COMPANY_MODEL = "company-worker"
+    process.env.NEMO_COMPANY_MODEL = "company-worker"
     const fromEnv = loadConfig({ provider: "ollama", baseUrl: "", model: "" })
     expect(fromEnv.companyModel).toBe("company-worker")
   })

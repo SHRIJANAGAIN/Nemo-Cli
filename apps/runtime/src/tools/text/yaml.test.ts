@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -17,14 +17,14 @@ const scalar = (node: unknown): string | undefined => (node as { scalar?: string
 describe("parseYamlComment", () => {
   it("parses unquoted, quoted, null, and tilde scalars", () => {
     const doc = parseYamlComment(
-      ["name: trayambak", 'version: "2.0"', "author: 'SKT AI LABS'", "empty: null", "tilde: ~", "nothing:"].join("\n"),
+      ["name: nemo", 'version: "2.0"', "author: 'Shrijan'", "empty: null", "tilde: ~", "nothing:"].join("\n"),
     )
     expect(doc.kind).toBe("map")
     const entries: Record<string, string | undefined> = {}
     for (const e of doc.mapEntries ?? []) entries[e.key] = scalar(e.value)
-    expect(entries["name"]).toBe("trayambak")
+    expect(entries["name"]).toBe("nemo")
     expect(entries["version"]).toBe("2.0")
-    expect(entries["author"]).toBe("SKT AI LABS")
+    expect(entries["author"]).toBe("Shrijan")
     expect(entries["empty"]).toBe("")
     expect(entries["tilde"]).toBe("")
     // A key with no inline value resolves to an (empty) sub-block map.
@@ -156,7 +156,7 @@ describe("yaml tool", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd()
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-yaml-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-yaml-"))
     process.chdir(tmp)
   })
 
@@ -216,7 +216,7 @@ describe("yaml tool", () => {
   })
 
   it("resolves relative file paths against the tool context cwd", async () => {
-    const other = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-yaml-cwd-"))
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-yaml-cwd-"))
     try {
       fs.writeFileSync(path.join(other, "c.yaml"), "name: ok\n", "utf8")
       const res = await createYamlTool().execute("call-1", { file: "c.yaml" }, undefined, undefined, {

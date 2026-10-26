@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -18,13 +18,13 @@ export interface PlanOptions {
   readonly status?: "pending" | "in_progress" | "completed" | "blocked"
 }
 
-const PLAN_DIR = path.join(os.homedir(), ".trayambak", "plans")
+const PLAN_DIR = path.join(os.homedir(), ".nemo", "plans")
 
 /**
  * Plan ids are single path segments by construction (`plan-<base36>`), so
  * anything a caller (slash handler, CLI arg) hands us must clear this BEFORE
  * it reaches a path join: `../../secret` would otherwise read/write `.json`
- * files outside `~/.trayambak/plans`. Same shape as the session-id choke
+ * files outside `~/.nemo/plans`. Same shape as the session-id choke
  * point in packages/core validate.
  */
 const PLAN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/

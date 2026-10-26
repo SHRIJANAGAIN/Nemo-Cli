@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -10,12 +10,25 @@ import * as https from "https"
 import * as os from "os"
 import * as path from "path"
 
-declare const __dirname: string
-import { loadConfig, type TrayambakConfig } from "../../../runtime/src/index.js"
+import { loadConfig, type NemoConfig } from "../../../runtime/src/index.js"
 import { locateLlamaCppBin } from "../../../runtime/src/llama-cpp-bin.js"
 import { configPath } from "../../../runtime/src/config.js"
+import { VERSION } from "../version.js"
 
 type CheckResult = { name: string; ok: boolean; detail: string }
+
+/** Max bytes buffered from a probed server: the operator's baseUrl can point
+ *  anywhere (including a repo-planted config), so a trickling server must
+ *  not be able to grow the buffer without bound (same class as the
+ *  web_search whole-response buffering). Past the cap the socket is
+ *  destroyed and whatever arrived is parsed best-effort. */
+export const DOCTOR_PROBE_MAX_BYTES = 64 * 1024
+
+export function appendProbeChunk(buf: string, chunk: string): { buf: string; over: boolean } {
+  if (buf.length >= DOCTOR_PROBE_MAX_BYTES) return { buf, over: true }
+  const next = buf + chunk.slice(0, DOCTOR_PROBE_MAX_BYTES - buf.length)
+  return { buf: next, over: buf.length + chunk.length > DOCTOR_PROBE_MAX_BYTES }
+}
 
 async function checkServer(baseUrl: string): Promise<CheckResult> {
   const base = baseUrl.replace(/\/+$/, "")
@@ -27,20 +40,39 @@ async function checkServer(baseUrl: string): Promise<CheckResult> {
       { hostname: url.hostname, port: url.port || defaultPort, path: url.pathname, timeout: 3000 },
       (res) => {
         let buf = ""
+        // Single-settle: destroy() after the cap tears the socket down, and
+        // 'end' never fires on a torn stream — without the 'close' branch
+        // the probe would hang until the 3 s socket timeout instead of
+        // answering immediately.
+        let done = false
+        const finish = (r: CheckResult): void => {
+          if (!done) {
+            done = true
+            resolve(r)
+          }
+        }
+        const unreachable = (detail: string): CheckResult => ({ name: "Server reachable", ok: false, detail })
         res.setEncoding("utf8")
-        res.on("data", (c) => (buf += c))
+        res.on("data", (c) => {
+          const next = appendProbeChunk(buf, String(c))
+          buf = next.buf
+          if (next.over) req.destroy()
+        })
         res.on("end", () => {
           try {
             const json = JSON.parse(buf) as { data?: Array<{ id?: string }> }
             const ids = (json.data ?? []).map((m) => m.id).filter(Boolean)
-            resolve({
+            finish({
               name: "Server reachable",
               ok: true,
               detail: `${base} - model(s): ${ids.join(", ") || "none reported"}`,
             })
           } catch {
-            resolve({ name: "Server reachable", ok: false, detail: `${base} returned an unparseable response` })
+            finish({ name: "Server reachable", ok: false, detail: `${base} returned an unparseable response` })
           }
+        })
+        res.on("close", () => {
+          finish(unreachable(`${base} - connection closed mid-response`))
         })
       },
     )
@@ -76,14 +108,14 @@ export async function doctorCommand(): Promise<void> {
       detail: fs.existsSync(cfg.modelPath) ? cfg.modelPath : `not found: ${cfg.modelPath}`,
     })
   } else {
-    results.push({ name: "GGUF model", ok: true, detail: "not configured (TRAYAMBAK_MODEL_PATH or --model-path)" })
+    results.push({ name: "GGUF model", ok: true, detail: "not configured (NEMO_MODEL_PATH or --model-path)" })
   }
 
   const bin = locateLlamaCppBin()
   results.push({
     name: "llama.cpp server binary",
     ok: Boolean(bin),
-    detail: bin ? bin : "not found - set TRAYAMBAK_LLAMACPP_BIN or run `trayambak serve` to auto-download",
+    detail: bin ? bin : "not found - set NEMO_LLAMACPP_BIN or run `nemo serve` to auto-download",
   })
 
   const server = await checkServer(cfg.baseUrl)
@@ -117,10 +149,9 @@ export async function doctorCommand(): Promise<void> {
 }
 
 export function infoCommand(): void {
-  const cfg = loadConfig() as TrayambakConfig
-  const version = readVersion()
+  const cfg = loadConfig() as NemoConfig
   const lines = [
-    `trayambak ${version}`,
+    `nemo ${VERSION}`,
     `node      v${process.versions.node}`,
     `platform  ${process.platform} ${process.arch}`,
     `cwd       ${process.cwd()}`,
@@ -131,22 +162,4 @@ export function infoCommand(): void {
     `tools     ${cfg.nativeTools ? "native function calling" : "text fallback"}`,
   ]
   process.stdout.write(lines.join("\n") + "\n")
-}
-
-function readVersion(): string {
-  const candidates = [
-    path.resolve(__dirname, "..", "..", "..", "..", "..", "package.json"),
-    path.resolve(process.cwd(), "package.json"),
-  ]
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p)) {
-        const json = JSON.parse(fs.readFileSync(p, "utf8")) as { version?: string }
-        if (json.version) return json.version
-      }
-    } catch {
-      /* keep looking */
-    }
-  }
-  return "0.3.0"
 }

@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 import { afterEach, describe, expect, it } from "vitest"
 import { SandboxType } from "./types.js"
@@ -15,7 +19,11 @@ afterEach(() => {
 describe("osCapableBackend", () => {
   it("admits only backends with a real isolator", () => {
     expect(osCapableBackend("seatbelt")).toBe(true)
-    expect(osCapableBackend("landlock")).toBe(true)
+    // Landlock is NOT os-capable here. It is a `SandboxBackend` member and it used
+    // to be admitted, which made `enforcementFor("landlock")` answer
+    // `os-sandbox` for an enforcement path no code implements. `landlock.ts`
+    // plans rulesets; the syscall that installs one does not exist.
+    expect(osCapableBackend("landlock")).toBe(false)
     expect(osCapableBackend("bwrap")).toBe(true)
     expect(osCapableBackend("windows-restricted")).toBe(true)
     expect(osCapableBackend("fallback")).toBe(false)
@@ -24,7 +32,7 @@ describe("osCapableBackend", () => {
 })
 
 describe("shouldUseOsSandbox", () => {
-  it("engages seatbelt/landlock/windows-restricted out of the box now that the flag is stable-on", () => {
+  it("engages seatbelt/bwrap/windows-restricted out of the box now that the flag is stable-on", () => {
     delete process.env[FLAG]
 
     expect(shouldUseOsSandbox(SandboxType.MacosSeatbelt)).toBe(true)

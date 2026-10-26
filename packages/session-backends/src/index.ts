@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -69,3 +69,62 @@ export function createSessionBackend(file?: string): SessionBackend {
 }
 
 export * from "./transcript.js"
+
+/* Read side. `transcript.ts` wrote context.jsonl / wire.jsonl but nothing read
+ * them back, so a transcript was write-only and resume could not rebuild history
+ * from it. */
+export {
+  DEFAULT_READ_BYTES,
+  MAX_TRANSCRIPT_BYTES,
+  describeRead,
+  isMessageRecord,
+  loadContextForResume,
+  readContext,
+  readContextTail,
+  readJsonl,
+  readWire,
+  type ContextLoad,
+  type DetailedReadResult,
+  type QuarantinedLine,
+  type ReadResult,
+  type WireRecord,
+} from "./read.js"
+
+/* Retention + integrity: bounded growth and torn-write detection. */
+export {
+  OVERSIZE_BYTES,
+  formatSessionReport,
+  previewPrune,
+  pruneSessions,
+  totalSessionBytes,
+  verifySession,
+  type PruneOptions,
+  type PruneResult,
+  type SessionHealth,
+  type SessionReport,
+} from "./retention.js"
+
+/* Export renderers behind the format the README advertises. */
+export {
+  exportAll,
+  exportFileName,
+  exportSession,
+  type ExportFormat,
+  type ExportOptions,
+  type ExportResult,
+} from "./export.js"
+
+/* Fork with recorded provenance. */
+export {
+  forkChain,
+  forkSession,
+  readProvenance,
+  type ForkOptions,
+  type ForkProvenance,
+  type ForkResult,
+} from "./fork.js"
+
+/* Analytics: turn a stored transcript into numbers. The pure analysis lives in
+ * packages/core (zero imports) so `apps/cli`, which may only import core and
+ * execpolicy, can reach it; only the filesystem half lives here. */
+export { readTranscriptStats, readTranscriptStatsText } from "./analytics.js"

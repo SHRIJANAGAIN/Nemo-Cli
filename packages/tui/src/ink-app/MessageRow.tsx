@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode } from "react"
@@ -11,13 +11,13 @@ import { MarkdownBlock } from "./Markdown.js"
 import { Spinner } from "./Spinner.js"
 import { ThinkingOrbs } from "./ThinkingOrbs.js"
 import { SubagentRow } from "./SubagentRow.js"
-import type { TrayambakMessage, ToolCallStatus, MessagePart, AppStatus } from "./types.js"
+import type { NemoMessage, ToolCallStatus, MessagePart, AppStatus } from "./types.js"
 import { bubbleBackground, useThemeColors } from "./themeColors.js"
 import { hardWrapLongRuns, normalizeStairIndent } from "./text-format.js"
 import { g } from "./glyphs.js"
 
 export interface MessageRowProps {
-  message: TrayambakMessage
+  message: NemoMessage
   verbose?: boolean
   isTranscriptMode?: boolean
   isStreaming?: boolean
@@ -208,7 +208,7 @@ export const MessageRow = ({
     const isError = message.isError ?? false
     const statusColor = isError ? theme.error : theme.success
     const statusIcon = isError ? g("fail") : g("ok")
-    // SKT AI LABS port: tool results collapse to ONE line. A resumed session used
+    // Shrijan port: tool results collapse to ONE line. A resumed session used
     // to dump every result's full JSON payload inline — walls of raw
     // interleave that buried the conversation under tool output.
     // Ctrl+O unfolds to full text (200-line cap, wrapped) instead.

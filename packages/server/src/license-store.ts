@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -15,22 +15,12 @@
  * checksums all day — every one dies at "unknown license" below.
  *
  * Persistence: one JSON file (0600, atomic tmp+rename writes) for the key
- * registry + one append-only JSONL file for pentest usage telemetry. Sized
- * for a license server (hundreds of keys, thousands of usage lines), not a
- * database — rotation trims the usage log past ~2MB. Single Node process:
- * no lock files, in-memory map flushed on every mutation.
+ * registry. Sized for a license server (hundreds of keys), not a database.
+ * Single Node process: no lock files, in-memory map flushed on every
+ * mutation.
  */
 
-import {
-  appendFileSync,
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { normalizeLicenseKey, verifyLicenseKey, type LicensePlan } from "../../../apps/runtime/src/license.js"
 
@@ -52,24 +42,13 @@ export interface LicenseRecord {
   lastSeenAt?: string
 }
 
-export interface UsageEntry {
-  ts: string
-  keyId: string
-  machineId: string
-  tool: string
-  target: string
-  ok: boolean
-}
-
 export interface LicenseStorePaths {
   file: string
-  usageFile: string
 }
 
 export function defaultLicenseStorePaths(): LicenseStorePaths {
   const file = process.env.LICENSE_STORE_PATH ?? "./data/licenses.json"
-  const usageFile = process.env.LICENSE_USAGE_PATH ?? "./data/license-usage.jsonl"
-  return { file, usageFile }
+  return { file }
 }
 
 interface StoreFile {
@@ -112,9 +91,7 @@ export interface LicenseCheck {
   record?: LicenseRecord
 }
 
-const PENTEST_PLANS: ReadonlySet<string> = new Set(["pentest", "pro", "enterprise"])
-
-/** Pure decision procedure, shared by /verify, /activate, /usage. */
+/** Pure decision procedure, shared by /verify and /activate. */
 export function checkLicense(
   keys: Record<string, LicenseRecord>,
   displayKey: string | undefined | null,
@@ -131,12 +108,12 @@ export function checkLicense(
   // Full-code match: same id must mean the same code (kills id-collision
   // lookalikes across the two wire generations).
   if (!rec || normalizeLicenseKey(rec.key) !== compact) {
-    return { valid: false, reason: "unknown license (not issued by SKT — register it via /admin first)" }
+    return { valid: false, reason: "unknown license (not issued by Shrijan — register it via /admin first)" }
   }
   if (v.claims.exp * 1000 <= Date.now()) {
     return { valid: false, reason: `expired on ${new Date(v.claims.exp * 1000).toISOString().slice(0, 10)}` }
   }
-  if (rec.revoked) return { valid: false, reason: "license revoked — contact SKT AI LABS", record: rec }
+  if (rec.revoked) return { valid: false, reason: "license revoked — contact Shrijan", record: rec }
   const machine = typeof machineId === "string" ? machineId.trim() : ""
   if (!machine) return { valid: false, reason: "no machine identity supplied", record: rec }
   if (!rec.boundMachineId) {
@@ -147,41 +124,19 @@ export function checkLicense(
     }
   }
   if (rec.boundMachineId !== machine) {
-    return { valid: false, reason: "bound to another machine (1-machine license) — ask SKT to unbind it", record: rec }
+    return { valid: false, reason: "bound to another machine (1-machine license) — ask Shrijan to unbind it", record: rec }
   }
   return { valid: true, plan: v.claims.plan, exp: v.claims.exp, record: rec }
-}
-
-export function checkPentest(
-  keys: Record<string, LicenseRecord>,
-  displayKey: string | undefined | null,
-  machineId: string | undefined | null,
-  secret?: string,
-): LicenseCheck {
-  const c = checkLicense(keys, displayKey, machineId, secret)
-  if (c.valid !== true) return c
-  if (!c.plan || !PENTEST_PLANS.has(c.plan)) {
-    return {
-      valid: false,
-      plan: c.plan,
-      exp: c.exp,
-      reason: `plan '${c.plan ?? "unknown"}' does not cover pentest tools`,
-      record: c.record,
-    }
-  }
-  return c
 }
 
 export class LicenseStore {
   private keys: Record<string, LicenseRecord>
   private readonly file: string
-  private readonly usageFile: string
   private readonly secret?: string
 
   constructor(paths?: Partial<LicenseStorePaths>, secret?: string) {
     const defaults = defaultLicenseStorePaths()
     this.file = paths?.file ?? defaults.file
-    this.usageFile = paths?.usageFile ?? defaults.usageFile
     this.secret = secret
     this.keys = loadStoreFile(this.file)
   }
@@ -217,10 +172,6 @@ export class LicenseStore {
 
   check(displayKey: string | undefined | null, machineId: string | undefined | null): LicenseCheck {
     return checkLicense(this.keys, displayKey, machineId, this.secret)
-  }
-
-  checkPentestOnly(displayKey: string | undefined | null, machineId: string | undefined | null): LicenseCheck {
-    return checkPentest(this.keys, displayKey, machineId, this.secret)
   }
 
   /** Bind an unbound key to a machine. Same-machine re-activation is a
@@ -289,45 +240,5 @@ export class LicenseStore {
 
   get size(): number {
     return Object.keys(this.keys).length
-  }
-
-  /** Append a pentest usage entry (JSONL). Rotates past ~2MB to the newest
-   *  5000 lines so the 1GB VPS never chokes on telemetry. */
-  appendUsage(entry: Omit<UsageEntry, "ts">): void {
-    mkdirSync(dirname(this.usageFile), { recursive: true })
-    const line = `${JSON.stringify({ ...entry, ts: new Date().toISOString() })}\n`
-    try {
-      appendFileSync(this.usageFile, line, "utf8")
-      const size = statSync(this.usageFile).size
-      if (size > 2_097_152) {
-        const lines = readFileSync(this.usageFile, "utf8")
-          .split("\n")
-          .filter((l) => l.length > 0)
-        writeFileSync(this.usageFile, `${lines.slice(-5000).join("\n")}\n`, "utf8")
-      }
-    } catch {
-      // Telemetry must never break licensing — the gate already passed.
-    }
-  }
-
-  readUsageTail(n: number): UsageEntry[] {
-    const count = Math.min(Math.max(Math.floor(n), 1), 500)
-    try {
-      if (!existsSync(this.usageFile)) return []
-      const lines = readFileSync(this.usageFile, "utf8")
-        .split("\n")
-        .filter((l) => l.length > 0)
-      const out: UsageEntry[] = []
-      for (const line of lines.slice(-count)) {
-        try {
-          out.push(JSON.parse(line) as UsageEntry)
-        } catch {
-          // Skip torn lines.
-        }
-      }
-      return out
-    } catch {
-      return []
-    }
   }
 }

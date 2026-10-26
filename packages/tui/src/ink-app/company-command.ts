@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -19,7 +19,7 @@
  */
 
 import { createAgentConfig } from "./app-bootstrap.js"
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 import { loadConfig, saveConfig } from "../../../../apps/runtime/src/config.js"
 import { splitCompanyRunArgs } from "../../../../apps/cli/src/commands/company.js"
 import {
@@ -45,11 +45,11 @@ export interface CompanySlashDeps {
   /** Batch launcher for mass runs (whole department / whole company). */
   readonly launchMany: (items: Array<{ type: string; prompt: string }>, background: boolean) => void
   /** Live agent config, patched in place so the next turn sees the change. */
-  readonly agentConfigRef: { current: TrayambakConfig | null }
+  readonly agentConfigRef: { current: NemoConfig | null }
   /** Nulled to force an agent rebuild on the next message. */
   readonly agentRef: { current: unknown }
   /** Config as loaded at boot; used only as the `createAgentConfig` seed. */
-  readonly bootConfig: Partial<TrayambakConfig> | null
+  readonly bootConfig: Partial<NemoConfig> | null
 }
 
 const USAGE =
@@ -59,7 +59,7 @@ export function handleCompanySlash(deps: CompanySlashDeps): void {
   const { args, addSystemMessage, launchSubagent, launchMany, agentConfigRef, agentRef, bootConfig } = deps
 
   /** Persist a config patch AND arm the agent rebuild that makes it live. */
-  const syncAgentConfig = (patch: Partial<TrayambakConfig>): void => {
+  const syncAgentConfig = (patch: Partial<NemoConfig>): void => {
     saveConfig(patch)
     agentConfigRef.current = { ...(agentConfigRef.current ?? createAgentConfig(bootConfig ?? {})), ...patch }
   }
@@ -67,7 +67,7 @@ export function handleCompanySlash(deps: CompanySlashDeps): void {
   const state = resolveCompanyState(deps.companyDir, deps.cwd, deps.homeDir, loadConfig())
   if (!state) {
     addSystemMessage(
-      "Company library not found — set TRAYAMBAK_COMPANY_DIR or companyDir to the checkout (e.g. ~/agency-agents-main).",
+      "Company library not found — set NEMO_COMPANY_DIR or companyDir to the checkout (e.g. ~/agency-agents-main).",
     )
     return
   }

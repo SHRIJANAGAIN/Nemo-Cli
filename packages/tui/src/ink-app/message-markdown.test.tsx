@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -22,7 +22,7 @@ import { PassThrough } from "node:stream"
 import { describe, expect, it } from "vitest"
 import { MessageRow } from "./MessageRow.js"
 import { ToolCallItem } from "./ToolCallItem.js"
-import type { TrayambakMessage, ToolCallDisplay } from "./types.js"
+import type { NemoMessage, ToolCallDisplay } from "./types.js"
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -44,7 +44,7 @@ async function renderNode(node: React.ReactElement): Promise<string> {
   return stripAnsi(sink)
 }
 
-function renderRow(message: TrayambakMessage): Promise<string> {
+function renderRow(message: NemoMessage): Promise<string> {
   return renderNode(React.createElement(MessageRow, { message }))
 }
 
@@ -63,7 +63,7 @@ const SCREENSHOT_ANSWER = [
 
 describe("assistant messages render markdown (no raw symbols)", () => {
   it("paints the reported table answer without |, backticks, or the alignment row", async () => {
-    const message = { id: "a1", timestamp: 1, role: "assistant", content: SCREENSHOT_ANSWER } as TrayambakMessage
+    const message = { id: "a1", timestamp: 1, role: "assistant", content: SCREENSHOT_ANSWER } as NemoMessage
     const frame = await renderRow(message)
 
     // Content survives…
@@ -92,7 +92,7 @@ describe("assistant messages render markdown (no raw symbols)", () => {
       role: "assistant",
       content: "",
       parts: [{ text: { type: "text", text: "### Summary\n\n- **done**\n- `next`" } }],
-    } as unknown as TrayambakMessage
+    } as unknown as NemoMessage
     const frame = await renderRow(message)
 
     expect(frame).toContain("Summary")
@@ -111,7 +111,7 @@ describe("tool output is verbatim (no markdown)", () => {
       role: "tool",
       content: "**not bold** and `code` and [x](y) and ### heading",
       toolName: "bash",
-    } as TrayambakMessage
+    } as NemoMessage
     const frame = await renderRow(message)
 
     expect(frame).toContain("**not bold**")

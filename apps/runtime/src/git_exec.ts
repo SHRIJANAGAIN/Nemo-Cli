@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execFile } from "child_process"
@@ -19,7 +19,7 @@ const GIT_DEFAULT_TIMEOUT_MS = 30_000
 
 /**
  * Run git with the same child-process boundary every other repo-command
- * path (bash, skills, hook-exec, pentest) already carries:
+ * path (bash, skills, hook-exec) already carries:
  *
  * - **Filtered env.** `git worktree add` executes the repository's
  *   `post-checkout` hook (verified) and checkout runs any configured

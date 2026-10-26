@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -11,8 +11,8 @@ import type { ProviderEntry } from "./registry.js"
 
 const entry = (over: Partial<ProviderEntry> = {}): ProviderEntry => ({
   id: "p1",
-  type: "openai",
-  label: "OpenAI",
+  type: "nvidia",
+  label: "NVIDIA",
   baseUrl: "http://127.0.0.1:9/v1",
   apiKey: "test-key",
   ...over,
@@ -26,7 +26,7 @@ describe("ProviderManager registry operations", () => {
 
     m.add(entry())
     expect(m.list().length).toBe(1)
-    expect(m.get("p1")?.label).toBe("OpenAI")
+    expect(m.get("p1")?.label).toBe("NVIDIA")
     expect(m.get("missing")).toBeUndefined()
     expect(m.active()?.id).toBe("p1")
   })
@@ -67,11 +67,11 @@ describe("ProviderManager registry operations", () => {
   it("exposes registered provider types case-insensitively", () => {
     const m = new ProviderManager()
     const types = m.supportedTypes()
-    expect(types).toContain("openai")
+    expect(types).toContain("nvidia")
     expect(types).toContain("ollama")
-    expect(types).toContain("anthropic")
-    expect(types.length).toBeGreaterThanOrEqual(9)
-    expect(m.hasType("OPENAI")).toBe(true)
+    expect(types).toContain("custom")
+    expect(types.length).toBeGreaterThanOrEqual(5)
+    expect(m.hasType("NVIDIA")).toBe(true)
     expect(m.hasType("bogus")).toBe(false)
   })
 })

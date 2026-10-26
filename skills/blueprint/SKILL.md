@@ -61,7 +61,7 @@ Produces `plans/myapp-migrate-database-to-postgresql.md` with steps like:
 /blueprint chatbot "extract LLM providers into a plugin system"
 ```
 
-Produces a plan with parallel steps where possible (e.g., "implement SKT AI LABS plugin" and "implement OpenAI plugin" run in parallel after the plugin interface step is done), model tier assignments (strongest for the interface design step, default for implementation), and invariants verified after every step (e.g., "all existing tests pass", "no provider imports in core").
+Produces a plan with parallel steps where possible (e.g., "implement Shrijan plugin" and "implement OpenAI plugin" run in parallel after the plugin interface step is done), model tier assignments (strongest for the interface design step, default for implementation), and invariants verified after every step (e.g., "all existing tests pass", "no provider imports in core").
 
 ## Key Features
 
@@ -70,11 +70,11 @@ Produces a plan with parallel steps where possible (e.g., "implement SKT AI LABS
 - **Branch/PR/CI workflow** — Built into every step. Degrades gracefully to direct mode when git/gh is absent.
 - **Parallel step detection** — Dependency graph identifies steps with no shared files or output dependencies.
 - **Plan mutation protocol** — Steps can be split, inserted, skipped, reordered, or abandoned with formal protocols and audit trail.
-- **Zero runtime risk** — Pure Markdown skill. The entire repository contains only `.md` files — no hooks, no shell scripts, no executable code, no `package.json`, no build step. Nothing runs on install or invocation beyond Trayambak Code's native Markdown skill loader.
+- **Zero runtime risk** — Pure Markdown skill. The entire repository contains only `.md` files — no hooks, no shell scripts, no executable code, no `package.json`, no build step. Nothing runs on install or invocation beyond Nemo Code's native Markdown skill loader.
 
 ## Installation
 
-This skill ships with Everything Trayambak Code. No separate installation is needed when ECC is installed.
+This skill ships with Everything Nemo Code. No separate installation is needed when ECC is installed.
 
 ### Full ECC install
 
@@ -87,7 +87,7 @@ test -f skills/blueprint/SKILL.md
 To update later, review the ECC diff before updating:
 
 ```bash
-cd /path/to/trayambak
+cd /path/to/nemo
 git fetch origin main
 git log --oneline HEAD..origin/main       # review new commits before updating
 git checkout <reviewed-full-sha>          # pin to a specific reviewed commit
@@ -95,11 +95,11 @@ git checkout <reviewed-full-sha>          # pin to a specific reviewed commit
 
 ### Vendored standalone install
 
-If you are vendoring only this skill outside the full ECC install, copy the reviewed file from the ECC repository into `~/.trayambak/skills/blueprint/SKILL.md`. Vendored copies do not have a git remote, so update them by re-copying the file from a reviewed ECC commit rather than running `git pull`.
+If you are vendoring only this skill outside the full ECC install, copy the reviewed file from the ECC repository into `~/.nemo/skills/blueprint/SKILL.md`. Vendored copies do not have a git remote, so update them by re-copying the file from a reviewed ECC commit rather than running `git pull`.
 
 ## Requirements
 
-- Trayambak Code (for `/blueprint` slash command)
+- Nemo Code (for `/blueprint` slash command)
 - Git + GitHub CLI (optional — enables full branch/PR/CI workflow; Blueprint detects absence and auto-switches to direct mode)
 
 ## Source

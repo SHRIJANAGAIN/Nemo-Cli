@@ -1,4 +1,4 @@
-export * as TrayambakWatcher from "./watcher"
+export * as NemoWatcher from "./watcher"
 
 import { EventEmitter } from "events"
 

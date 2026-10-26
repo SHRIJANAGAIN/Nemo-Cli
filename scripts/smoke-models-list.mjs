@@ -4,14 +4,14 @@
  * /v1/models JSON never parsed ("empty" → fallback) and (b) resolveModels
  * padded failures with staticModels that looked like the full catalog.
  *
- * Drives the REAL TrayambakApp: local server serves 12 distinctive ids on
+ * Drives the REAL NemoApp: local server serves 12 distinctive ids on
  * GET /v1/models, config points provider nvidia at it, then /models runs the
  * production path (loadConfig → fetchModelsDetailed → resolveModels →
  * ModelPicker). Asserts the picker shows all 12 live ids, NEVER a static
  * fallback id or the "5 models" count, and that the live list lands in the
  * sandbox modelCache (live → cached chain).
  * Hermetic: chdir into a temp sandbox so configDir() resolves there — the
- * user's real ~/.trayambak config is neither read nor written. */
+ * user's real ~/.nemo config is neither read nor written. */
 import { PassThrough } from "node:stream"
 import http from "node:http"
 import fs from "node:fs"
@@ -24,11 +24,11 @@ const distEsm = pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "
 
 // Env hermeticity: no ambient overrides may leak into loadConfig().
 for (const env of [
-  "TRAYAMBAK_BASE_URL",
-  "TRAYAMBAK_API_KEY",
-  "TRAYAMBAK_PROVIDER",
-  "TRAYAMBAK_THEME",
-  "TRAYAMBAK_MODEL",
+  "NEMO_BASE_URL",
+  "NEMO_API_KEY",
+  "NEMO_PROVIDER",
+  "NEMO_THEME",
+  "NEMO_MODEL",
 ]) {
   delete process.env[env]
 }
@@ -46,24 +46,24 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r))
 const port = server.address().port
 
-// Sandbox: chdir BEFORE the app boots so configDir() = <sandbox>/.trayambak.
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-models-"))
+// Sandbox: chdir BEFORE the app boots so configDir() = <sandbox>/.nemo.
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-models-"))
 process.chdir(sandbox)
 const config = {
-  themeName: "trayambak-dark", // skip ThemePicker
+  themeName: "nemo-dark", // skip ThemePicker
   provider: "nvidia",
   baseUrl: `http://127.0.0.1:${port}`,
   apiKey: "test-key",
   model: "test/model",
   cwd: sandbox,
 }
-fs.mkdirSync(path.join(sandbox, ".trayambak"), { recursive: true })
-fs.writeFileSync(path.join(sandbox, ".trayambak", "config.json"), JSON.stringify(config, null, 2))
-const convDir = path.join(sandbox, "skt", "8-conversations")
+fs.mkdirSync(path.join(sandbox, ".nemo"), { recursive: true })
+fs.writeFileSync(path.join(sandbox, ".nemo", "config.json"), JSON.stringify(config, null, 2))
+const convDir = path.join(sandbox, "nemo", "8-conversations")
 fs.mkdirSync(convDir, { recursive: true })
 fs.writeFileSync(path.join(convDir, "sessions.json"), "[]")
 fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "models-smoke" }))
-process.env.TRAYAMBAK_HOME = sandbox
+process.env.NEMO_HOME = sandbox
 
 // Raw terminal end (faked TTY exactly like the other full-app smokes).
 const stdin = new PassThrough()
@@ -86,12 +86,12 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "")
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config,
     modelName: "test/model",
     permissionMode: "ask",
@@ -114,7 +114,7 @@ function assert(cond, label) {
 }
 
 await wait(700)
-assert(stripAnsi(sink).includes("Welcome To Trayambak CLI"), "boot renders Welcome screen")
+assert(stripAnsi(sink).includes("Welcome To Nemo CLI"), "boot renders Welcome screen")
 
 // Run the production /models path against the local server.
 sink = ""
@@ -131,7 +131,7 @@ assert(!frame.includes("mixtral-8x7b-instruct"), "static fallback id (mixtral) n
 assert(!frame.includes("5 models"), 'no "5 models" count anywhere')
 
 // Live list must persist to the sandbox modelCache (live → cached chain).
-const saved = JSON.parse(fs.readFileSync(path.join(sandbox, ".trayambak", "config.json"), "utf8"))
+const saved = JSON.parse(fs.readFileSync(path.join(sandbox, ".nemo", "config.json"), "utf8"))
 const cache = saved.modelCache?.nvidia ?? []
 assert(cache.length === 12, `modelCache.nvidia persisted 12 live ids (got ${cache.length})`)
 

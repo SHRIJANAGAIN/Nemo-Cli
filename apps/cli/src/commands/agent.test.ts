@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -12,10 +12,10 @@ import * as path from "node:path"
 import type * as AgentModule from "./agent.js"
 
 /**
- * discoverAgentProfiles() reads `<cwd>/.trayambak/agents/*.{md,txt,...}` at
+ * discoverAgentProfiles() reads `<cwd>/.nemo/agents/*.{md,txt,...}` at
  * CALL time plus the bundled assets/agents folder (found via the module's own
  * __dirname). Every test therefore chdirs into a throwaway dir with its own
- * .trayambak, and a temp home is held during the dynamic import so the barrel
+ * .nemo, and a temp home is held during the dynamic import so the barrel
  * import chain (llama-cpp-bin etc.) bakes sandboxed paths. The bundled roster
  * is always non-empty, so assertions target the seeded profiles rather than
  * total counts.
@@ -28,8 +28,8 @@ let home = ""
 let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
-const agentFile = (): string => path.join(tmp, ".trayambak", "agents", "test-reviewer.md")
-const txtFile = (): string => path.join(tmp, ".trayambak", "agents", "custom-helper.txt")
+const agentFile = (): string => path.join(tmp, ".nemo", "agents", "test-reviewer.md")
+const txtFile = (): string => path.join(tmp, ".nemo", "agents", "custom-helper.txt")
 
 function seedReviewer(): string {
   const file = agentFile()
@@ -51,9 +51,9 @@ function seedPlainTxt(): string {
 
 beforeAll(async () => {
   originalCwd = process.cwd()
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-agent-home-"))
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-agent-cwd-"))
-  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-agent-home-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-agent-cwd-"))
+  fs.mkdirSync(path.join(tmp, ".nemo"), { recursive: true })
 
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
@@ -77,8 +77,8 @@ afterAll(() => {
 })
 
 beforeEach(() => {
-  fs.rmSync(path.join(tmp, ".trayambak"), { recursive: true, force: true })
-  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  fs.rmSync(path.join(tmp, ".nemo"), { recursive: true, force: true })
+  fs.mkdirSync(path.join(tmp, ".nemo"), { recursive: true })
 })
 
 describe("agentCommand list", () => {
@@ -191,7 +191,7 @@ describe("profile helpers", () => {
 
     const raw = agent.getAgentProfilesRaw().find((p) => p.file === agentFile())
     expect(raw?.prompt).toBe("You are a test agent.")
-    expect(raw?.source).toBe(".trayambak/agents")
+    expect(raw?.source).toBe(".nemo/agents")
     expect(raw?.category).toBe("reviewer")
   })
 })

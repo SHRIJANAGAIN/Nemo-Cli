@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { execFile } from "node:child_process"
 import * as fs from "node:fs"
 import { promisify } from "node:util"
@@ -40,7 +44,7 @@ export function combinePromptWithStdin(prompt: string, piped: string): string {
  *
  * Declared structurally rather than imported from `packages/protocol`, because
  * `apps/cli` may only import `packages/core` and `packages/execpolicy`
- * (`trayambak/no-cross-package-import`). Every `TaggedAgentEvent` satisfies this
+ * (`nemo/no-cross-package-import`). Every `TaggedAgentEvent` satisfies this
  * shape, so the loop's real event stream narrows here unchanged; `allowed` and
  * `passed` are optional only because an event of a different type carries
  * neither, and both are read with an explicit `=== true` so a missing field can

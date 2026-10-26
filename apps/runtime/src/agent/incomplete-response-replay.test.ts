@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -28,7 +28,7 @@ import { describe, expect, it } from "vitest"
 import { runAgentLoop } from "./agent-loop.js"
 import { Session } from "../session/session.js"
 import type { AgentMessage } from "../../../../packages/protocol/src/index.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 
 const cfg = {
   maxTurns: 20,
@@ -37,7 +37,7 @@ const cfg = {
   maxToolCalls: 5,
   cwd: os.tmpdir(),
   permissions: { mode: "default", rules: [], askByDefault: true },
-} as unknown as TrayambakConfig
+} as unknown as NemoConfig
 
 /** Counts provider calls so "did it replay?" is observable, not inferred. */
 function countedProvider(replies: unknown[]) {

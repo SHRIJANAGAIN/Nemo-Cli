@@ -26,7 +26,7 @@ End-to-end testing for Windows native desktop applications using **pywinauto** b
 
 ## Core Concepts
 
-All Windows desktop automation relies on **UI Automation (UIA)**, a Windows-built-in accessibility API. Every supported framework exposes a tree of UIA elements with properties Trayambak can read and act on:
+All Windows desktop automation relies on **UI Automation (UIA)**, a Windows-built-in accessibility API. Every supported framework exposes a tree of UIA elements with properties Nemo can read and act on:
 
 ```
 Your test (Python)

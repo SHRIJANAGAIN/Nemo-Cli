@@ -1,16 +1,17 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
 import React from "react"
+import os from "node:os"
 import { PassThrough } from "node:stream"
 import { Box, Text, render, type Instance } from "ink"
 import { resetGlyphCache } from "./glyphs.js"
 import { liveViewportRows, welcomeFillRows, welcomeLogoCompact } from "./app-bootstrap.js"
-import { WelcomeScreen, formatClock, formatDate, shortPath } from "./WelcomeScreen.js"
+import { WelcomeScreen, formatClock, formatDate, isHomeDir, shortPath } from "./WelcomeScreen.js"
 
 describe("formatClock", () => {
   it("zero-pads hours, minutes and seconds", () => {
@@ -44,7 +45,7 @@ describe("formatDate", () => {
 
 describe("shortPath", () => {
   it("reduces a path to its folder name", () => {
-    expect(shortPath("C:/Users/engli/trayambak")).toBe("trayambak")
+    expect(shortPath("C:/Users/engli/nemo")).toBe("nemo")
     expect(shortPath("C:\\Users\\engli\\Default Project")).toBe("Default Project")
     expect(shortPath("/home/engli/app")).toBe("app")
   })
@@ -65,8 +66,44 @@ describe("shortPath", () => {
     // The label sits in the status block beside a fixed-width key, so a
     // separator here would read as a column misalignment.
     for (const p of ["C:/a/b", "/home/engli", "relative/folder"]) {
-      expect(shortPath(p)).not.toMatch(/[\\/]/)
+      expect(shortPath(p, "/home/nobody")).not.toMatch(/[\\/]/)
     }
+  })
+
+  it("hides the main directory instead of stating the obvious", () => {
+    // Home (case-insensitive, trailing separators tolerated) and filesystem
+    // roots carry no project identity — the Directory line hides there.
+    // Explicit homeDir keeps this hermetic (never the dev box's own home).
+    expect(shortPath("C:\\Users\\engli", "C:\\Users\\engli")).toBe("")
+    expect(shortPath("c:/users/engli/", "C:\\Users\\engli")).toBe("")
+    expect(shortPath("/home/engli", "/home/engli")).toBe("")
+    expect(shortPath("C:\\", "C:\\Users\\engli")).toBe("")
+    expect(shortPath("/", "/home/engli")).toBe("")
+    // Anything else still reduces to its folder name.
+    expect(shortPath("C:\\Users\\engli\\nemo", "C:\\Users\\engli")).toBe("nemo")
+    expect(shortPath("/home/engli/app", "/home/engli")).toBe("app")
+  })
+})
+
+describe("isHomeDir", () => {
+  it("matches home case-insensitively and tolerates trailing separators", () => {
+    expect(isHomeDir("C:\\Users\\Engli", "c:\\users\\engli")).toBe(true)
+    expect(isHomeDir("C:\\Users\\engli\\", "C:\\Users\\engli")).toBe(true)
+    expect(isHomeDir("/home/engli/", "/home/engli")).toBe(true)
+  })
+
+  it("treats filesystem roots as main directories too", () => {
+    expect(isHomeDir("C:\\", "C:\\Users\\engli")).toBe(true)
+    expect(isHomeDir("C:/", "C:\\Users\\engli")).toBe(true)
+    expect(isHomeDir("/", "/home/engli")).toBe(true)
+  })
+
+  it("rejects real project folders, siblings, and empties", () => {
+    expect(isHomeDir("C:\\Users\\engli\\nemo", "C:\\Users\\engli")).toBe(false)
+    expect(isHomeDir("/home/engli/app", "/home/engli")).toBe(false)
+    expect(isHomeDir("/home/other", "/home/engli")).toBe(false)
+    expect(isHomeDir("", "/home/engli")).toBe(false)
+    expect(isHomeDir("relative/folder", "/home/engli")).toBe(false)
   })
 })
 
@@ -107,14 +144,14 @@ describe("WelcomeScreen status block", () => {
 
   it("shows only the folder name, never the full path", async () => {
     const { stdin, stdout, sink } = openStdio(120)
-    instance = render(React.createElement(WelcomeScreen, { cwd: "C:\\Users\\engli\\trayambak", width: 110 }), {
+    instance = render(React.createElement(WelcomeScreen, { cwd: "C:\\Users\\engli\\nemo", width: 110 }), {
       stdin,
       stdout,
       patchConsole: false,
     })
     await wait(200)
     const out = sink().replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
-    expect(out).toContain("trayambak")
+    expect(out).toContain("nemo")
     // The path prefix must never reach the screen.
     expect(out).not.toContain("C:\\Users")
     expect(out).not.toContain("C:/Users")
@@ -122,7 +159,7 @@ describe("WelcomeScreen status block", () => {
 
   it("does not repeat the model name under the logo", async () => {
     const { stdin, stdout, sink } = openStdio(120)
-    instance = render(React.createElement(WelcomeScreen, { cwd: "C:\\Users\\engli\\trayambak", width: 110 }), {
+    instance = render(React.createElement(WelcomeScreen, { cwd: "C:\\Users\\engli\\nemo", width: 110 }), {
       stdin,
       stdout,
       patchConsole: false,
@@ -135,15 +172,32 @@ describe("WelcomeScreen status block", () => {
 
   it("labels the folder Directory, never cwd", async () => {
     const { stdin, stdout, sink } = openStdio(120)
-    instance = render(React.createElement(WelcomeScreen, { cwd: "C:\\Users\\engli\\trayambak", width: 110 }), {
+    instance = render(React.createElement(WelcomeScreen, { cwd: "C:\\Users\\engli\\nemo", width: 110 }), {
       stdin,
       stdout,
       patchConsole: false,
     })
     await wait(200)
     const out = sink().replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
-    expect(out).toMatch(/Directory\s+trayambak/)
+    expect(out).toMatch(/Directory\s+nemo/)
     expect(out).not.toMatch(/^\s*cwd\s/m)
+  }, 15000)
+
+  it("hides the Directory line inside the home folder", async () => {
+    // Deterministic by construction: whatever this machine's home is,
+    // shortPath maps it to "" and the component renders no line for "".
+    const home = os.homedir()
+    const { stdin, stdout, sink } = openStdio(120)
+    instance = render(React.createElement(WelcomeScreen, { cwd: home, width: 110 }), {
+      stdin,
+      stdout,
+      patchConsole: false,
+    })
+    await wait(200)
+    const out = sink().replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
+    expect(out).not.toContain("Directory")
+    // The clock still shows — only the folder line hides.
+    expect(out).toMatch(/\d\d:\d\d:\d\d/)
   }, 15000)
 })
 
@@ -230,7 +284,7 @@ describe("idle frame fits the viewport (no resize clones)", () => {
         Box,
         { flexDirection: "column", flexGrow: 1 },
         React.createElement(WelcomeScreen, {
-          cwd: "C:\\Users\\engli\\trayambak",
+          cwd: "C:\\Users\\engli\\nemo",
           fillRows: welcomeFillRows(viewportRows),
           width,
           logoCompact: welcomeLogoCompact(viewportRows),
@@ -287,6 +341,6 @@ describe("idle frame fits the viewport (no resize clones)", () => {
     await wait(200)
     const frame = lastFrame(sink())
     expect(screenRows(frame, 118)).toBeLessThanOrEqual(20)
-    expect(frame).toContain("TRAYAMBAK")
+    expect(frame).toContain("NEMO")
   }, 15000)
 })

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -28,10 +28,10 @@ function scratch(prefix: string): string {
 
 // `read_file` records each successful read into the frecency store, which lives
 // in the per-user state dir. Without this the suite would write into the
-// developer's real ~/.trayambak on every run, so the store is redirected into a
+// developer's real ~/.nemo on every run, so the store is redirected into a
 // throwaway directory.
-const STATE_DIR = path.join(os.tmpdir(), "trayambak-readfile-state")
-process.env.TRAYAMBAK_STATE_DIR = STATE_DIR
+const STATE_DIR = path.join(os.tmpdir(), "nemo-readfile-state")
+process.env.NEMO_STATE_DIR = STATE_DIR
 
 afterEach(() => {
   // Both halves matter: the scratch dirs AND the state dir. Removing only the
@@ -154,7 +154,7 @@ describe("read_file bounded read (#75)", () => {
 
 /** The store the tool wrote, read back through the real loader. */
 function store(): FrecencyEntry[] {
-  return loadFrecency(path.join(process.env.TRAYAMBAK_STATE_DIR ?? "", "frecency.json"))
+  return loadFrecency(path.join(process.env.NEMO_STATE_DIR ?? "", "frecency.json"))
 }
 
 describe("frecency recording", () => {

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -14,7 +14,7 @@ import type * as ModeModule from "./mode.js"
 /**
  * mode.ts binds MODE_FILE to os.homedir() AT MODULE LOAD and (round 13)
  * really persists `set` there — so a throwaway home is installed before
- * the dynamic import and the real ~/.trayambak/mode.json is never read or
+ * the dynamic import and the real ~/.nemo/mode.json is never read or
  * written. `import type` above is erased and cannot pull the module in
  * early. Error-path strings are still asserted exactly: they are what the
  * CLI prints when a user typos a mode.
@@ -26,10 +26,10 @@ let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
 const KNOWN: ModeModule.ModeName[] = ["default", "plan", "architect", "code", "debug", "review"]
-const modeFile = (): string => path.join(home, ".trayambak", "mode.json")
+const modeFile = (): string => path.join(home, ".nemo", "mode.json")
 
 beforeAll(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mode-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mode-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home

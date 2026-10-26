@@ -32,30 +32,30 @@ breaches, findings requiring a rooted/jailbroken host.
 
 ## Local-first data handling
 
-Trayambak can run a local model through llama.cpp — no prompts or code
+Nemo can run a local model through llama.cpp — no prompts or code
 leave the machine unless you configure a remote provider (`baseUrl`,
-`apiKey`) or remote MCP server. Telemetry is off by default
-(`NullTelemetry`); debug telemetry requires explicit opt-in.
+`apiKey`) or remote MCP server. There is no telemetry: no usage, crash or
+performance data is collected or transmitted.
 
 Review before running untrusted prompts:
 
-- binary path `TRAYAMBAK_LLAMACPP_BIN` and GGUF model source,
-- working directory (`TRAYAMBAK_CWD` / `--cwd`),
-- MCP servers (`TRAYAMBAK_MCP_SERVERS`), hooks, and skills.
+- binary path `NEMO_LLAMACPP_BIN` and GGUF model source,
+- working directory (`NEMO_CWD` / `--cwd`),
+- MCP servers (`NEMO_MCP_SERVERS`), hooks, and skills.
 
 ## Secret storage
 
-- API keys: prefer env vars (`TRAYAMBAK_API_KEY`) over `config.json`.
+- API keys: prefer env vars (`NEMO_API_KEY`) over `config.json`.
   `config.json`, `sessions.json`, transcripts, and `mcp-auth.json` are
   written with `0600` permissions (POSIX) and atomically (tmp + rename).
-- `~/.trayambak/mcp-auth.json` holds OAuth tokens — never commit it,
-  never paste it into issues. `trayambak mcp logout <name>` deletes the
+- `~/.nemo/mcp-auth.json` holds OAuth tokens — never commit it,
+  never paste it into issues. `nemo mcp logout <name>` deletes the
   local tokens for that server.
 - Keys pasted with prefixes (`NVAPI_KEY …`, `Bearer …`, `KEY=…`) are
   stripped at load but still stored clean — rotate a key that was ever
   committed or screenshared.
 - OS keychain integration is not yet built in; on shared hosts set
-  `TRAYAMBAK_API_KEY` per-process and keep `~/.trayambak/` `0700`.
+  `NEMO_API_KEY` per-process and keep `~/.nemo/` `0700`.
 
 ## Tool execution
 
@@ -73,6 +73,6 @@ network exposure lives in [docs/security.md](docs/security.md).
 ## Releases
 
 - `npm publish ./publish --provenance` (see `scripts/make-publish.mjs`).
-- `TRAYAMBAK_SKIP_OBFUSCATION=1` (or `--skip-obfuscation`) produces a debuggable publish build;
+- `NEMO_SKIP_OBFUSCATION=1` (or `--skip-obfuscation`) produces a debuggable publish build;
   default obfuscation is size/hygiene only — never a security boundary.
 - Verify the tarball contains only `dist/` + `Img/` (`files` allowlist).

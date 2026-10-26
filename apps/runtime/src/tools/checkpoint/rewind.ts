@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * trayambak__Rewind — restore files snapshotted by trayambak__Checkpoint.
+ * nemo__Rewind — restore files snapshotted by nemo__Checkpoint.
  *
  * The current bytes of every file about to be overwritten are stashed under
  * `<id>/replaced/<mirrored-path>` first, so a rewind is itself recoverable by
@@ -39,14 +39,14 @@ import {
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
-  name: "trayambak__Rewind",
+  name: "nemo__Rewind",
   description:
-    "Restore files from a .trayambak/checkpoints/<id> snapshot, stashing the current bytes under <id>/replaced/ first. 'checkpoint_id' may be the id or the label.",
+    "Restore files from a .nemo/checkpoints/<id> snapshot, stashing the current bytes under <id>/replaced/ first. 'checkpoint_id' may be the id or the label.",
   parameters: {
     type: "object",
     required: ["checkpoint_id"],
     properties: {
-      checkpoint_id: { type: "string", description: "Checkpoint id, or the label passed to trayambak__Checkpoint." },
+      checkpoint_id: { type: "string", description: "Checkpoint id, or the label passed to nemo__Checkpoint." },
       paths: {
         type: "array",
         items: { type: "string", description: "Workspace-relative file path." },

@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { SlashCommandRegistry } from "./registry.js"
-import { buildTrayambakSlashRegistry, formatHelp, dispatchSlashCommandAsync } from "./command-dispatch.js"
+import { buildNemoSlashRegistry, formatHelp, dispatchSlashCommandAsync } from "./command-dispatch.js"
 import { loadConfig } from "../../../runtime/src/index.js"
 
 export interface SlashCommandInterface {
@@ -18,7 +18,7 @@ export class SlashCommandService implements SlashCommandInterface {
   readonly registry: SlashCommandRegistry
 
   constructor() {
-    this.registry = buildTrayambakSlashRegistry()
+    this.registry = buildNemoSlashRegistry()
   }
 
   dispatch(input: string): Promise<string> {

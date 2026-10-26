@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { mkdtempSync } from "node:fs"
@@ -37,7 +37,7 @@ describe("parseAutofixRepos", () => {
 
   it("keys and branches are stable", () => {
     expect(autofixKey("O/A", 3)).toBe("o/a#3")
-    expect(autofixBranch(3)).toBe("trayambak/issue-3")
+    expect(autofixBranch(3)).toBe("nemo/issue-3")
   })
 })
 
@@ -64,17 +64,17 @@ describe("AutofixLedger", () => {
 describe("listLabeledIssues", () => {
   it("keeps issues, drops PRs and non-200s", async () => {
     const fetchJson: FetchJson = async (path) => {
-      expect(path).toContain("labels=trayambak")
+      expect(path).toContain("labels=nemo")
       return {
         status: 200,
         json: [{ number: 1, title: "fix me" }, { number: 2, title: "a pr", pull_request: {} }, "garbage"],
       }
     }
-    expect(await listLabeledIssues(fetchJson, "tok", "o/a", "trayambak")).toEqual([
+    expect(await listLabeledIssues(fetchJson, "tok", "o/a", "nemo")).toEqual([
       { repo: "o/a", number: 1, title: "fix me" },
     ])
     const dead: FetchJson = async () => ({ status: 403, json: null })
-    expect(await listLabeledIssues(dead, "tok", "o/a", "trayambak")).toEqual([])
+    expect(await listLabeledIssues(dead, "tok", "o/a", "nemo")).toEqual([])
   })
 })
 
@@ -91,7 +91,7 @@ describe("autofixTick", () => {
     const runs: string[] = []
     const deps = {
       repos: ["o/a"],
-      label: "trayambak",
+      label: "nemo",
       ledger,
       installationIdFor: async () => 111,
       tokenFor: async () => "tok",
@@ -105,7 +105,7 @@ describe("autofixTick", () => {
     expect(first.ran).toHaveLength(1)
     expect(first.ran[0]).toMatchObject({ repo: "o/a", number: 1, prUrl: "https://github.com/o/a/pull/9" })
     expect(runs).toHaveLength(1)
-    expect(runs[0]).toContain("trayambak/issue-1")
+    expect(runs[0]).toContain("nemo/issue-1")
     // Second tick: #1 ledgered, runs #2. Third: nothing left to run.
     const second = await autofixTick(deps)
     expect(second.ran[0]?.number).toBe(2)
@@ -119,7 +119,7 @@ describe("autofixTick", () => {
     let jobs = 0
     const idle = await autofixTick({
       repos: [],
-      label: "trayambak",
+      label: "nemo",
       ledger,
       installationIdFor: async () => 0,
       tokenFor: async () => "",
@@ -132,7 +132,7 @@ describe("autofixTick", () => {
     expect(idle).toMatchObject({ checked: 0, ran: [] })
     const broken = await autofixTick({
       repos: ["o/a"],
-      label: "trayambak",
+      label: "nemo",
       ledger,
       installationIdFor: async () => {
         throw new Error("nope")
@@ -163,7 +163,7 @@ describe("triage pass", () => {
   }
   const baseDeps = (ledger: AutofixLedger, posted: string[]) => ({
     repos: ["o/a"],
-    label: "trayambak",
+    label: "nemo",
     ledger,
     installationIdFor: async () => 111,
     tokenFor: async () => "tok",

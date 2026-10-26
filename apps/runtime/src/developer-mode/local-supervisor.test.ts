@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -56,8 +56,8 @@ describe("sanitizeSupervisorConfig", () => {
   })
 
   it("keeps valid fields and defaults invalid ones", () => {
-    const out = sanitizeSupervisorConfig({ provider: "openai", model: 7, timeoutMs: "soon" })
-    expect(out.provider).toBe("openai")
+    const out = sanitizeSupervisorConfig({ provider: "nvidia", model: 7, timeoutMs: "soon" })
+    expect(out.provider).toBe("nvidia")
     expect(out.model).toBe(DEFAULT_LOCAL_SUPERVISOR_CONFIG.model)
     expect(out.timeoutMs).toBe(DEFAULT_LOCAL_SUPERVISOR_CONFIG.timeoutMs)
   })

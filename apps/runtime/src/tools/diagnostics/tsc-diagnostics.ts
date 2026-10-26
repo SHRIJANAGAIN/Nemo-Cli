@@ -1,13 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * LSP-lite diagnostics core — ports SKT AI LABS's lsp/diagnostic.ts + tool/diagnostics.ts
+ * LSP-lite diagnostics core — ports Shrijan's lsp/diagnostic.ts + tool/diagnostics.ts
  * (pretty/report/filterDiagnostics, verbatim) on top of tsc output instead of a
- * live language server: trayambak has no LSP dependency, while TypeScript's
+ * live language server: nemo has no LSP dependency, while TypeScript's
  * compiler ships with every working install (the shim's build requires it).
  *
  * Diagnostics carry the LSP Diagnostic shape (0-based range), so a real LSP
@@ -17,7 +17,7 @@
 import * as fs from "fs"
 import * as path from "path"
 
-/** LSP-shaped diagnostic (0-based range), SKT AI LABS's LSPClient.Diagnostic subset. */
+/** LSP-shaped diagnostic (0-based range), Shrijan's LSPClient.Diagnostic subset. */
 export interface Diagnostic {
   range: { start: { line: number; character: number } }
   /** LSP severity: 1 error, 2 warning, 3 info, 4 hint. */
@@ -29,13 +29,13 @@ export interface Diagnostic {
 
 const SEVERITY_LABEL: Record<number, string> = { 1: "ERROR", 2: "WARN", 3: "INFO", 4: "HINT" }
 
-/** Per-file cap for report blocks (SKT AI LABS: 20). */
+/** Per-file cap for report blocks (Shrijan: 20). */
 export const DIAGNOSTICS_MAX_PER_FILE = 20
 
 /** Skip in-process syntax checks on very large files (transpile cost). */
 const MAX_SYNTAX_CHECK_BYTES = 1_000_000
 
-/** SKT AI LABS lsp/diagnostic.ts pretty(): `ERROR [12:5] message`, 1-based position. */
+/** Shrijan lsp/diagnostic.ts pretty(): `ERROR [12:5] message`, 1-based position. */
 export function pretty(diagnostic: Diagnostic): string {
   const severity = SEVERITY_LABEL[diagnostic.severity || 1] ?? "ERROR"
   const line = diagnostic.range.start.line + 1
@@ -43,7 +43,7 @@ export function pretty(diagnostic: Diagnostic): string {
   return `${severity} [${line}:${col}] ${diagnostic.message}`
 }
 
-/** SKT AI LABS lsp/diagnostic.ts report(): ERROR-only `<diagnostics>` block, capped
+/** Shrijan lsp/diagnostic.ts report(): ERROR-only `<diagnostics>` block, capped
  * per file, `""` when the file has no errors. */
 export function report(file: string, issues: Diagnostic[]): string {
   const errors = issues.filter((item) => item.severity === 1)
@@ -54,7 +54,7 @@ export function report(file: string, issues: Diagnostic[]): string {
   return `<diagnostics file="${file}">\n${limited.map(pretty).join("\n")}${suffix}\n</diagnostics>`
 }
 
-/** SKT AI LABS tool/diagnostics.ts filterDiagnostics verbatim: keep only entries for
+/** Shrijan tool/diagnostics.ts filterDiagnostics verbatim: keep only entries for
  * the requested files (edits receive diagnostics for ALL files; storing or
  * printing them all bloats payloads). */
 export function filterDiagnostics(
@@ -192,7 +192,7 @@ export async function syntaxDiagnostics(source: string, fileName: string): Promi
 }
 
 /** Hook for edit_file/write_file: `""` when the file is clean or not a
- * checkable type, otherwise a leading newline + the SKT AI LABS `<diagnostics>`
+ * checkable type, otherwise a leading newline + the Shrijan `<diagnostics>`
  * block so syntax errors surface in the transcript immediately. Never throws. */
 export async function syntaxNote(filePath: string, content: string): Promise<string> {
   try {

@@ -1,13 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * The `diagnostics` tool — LSP-lite's project-wide layer. Spawns
  * `tsc --noEmit --pretty false` in a child process (never blocks the TUI's
- * event loop), parses the output into per-file diagnostics, and renders SKT AI LABS's
+ * event loop), parses the output into per-file diagnostics, and renders Shrijan's
  * `<diagnostics>` report blocks for the model. Results are cached for a few
  * seconds so repeated agent calls don't re-run the compiler; `refresh`
  * bypasses the cache.
@@ -60,7 +60,7 @@ export function resetDiagnosticsCache(): void {
 }
 
 /** Locate `node_modules/typescript/bin/tsc`: walk up from cwd first (the
- * project's own TypeScript), then fall back to trayambak's bundled copy (its
+ * project's own TypeScript), then fall back to nemo's bundled copy (its
  * build depends on tsc, so any working install has one). */
 export function resolveTscBin(cwd: string): string | undefined {
   let dir = path.resolve(cwd)

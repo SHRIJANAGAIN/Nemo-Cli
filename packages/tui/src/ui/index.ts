@@ -1,12 +1,16 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 /**
- * TRAYAMBAK TUI component library - barrel export.
+ * Nemo TUI component library - barrel export.
  * Theme system, boxes/dialogs, spinners, toasts, tool display, footer, diff/markdown.
+ * Layout and several components are ported from the Codex TUI (`codex-rs/tui`).
  */
 
 export * from "./theme"
@@ -21,4 +25,3 @@ export * from "./footer"
 export * from "./footer-mode"
 export * from "./key-hint"
 
-export * from "./types"

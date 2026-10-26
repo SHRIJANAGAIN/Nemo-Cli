@@ -2,7 +2,7 @@
  * report what the screen actually ends up looking like.
  *
  * This is the reproduction harness for the frame clones: it feeds the exact
- * bytes the terminal received (TRAYAMBAK_TRACE capture) into scripts/
+ * bytes the terminal received (NEMO_TRACE capture) into scripts/
  * vt-screen.mjs — the same simulator the repo's own smoke tests assert on —
  * and then counts how many frame top-borders are visible at once. More than
  * one = the clones, reproduced offline with zero guessing.
@@ -51,7 +51,7 @@ log(`at rows: ${tops.join(",") || "(none)"}`)
 // appears exactly once per live frame.
 const clocks = view.filter((l) => /\d\d:\d\d:\d\d/.test(l)).length
 log(`clock lines on screen: ${clocks}${clocks > 1 ? "  <-- CLONES" : ""}`)
-const composers = view.filter((l) => l.includes("Ask Trayambak")).length
+const composers = view.filter((l) => l.includes("Ask Nemo")).length
 log(`composer lines on screen: ${composers}${composers > 1 ? "  <-- CLONES" : ""}`)
 
 log("── screen (first 12 rows) ──")

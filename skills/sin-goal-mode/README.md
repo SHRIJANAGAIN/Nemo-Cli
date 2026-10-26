@@ -38,7 +38,7 @@ python3 -m pytest tests/ -v
 ## Architecture
 
 ```
-MCP Clients (Trayambak / Trayambak / Cursor)
+MCP Clients (Nemo / Nemo / Cursor)
     ↓ stdio
 FastMCP Server (sin_goal_mode.server)
     ↓ SQLite

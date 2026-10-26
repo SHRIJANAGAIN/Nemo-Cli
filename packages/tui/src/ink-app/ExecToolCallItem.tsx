@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode } from "react"
@@ -12,6 +12,11 @@ import { toolBoxWidth } from "./types.js"
 import { highlightBashToLines, type BashPalette } from "./syntax-highlight.js"
 import { useThemeColors, type ThemeSnapshot } from "./themeColors.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { useElapsed } from "./use-animation-clock.js"
+import { Shimmer } from "./Shimmer.js"
+import { ProgressBar } from "./ProgressBar.js"
+import { formatDuration, formatElapsed } from "./duration-text.js"
+import { hiddenLinesLabel, previewOutput, type OutputPreviewOptions } from "./output-preview.js"
 import { g } from "./glyphs.js"
 
 /** Bind the active Ink theme's syntax tokens onto bash roles (/theme now
@@ -29,6 +34,21 @@ function bashPalette(theme: ThemeSnapshot): BashPalette {
 
 const TOOL_CALL_MAX_LINES = 5
 const USER_SHELL_TOOL_CALL_MAX_LINES = 50
+
+/** Sweep length for the running bar: a quarter of the box, clamped so it stays
+ * legible at 60 cols and does not span a 240-col terminal whole. */
+function sweepWidth(termWidth: number): number {
+  return Math.max(8, Math.min(28, Math.floor(termWidth / 4)))
+}
+
+/** Line budget for the result preview: capped at 200 under Ctrl+O, but the
+ * preview is a HEAD AND TAIL split (see output-preview.ts), so an error at the
+ * end of a long build is still on screen. */
+function previewBudget(expandOutput: boolean, maxLines: number): OutputPreviewOptions {
+  const total = expandOutput ? 200 : maxLines
+  const headLines = Math.ceil(total / 2)
+  return { headLines, tailLines: total - headLines }
+}
 
 function formatUnifiedExecInteraction(command: string[], input?: string): string {
   const commandDisplay = command.join(" ")
@@ -75,6 +95,9 @@ export const ExecToolCallItem = ({
   // Live border chase for running boxes (see use-border-pulse.ts): the
   // light trips around the edges every 160ms.
   const pulse = useBorderPulse(isRunning, [theme.primary, theme.accent, theme.warning, theme.success], theme.border)
+  // Wall clock for a command that is still going. "Running" with no number is a
+  // guess, and five minutes of a silent `npm ci` reads as a hang.
+  const elapsedMs = useElapsed(isRunning)
 
   const success = isFinished ? !isError : undefined
   let bullet: ReactNode
@@ -162,7 +185,16 @@ export const ExecToolCallItem = ({
             so it can never be clipped by command text. */}
         <Box flexDirection="column" flexGrow={1} minWidth={0}>
           <Box flexDirection="row">
-            {title && <Text bold>{title} </Text>}
+            {title ? (
+              isRunning ? (
+                /* "Running" is the one word in the box that is still true when
+                   nothing else moves — so it carries the sweep. Command text
+                   keeps its syntax colours untouched. */
+                <Shimmer text={`${title} `} color={theme.text} glow={theme.accent} bold />
+              ) : (
+                <Text bold>{title} </Text>
+              )
+            ) : null}
             {highlightedLines.length > 0 ? (
               <Text wrap="truncate-end">
                 {highlightedLines[0].spans.map((span, si) => (
@@ -188,6 +220,15 @@ export const ExecToolCallItem = ({
           {highlightedLines.length > maxLines && (
             <Text color={theme.textMuted}>{"  └ … +" + (highlightedLines.length - maxLines) + " lines"}</Text>
           )}
+          {/* Running row: a window sweeping the track plus the wall clock. It
+              occupies the same line the ✓/✗ mark takes when the call finishes,
+              so the box height does not jump mid-flight. */}
+          {isRunning && (
+            <Box flexDirection="row" flexWrap="nowrap">
+              <ProgressBar indeterminate width={sweepWidth(termWidth)} color={pulse.color} intervalMs={140} />
+              <Text color={theme.textMuted}>{` ${formatElapsed(elapsedMs)}`}</Text>
+            </Box>
+          )}
           {/* Ported resultLine palette: ok green bold / fail red bold before
               the (dim) duration — on its own row, always visible. */}
           {isFinished && (
@@ -195,7 +236,7 @@ export const ExecToolCallItem = ({
               <Text bold color={isError ? theme.error : theme.success}>
                 {isError ? g("fail") : g("ok")}
               </Text>
-              {durationMs !== undefined && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
+              {durationMs !== undefined && <Text color={theme.textMuted}> • {formatDuration(durationMs)}</Text>}
             </Text>
           )}
         </Box>
@@ -204,19 +245,44 @@ export const ExecToolCallItem = ({
       {result && (
         <Box flexDirection="column" marginLeft={2} marginTop={1}>
           {((): ReactNode[] => {
-            const all = result.split("\n")
-            const limit = expandOutput ? 200 : maxLines
-            const shown = all.slice(0, limit)
-            const rows = shown.map((line, i) => (
-              <Text key={i} color={theme.textMuted} wrap="truncate-end">
+            const limits = previewBudget(expandOutput, maxLines)
+            const preview = previewOutput(result, {
+              ...limits,
+              headCols: Math.max(10, termWidth - 12),
+              tailCols: Math.max(6, Math.floor((termWidth - 12) / 3)),
+            })
+            const rows: ReactNode[] = preview.lines.map((line, i) => (
+              <Text key={`line-${i}`} color={theme.textMuted} wrap="truncate-end">
                 {i === 0 ? "  + " : "    "}
-                {line.replace(/\r/g, "").slice(0, Math.max(10, termWidth - 8)) || " "}
+                {line || " "}
               </Text>
             ))
-            if (all.length > limit) {
+            // The dropped middle is announced where it was cut, not at the end:
+            // with a tail on screen, a trailing "…" would read as the output's
+            // own last line.
+            if (preview.hidden > 0) {
+              rows.splice(
+                limits.headLines ?? 0,
+                0,
+                <Text key="hidden" color={theme.textMuted}>
+                  {`    ${hiddenLinesLabel(preview.hidden, /* expandable */ !expandOutput)}`}
+                </Text>,
+              )
+            }
+            // Ctrl+O has a ceiling; past it the hint above is gone, so say why
+            // lines are still missing rather than leaving the user to re-press
+            // the key that already did its job.
+            if (expandOutput && preview.hidden > 0) {
               rows.push(
-                <Text key="more" color={theme.textMuted}>
-                  {expandOutput ? `… +${all.length - limit} more lines (still collapsed past 200)` : "…"}
+                <Text key="cap" color={theme.textMuted}>
+                  {"  (still collapsed past 200 lines)"}
+                </Text>,
+              )
+            }
+            if (isRunning && preview.partial) {
+              rows.push(
+                <Text key="stream" color={theme.textMuted}>
+                  {"    ▌"}
                 </Text>,
               )
             }

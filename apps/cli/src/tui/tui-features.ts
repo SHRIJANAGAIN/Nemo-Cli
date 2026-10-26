@@ -1,4 +1,4 @@
-export * as TrayambakTuiFeatures from "./tui-features"
+export * as NemoTuiFeatures from "./tui-features"
 
 export interface TuiGoalSync {
   readonly goalId: string

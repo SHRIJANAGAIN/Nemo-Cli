@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * SQLite state backend (sqliteState flag) — same API surface as the JSON
@@ -58,7 +62,7 @@ function openRaw(dbFile: string): RawDatabase {
 }
 
 beforeEach(() => {
-  home = mkdtempSync(join(tmpdir(), "trayambak-sqlite-"))
+  home = mkdtempSync(join(tmpdir(), "nemo-sqlite-"))
   storeFile = join(home, "state", "state_1.json")
   resetDatabase()
 })

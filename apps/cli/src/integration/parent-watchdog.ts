@@ -1,4 +1,4 @@
-export * as TrayambakParentWatchdog from "./parent-watchdog"
+export * as NemoParentWatchdog from "./parent-watchdog"
 
 export interface WatchdogConfig {
   readonly checkInterval: number

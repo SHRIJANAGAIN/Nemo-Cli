@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Session Store — persistent thread storage with fork, archive, resume, unarchive, delete, migrate.
@@ -107,7 +111,7 @@ export class ThreadStore {
   private threadCache: Map<string, StoredThread> = new Map()
 
   private constructor(storeDir?: string) {
-    this.storeDir = storeDir ?? join(homedir(), ".trayambak", "threads")
+    this.storeDir = storeDir ?? join(homedir(), ".nemo", "threads")
     if (!existsSync(this.storeDir)) {
       mkdirSync(this.storeDir, { recursive: true })
     }
@@ -125,7 +129,7 @@ export class ThreadStore {
    * Reset the singleton, optionally pointing it at a different directory.
    *
    * Tests must call this with a temp directory: the default store lives in
-   * `~/.trayambak/threads`, so running the suite against the default would
+   * `~/.nemo/threads`, so running the suite against the default would
    * clear the user's real conversation history.
    */
   static resetInstance(storeDir?: string): ThreadStore {

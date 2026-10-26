@@ -1,4 +1,4 @@
-export * as TrayambakSessionContinuation from "./session-continuation"
+export * as NemoSessionContinuation from "./session-continuation"
 
 export interface ContinuationContext {
   readonly sessionId: string

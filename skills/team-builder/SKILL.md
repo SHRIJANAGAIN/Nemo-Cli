@@ -50,10 +50,10 @@ agents/
 
 Agents are discovered via two methods, merged and deduplicated by agent name:
 
-1. **`trayambak agents` command** (primary) — run `trayambak agents` to get all agents known to the CLI, including user agents, plugin agents (e.g. `ecc:architect`), and built-in agents. This automatically covers ECC marketplace installs without any path configuration.
+1. **`nemo agents` command** (primary) — run `nemo agents` to get all agents known to the CLI, including user agents, plugin agents (e.g. `ecc:architect`), and built-in agents. This automatically covers ECC marketplace installs without any path configuration.
 2. **File glob** (fallback, for reading agent content) — agent markdown files are read from:
    - `./agents/**/*.md` + `./agents/*.md` — project-local agents
-   - `~/.trayambak/agents/**/*.md` + `~/.trayambak/agents/*.md` — global user agents
+   - `~/.nemo/agents/**/*.md` + `~/.nemo/agents/*.md` — global user agents
 
 Earlier sources take precedence when names collide: user agents > plugin agents > built-in agents. A custom path can be used instead if the user specifies one.
 
@@ -61,10 +61,10 @@ Earlier sources take precedence when names collide: user agents > plugin agents 
 
 ### Step 1: Discover Available Agents
 
-Run `trayambak agents` to get the full agent list. Parse each line:
+Run `nemo agents` to get the full agent list. Parse each line:
 
 - **Plugin agents** are prefixed with `plugin-name:` (e.g., `ecc:security-reviewer`). Use the part after `:` as the agent name and the plugin name as the domain.
-- **User agents** have no prefix. Read the corresponding markdown file from `~/.trayambak/agents/` or `./agents/` to extract the name and description.
+- **User agents** have no prefix. Read the corresponding markdown file from `~/.nemo/agents/` or `./agents/` to extract the name and description.
 - **Built-in agents** (e.g., `Explore`, `Plan`) are skipped unless the user explicitly asks to include them.
 
 For user agents loaded from markdown files:
@@ -74,7 +74,7 @@ For user agents loaded from markdown files:
 - Extract the agent name from the first `# Heading`. If no heading is found, derive the name from the filename (strip `.md`, replace hyphens with spaces, title-case)
 - Extract a one-line summary from the first paragraph after the heading
 
-If no agents are found after running `trayambak agents` and probing file locations, inform the user: "No agents found. Run `trayambak agents` to verify your setup." Then stop.
+If no agents are found after running `nemo agents` and probing file locations, inform the user: "No agents found. Run `nemo agents` to verify your setup." Then stop.
 
 ### Step 2: Present Domain Menu
 
@@ -134,14 +134,14 @@ If only 1 agent was selected, skip synthesis and present the output directly.
 - **Dynamic discovery only.** Never hardcode agent lists. New files in the directory auto-appear in the menu.
 - **Max 5 agents per team.** More than 5 produces diminishing returns and excessive token usage. Enforce at selection time.
 - **Parallel dispatch.** All agents run simultaneously — use the Agent tool's parallel invocation pattern.
-- **Parallel Agent calls, not TeamCreate.** This skill uses parallel Agent tool calls for independent work. TeamCreate (a Trayambak Code tool for multi-agent dialogue) is only needed when agents must debate or respond to each other.
+- **Parallel Agent calls, not TeamCreate.** This skill uses parallel Agent tool calls for independent work. TeamCreate (a Nemo Code tool for multi-agent dialogue) is only needed when agents must debate or respond to each other.
 
 ## Examples
 
 ```
 User: team builder
 
-Trayambak:
+Nemo:
 Available agent domains:
 1. Engineering (2) — Software Architect, Security Engineer
 2. Marketing (1) — SEO Specialist
@@ -152,7 +152,7 @@ Pick domains or name specific agents:
 
 User: security + seo
 
-Trayambak:
+Nemo:
 Selected: Security Engineer + SEO Specialist
 What should they work on?
 
@@ -160,7 +160,7 @@ User: Review my Next.js e-commerce site before launch
 
 [Both agents spawn in parallel, each applying their specialty to the codebase]
 
-Trayambak:
+Nemo:
 ## Security Engineer Findings
 - [findings...]
 

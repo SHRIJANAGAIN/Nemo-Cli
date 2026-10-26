@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode, useEffect, useState } from "react"
@@ -21,7 +21,7 @@ export interface CommandPaletteProps {
   onClose: () => void
 }
 
-/** SKT AI LABS-style command palette (ctrl+p): fuzzy filter over every action and
+/** Shrijan-style command palette (ctrl+p): fuzzy filter over every action and
  * slash command, Suggested pinned while unfiltered, ranked while typing. */
 export function CommandPalette({ entries, onSelect, onClose }: CommandPaletteProps): ReactNode {
   const [query, setQuery] = useState("")
@@ -54,7 +54,7 @@ export function CommandPalette({ entries, onSelect, onClose }: CommandPalettePro
       move(1)
       return
     }
-    // SKT AI LABS reuses ctrl+p / ctrl+n as dialog prev/next while its dialogs are
+    // Shrijan reuses ctrl+p / ctrl+n as dialog prev/next while its dialogs are
     // open; the app-level ctrl+p chord is overlay-guarded, so this is safe.
     if (key.ctrl && input === "p") {
       move(-1)

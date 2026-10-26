@@ -4,11 +4,11 @@
 # Output: JSON to stdout
 #
 # Environment:
-#   RULES_DISTILL_DIR  Override ~/.trayambak/rules (for testing only)
+#   RULES_DISTILL_DIR  Override ~/.nemo/rules (for testing only)
 
 set -euo pipefail
 
-RULES_DIR="${RULES_DISTILL_DIR:-${1:-$HOME/.trayambak/rules}}"
+RULES_DIR="${RULES_DISTILL_DIR:-${1:-$HOME/.nemo/rules}}"
 
 if [[ ! -d "$RULES_DIR" ]]; then
   jq -n --arg path "$RULES_DIR" '{"error":"rules directory not found","path":$path}' >&2

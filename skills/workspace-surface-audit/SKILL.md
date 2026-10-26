@@ -1,6 +1,6 @@
 ---
 name: workspace-surface-audit
-description: Audit the active repo, MCP servers, plugins, connectors, env surfaces, and harness setup, then recommend the highest-value ECC-native skills, hooks, agents, and operator workflows. Use when the user wants help setting up Trayambak Code or understanding what capabilities are actually available in their environment.
+description: Audit the active repo, MCP servers, plugins, connectors, env surfaces, and harness setup, then recommend the highest-value ECC-native skills, hooks, agents, and operator workflows. Use when the user wants help setting up Nemo Code or understanding what capabilities are actually available in their environment.
 metadata:
   origin: ECC
 ---
@@ -13,7 +13,7 @@ This is the ECC-native answer to setup-audit plugins. It does not modify files u
 
 ## When to Use
 
-- User says "set up Trayambak Code", "recommend automations", "what plugins or MCPs should I use?", or "what am I missing?"
+- User says "set up Nemo Code", "recommend automations", "what plugins or MCPs should I use?", or "what am I missing?"
 - Auditing a machine or repo before installing more skills, hooks, or connectors
 - Comparing official marketplace plugins against ECC-native coverage
 - Reviewing `.env`, `.mcp.json`, plugin settings, or connected-app surfaces to find missing workflow layers
@@ -35,8 +35,8 @@ Inspect only the files and settings needed to answer the question well:
 
 1. Repo surface
    - `package.json`, lockfiles, language markers, framework config, `README.md`
-   - `.mcp.json`, `.lsp.json`, `.trayambak/settings*.json`, `.trayambak/*`
-   - `AGENTS.md`, `TRAYAMBAK.md`, install manifests, hook configs
+   - `.mcp.json`, `.lsp.json`, `.nemo/settings*.json`, `.nemo/*`
+   - `AGENTS.md`, `NEMO.md`, install manifests, hook configs
 2. Environment surface
    - `.env*` files in the active repo and obvious adjacent ECC workspaces
    - Surface only key names such as `STRIPE_API_KEY`, `TWILIO_AUTH_TOKEN`, `FAL_KEY`
@@ -67,8 +67,8 @@ If a surface exists only as a primitive, call that out. Example:
 
 Compare the workspace against:
 
-- official Trayambak plugins that overlap with setup, review, docs, design, or workflow quality
-- locally installed plugins in Trayambak or Trayambak Code
+- official Nemo plugins that overlap with setup, review, docs, design, or workflow quality
+- locally installed plugins in Nemo or Nemo Code
 - the user's currently connected app surfaces
 
 Do not just list names. For each comparison, answer:

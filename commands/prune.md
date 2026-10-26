@@ -13,13 +13,13 @@ Remove expired pending instincts that were auto-generated but never reviewed or 
 Run the instinct CLI using the plugin root path:
 
 ```bash
-python3 "${TRAYAMBAK_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" prune
+python3 "${NEMO_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" prune
 ```
 
-Or if `TRAYAMBAK_PLUGIN_ROOT` is not set (manual installation):
+Or if `NEMO_PLUGIN_ROOT` is not set (manual installation):
 
 ```bash
-python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py prune
+python3 ~/.nemo/skills/continuous-learning-v2/scripts/instinct-cli.py prune
 ```
 
 ## Usage

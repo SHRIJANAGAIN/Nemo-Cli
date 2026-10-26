@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -42,9 +42,9 @@ function write(p: string, content: string): string {
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-"))
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-home-"))
-  cwd = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-cwd-"))
+  root = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-home-"))
+  cwd = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-cwd-"))
   delete process.env[COMPANY_DIR_ENV]
 })
 
@@ -64,7 +64,7 @@ describe("resolveCompanyRoot", () => {
     expect(resolveCompanyRoot(root, cwd, home)).toBe(root)
   })
 
-  it("falls back to TRAYAMBAK_COMPANY_DIR, then home, then cwd", () => {
+  it("falls back to NEMO_COMPANY_DIR, then home, then cwd", () => {
     const fromEnv = mkdir(path.join(root, "from-env"))
     const fromHome = mkdir(path.join(home, "agency-agents-main"))
     const fromCwd = mkdir(path.join(cwd, "agency-agents-main"))
@@ -175,7 +175,7 @@ describe("buildCompanyBlock (model self-use)", () => {
     expect(block).toContain("## COMPANY")
     expect(block).toContain("engineering (1)")
     expect(block).toContain("marketing (1)")
-    expect(block).toContain("trayambak__Agent")
+    expect(block).toContain("nemo__Agent")
     expect(block).toContain("subagent_type")
     expect(block).toContain("slash commands are user-only")
     expect(block.length).toBeLessThan(2000)

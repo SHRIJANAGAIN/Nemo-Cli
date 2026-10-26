@@ -10,10 +10,10 @@ MODEL_TURN_OK
 │ │✓  Called glob({"pattern":"*.md","path":".","max_results":5}) ✓      │  │
 │ │                                                                     │  │
 │ │    + 5 file(s):                                                     │  │
-│ │      skt\9-session\import-memory.md                                 │  │
-│ │      skt\5-eval\evalr-mistake-2026-09-07-001.md                     │  │
+│ │      nemo\9-session\import-memory.md                                 │  │
+│ │      nemo\5-eval\evalr-mistake-2026-09-07-001.md                     │  │
 │ │      CHANGELOG.md                                                   │  │
-│ │      skt\5-eval\evalr-err_mtt4phqo.md                               │  │
+│ │      nemo\5-eval\evalr-err_mtt4phqo.md                               │  │
 │ │  …                                                                  │  │
 │ ╰─────────────────────────────────────────────────────────────────────╯  │
 │                                                                          │

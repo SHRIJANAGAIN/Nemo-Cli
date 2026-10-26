@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { useHandleBuildPlanClick } from "./use-handle-build-plan-click.js"
 
 /**
- * The build-plan dispatcher fires `trayambak:build-plan` for the host shell.
+ * The build-plan dispatcher fires `nemo:build-plan` for the host shell.
  * It accepts the originating click for call-site convenience but must NOT
  * forward it — listeners get a bare event.
  */
@@ -35,10 +35,10 @@ beforeEach(() => {
 afterEach(dropWindow)
 
 describe("useHandleBuildPlanClick", () => {
-  it("dispatches trayambak:build-plan with no detail payload", () => {
+  it("dispatches nemo:build-plan with no detail payload", () => {
     useHandleBuildPlanClick().handleBuildPlanClick()
     expect(dispatched).toHaveLength(1)
-    expect(dispatched[0]!.type).toBe("trayambak:build-plan")
+    expect(dispatched[0]!.type).toBe("nemo:build-plan")
     expect(dispatched[0]!.detail ?? null).toBeNull()
   })
 
@@ -46,7 +46,7 @@ describe("useHandleBuildPlanClick", () => {
     const fakeClick = { type: "click", currentTarget: {} } as unknown as React.MouseEvent<HTMLButtonElement>
     useHandleBuildPlanClick().handleBuildPlanClick(fakeClick)
     expect(dispatched).toHaveLength(1)
-    expect(dispatched[0]!.type).toBe("trayambak:build-plan")
+    expect(dispatched[0]!.type).toBe("nemo:build-plan")
     expect(dispatched[0]!.detail ?? null).toBeNull()
   })
 

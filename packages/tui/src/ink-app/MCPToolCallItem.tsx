@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode } from "react"
@@ -12,10 +12,20 @@ import { toolBoxWidth } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { useElapsed } from "./use-animation-clock.js"
+import { ProgressBar } from "./ProgressBar.js"
+import { formatDuration, formatElapsed } from "./duration-text.js"
+import { hiddenLinesLabel, previewOutput } from "./output-preview.js"
 import { g } from "./glyphs.js"
 
 const TOOL_CALL_MAX_LINES = 5
 const MAX_ARG_LENGTH = 60
+
+/** Sweep length for the running bar: a quarter of the box, clamped so it stays
+ * legible at 60 cols and does not span a 240-col terminal whole. */
+function sweepWidth(termWidth: number): number {
+  return Math.max(8, Math.min(28, Math.floor(termWidth / 4)))
+}
 
 function formatArgs(args: Record<string, unknown>, maxLen: number = MAX_ARG_LENGTH): string {
   const entries = Object.entries(args)
@@ -83,23 +93,23 @@ export const MCPToolCallItem = ({
   // Live border chase for running boxes (see use-border-pulse.ts): the
   // light trips around the edges every 160ms.
   const pulse = useBorderPulse(isRunning, [theme.primary, theme.accent, theme.warning, theme.success], theme.border)
+  const elapsedMs = useElapsed(isRunning)
 
   const nodeRepl = server === "node_repl" && name === "js"
   const compact = nodeRepl && renderMode === "display"
 
-  let headerText: string
-  if (compact) {
-    const title = typeof args?.title === "string" ? args.title.split(" ").slice(0, 10).join(" ") : "node_repl.js"
-    headerText = title
-  } else {
-    // Width-aware args budget (mirrors ToolCallItem): a fixed 60 chars let
-    // the truncate eat the ✓/duration tail at ~100 cols. Reserve room for
-    // bullet + labels + server.name + parens + mark + duration.
-    const durationTail = durationMs !== undefined && isFinished ? ` • ${durationMs}ms`.length : 0
-    const argBudget = Math.max(20, Math.min(60, termWidth - (server?.length ?? 0) - name.length - 25 - durationTail))
-    const argsStr = formatArgs(args, argBudget)
-    headerText = `${server}.${name}(${argsStr})`
-  }
+  // Width-aware args budget (mirrors ToolCallItem): a fixed 60 chars let the
+  // truncate eat the ✓/duration tail at ~100 cols. Reserve room for bullet +
+  // labels + server.name + parens + mark + duration. Rendered from here, so the
+  // budget cannot drift from what the header actually shows.
+  const durationTail = durationMs !== undefined && isFinished ? ` • ${formatDuration(durationMs)}` : ""
+  const argBudget = Math.max(20, Math.min(60, termWidth - (server?.length ?? 0) - name.length - 25 - durationTail.length))
+  const argsStr = formatArgs(args, argBudget)
+  const title = compact
+    ? typeof args?.title === "string"
+      ? args.title.split(" ").slice(0, 10).join(" ")
+      : "node_repl.js"
+    : `${server}.${name}`
 
   const success = isFinished ? !isError : undefined
   let bullet: ReactNode
@@ -155,51 +165,84 @@ export const MCPToolCallItem = ({
           {compact ? (
             <Text color={theme.primary} bold>
               {" "}
-              {headerText}
+              {title}
             </Text>
           ) : (
             <>
               <Text color={theme.primary} bold>
                 {" "}
-                {server}.{name}
+                {title}
               </Text>
               <Text color={theme.textMuted} dimColor>
-                (
-              </Text>
-              <Text color={theme.textMuted} dimColor>
-                {formatArgs(args)}
-              </Text>
-              <Text color={theme.textMuted} dimColor>
-                )
+                {"("}
+                {argsStr}
+                {")"}
               </Text>
             </>
           )}
-          {/* Ported resultLine palette: ✓ green bold / ✗ red bold. */}
+          {/* Ported resultLine palette: ✓ green bold / ✗ red bold, from the
+              glyph table so NEMO_GLYPHS=ascii gets v/x like every other
+              mark in the UI. */}
           {isFinished && (
             <Text bold color={isError ? theme.error : theme.success}>
-              {isError ? " ✗" : " ✓"}
+              {" "}
+              {isError ? g("fail") : g("ok")}
             </Text>
           )}
-          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
+          {durationTail !== "" && <Text color={theme.textMuted}>{durationTail}</Text>}
         </Text>
       </Box>
+
+      {/* Running row: a window sweeping the track plus the wall clock, on the
+          line the ✓/duration mark takes when the call finishes — an MCP call
+          that hangs was indistinguishable from one that just started. */}
+      {isRunning && (
+        <Box flexDirection="row" flexWrap="nowrap" marginLeft={3}>
+          <ProgressBar indeterminate width={sweepWidth(termWidth)} color={pulse.color} intervalMs={140} />
+          <Text color={theme.textMuted}>{` ${formatElapsed(elapsedMs)}`}</Text>
+        </Box>
+      )}
 
       {result && (
         <Box flexDirection="column" marginLeft={2} marginTop={1}>
           {((): ReactNode[] => {
-            const all = result.split("\n")
-            const limit = expandOutput ? 200 : TOOL_CALL_MAX_LINES
-            const shown = all.slice(0, limit)
-            const rows = shown.map((line, i) => (
-              <Text key={i} color={theme.textMuted} wrap="truncate-end">
+            // Head AND tail (see output-preview.ts): an MCP tool that fails at
+            // the end of a long payload used to preview only its first 5 lines,
+            // which is where the error never is.
+            const total = expandOutput ? 200 : TOOL_CALL_MAX_LINES
+            const headLines = Math.ceil(total / 2)
+            const preview = previewOutput(result, {
+              headLines,
+              tailLines: total - headLines,
+              headCols: Math.max(10, termWidth - 12),
+              tailCols: Math.max(6, Math.floor((termWidth - 12) / 3)),
+            })
+            const rows: ReactNode[] = preview.lines.map((line, i) => (
+              <Text key={`line-${i}`} color={theme.textMuted} wrap="truncate-end">
                 {i === 0 ? "  + " : "    "}
-                {line.replace(/\r/g, "").slice(0, Math.max(10, termWidth - 8)) || " "}
+                {line || " "}
               </Text>
             ))
-            if (all.length > limit) {
+            if (preview.hidden > 0) {
+              rows.splice(
+                headLines,
+                0,
+                <Text key="hidden" color={theme.textMuted}>
+                  {`    ${hiddenLinesLabel(preview.hidden, /* expandable */ !expandOutput)}`}
+                </Text>,
+              )
+            }
+            if (expandOutput && preview.hidden > 0) {
               rows.push(
-                <Text key="more" color={theme.textMuted}>
-                  {expandOutput ? `… +${all.length - limit} more lines (still collapsed past 200)` : "…"}
+                <Text key="cap" color={theme.textMuted}>
+                  {"  (still collapsed past 200 lines)"}
+                </Text>,
+              )
+            }
+            if (isRunning && preview.partial) {
+              rows.push(
+                <Text key="stream" color={theme.textMuted}>
+                  {"    ▌"}
                 </Text>,
               )
             }

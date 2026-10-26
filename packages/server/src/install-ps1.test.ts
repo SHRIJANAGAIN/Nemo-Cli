@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -21,8 +21,8 @@ describe("INSTALL_PS1", () => {
     )
 
   it("installs the published scope, verifies, and guides — nothing else", () => {
-    expect(INSTALL_PS1).toContain("npm install -g @skt-ai-labs/trayambak-cli")
-    expect(INSTALL_PS1).toContain("trayambak --version")
+    expect(INSTALL_PS1).toContain("npm install -g @shrijan/nemo-cli")
+    expect(INSTALL_PS1).toContain("nemo --version")
     expect(INSTALL_PS1).toContain("/provider add")
     expect(INSTALL_PS1).toContain("/github login")
     // Node bootstrap: winget first, official nodejs.org MSI fallback.

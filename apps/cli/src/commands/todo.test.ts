@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -14,7 +14,7 @@ import type * as TodoModule from "./todo.js"
 /**
  * todo.ts resolves its storage root from os.homedir() AT MODULE LOAD, so the
  * temp home is installed before the dynamic import in beforeAll and the real
- * ~/.trayambak/todos is never read or written. `import type` above is erased,
+ * ~/.nemo/todos is never read or written. `import type` above is erased,
  * so it cannot pull the module in early.
  */
 
@@ -23,7 +23,7 @@ let home = ""
 let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
-const todoDir = (): string => path.join(home, ".trayambak", "todos")
+const todoDir = (): string => path.join(home, ".nemo", "todos")
 
 function todoFile(sessionId?: string): string {
   const id = sessionId && sessionId.trim() ? sessionId.trim() : "global"
@@ -38,7 +38,7 @@ function readTodos(sessionId?: string): Array<{ id: number; content: string; sta
 }
 
 beforeAll(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-todo-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-todo-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -197,18 +197,18 @@ describe("todoCommand session id validation (round 12 attack)", () => {
       expect(todo.todoCommand({ action: "clear", sessionId: bad })).toBe(`Invalid session id: ${bad}`)
     }
     // A traversal like `../evil` used to resolve to a sibling of the todos
-    // dir (~/.trayambak/evil.json) — nothing at all may be written.
-    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+    // dir (~/.nemo/evil.json) — nothing at all may be written.
+    expect(fs.existsSync(path.join(home, ".nemo", "evil.json"))).toBe(false)
     expect(fs.existsSync(path.join(home, "evil.json"))).toBe(false)
     expect(fs.existsSync(todoDir())).toBe(false)
   })
 
   it("cannot read or clear the user's config as if it were a todo list", () => {
-    // `../config` resolves to ~/.trayambak/config.json: the old code would
+    // `../config` resolves to ~/.nemo/config.json: the old code would
     // JSON.parse the real config (then crash on undefined .items) or, on
     // `clear`, overwrite it with {"items":[]} — wiping the configuration.
-    fs.mkdirSync(path.join(home, ".trayambak"), { recursive: true })
-    const config = path.join(home, ".trayambak", "config.json")
+    fs.mkdirSync(path.join(home, ".nemo"), { recursive: true })
+    const config = path.join(home, ".nemo", "config.json")
     fs.writeFileSync(config, JSON.stringify({ model: "keep-me" }), "utf8")
 
     expect(todo.todoCommand({ action: "list", sessionId: "../config" })).toBe("Invalid session id: ../config")

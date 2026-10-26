@@ -10,12 +10,12 @@ Remove-Item $log -ErrorAction SilentlyContinue
 function W($m) { Add-Content -Path $log -Value $m }
 trap { W ("TRAP: " + $_.Exception.Message); exit 1 }
 
-$cli = "C:\Users\engli\AppData\Roaming\npm\node_modules\@skt-ai-labs\trayambak-cli\dist\apps\cli\src\index.js"
+$cli = "C:\Users\engli\AppData\Roaming\npm\node_modules\@shrijan\nemo-cli\dist\apps\cli\src\index.js"
 if (-not (Test-Path $cli)) { W "NO_CLI_ENTRY"; exit 1 }
 
-$env:TRAYAMBAK_RESIZE_DEBUG = "1"
-$env:TRAYAMBAK_RESIZE_LOG = (Join-Path $env:TEMP "resize-wiggle-guard.log")
-Remove-Item $env:TRAYAMBAK_RESIZE_LOG -ErrorAction SilentlyContinue
+$env:NEMO_RESIZE_DEBUG = "1"
+$env:NEMO_RESIZE_LOG = (Join-Path $env:TEMP "resize-wiggle-guard.log")
+Remove-Item $env:NEMO_RESIZE_LOG -ErrorAction SilentlyContinue
 
 W "console: $([Console]::WindowWidth)x$([Console]::WindowHeight) buffer=$([Console]::BufferHeight) top=$([Console]::WindowTop)"
 $proc = Start-Process -FilePath "node.exe" -ArgumentList $cli -NoNewWindow -PassThru -WorkingDirectory $env:TEMP
@@ -39,8 +39,8 @@ W "drift narrow-phase=$($tn - $t0) drift total=$($t1 - $t0)"
 
 if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
 W "guard log:"
-if (Test-Path $env:TRAYAMBAK_RESIZE_LOG) {
-  Get-Content $env:TRAYAMBAK_RESIZE_LOG | Select-Object -Last 12 | ForEach-Object { W ("  " + $_) }
+if (Test-Path $env:NEMO_RESIZE_LOG) {
+  Get-Content $env:NEMO_RESIZE_LOG | Select-Object -Last 12 | ForEach-Object { W ("  " + $_) }
 } else {
   W "  (no guard log - env did not reach the child?)"
 }

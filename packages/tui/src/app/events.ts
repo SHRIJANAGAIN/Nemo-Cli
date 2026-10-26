@@ -1,17 +1,20 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 /**
  * Application-level events used to coordinate UI actions.
  *
- * This is a TypeScript port of the TRAYAMBAK TUI AppEvent enum.
+ * This is a TypeScript port of the Codex TUI AppEvent enum.
  * Events are the internal message bus between UI components and the top-level App loop.
  */
 
-export interface TrayambakConfig {
+export interface NemoConfig {
   apiKey?: string
   baseUrl?: string
   model?: string
@@ -118,7 +121,7 @@ export type AppEvent =
   | { type: "TurnFailedEvent"; threadId: string; error: string }
   | { type: "ErrorEvent"; error: Error }
   | { type: "FatalErrorEvent"; error: Error }
-  | { type: "ConfigUpdateEvent"; config: Partial<TrayambakConfig> }
+  | { type: "ConfigUpdateEvent"; config: Partial<NemoConfig> }
   | { type: "ThemeChangeEvent"; theme: string }
   | { type: "NotificationEvent"; notification: { title: string; body: string; level: "info" | "warning" | "error" } }
   | { type: "UserInputEvent"; text: string }

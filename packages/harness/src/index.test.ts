@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -9,7 +9,7 @@
  * agent turn depends on it (facts persistence, event caps, snapshots).
  *
  * Deterministic by construction: every test gets a fresh `mkdtemp` cwd so
- * no real `.trayambak/harness.json` is ever touched — no network, no
+ * no real `.nemo/harness.json` is ever touched — no network, no
  * ambient state.
  */
 
@@ -20,7 +20,7 @@ import * as path from "node:path"
 import { HarnessRuntime, RecursiveTaskRuntime, type HarnessPlugin } from "./index.js"
 
 function tempCwd(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-harness-"))
+  return fs.mkdtempSync(path.join(os.tmpdir(), "nemo-harness-"))
 }
 
 function turnStart(prompt: string): { type: "turn_start"; prompt: string } {
@@ -98,12 +98,12 @@ describe("HarnessRuntime plugins", () => {
 
   it("renders durable facts as a context block", () => {
     const runtime = new HarnessRuntime(tempCwd(), "sess_ctx")
-    runtime.state.facts["owner"] = "trayambak"
+    runtime.state.facts["owner"] = "nemo"
     runtime.state.facts["mode"] = "hunt"
 
     const ctx = runtime.context()
     expect(ctx).toContain("Durable harness facts:")
-    expect(ctx).toContain("- owner: trayambak")
+    expect(ctx).toContain("- owner: nemo")
     expect(ctx).toContain("- mode: hunt")
   })
 })

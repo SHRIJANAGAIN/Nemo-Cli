@@ -1,20 +1,15 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
 import * as http from "node:http"
 import type { AddressInfo } from "node:net"
-import { createOpenAIProvider } from "./openai.js"
-import { createXAIProvider } from "./xai.js"
-import { createHuggingFaceProvider } from "./huggingface.js"
 import { createCustomProvider } from "./custom.js"
 import { createNvidiaProvider, nvidiaReasoningParamsAllowed } from "./nvidia.js"
 import { createLlamaCppProvider } from "./llama-cpp.js"
-import { createAnthropicProvider, toAnthropicBody } from "./anthropic.js"
-import { createGoogleProvider, toGeminiBody } from "./google.js"
 import { createOllamaProvider } from "./ollama.js"
 import { normalizeCustomBaseUrl } from "./custom.js"
 import {
@@ -29,7 +24,7 @@ import type { ChatInput } from "./types.js"
 import { clampTemperature } from "./types.js"
 
 /**
- * Built-in OpenAI-compatible providers (openai/xai/huggingface/custom):
+ * The surviving backends (nvidia, nvidia-nim, ollama, llama.cpp, custom):
  * request shaping + SSE assembly, against a local stub — no network.
  */
 
@@ -87,20 +82,19 @@ const toolInput: ChatInput = {
   ],
 }
 
-describe("openai/xai/huggingface/custom providers", () => {
+describe("nvidia/ollama/custom/llama.cpp providers", () => {
   it("exposes the right ids", () => {
     const opts = { baseUrl: "http://x", model: "m" }
-    expect(createOpenAIProvider(opts).id).toBe("openai")
-    expect(createXAIProvider(opts).id).toBe("xai")
-    expect(createHuggingFaceProvider(opts).id).toBe("huggingface")
     expect(createCustomProvider(opts).id).toBe("custom")
+    expect(createOllamaProvider(opts).id).toBe("ollama")
     expect(createNvidiaProvider(opts).id).toBe("nvidia")
+    expect(createLlamaCppProvider(opts).id).toBe("llama.cpp")
   })
 
-  it("openai posts model + tools to /v1/chat/completions with Bearer auth", async () => {
+  it("nvidia posts model + tools to /v1/chat/completions with Bearer auth", async () => {
     let seen!: Captured
     await withStub(async (stubUrl) => {
-      const p = createOpenAIProvider({ baseUrl: stubUrl, model: "gpt-4o", apiKey: "k" })
+      const p = createNvidiaProvider({ baseUrl: stubUrl, model: "nvidia/nemotron-3-super-120b-a12b", apiKey: "k" })
       const msg = await p.chat(toolInput)
       const text = msg.content.find((c) => c.type === "text")
       expect(text && "text" in text ? text.text : "").toBe("Hello")
@@ -113,21 +107,19 @@ describe("openai/xai/huggingface/custom providers", () => {
     })
     expect(seen.url).toBe("/v1/chat/completions")
     expect(seen.auth).toBe("Bearer k")
-    expect(seen.body.model).toBe("gpt-4o")
+    expect(seen.body.model).toBe("nvidia/nemotron-3-super-120b-a12b")
     expect(Array.isArray(seen.body.tools)).toBe(true)
   }, 15000)
 
-  it("openai maps reasoningEffort to reasoning_effort", async () => {
-    const seen = await withStub(async (stubUrl) => {
-      const p = createOpenAIProvider({ baseUrl: stubUrl, model: "gpt-4o", reasoningEffort: "high" })
-      await p.chat(toolInput)
-    })
-    expect(seen.body.reasoning_effort).toBe("high")
-    expect(seen.body).not.toHaveProperty("reasoning_tokens")
-  }, 15000)
+  it("rejects a junk or missing key for NVIDIA's cloud before spending a request", async () => {
+    const junk = createNvidiaProvider({ baseUrl: "https://integrate.api.nvidia.com", model: "m", apiKey: "hi" })
+    await expect(junk.chat(toolInput)).rejects.toThrow(/does not start with "nvapi-"/)
+    const empty = createNvidiaProvider({ baseUrl: "https://integrate.api.nvidia.com", model: "m" })
+    await expect(empty.chat(toolInput)).rejects.toThrow(/No NVIDIA API key configured/)
+  })
 
-  it("xai/huggingface/custom send no reasoning params", async () => {
-    for (const make of [createXAIProvider, createHuggingFaceProvider, createCustomProvider]) {
+  it("ollama/custom send no reasoning params", async () => {
+    for (const make of [createOllamaProvider, createCustomProvider]) {
       const seen = await withStub(async (stubUrl) => {
         const p = make({ baseUrl: stubUrl, model: "m", reasoningEffort: "high" })
         await p.chat(toolInput)
@@ -137,19 +129,26 @@ describe("openai/xai/huggingface/custom providers", () => {
     }
   }, 15000)
 
-  it("registry knows all 22 types (case-insensitive)", () => {
+  it("registry knows every surviving type (case-insensitive)", () => {
+    const registry = createProviderRegistry()
+    for (const t of ["llamacpp", "nvidia", "nvidia-nim", "ollama", "custom", "NVIDIA"]) {
+      expect(registry.has(t)).toBe(true)
+    }
+    expect(registry.create("nvidia-nim", { baseUrl: "http://x", model: "m" })?.id).toBe("nvidia")
+    expect(registry.create("ollama", { baseUrl: "http://x", model: "m" })?.id).toBe("ollama")
+    expect(registry.create("custom", { baseUrl: "http://x", model: "m" })?.id).toBe("custom")
+    expect(registry.create("llamacpp", { baseUrl: "http://x", model: "m" })?.id).toBe("llama.cpp")
+    expect(registry.create("nope", { baseUrl: "http://x", model: "m" })).toBeUndefined()
+  })
+
+  it("the removed cloud backends are gone from the registry", () => {
     const registry = createProviderRegistry()
     for (const t of [
-      "llamacpp",
-      "nvidia",
-      "nvidia-nim",
       "openai",
       "xai",
       "huggingface",
       "anthropic",
       "google",
-      "ollama",
-      "custom",
       "groq",
       "mistral",
       "cerebras",
@@ -161,254 +160,32 @@ describe("openai/xai/huggingface/custom providers", () => {
       "fireworks",
       "venice",
       "azure",
-      "skt-gateway",
-      "OpenAI",
+      "nemo-gateway",
     ]) {
-      expect(registry.has(t)).toBe(true)
+      expect(registry.has(t), t).toBe(false)
     }
-    expect(registry.create("xai", { baseUrl: "http://x", model: "m" })?.id).toBe("xai")
-    expect(registry.create("openai", { baseUrl: "http://x", model: "m" })?.id).toBe("openai")
-    expect(registry.create("anthropic", { baseUrl: "http://x", model: "m" })?.id).toBe("anthropic")
-    expect(registry.create("google", { baseUrl: "http://x", model: "m" })?.id).toBe("google")
-    expect(registry.create("nvidia-nim", { baseUrl: "http://x", model: "m" })?.id).toBe("nvidia")
-    expect(registry.create("ollama", { baseUrl: "http://x", model: "m" })?.id).toBe("ollama")
-    expect(registry.create("nope", { baseUrl: "http://x", model: "m" })).toBeUndefined()
   })
 })
 
-describe("anthropic/google providers", () => {
-  it("exposes the right ids + defaults", () => {
-    expect(createAnthropicProvider({ baseUrl: "", model: "" }).id).toBe("anthropic")
-    expect(createGoogleProvider({ baseUrl: "", model: "" }).id).toBe("google")
-  })
-
-  it("anthropic maps system/tools/tool-results to Messages shape", () => {
-    const body = toAnthropicBody(
-      {
-        system: "sys",
-        messages: [
-          { role: "user", content: "hi" },
-          {
-            role: "assistant",
-            content: "",
-            tool_calls: [
-              { id: "toolu_1", type: "function", function: { name: "bash", arguments: '{"command":"ls"}' } },
-            ],
-          },
-          { role: "tool", content: "ok", tool_call_id: "toolu_1" },
-        ],
-        tools: [
-          {
-            timeoutMs: 30_000,
-            name: "bash",
-            description: "run",
-            parameters: { type: "object", properties: {}, required: [] },
-          },
-        ],
-      },
-      "claude-3-5-sonnet-latest",
-    )
-    expect(body.model).toBe("claude-3-5-sonnet-latest")
-    // #123: the system prompt is a cacheable BLOCK, not a bare string —
-    // Anthropic only honours a prompt-cache breakpoint on block form. The
-    // text itself is unchanged.
-    expect(body.system).toEqual([{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }])
-    expect(Array.isArray(body.tools)).toBe(true)
-    const msgs = body.messages as Array<{ role: string; content: unknown }>
-    expect(msgs[0].role).toBe("user")
-    expect(msgs[1].role).toBe("assistant")
-    expect(msgs[2].role).toBe("user")
-  })
-
-  it("anthropic streams text + tool_use off a stub", async () => {
-    const server = http.createServer((req, res) => {
-      let raw = ""
-      req.on("data", (c) => (raw += c))
-      req.on("end", () => {
-        res.writeHead(200, { "Content-Type": "text/event-stream" })
-        res.end(
-          'event: message_start\ndata: {"type":"message_start","message":{"id":"m","usage":{"input_tokens":1}}}\n\n' +
-            'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n' +
-            'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n' +
-            'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"bash","input":{}}}\n\n' +
-            'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"command\\":\\"ls\\"}"}}\n\n' +
-            'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use"}}\n\n' +
-            'event: message_stop\ndata: {"type":"message_stop"}\n\n',
-        )
-      })
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const p = createAnthropicProvider({
-        baseUrl: `http://127.0.0.1:${port}`,
-        model: "claude-3-5-sonnet-latest",
-        apiKey: "k",
-      })
-      const msg = await p.chat({ messages: [{ role: "user", content: "hi" }] })
-      expect(msg.content.find((c) => c.type === "text" && "text" in c && c.text === "Hello")).toBeTruthy()
-      const tc = msg.content.find((c) => c.type === "toolCall")
-      expect(tc && "name" in tc ? tc.name : "").toBe("bash")
-      expect(msg.stopReason).toBe("tool_use")
-    } finally {
-      server.close()
-    }
-  }, 15000)
-
-  it("google maps messages to contents + parses generateContent", async () => {
-    const body = toGeminiBody(
-      {
-        system: "sys",
-        messages: [{ role: "user", content: "hi" }],
-        tools: [
-          {
-            timeoutMs: 30_000,
-            name: "bash",
-            description: "run",
-            parameters: { type: "object", properties: {}, required: [] },
-          },
-        ],
-      },
-      "gemini-2.5-flash",
-    ) as { contents: unknown[]; system_instruction: unknown; tools: unknown[] }
-    expect(Array.isArray(body.contents)).toBe(true)
-    expect(body.system_instruction).toBeTruthy()
-    expect(Array.isArray(body.tools)).toBe(true)
-
-    const server = http.createServer((req, res) => {
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(
-        JSON.stringify({
-          candidates: [
-            {
-              content: { parts: [{ text: "Hello" }, { functionCall: { name: "bash", args: { command: "ls" } } }] },
-              finishReason: "STOP",
-            },
-          ],
-        }),
-      )
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const p = createGoogleProvider({ baseUrl: `http://127.0.0.1:${port}`, model: "gemini-2.5-flash", apiKey: "k" })
-      const msg = await p.chat({ messages: [{ role: "user", content: "hi" }] })
-      expect(msg.stopReason).toBe("tool_use")
-      expect(msg.content.some((c) => c.type === "toolCall" && "name" in c && c.name === "bash")).toBe(true)
-    } finally {
-      server.close()
-    }
-  }, 15000)
-
-  it("google authenticates via the x-goog-api-key header, never the URL (#70)", async () => {
-    let seenUrl = ""
-    let seenKey: string | string[] | undefined
-    const server = http.createServer((req, res) => {
-      seenUrl = req.url ?? ""
-      seenKey = req.headers["x-goog-api-key"]
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] }))
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const p = createGoogleProvider({
-        baseUrl: `http://127.0.0.1:${port}`,
-        model: "gemini-2.5-flash",
-        apiKey: "sekrit",
-      })
-      await p.chat({ messages: [{ role: "user", content: "hi" }] })
-      expect(seenKey).toBe("sekrit")
-      expect(seenUrl).not.toContain("key=")
-      expect(seenUrl).toContain(":generateContent")
-    } finally {
-      server.close()
-    }
-  }, 15000)
-
-  it("fetchModelsDetailed sends the Google key as a header, not a query param (#70)", async () => {
-    let seenUrl = ""
-    let seenKey: string | string[] | undefined
-    const server = http.createServer((req, res) => {
-      seenUrl = req.url ?? ""
-      seenKey = req.headers["x-goog-api-key"]
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }, { name: "models/gemini-2.0-flash" }] }))
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const status = await fetchModelsDetailed("google", `http://127.0.0.1:${port}/v1beta`, "sekrit")
-      expect(status.source).toBe("live")
-      expect(status.models).toContain("gemini-2.5-flash")
-      expect(seenKey).toBe("sekrit")
-      expect(seenUrl).not.toContain("key=")
-    } finally {
-      server.close()
-    }
-  }, 15000)
-
-  it("verifyProviderKey sends the Google key as a header, not a query param (#70)", async () => {
-    let seenUrl = ""
-    let seenKey: string | string[] | undefined
-    const server = http.createServer((req, res) => {
-      seenUrl = req.url ?? ""
-      seenKey = req.headers["x-goog-api-key"]
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ candidates: [{ content: { parts: [{ text: "ok" }] } }] }))
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const result = await verifyProviderKey("google", `http://127.0.0.1:${port}/v1beta`, "sekrit", "gemini-2.5-flash")
-      expect(result.ok).toBe(true)
-      expect(seenKey).toBe("sekrit")
-      expect(seenUrl).not.toContain("key=")
-    } finally {
-      server.close()
-    }
-  }, 15000)
-
-  it("catalog covers all 21 backends with fetch fallback", async () => {
-    expect(PROVIDER_CATALOG.length).toBe(21)
-    for (const id of [
-      "huggingface",
-      "nvidia-nim",
-      "nvidia",
-      "openai",
-      "anthropic",
-      "google",
-      "xai",
-      "ollama",
-      "custom",
-      "groq",
-      "mistral",
-      "cerebras",
-      "together",
-      "deepinfra",
-      "cohere",
-      "perplexity",
-      "openrouter",
-      "fireworks",
-      "venice",
-      "azure",
-      "skt-gateway",
-    ]) {
+describe("catalog", () => {
+  it("covers the surviving backends with fetch fallback", async () => {
+    expect(PROVIDER_CATALOG.length).toBe(5)
+    for (const id of ["nvidia-nim", "nvidia", "llamacpp", "ollama", "custom"]) {
       expect(getCatalogEntry(id)?.defaultBaseUrl.length).toBeGreaterThan(0)
     }
     // Unreachable endpoint → static fallback, never rejects.
-    const ids = await fetchModelsForProvider("anthropic", "http://127.0.0.1:1", "bad")
+    const ids = await fetchModelsForProvider("nvidia", "http://127.0.0.1:1", "bad")
     expect(ids.length).toBeGreaterThan(0)
   }, 15000)
 
   it("detailed fetch reports fallback + network error kind", async () => {
-    const res = await fetchModelsDetailed("openai", "http://127.0.0.1:1", "bad")
+    const res = await fetchModelsDetailed("nvidia", "http://127.0.0.1:1", "bad")
     expect(res.source).toBe("fallback")
     expect(res.error).toBe("network")
     expect(res.models.length).toBeGreaterThan(0)
   }, 15000)
 
-  it("ollama lists via /api/tags and chats OpenAI-compatible without a key", async () => {
+  it("ollama lists via /api/tags", async () => {
     expect(createOllamaProvider({ baseUrl: "", model: "" }).id).toBe("ollama")
     const server = http.createServer((req, res) => {
       if (req.url === "/api/tags") {
@@ -450,37 +227,17 @@ describe("anthropic/google providers", () => {
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
     const port = (server.address() as AddressInfo).port
     try {
-      const ok = await verifyProviderKey("huggingface", `http://127.0.0.1:${port}`, "k", "m")
+      const ok = await verifyProviderKey("nvidia", `http://127.0.0.1:${port}`, "k", "m")
       expect(ok.ok).toBe(true)
       expect(ok.status).toBe(200)
       mode = "denied"
-      const bad = await verifyProviderKey("huggingface", `http://127.0.0.1:${port}`, "k", "m")
+      const bad = await verifyProviderKey("nvidia", `http://127.0.0.1:${port}`, "k", "m")
       expect(bad.ok).toBe(false)
       expect(bad.status).toBe(401)
-      expect(bad.hint ?? "").toContain("Inference Providers")
+      expect(bad.hint ?? "").toContain("nvapi")
     } finally {
       server.close()
     }
-  }, 15000)
-
-  it("gateway providers keep truthful ids and chat OpenAI-compatible", async () => {
-    const { createOpenAICompatibleProvider } = await import("./openai.js")
-    const registry = createProviderRegistry()
-    for (const id of ["groq", "openrouter", "skt-gateway", "azure"]) {
-      expect(registry.has(id)).toBe(true)
-      const p = registry.create(id, { baseUrl: "http://x", model: "m" })
-      expect(p?.id).toBe(id)
-    }
-    const seen = await withStub(async (stubUrl) => {
-      const make = createOpenAICompatibleProvider("openrouter", "OpenRouter API", stubUrl, "m")
-      const p = make({ baseUrl: stubUrl, model: "m", reasoningEffort: "high" })
-      expect(p.id).toBe("openrouter")
-      await p.chat(toolInput)
-    })
-    // No gateway-specific reasoning params leak to proxied models.
-    expect(seen.body).not.toHaveProperty("reasoning_tokens")
-    expect(seen.body).not.toHaveProperty("reasoning_effort")
-    expect(seen.url).toBe("/v1/chat/completions")
   }, 15000)
 })
 
@@ -500,8 +257,8 @@ describe("nvidia reasoning params stay on NVIDIA's own endpoints", () => {
 
   it("a custom-gateway baseUrl gets no NVIDIA-dialect reasoning field", async () => {
     // reasoning_tokens on a non-NVIDIA endpoint is exactly how strict
-    // gateways 400 — the same rule OpenAICompatibleProvider already
-    // applies wholesale (test above), now pinned for nvidia itself.
+    // gateways 400 — the same rule the local runtimes already apply
+    // wholesale, now pinned for nvidia itself.
     const seen = await withStub(async (stubUrl) => {
       const p = createNvidiaProvider({ baseUrl: stubUrl, model: "m", reasoningEffort: "high" })
       await p.chat(toolInput)
@@ -522,7 +279,7 @@ describe("temperature clamping (per-backend ceilings)", () => {
     expect(clampTemperature(Number.POSITIVE_INFINITY, 1, 1)).toBe(1)
   })
 
-  it("nvidia/openai clamp chat temperature to 0–2 (the reported 400)", async () => {
+  it("nvidia clamps chat temperature to 0–2 (the reported 400)", async () => {
     for (const [temp, want] of [
       [2.7, 2],
       [-1, 0],
@@ -533,12 +290,6 @@ describe("temperature clamping (per-backend ceilings)", () => {
       })
       expect(seen.body.temperature).toBe(want)
     }
-    // OpenAI + xAI ride NvidiaProvider.buildBody — same ceiling by inheritance.
-    const seenOpenAI = await withStub(async (stubUrl) => {
-      const p = createOpenAIProvider({ baseUrl: stubUrl, model: "m", temperature: 2.7 })
-      await p.chat({ messages: [{ role: "user", content: "hi" }] })
-    })
-    expect(seenOpenAI.body.temperature).toBe(2)
   }, 15000)
 
   it("llama-cpp clamps chat temperature to 0–2 (local servers accept anything)", async () => {
@@ -559,96 +310,6 @@ describe("temperature clamping (per-backend ceilings)", () => {
       await p.chat({ messages: [{ role: "user", content: "hi" }] })
     })
     expect(def.body.temperature).toBe(0.7)
-  }, 15000)
-
-  it("anthropic clamps to 0–1 and still omits an unset temperature", async () => {
-    const bodies: Record<string, unknown>[] = []
-    const server = http.createServer((req, res) => {
-      let raw = ""
-      req.on("data", (c) => (raw += c))
-      req.on("end", () => {
-        bodies.push(JSON.parse(raw) as Record<string, unknown>)
-        res.writeHead(200, { "Content-Type": "text/event-stream" })
-        res.end(
-          'event: message_start\ndata: {"type":"message_start","message":{"id":"m","usage":{"input_tokens":1}}}\n\n' +
-            'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}\n\n' +
-            'event: message_stop\ndata: {"type":"message_stop"}\n\n',
-        )
-      })
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const hot = createAnthropicProvider({
-        baseUrl: `http://127.0.0.1:${port}`,
-        model: "claude-3-5-sonnet-latest",
-        apiKey: "k",
-        temperature: 2.7,
-      })
-      await hot.chat({ messages: [{ role: "user", content: "hi" }] })
-      const unset = createAnthropicProvider({ baseUrl: `http://127.0.0.1:${port}`, model: "m", apiKey: "k" })
-      await unset.chat({ messages: [{ role: "user", content: "hi" }] })
-    } finally {
-      server.close()
-    }
-    expect(bodies).toHaveLength(2)
-    expect(bodies[0]?.temperature).toBe(1)
-    expect(bodies[1]).not.toHaveProperty("temperature")
-  }, 15000)
-
-  it("google clamps generationConfig.temperature to 0–2", async () => {
-    const bodies: Record<string, unknown>[] = []
-    const server = http.createServer((req, res) => {
-      let raw = ""
-      req.on("data", (c) => (raw += c))
-      req.on("end", () => {
-        bodies.push(JSON.parse(raw) as Record<string, unknown>)
-        res.writeHead(200, { "Content-Type": "application/json" })
-        res.end(
-          JSON.stringify({
-            candidates: [{ content: { parts: [{ text: "Hello" }] }, finishReason: "STOP" }],
-          }),
-        )
-      })
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const p = createGoogleProvider({
-        baseUrl: `http://127.0.0.1:${port}`,
-        model: "gemini-2.5-flash",
-        apiKey: "k",
-        temperature: 2.7,
-      })
-      await p.chat({ messages: [{ role: "user", content: "hi" }] })
-    } finally {
-      server.close()
-    }
-    expect(bodies).toHaveLength(1)
-    const gen = bodies[0]?.generationConfig as Record<string, unknown> | undefined
-    expect(gen?.temperature).toBe(2)
-  }, 15000)
-
-  it("google maps INCOMPLETE (Gemini length condition) to length, not end_turn", async () => {
-    const server = http.createServer((_req, res) => {
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(
-        JSON.stringify({ candidates: [{ content: { parts: [{ text: "partial" }] }, finishReason: "INCOMPLETE" }] }),
-      )
-    })
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
-    const port = (server.address() as AddressInfo).port
-    try {
-      const p = createGoogleProvider({
-        baseUrl: `http://127.0.0.1:${port}`,
-        model: "gemini-2.5-flash",
-        apiKey: "k",
-      })
-      const msg = await p.chat({ messages: [{ role: "user", content: "hi" }] })
-      expect(msg.stopReason).toBe("length")
-    } finally {
-      server.close()
-    }
   }, 15000)
 
   it("llama-cpp maps max_tokens/incomplete finish reasons to length, not end_turn", async () => {

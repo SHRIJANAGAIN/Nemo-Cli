@@ -1,6 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
-/** App-server daemon lifecycle (pid file in ~/.trayambak). */
+/** App-server daemon lifecycle (pid file in ~/.nemo). */
 
 import * as fs from "fs"
 import * as os from "os"
@@ -8,7 +12,7 @@ import * as path from "path"
 import { spawn } from "child_process"
 
 function pidFile(): string {
-  return path.join(os.homedir(), ".trayambak", "app-server.pid")
+  return path.join(os.homedir(), ".nemo", "app-server.pid")
 }
 
 export function daemonStatus(): string {

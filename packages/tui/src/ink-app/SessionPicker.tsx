@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode, useEffect, useState } from "react"
@@ -9,9 +9,11 @@ import { Box, Text, useStdout } from "ink"
 import { useThemeColors } from "./themeColors.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
-import type { SessionEntry } from "../../../../skt/9-session/session.js"
-import { backfillUntitledSessions } from "../../../../skt/9-session/session.js"
+import type { SessionEntry } from "../../../../nemo/9-session/session.js"
+import { backfillUntitledSessions } from "../../../../nemo/9-session/session.js"
 import { g } from "./glyphs.js"
+import { cycleIndex } from "./animations.js"
+import { useAnimationClock } from "./use-animation-clock.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 
 export interface SessionPickerProps {
@@ -19,7 +21,7 @@ export interface SessionPickerProps {
   onSelect: (session: SessionEntry) => void
   onNewChat?: () => void
   onArchive?: (session: SessionEntry) => void
-  /** Inline rename of the selected session (SKT AI LABS history-panel parity). */
+  /** Inline rename of the selected session (Shrijan history-panel parity). */
   onRename?: (session: SessionEntry, name: string) => void
   /** Delete the selected session — always gated behind a y/n confirm. */
   onDelete?: (session: SessionEntry) => void
@@ -64,13 +66,11 @@ export const SessionPicker = ({
   const [editName, setEditName] = useState("")
   // Blinky rename caret — same cell, solid ▌ ↔ space every 530ms, exactly
   // like the composer's (the hardware caret is hidden app-wide, so a
-  // permanently-lit block reads as stuck).
-  const [caretOn, setCaretOn] = useState(/*initial*/ true)
-  useEffect(() => {
-    if (!editing) return
-    const timer = setInterval(() => setCaretOn((v) => !v), 530)
-    return () => clearInterval(timer)
-  }, [editing])
+  // permanently-lit block reads as stuck). Derived from the shared clock:
+  // in phase with the composer blink, and no timer of its own while the
+  // editor is closed.
+  const caretTick = useAnimationClock(530, editing)
+  const caretOn = cycleIndex(caretTick, 2) === 0
   /** Armed delete confirmation — owns all input while true. */
   const [confirmDelete, setConfirmDelete] = useState(/*initial*/ false)
   const MAX_VISIBLE = 20

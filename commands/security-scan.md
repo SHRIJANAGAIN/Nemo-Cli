@@ -12,7 +12,7 @@ Run AgentShield against the current project or a target path, then turn the find
 
 `/security-scan [path] [--format text|json|markdown|html] [--min-severity low|medium|high|critical] [--fix]`
 
-- `path` (optional): defaults to the current project. Use a `.trayambak/` path, a repo root, or a checked-in template directory.
+- `path` (optional): defaults to the current project. Use a `.nemo/` path, a repo root, or a checked-in template directory.
 - `--format`: output format. Use `json` for CI, `markdown` for handoffs, and `html` for standalone review reports.
 - `--min-severity`: filters lower-priority findings.
 - `--fix`: applies only AgentShield fixes explicitly marked as safe and auto-fixable.

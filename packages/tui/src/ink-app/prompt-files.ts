@@ -1,16 +1,16 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Project/user prompt files as custom slash commands — SKT AI LABS's
+ * Project/user prompt files as custom slash commands — Shrijan's
  * `{command,commands}` + `**\/*.md` glob port. Any `.md` file under
  *
  *   ./commands/              project prompts
- *   ./.trayambak/commands/   project prompts (namespaced dir)
- *   ~/.trayambak/commands/   user-wide prompts
+ *   ./.nemo/commands/   project prompts (namespaced dir)
+ *   ~/.nemo/commands/   user-wide prompts
  *   <install>/commands       bundled prompts (always present)
  *
  * becomes `/name` in the composer. The body is a PROMPT TEMPLATE: it expands
@@ -18,7 +18,7 @@
  * normal prompt — the model runs it, there is no code execution here.
  *
  * First directory wins on a name collision, so `./commands` beats
- * `.trayambak/commands` beats the user-wide dir (project beats user).
+ * `.nemo/commands` beats the user-wide dir (project beats user).
  */
 
 import * as fs from "node:fs"
@@ -41,8 +41,8 @@ const MD_EXT_LENGTH = 3 // ".md"
 export function defaultPromptCommandDirs(cwd: string, home: string = os.homedir()): string[] {
   return [
     path.join(cwd, "commands"),
-    path.join(cwd, ".trayambak", "commands"),
-    path.join(home, ".trayambak", "commands"),
+    path.join(cwd, ".nemo", "commands"),
+    path.join(home, ".nemo", "commands"),
   ]
 }
 
@@ -152,7 +152,7 @@ export function loadPromptCommands(dirs: readonly string[]): PromptCommand[] {
 }
 
 /**
- * SKT AI LABS/Roo placeholder expansion: `$ARGUMENTS` = everything after the command
+ * Shrijan/Roo placeholder expansion: `$ARGUMENTS` = everything after the command
  * name; `$1..$9…` = positional words, multi-digit included (missing →
  * empty); `$$` = literal `$`. Single pass, so no sentinel is needed.
  *

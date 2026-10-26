@@ -1,17 +1,18 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { useState, type ReactNode } from "react"
-import { Box, Text, useInput } from "ink"
+import { Box, Text, useInput, useStdout } from "ink"
 import { useThemeColors } from "./themeColors.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
 import type { PermissionRequest, PermissionMode } from "./types.js"
 import { PERMISSION_MODE_LABELS } from "./types.js"
 import { approvalDecisionFor, approvalNavigationFor } from "./approvalKeys.js"
 import { Spinner } from "./Spinner.js"
+import { Marquee } from "./Marquee.js"
 import { g, spinnerFrames } from "./glyphs.js"
 
 function formatArgsSimple(args: Record<string, unknown>, maxLen: number = 200): string {
@@ -79,6 +80,9 @@ export const PermissionOverlay = ({
   onDenyAlways,
 }: PermissionOverlayProps): ReactNode | null => {
   const theme = useThemeColors()
+  const { stdout } = useStdout()
+  // Cells left for the args row after the pane padding and the " args: " label.
+  const argsCols = Math.max(12, (stdout?.columns ?? 80) - 12)
 
   // Hooks must run unconditionally (Rules of Hooks) — no early returns above.
   const [selectedIdx, setSelectedIdx] = useState(0)
@@ -182,9 +186,18 @@ export const PermissionOverlay = ({
                 <Text color={theme.warning}>{req.reason}</Text>
               </Box>
               {req.args && Object.keys(req.args).length > 0 && (
-                <Box>
+                <Box flexDirection="row" flexWrap="nowrap">
                   <Text dimColor> args: </Text>
-                  <Text dimColor>{formatArgsSimple(req.args)}</Text>
+                  {isSelected ? (
+                    /* One row, scrolling — the old wrapping Text pushed a long
+                       `command=` payload over three lines and the [y]/[n] hints
+                       off the bottom of the pane, which is where a permission
+                       dialog looks hung to the user. Text that fits never
+                       scrolls (see Marquee). */
+                    <Marquee text={formatArgsSimple(req.args)} width={argsCols} dimColor />
+                  ) : (
+                    <Text dimColor>{formatArgsSimple(req.args, argsCols)}</Text>
+                  )}
                 </Box>
               )}
               {isSelected && (

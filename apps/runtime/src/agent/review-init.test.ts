@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -33,7 +33,7 @@ describe("buildReviewPrompt", () => {
     const p = buildReviewPrompt("")
     expect(p).toContain("uncommitted working-tree changes")
     expect(p).toContain("git diff --cached")
-    expect(p).toContain("trayambak__ParallelReview")
+    expect(p).toContain("nemo__ParallelReview")
     expect(p).toContain("Adversarially verify")
     expect(p).toContain("performance")
     expect(p).toContain("test coverage")

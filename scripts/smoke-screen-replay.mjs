@@ -3,7 +3,7 @@
  *
  * Why: byte-level checks proved clean (every fullscreen frame is a full
  * clear+rewrite), yet the user sees a stuck row:
- *   │TRAYAMBAK        { REMOVE } THIS TEXT FROM BOX FIX IT //// …
+ *   │NEMO        { REMOVE } THIS TEXT FROM BOX FIX IT //// …
  * i.e. the logo row merged with a message row on SCREEN. That can only be
  * caught by modelling cursor/erase/wrap semantics across all write paths
  * (frame writes, static flush, console.log→writeToStdout, resize-guard blank).
@@ -13,8 +13,8 @@
  * (notify path), width resize (guard path), more submits.
  *
  * Oracles (checked after every settle, over scrollback + viewport):
- *   O1: every row containing TRAYAMBAK matches  │TRAYAMBAK<spaces>│
- *   O2: no row contains TRAYAMBAK together with a submitted marker
+ *   O1: every row containing NEMO matches  │NEMO<spaces>│
+ *   O2: no row contains NEMO together with a submitted marker
  *   O3: no row contains two distinct markers (cross-row merge)
  *   O4: viewport top row is the frame's ┌ border (no off-by-one scroll)
  *
@@ -53,8 +53,8 @@ const checkScreen = (screen, label) => {
   const sbLen = screen.scrollbackRows().length
   rows.forEach((r, i) => {
     const where = i < sbLen ? `sb${i}` : `row${i - sbLen}`
-    if (r.includes("TRAYAMBAK")) {
-      if (!/^│TRAYAMBAK\s*│$/.test(r)) {
+    if (r.includes("NEMO")) {
+      if (!/^│NEMO\s*│$/.test(r)) {
         ok = false
         reasons.push(`O1 ${where}: ${JSON.stringify(r)}`)
       }
@@ -131,12 +131,12 @@ stdout.on("data", (chunk) => screen.write(chunk.toString()))
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark",
+      themeName: "nemo-dark",
       baseUrl: "http://127.0.0.1:9/api",
       apiKey: "k",
       model: "test/m",
@@ -246,7 +246,7 @@ await settle(700)
 
 // ── Scenario 5: console.log mid-session (notify-user path) ─────────────────
 current = "console-log-notify"
-console.log("[trayambak notify][info] NOTIFY_MARKER_ZULU happened")
+console.log("[nemo notify][info] NOTIFY_MARKER_ZULU happened")
 await settle(900)
 
 // ── Scenario 6: width resize (guard path) ──────────────────────────────────

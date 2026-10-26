@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -20,7 +20,7 @@ import { runAgentLoop, type RunConfig } from "./agent-loop.js"
 import { Session } from "../session/session.js"
 import { textResult, type Tool } from "../tools/types.js"
 import type { HookShellExecutor } from "../tools/hook-exec.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { DeveloperModeEngine } from "../developer-mode/index.js"
 import type { DenialTracker } from "../../../../packages/core/src/approval.js"
 import type { ChatInput, Provider } from "../../../../packages/provider/src/index.js"
@@ -68,7 +68,7 @@ export function failReply(message: string): ScriptedReply {
   }
 }
 
-export function testBaseConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakConfig {
+export function testBaseConfig(overrides: Partial<NemoConfig> = {}): NemoConfig {
   return {
     maxTurns: 4,
     maxRetries: 0,
@@ -79,7 +79,7 @@ export function testBaseConfig(overrides: Partial<TrayambakConfig> = {}): Trayam
     cwd: os.tmpdir(),
     permissions: { mode: "default", rules: [], askByDefault: false },
     ...overrides,
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 }
 
 export interface ProbeBehavior {
@@ -133,7 +133,7 @@ export interface TestLoopResult {
 
 export async function runTestLoop(
   prompt: string,
-  config: TrayambakConfig,
+  config: NemoConfig,
   scripted: ScriptedProvider,
   opts: TestLoopOptions = {},
 ): Promise<TestLoopResult> {

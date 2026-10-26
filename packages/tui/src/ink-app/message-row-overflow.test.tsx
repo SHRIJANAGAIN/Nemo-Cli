@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -19,11 +19,11 @@ import { PassThrough } from "node:stream"
 import { describe, expect, it } from "vitest"
 import { MessageRow } from "./MessageRow.js"
 import { MessageList } from "./MessageList.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-async function renderRow(message: TrayambakMessage, columns = 100, expandOutput = false): Promise<string> {
+async function renderRow(message: NemoMessage, columns = 100, expandOutput = false): Promise<string> {
   const pass = new PassThrough()
   let sink = ""
   pass.on("data", (c) => (sink += c.toString()))
@@ -42,8 +42,8 @@ async function renderRow(message: TrayambakMessage, columns = 100, expandOutput 
   return sink
 }
 
-function toolMessage(content: string): TrayambakMessage {
-  return { id: "t1", timestamp: 1, role: "tool", content, toolName: "bash" } as TrayambakMessage
+function toolMessage(content: string): NemoMessage {
+  return { id: "t1", timestamp: 1, role: "tool", content, toolName: "bash" } as NemoMessage
 }
 
 describe("MessageRow yoga overflow guard", () => {
@@ -80,24 +80,24 @@ describe("MessageRow yoga overflow guard", () => {
   }, 30000)
 
   it("survives a 100k unbroken assistant line (streaming babble shape)", async () => {
-    const message: TrayambakMessage = {
+    const message: NemoMessage = {
       id: "a1",
       timestamp: 1,
       role: "assistant",
       content: "C".repeat(100000),
-    } as TrayambakMessage
+    } as NemoMessage
     const sink = await renderRow(message, 100, /*expandOutput*/ false)
     expect(sink.length).toBeGreaterThan(0)
   }, 30000)
 
   it("survives a giant history: 300 tool rows with multi-KB outputs at once", async () => {
-    const messages: TrayambakMessage[] = Array.from({ length: 300 }, (_, i) => ({
+    const messages: NemoMessage[] = Array.from({ length: 300 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
       role: "tool",
       content: `result ${i}\n${"x".repeat(150)} ${"y".repeat(1500)}\nend ${i}`,
       toolName: "bash",
-    })) as TrayambakMessage[]
+    })) as NemoMessage[]
     const pass = new PassThrough()
     let sink = ""
     pass.on("data", (c) => (sink += c.toString()))

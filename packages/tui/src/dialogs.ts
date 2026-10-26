@@ -1,10 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-/** Popup dialog / palette components for the TRAYAMBAK terminal UI (plain ANSI). */
+/** Popup dialog / palette components for the NEMO terminal UI (plain ANSI). */
 
 import { COLOR } from "./index"
 import { setThemeByName, fg as trueFg, listThemes, applyTerminalTheme } from "./ui/theme"
@@ -93,7 +93,7 @@ export interface PaletteAction {
   category?: string
 }
 
-/** Command palette popup — lists all actions with descriptions, categories, and key bindings (trayambak-style). */
+/** Command palette popup — lists all actions with descriptions, categories, and key bindings (nemo-style). */
 export function renderCommandPalette(actions: PaletteAction[]): string {
   // Group by category
   const categories = new Map<string, PaletteAction[]>()
@@ -183,7 +183,7 @@ export function renderFileChange(file: string, added: number, removed: number): 
 
 /* ───────────────────────── Theme system ───────────────────────── */
 
-export interface TrayambakTheme {
+export interface NemoTheme {
   name: string
   primary: string
   secondary: string
@@ -194,7 +194,7 @@ export interface TrayambakTheme {
 }
 
 /** Built-in themes (256-color ANSI). */
-export const THEMES: Record<string, TrayambakTheme> = {
+export const THEMES: Record<string, NemoTheme> = {
   sky: {
     name: "sky",
     primary: "\x1b[38;5;39m",
@@ -251,9 +251,9 @@ export const THEMES: Record<string, TrayambakTheme> = {
   },
 }
 
-let activeTheme: TrayambakTheme = THEMES.sky
+let activeTheme: NemoTheme = THEMES.sky
 
-export function setTheme(name: string): TrayambakTheme | null {
+export function setTheme(name: string): NemoTheme | null {
   const t = THEMES[name.toLowerCase()]
   if (t) {
     activeTheme = t
@@ -278,7 +278,7 @@ export function setTheme(name: string): TrayambakTheme | null {
   return null
 }
 
-export function getTheme(): TrayambakTheme {
+export function getTheme(): NemoTheme {
   return activeTheme
 }
 
@@ -303,7 +303,7 @@ export function renderThemeList(): string {
   })
   return renderPopup("THEMES", lines, { accent: "skyBlue" })
 }
-/* ─────────────────────── Trayambak UI components ─────────────────────── */
+/* ─────────────────────── Nemo UI components ─────────────────────── */
 
 /** Colored status dot (•) — green=connected, red=error, yellow=warning, gray=muted. */
 export function renderStatusDot(status: "connected" | "error" | "warning" | "muted" | "disabled"): string {
@@ -317,7 +317,7 @@ export function renderStatusDot(status: "connected" | "error" | "warning" | "mut
   return `${colors[status] ?? PALETTE.dim}•${PALETTE.reset}`
 }
 
-/** Trayambak-style split logo: muted left half + bold right half with shadow gap. */
+/** Nemo-style split logo: muted left half + bold right half with shadow gap. */
 export function renderSplitLogo(art: string): string {
   const lines = art.split("\n")
   const width = Math.max(...lines.map((l) => l.length))
@@ -334,7 +334,7 @@ export function renderSplitLogo(art: string): string {
   return out.join("\n")
 }
 
-/** Startup loading screen — logo + braille spinner + status text (Trayambak-style). */
+/** Startup loading screen — logo + braille spinner + status text (Nemo-style). */
 export function renderStartupLoading(logo: string, status: string, frame: number): string {
   const spinner = BRAILLE_FRAMES[frame % BRAILLE_FRAMES.length]
   const out: string[] = []
@@ -346,7 +346,7 @@ export function renderStartupLoading(logo: string, status: string, frame: number
   return out.join("\n")
 }
 
-/** Status dialog — MCP/LSP servers, formatters, plugins with colored dots (Trayambak-style). */
+/** Status dialog — MCP/LSP servers, formatters, plugins with colored dots (Nemo-style). */
 export function renderStatusDialog(opts: {
   mcp?: Array<{ name: string; status: "connected" | "error" | "disabled" | "warning" }>
   lsp?: Array<{ name: string; status: "connected" | "error"; root: string }>
@@ -594,7 +594,7 @@ export function renderMarkdown(text: string): string {
   return out.join("\n")
 }
 
-function applyInline(s: string, t: TrayambakTheme): string {
+function applyInline(s: string, t: NemoTheme): string {
   let out = s.replace(/`([^`\n]+)`/g, (_m, code) => `${COLOR.bgBlue}${COLOR.white} ${code} ${COLOR.reset}`)
   out = out.replace(/\*\*([^*\n]+)\*\*/g, (_m, body) => `${COLOR.bold}${body}${COLOR.reset}`)
   out = out.replace(/\*([^*\n]+)\*/g, (_m, body) => `${COLOR.italic}${t.accent}${body}${COLOR.reset}`)
@@ -646,7 +646,7 @@ export function renderFooter(opts: {
         : `${COLOR.bgGreen}${COLOR.black}${COLOR.bold} ASK ${COLOR.reset}`,
     )
   }
-  segs.push(`${COLOR.bgBlue}${COLOR.white}${COLOR.bold} TRAYAMBAK ${COLOR.reset}`)
+  segs.push(`${COLOR.bgBlue}${COLOR.white}${COLOR.bold} NEMO ${COLOR.reset}`)
   if (opts.session) segs.push(`${t.muted}session:${COLOR.reset} ${t.accent}${opts.session}${COLOR.reset}`)
   if (opts.contextPercent !== undefined) {
     const color = opts.contextPercent > 80 ? t.error : t.success
@@ -669,7 +669,7 @@ export function renderFooter(opts: {
     // Drop the trailing cwd/model segments first (they are the least
     // important), then hard-truncate the tail.
     return (
-      `${COLOR.bgBlue}${COLOR.white}${COLOR.bold} TRAYAMBAK ${COLOR.reset}${t.muted}…${COLOR.reset}` +
+      `${COLOR.bgBlue}${COLOR.white}${COLOR.bold} NEMO ${COLOR.reset}${t.muted}…${COLOR.reset}` +
       stripAnsiTail(left)
     )
   }
@@ -740,7 +740,7 @@ export interface PermissionRequest {
   reason: string
 }
 
-/** A centred "Allow / Deny" prompt — Trayambak-style permission gate. */
+/** A centred "Allow / Deny" prompt — Nemo-style permission gate. */
 export function renderPermission(req: PermissionRequest): string {
   const t = getTheme()
   const lines: string[] = [

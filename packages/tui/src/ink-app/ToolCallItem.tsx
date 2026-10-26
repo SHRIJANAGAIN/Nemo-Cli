@@ -1,7 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 import React, { type ReactNode } from "react"
@@ -15,6 +18,7 @@ import { toolBoxWidth } from "./types.js"
 import { truncateMiddleLines } from "../../../../apps/runtime/src/tools/text/diff-render.js"
 import { useThemeColors } from "./themeColors.js"
 import { useBorderPulse } from "./use-border-pulse.js"
+import { formatDuration } from "./duration-text.js"
 import { g } from "./glyphs.js"
 
 export interface ToolCallItemProps {
@@ -39,7 +43,7 @@ function isExecToolCall(toolCall: ToolCallDisplay): boolean {
 }
 
 function isSwarmToolCall(toolCall: ToolCallDisplay): boolean {
-  return toolCall.name === "skt__Swarm"
+  return toolCall.name === "nemo__Swarm"
 }
 
 export const ToolCallItem = ({
@@ -144,8 +148,10 @@ export const ToolCallItem = ({
   // truncate-end below is the hard guarantee if the estimate is off.
   // A "…" marks the cut — the old bare slice ended headers mid-word
   // ("Explore the) with no sign anything was hidden.
-  const durationTail = durationMs !== undefined && isFinished ? ` • ${durationMs}ms`.length : 0
-  const argBudget = Math.max(20, Math.min(100, termWidth - 25 - durationTail))
+  // Rendered from the same string the budget measures: a tail whose width is
+  // estimated from a *different* shape is how a truncated header ate the mark.
+  const durationTail = durationMs !== undefined && isFinished ? ` • ${formatDuration(durationMs)}` : ""
+  const argBudget = Math.max(20, Math.min(100, termWidth - 25 - durationTail.length))
   const argRaw = Object.keys(args).length > 0 ? JSON.stringify(args) : ""
   const argJson = argRaw.length > argBudget ? `${argRaw.slice(0, argBudget - 1)}…` : argRaw
 
@@ -197,7 +203,7 @@ export const ToolCallItem = ({
               {isError ? ` ${g("fail")}` : ` ${g("ok")}`}
             </Text>
           )}
-          {durationMs !== undefined && isFinished && <Text color={theme.textMuted}> • {durationMs}ms</Text>}
+          {durationTail !== "" && <Text color={theme.textMuted}>{durationTail}</Text>}
         </Text>
       </Box>
 

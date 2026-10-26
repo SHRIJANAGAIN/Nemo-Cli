@@ -11,7 +11,7 @@ paths:
 
 ## PostToolUse Hooks
 
-Configure in `~/.trayambak/settings.json`:
+Configure in `~/.nemo/settings.json`:
 
 - **gofmt/goimports**: Auto-format `.go` files after edit
 - **go vet**: Run static analysis after editing `.go` files

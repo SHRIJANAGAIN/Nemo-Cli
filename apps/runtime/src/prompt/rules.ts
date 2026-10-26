@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -56,7 +56,7 @@ export function loadRules(cwd: string = process.cwd()): RuleFile[] {
     }
   }
 
-  const globalDir = path.join(os.homedir(), ".trayambak")
+  const globalDir = path.join(os.homedir(), ".nemo")
   if (fs.existsSync(globalDir)) {
     for (const name of RULE_FILENAMES) {
       const filePath = path.join(globalDir, name)
@@ -107,7 +107,7 @@ export function writeRule(
   cwd: string = process.cwd(),
   scope: "project" | "global" = "project",
 ): string {
-  const targetDir = scope === "global" ? path.join(os.homedir(), ".trayambak") : cwd
+  const targetDir = scope === "global" ? path.join(os.homedir(), ".nemo") : cwd
   fs.mkdirSync(targetDir, { recursive: true })
   const filePath = path.join(targetDir, name)
   fs.writeFileSync(filePath, content, "utf8")

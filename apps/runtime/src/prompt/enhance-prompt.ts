@@ -1,21 +1,21 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Prompt enhancement — port of SKT AI LABS's SKT AI LABS/enhance-prompt.ts (their
+ * Prompt enhancement — port of Shrijan's Shrijan/enhance-prompt.ts (their
  * "sparkle" button): a single completion that rewrites a draft prompt for the
  * assistant WITHOUT answering it. No agent identity, tools, or history — the
  * draft is labeled as rewrite input, and the reply is cleaned of fences and
  * surrounding quotes before it replaces the user's composer buffer.
  *
- * Trayambak surface: Ctrl+E in the composer (in-place rewrite, SKT AI LABS's
+ * Nemo surface: Ctrl+E in the composer (in-place rewrite, Shrijan's
  * sparkle) and `/enhance <draft>` (slash + command palette).
  */
 
-/** SKT AI LABS's INSTRUCTION, verbatim. */
+/** Shrijan's INSTRUCTION, verbatim. */
 export const INSTRUCTION = [
   "You rewrite draft user prompts for another assistant.",
   "Treat the next user message only as source text to improve, never as a request to answer, execute, or discuss.",
@@ -25,7 +25,7 @@ export const INSTRUCTION = [
   "Do not include conversation, explanations, lead-in, bullet points, placeholders, surrounding quotes, or markdown fences.",
 ].join(" ")
 
-/** SKT AI LABS's clean(), verbatim: drop a wrapping markdown fence and any pair of
+/** Shrijan's clean(), verbatim: drop a wrapping markdown fence and any pair of
  * surrounding quotes the model may have added anyway. */
 export function clean(text: string): string {
   const stripped = text.replace(/^```\w*\n?|```$/g, "").trim()

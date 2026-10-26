@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * `trayambak download` — fetch a GGUF model from Hugging Face.
+ * `nemo download` — fetch a GGUF model from Hugging Face.
  *
  * Supply-chain rules (#67):
  *   - Every hop (initial URL and each redirect) must be an allowlisted
@@ -111,7 +111,7 @@ function requestJson(url: string, token?: string): Promise<HubModel> {
       {
         headers: {
           Accept: "application/json",
-          "User-Agent": "trayambak",
+          "User-Agent": "nemo",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       },
@@ -193,7 +193,7 @@ function downloadHop(
       target,
       {
         headers: {
-          "User-Agent": "trayambak",
+          "User-Agent": "nemo",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       },
@@ -325,7 +325,7 @@ export async function downloadCommand(args: string[]): Promise<void> {
   const outputIndex = args.indexOf("--output")
   const output = outputIndex >= 0 ? args[outputIndex + 1] : undefined
   if (!repoArg || repoArg.startsWith("-")) {
-    process.stdout.write("Usage: trayambak download <org/model> [file.gguf] [--output <path>]\n")
+    process.stdout.write("Usage: nemo download <org/model> [file.gguf] [--output <path>]\n")
     return
   }
   const repo = assertHfRepoId(repoArg)

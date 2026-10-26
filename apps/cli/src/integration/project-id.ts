@@ -1,4 +1,4 @@
-export * as TrayambakProjectId from "./project-id"
+export * as NemoProjectId from "./project-id"
 
 import { existsSync } from "fs"
 import { join } from "path"

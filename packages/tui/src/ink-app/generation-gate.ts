@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -45,6 +45,13 @@ export interface GateOptions {
   write: (sequence: string) => void
   /** Reporting is only safe when there is a real terminal to report to. */
   interactive?: boolean
+  /**
+   * Alternate-screen mode owns the wheel itself (App enables reporting on
+   * mount for in-app transcript paging and disables it on teardown). The gate
+   * must not touch reporting there — its wheel-release on park/scroll-away
+   * would kill App's scrolling mid-turn. Phase bookkeeping is untouched.
+   */
+  altScreen?: boolean
 }
 
 export class GenerationGate {
@@ -58,10 +65,12 @@ export class GenerationGate {
   private reporting = false
   private readonly write: (sequence: string) => void
   private readonly interactive: boolean
+  private readonly altScreen: boolean
 
   constructor(options: GateOptions) {
     this.write = options.write
     this.interactive = options.interactive !== false
+    this.altScreen = options.altScreen === true
   }
 
   get current(): GatePhase {
@@ -75,7 +84,7 @@ export class GenerationGate {
 
   /** Emit the OFF sequence exactly once, and only when reporting is live. */
   private releaseWheel(): void {
-    if (!this.reporting) return
+    if (!this.reporting || this.altScreen) return
     this.reporting = false
     this.write(MOUSE_REPORTING_OFF)
   }
@@ -83,10 +92,11 @@ export class GenerationGate {
   /**
    * A turn started producing output. Take the wheel so a scroll-away can be
    * noticed. A no-op when non-interactive: there is no terminal to report to and
-   * nothing to detect, so the device keeps its native scrolling.
+   * nothing to detect, so the device keeps its native scrolling. Also a no-op
+   * in alt-screen mode: App owns reporting there for transcript paging.
    */
   enterWorking(): void {
-    if (!this.interactive || this.reporting) return
+    if (!this.interactive || this.reporting || this.altScreen) return
     this.phase = "working"
     this.reporting = true
     this.write(MOUSE_REPORTING_ON)

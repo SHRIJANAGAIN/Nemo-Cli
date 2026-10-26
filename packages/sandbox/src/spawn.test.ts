@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * OS-level spawner behaviour (spawn.ts).
@@ -52,17 +56,45 @@ function request(overrides: Partial<SpawnRequest> = {}): SpawnRequest {
 }
 
 describe("seatbeltProfile", () => {
+  /**
+   * These three tests previously asserted `toContain("(allow default)")` and the
+   * second was named "leaves the default-allow profile open when network is
+   * allowed". `(allow default)` permits every file operation on the host, so a
+   * `read-only` session had unrestricted write access while `spawnProcess`
+   * returned `isSandboxed: true`. The tests pinned the vulnerability; the names
+   * documented it as intended behaviour.
+   *
+   * The intent that survives — deny network when the policy disables it, never
+   * emit JSON — is kept below. What changed is the security assertion: the
+   * profile must now be deny-by-default.
+   */
+
+  it("is deny-by-default, never allow-default", () => {
+    // `(allow default)` at any position is what made this a no-op. Its absence
+    // is the single most important property of the profile.
+    for (const policy of [netPolicy(true), netPolicy(false)]) {
+      expect(seatbeltProfile(policy), "no policy").not.toContain("(allow default)")
+      expect(seatbeltProfile(policy, undefined), "no fs policy").not.toContain("(allow default)")
+    }
+  })
+
+  it("withholds by default before it grants anything", () => {
+    const profile = seatbeltProfile(netPolicy(false))
+    expect(profile).toContain("(deny default)")
+    // SBPL is last-match-wins, so a grant placed before the deny would be void
+    // and a deny placed after a blanket allow would be the only thing working.
+    expect(profile.indexOf("(deny default)")).toBeLessThan(profile.indexOf("(allow file-read*"))
+  })
+
   it("emits SBPL text that denies network when the policy disables it", () => {
     const profile = seatbeltProfile(netPolicy(true))
     expect(profile).toContain("(version 1)")
-    expect(profile).toContain("(allow default)")
-    // Later rules win in SBPL, so the deny must come after the allow.
-    expect(profile.indexOf("(deny network*)")).toBeGreaterThan(profile.indexOf("(allow default)"))
+    expect(profile).toContain("(deny network*)")
+    expect(profile.indexOf("(deny network*)")).toBeGreaterThan(profile.indexOf("(deny default)"))
   })
 
-  it("leaves the default-allow profile open when network is allowed", () => {
+  it("leaves network open when the policy allows it", () => {
     const profile = seatbeltProfile(netPolicy(false))
-    expect(profile).toContain("(allow default)")
     expect(profile).not.toContain("(deny network*)")
   })
 
@@ -87,13 +119,38 @@ describe("landlockArgs", () => {
     expect(args).not.toContain("/dev/null")
   })
 
-  it("binds cwd exactly once, writable — the old --ro-bind/--bind pair cancelled out", () => {
-    const args = landlockArgs(["/bin/true"], "/w", netPolicy(false))
-    expect(args.filter((a) => a === "--ro-bind")).toHaveLength(0)
-    expect(args.filter((a) => a === "--bind")).toHaveLength(1)
-    expect(args).toContain("--die-with-parent")
-    expect(args).toContain("--unshare-user")
-    expect(args).toContain("--unshare-pid")
+  it("binds cwd read-write ONLY when the policy grants a writable root covering it", () => {
+    // This assertion was `toHaveLength(0)` before the fix: the old builder
+    // hardcoded `--bind cwd cwd`, so a `read-only` session — no writable roots
+    // at all — still got a writable workspace.
+    const readOnly = landlockArgs(["/bin/true"], "/w", netPolicy(false), undefined)
+    expect(readOnly.filter((a) => a === "--bind")).toHaveLength(0)
+    expect(readOnly).toContain("--ro-bind")
+
+    const writable = landlockArgs(["/bin/true"], "/w", netPolicy(false), {
+      writableRoots: ["/w"],
+      readOnlySubpaths: [],
+      denyReadPaths: [],
+      denyWritePaths: [],
+    })
+    expect(writable.filter((a) => a === "--bind")).toHaveLength(1)
+    expect(writable).toContain("--die-with-parent")
+    expect(writable).toContain("--unshare-user")
+    expect(writable).toContain("--unshare-pid")
+  })
+
+  it("binds a writable root exactly once, never as a ro-bind/bind pair", () => {
+    // The old `--ro-bind cwd cwd` followed by `--bind cwd cwd` was a dead mount
+    // pair that cancelled itself out. A path in both lists is a legitimate
+    // bubblewrap overlay, so the assertion is on the WORKSPACE, not on all roots.
+    const args = landlockArgs(["/bin/true"], "/w", netPolicy(false), {
+      writableRoots: ["/w"],
+      readOnlySubpaths: [],
+      denyReadPaths: [],
+      denyWritePaths: [],
+    })
+    const workspaceBinds = args.filter((a, i) => a === "--bind" && args[i + 2] === "/w")
+    expect(workspaceBinds).toHaveLength(1)
   })
 })
 

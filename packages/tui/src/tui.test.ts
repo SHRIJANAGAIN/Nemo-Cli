@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
@@ -147,11 +147,11 @@ describe("TerminalUI: footer", () => {
     expect(output).toContain("/my/path")
   })
 
-  it("includes TRAYAMBAK badge", () => {
+  it("includes NEMO badge", () => {
     const ui = new TerminalUI({ useColor: false })
     ui.footer({ model: "llama", cwd: "/home" })
     const output = cap.output.join("")
-    expect(output).toContain("TRAYAMBAK")
+    expect(output).toContain("NEMO")
   })
 })
 
@@ -340,14 +340,14 @@ describe("TerminalUI: banner, stcRule, clearScreen, notice", () => {
     ui.banner("Hello World")
     const output = cap.output.join("")
     expect(output).toContain("Hello World")
-    expect(output).toContain("TRAYAMBAK")
+    expect(output).toContain("NEMO")
   })
 
-  it("stcRule prints TRAYAMBAK CODE tag", () => {
+  it("stcRule prints NEMO CODE tag", () => {
     const ui = new TerminalUI({ useColor: false })
     ui.stcRule()
     const output = cap.output.join("")
-    expect(output).toContain("TRAYAMBAK CODE")
+    expect(output).toContain("NEMO CODE")
   })
 
   it("clearScreen writes ANSI clear and home", () => {

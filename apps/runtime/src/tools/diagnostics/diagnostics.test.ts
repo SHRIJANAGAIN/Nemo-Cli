@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -35,7 +35,7 @@ function resultText(result: { content: unknown[] }): string {
 }
 
 describe("pretty", () => {
-  it("renders SKT AI LABS's `ERROR [line:col] message` with 1-based positions", () => {
+  it("renders Shrijan's `ERROR [line:col] message` with 1-based positions", () => {
     expect(pretty({ range: { start: { line: 11, character: 4 } }, severity: 1, message: "TS2345: bad arg" })).toBe(
       "ERROR [12:5] TS2345: bad arg",
     )
@@ -75,7 +75,7 @@ describe("report", () => {
   })
 })
 
-describe("filterDiagnostics (SKT AI LABS port)", () => {
+describe("filterDiagnostics (Shrijan port)", () => {
   const record = {
     "/p/a.ts": [{ range: { start: { line: 0, character: 0 } }, severity: 1 as const, message: "A" }],
     "/p/b.ts": [{ range: { start: { line: 0, character: 0 } }, severity: 1 as const, message: "B" }],
@@ -207,7 +207,7 @@ describe("findUp / resolveTscBin", () => {
     fs.mkdirSync(nested, { recursive: true })
     fs.writeFileSync(path.join(root, "marker.txt"), "", "utf8")
     expect(findUp("marker.txt", nested)).toBe(path.join(root, "marker.txt"))
-    expect(findUp("definitely-missing-trayambak-test-file.json", nested)).toBeUndefined()
+    expect(findUp("definitely-missing-nemo-test-file.json", nested)).toBeUndefined()
     fs.rmSync(root, { recursive: true, force: true })
   })
 

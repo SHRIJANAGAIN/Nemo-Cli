@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { mkdtempSync, rmSync } from "node:fs"
@@ -9,7 +9,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { DEFAULT_PERMISSIONS } from "../../../../../packages/protocol/src/permissions.js"
-import type { TrayambakConfig } from "../../config.js"
+import type { NemoConfig } from "../../config.js"
 import type { ToolContext } from "../types.js"
 import {
   createTerminalSession,
@@ -32,7 +32,7 @@ const SHELL = process.platform === "win32" ? "cmd" : "sh"
 const ctxFor = (dir: string): ToolContext =>
   ({
     cwd: dir,
-    config: { shellCommand: process.platform === "win32" ? "cmd /c" : "sh -c" } as unknown as TrayambakConfig,
+    config: { shellCommand: process.platform === "win32" ? "cmd /c" : "sh -c" } as unknown as NemoConfig,
     permissions: { ...DEFAULT_PERMISSIONS, askByDefault: false },
   }) as ToolContext
 
@@ -54,7 +54,7 @@ afterEach(async () => {
 })
 
 function tempDir(): string {
-  dir = mkdtempSync(join(tmpdir(), "trayambak-terminal-"))
+  dir = mkdtempSync(join(tmpdir(), "nemo-terminal-"))
   return dir
 }
 

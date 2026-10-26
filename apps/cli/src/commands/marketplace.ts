@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import {
@@ -27,7 +27,7 @@ function entriesText(entries: Array<{ kind: string; name: string; description: s
   return entries.map((e) => `  - [${e.kind}] ${e.name}${e.description ? `: ${e.description}` : ""}`).join("\n")
 }
 
-/** `trayambak marketplace <list|search|install|remove>`: shelf CLI twin. */
+/** `nemo marketplace <list|search|install|remove>`: shelf CLI twin. */
 export function marketplaceCommand(opts: MarketplaceOptions): string {
   const action = (opts.action ?? "list").trim().toLowerCase()
   const source = opts.source && opts.source.length > 0 ? opts.source : defaultMarketplaceSource()
@@ -36,24 +36,24 @@ export function marketplaceCommand(opts: MarketplaceOptions): string {
     case "list":
       return entriesText(scanMarketplace(source))
     case "search": {
-      if (!opts.nameOrQuery) return usageOutput("Usage: trayambak marketplace search <query> [--source <dir>]")
+      if (!opts.nameOrQuery) return usageOutput("Usage: nemo marketplace search <query> [--source <dir>]")
       const hits = searchMarketplace(source, opts.nameOrQuery)
       return hits.length > 0 ? entriesText(hits) : failOutput(`No marketplace entries match '${opts.nameOrQuery}'.`)
     }
     case "install": {
       const kind = (opts.kind ?? "").trim().toLowerCase()
       if (kind !== "skill" && kind !== "agent")
-        return usageOutput("Usage: trayambak marketplace install <skill|agent> <name> [--source <dir>]")
+        return usageOutput("Usage: nemo marketplace install <skill|agent> <name> [--source <dir>]")
       if (!opts.nameOrQuery)
-        return usageOutput("Usage: trayambak marketplace install <skill|agent> <name> [--source <dir>]")
+        return usageOutput("Usage: nemo marketplace install <skill|agent> <name> [--source <dir>]")
       const result = installMarketplaceEntry(source, kind as MarketplaceKind, opts.nameOrQuery, cwd)
       return result.ok ? result.message : failOutput(`Error: ${result.error}`)
     }
     case "remove": {
       const kind = (opts.kind ?? "").trim().toLowerCase()
       if (kind !== "skill" && kind !== "agent")
-        return usageOutput("Usage: trayambak marketplace remove <skill|agent> <name>")
-      if (!opts.nameOrQuery) return usageOutput("Usage: trayambak marketplace remove <skill|agent> <name>")
+        return usageOutput("Usage: nemo marketplace remove <skill|agent> <name>")
+      if (!opts.nameOrQuery) return usageOutput("Usage: nemo marketplace remove <skill|agent> <name>")
       const result = removeMarketplaceEntry(kind as MarketplaceKind, opts.nameOrQuery, cwd)
       return result.ok ? result.message : failOutput(`Error: ${result.error}`)
     }

@@ -17,33 +17,8 @@
  *      task create→get→update→output→list, and a checkpoint→mutate→rewind
  *      roundtrip verified against the bytes on disk.
  *
- * Plus the pentest catalog (every entry well-formed + unique, ≥80 tools) and
- * the live engagement flow (ListTools → StartEngagement → GetStatus →
- * GetFindings → RunTool unknown-tool denial) and the 5 Pentest* meta-tools
- * being model-facing (the arsenal regression from the unknown-tool bug).
- *
- * License (since 2026-09-29): every trayambak__Pentest* execution is gated by
- * a LIVE license check in tools/index.ts (gatePentest → serverCanUsePentest).
- * To verify that gate AND the flow behind it offline, this script boots a
- * local node:http license stub (same shape as license.test.ts: /license/
- * verify|activate|usage) and points TRAYAMBAK_LICENSE_KEY /
- * TRAYAMBAK_LICENSE_SERVER at it BEFORE loadConfig(), so the REAL
- * serverVerifyLicenseKey / serverCanUsePentest / reportToolUsage path runs
- * end-to-end — product code untouched, only the remote end is in-process.
- * Developer mode (since 2026-10-01): gatePentest now checks
- * config.developerMode.enabled BEFORE the license check, so a harness that
- * leaves devmode OFF never reaches the gate this script exists to prove —
- * every probe returns the devmode refusal instead of a license one. This
- * script therefore turns devmode on after loadConfig() (harness-local only;
- * the shipped default remains OFF) and section 5 additionally re-probes
- * devmode OFF, so BOTH gates are proven fail-closed.
- *
- * Section 5 then re-probes the gates NEGATIVE (devmode off / no key /
- * unreachable server) so a gate that silently stops gating can never pass
- * this script.
- *
- * Isolation: chdir into a fresh sandbox with a local .trayambak/ (configDir()
- * is cwd-based) and HOME/USERPROFILE/TRAYAMBAK_HOME pointed at it too, so no
+ * Isolation: chdir into a fresh sandbox with a local .nemo/ (configDir()
+ * is cwd-based) and HOME/USERPROFILE/NEMO_HOME pointed at it too, so no
  * homedir()-based store (truncation, memory, auth) can be touched. Every
  * requestPermission() call is RECORDED and DENIED — a tool that asks for
  * approval on empty args never gets it.
@@ -52,7 +27,6 @@
  * Exit: 0 = ALL_TOOLS_OK, 1 = ALL_TOOLS_FAIL (details on stderr).
  */
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { createServer } from "node:http"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -61,10 +35,10 @@ const repo = path.join(here, "..")
 
 // ── Isolation ───────────────────────────────────────────────────────────────
 const fs = await import("node:fs")
-const sandbox = fs.mkdtempSync(path.join(tmpdir(), "trayambak-alltools-"))
-fs.mkdirSync(path.join(sandbox, ".trayambak"), { recursive: true })
+const sandbox = fs.mkdtempSync(path.join(tmpdir(), "nemo-alltools-"))
+fs.mkdirSync(path.join(sandbox, ".nemo"), { recursive: true })
 fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "alltools-sandbox", private: true }))
-process.env.TRAYAMBAK_HOME = sandbox
+process.env.NEMO_HOME = sandbox
 process.env.HOME = sandbox
 process.env.USERPROFILE = sandbox
 process.env.TEMP = path.join(sandbox, "temp")
@@ -83,61 +57,18 @@ process.on("unhandledRejection", (error) => {
   strayRejections += 1
 })
 
-// ── License stub (must precede loadConfig: env → config → gate) ─────────────
-// Routes mirror license.test.ts's server stub. The gate still runs its full
-// verification logic; only the remote end is local to this process.
-const licenseSeen = []
-const licenseServer = createServer((req, res) => {
-  let data = ""
-  req.on("data", (c) => {
-    data += c.toString()
-  })
-  req.on("end", () => {
-    licenseSeen.push(req.url ?? "")
-    const routes = {
-      "/license/verify": { valid: true, plan: "pentest", exp: 1893456000 },
-      "/license/activate": { ok: true, plan: "pentest", exp: 1893456000 },
-      "/license/usage": { ok: true },
-    }
-    const json = routes[req.url ?? ""]
-    if (json === undefined) {
-      res.writeHead(404, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ error: "not found" }))
-      return
-    }
-    res.writeHead(200, { "Content-Type": "application/json" })
-    res.end(JSON.stringify(json))
-  })
-})
-await new Promise((resolve) => licenseServer.listen(0, "127.0.0.1", resolve))
-const licenseUrl = `http://127.0.0.1:${licenseServer.address().port}`
-// Shape-valid key per normalizeLicenseKey (16 Crockford chars): the SERVER
-// does the real accept/reject — the stub is the server here.
-process.env.TRAYAMBAK_LICENSE_KEY = "1102-AAAA-BBBB-CCCC"
-process.env.TRAYAMBAK_LICENSE_SERVER = licenseUrl
-console.log(`license stub listening: ${licenseUrl}`)
-
 // ── Dist imports (the shipped build, not sources) ───────────────────────────
 const dist = (...parts) => pathToFileURL(path.join(repo, "dist", ...parts)).href
 const { loadConfig } = await import(dist("apps", "runtime", "src", "config.js"))
 const { createDefaultTools } = await import(dist("apps", "runtime", "src", "tools", "index.js"))
 const { DEFAULT_PERMISSIONS } = await import(dist("packages", "protocol", "src", "permissions.js"))
-const { getSecurityToolRegistry } = await import(
-  dist("apps", "runtime", "src", "tools", "pentest", "security-tool-registry.js")
-)
 
 const config = loadConfig()
-// Harness-local devmode: gatePentest refuses when developerMode.enabled is
-// not true, and it refuses BEFORE consulting the license — so with devmode
-// off this script could never reach the license gate it was written to
-// prove. Enable it here only; the product default stays OFF and section 5
-// re-probes devmode OFF to assert that control directly.
-config.developerMode = { ...config.developerMode, enabled: true }
 
 // Permission stub: record everything, DENY everything except the one exact
 // harmless echo probe used by the positive battery. No empty-args probe may
 // ever act on an approval it asked for; the request itself is worth reporting.
-const PERMISSION_ECHO_PROBE = "echo trayambak-positive-ok"
+const PERMISSION_ECHO_PROBE = "echo nemo-positive-ok"
 const permissionRequests = []
 const toolContext = {
   cwd: sandbox,
@@ -247,14 +178,6 @@ async function exec(tool, args, timeoutMs = EXEC_TIMEOUT_MS) {
   }
 }
 
-const PENTEST_META = [
-  "trayambak__PentestListTools",
-  "trayambak__PentestRunTool",
-  "trayambak__PentestStartEngagement",
-  "trayambak__PentestGetStatus",
-  "trayambak__PentestGetFindings",
-]
-
 // ── 1. Model-facing set: definitions + empty-args execute ───────────────────
 console.log(`model-facing tools: ${tools.length}`)
 if (tools.length < 40) fail("toolset:count", `only ${tools.length} tools model-facing (expected ≥40)`)
@@ -276,10 +199,6 @@ for (const tool of tools) {
   }
   const mark = run.state === "ok" ? " ok " : run.state === "grace" ? " err" : "BAD"
   console.log(`  ${mark} ${name}${run.ms >= 1000 ? ` (${run.ms}ms)` : ""}`)
-}
-
-for (const meta of PENTEST_META) {
-  if (!seen.has(meta)) fail("pentest:meta-missing", `${meta} not model-facing`)
 }
 
 // ── 2. Positive paths: real invocations with valid args (all sandbox-local) ─
@@ -324,10 +243,10 @@ async function checkPos(label, name, args, expect = []) {
 }
 
 // bash / file loop: echo → write → read → edit → grep → glob
-await checkPos("bash echo", "bash", { command: PERMISSION_ECHO_PROBE }, [/trayambak-positive-ok/])
+await checkPos("bash echo", "bash", { command: PERMISSION_ECHO_PROBE }, [/nemo-positive-ok/])
 const probePath = path.join(sandbox, "positive-probe.txt")
-await checkPos("write_file", "write_file", { path: "positive-probe.txt", content: "trayambak positive probe line\n" })
-await checkPos("read_file", "read_file", { path: "positive-probe.txt" }, [/trayambak positive probe line/])
+await checkPos("write_file", "write_file", { path: "positive-probe.txt", content: "nemo positive probe line\n" })
+await checkPos("read_file", "read_file", { path: "positive-probe.txt" }, [/nemo positive probe line/])
 await checkPos("edit_file", "edit_file", {
   path: "positive-probe.txt",
   old_string: "positive probe",
@@ -342,7 +261,7 @@ await checkPos(
   "summarize",
   {
     text:
-      "Trayambak is a deterministic coding agent that hunts bugs, verifies every tool, and summarizes " +
+      "Nemo is a deterministic coding agent that hunts bugs, verifies every tool, and summarizes " +
       "long documents into concise extractive summaries. The positive battery feeds it a deliberately " +
       "long passage so the summarizer has real work to do and returns a non-trivial excerpt instead " +
       "of an empty string or a validation error.",
@@ -354,7 +273,7 @@ await checkPos(
 await checkPos("todo write", "todo", { action: "write", content: "verify todo positive", priority: "high" })
 await checkPos("todo read", "todo", { action: "read" }, [/verify todo positive/])
 
-// memory store (HOME/TRAYAMBAK_HOME point at the sandbox)
+// memory store (HOME/NEMO_HOME point at the sandbox)
 await checkPos("memory save", "memory", { action: "save", title: "positive probe", content: "verify memory positive fact" })
 await checkPos("memory search", "memory", { action: "search", query: "positive fact" })
 await checkPos("memory list", "memory", { action: "list" })
@@ -365,33 +284,33 @@ await checkPos("get_mode shows coder", "get_mode", {}, [/coder/])
 await checkPos("set_mode default", "set_mode", { mode: "default" })
 
 await checkPos("dream status", "dream", { action: "status" }, [/\S/])
-await checkPos("tool_search", "tool_search", { query: "pentest" })
+await checkPos("tool_search", "tool_search", { query: "grep" })
 await checkPos("read_manifest", "read_manifest", {}, [/alltools-sandbox/])
 
 // cron roundtrip (in-memory job map)
-const cronOut = await checkPos("cron create", "trayambak__CronCreate", {
+const cronOut = await checkPos("cron create", "nemo__CronCreate", {
   cron: "*/5 * * * *",
   prompt: "verify cron positive",
 })
 const cronId = /cron_[a-z0-9]+_[a-z0-9]+/.exec(cronOut)?.[0]
 if (cronId !== undefined) {
-  await checkPos("cron list", "trayambak__CronList", {}, [new RegExp(cronId)])
-  await checkPos("cron delete", "trayambak__CronDelete", { id: cronId })
+  await checkPos("cron list", "nemo__CronList", {}, [new RegExp(cronId)])
+  await checkPos("cron delete", "nemo__CronDelete", { id: cronId })
 } else {
   fail("pos:cron:create-id", `no cron id in: ${cronOut.slice(0, 200)}`)
 }
 
 // task roundtrip (tasks.json under sandbox HOME)
-const taskOut = await checkPos("task create", "trayambak__TaskCreate", {
+const taskOut = await checkPos("task create", "nemo__TaskCreate", {
   content: "verify task positive",
   priority: "high",
 })
 const taskId = /task_[a-z0-9]+_[a-z0-9]+/.exec(taskOut)?.[0]
 if (taskId !== undefined) {
-  await checkPos("task get", "trayambak__TaskGet", { id: taskId }, [/verify task positive/])
-  await checkPos("task update", "trayambak__TaskUpdate", { id: taskId, status: "completed", result: "task finished ok" })
-  await checkPos("task output", "trayambak__TaskOutput", { id: taskId }, [/task finished ok/])
-  await checkPos("task list", "trayambak__TaskList", {}, [new RegExp(taskId)])
+  await checkPos("task get", "nemo__TaskGet", { id: taskId }, [/verify task positive/])
+  await checkPos("task update", "nemo__TaskUpdate", { id: taskId, status: "completed", result: "task finished ok" })
+  await checkPos("task output", "nemo__TaskOutput", { id: taskId }, [/task finished ok/])
+  await checkPos("task list", "nemo__TaskList", {}, [new RegExp(taskId)])
 } else {
   fail("pos:task:create-id", `no task id in: ${taskOut.slice(0, 200)}`)
 }
@@ -403,14 +322,14 @@ if (!fs.existsSync(probePath)) {
   const probeBefore = fs.readFileSync(probePath, "utf8")
   const cpOut = await checkPos(
     "checkpoint",
-    "trayambak__Checkpoint",
+    "nemo__Checkpoint",
     { paths: ["positive-probe.txt"], label: "verify-checkpoint" },
     [/Label: verify-checkpoint/],
   )
   const cpId = /^Checkpoint created: ([0-9a-f-]+)/mi.exec(cpOut)?.[1]
   if (cpId !== undefined) {
     fs.writeFileSync(probePath, "mutated after checkpoint\n")
-    await checkPos("rewind", "trayambak__Rewind", { checkpoint_id: cpId }, [/Rewind complete/])
+    await checkPos("rewind", "nemo__Rewind", { checkpoint_id: cpId }, [/Rewind complete/])
     const restored = fs.readFileSync(probePath, "utf8")
     if (restored !== probeBefore) {
       fail("pos:rewind:bytes", `restored content differs: ${JSON.stringify(restored.slice(0, 200))}`)
@@ -422,124 +341,12 @@ if (!fs.existsSync(probePath)) {
   }
 }
 
-// ── 3. Pentest catalog integrity ────────────────────────────────────────────
-const registry = getSecurityToolRegistry()
-const catalog = registry.listTools()
-if (catalog.length < 80) fail("catalog:size", `only ${catalog.length} tools (expected ≥80)`)
-
-const catalogNames = new Set()
-const categories = new Set()
-for (const entry of catalog) {
-  const label = typeof entry?.name === "string" && entry.name.length > 0 ? entry.name : "<unnamed>"
-  for (const field of ["name", "category", "description", "command"]) {
-    if (typeof entry?.[field] !== "string" || entry[field].length === 0) fail(`catalog:${label}`, `empty '${field}'`)
-  }
-  if (typeof entry?.name === "string" && entry.name.length > 0) {
-    if (catalogNames.has(entry.name)) fail("catalog:duplicate", entry.name)
-    catalogNames.add(entry.name)
-    if (typeof entry.category === "string") categories.add(entry.category)
-  }
-}
-
-// ── 4. Live engagement flow + denial ────────────────────────────────────────
-const need = (name) => {
-  const tool = byName.get(name)
-  if (!tool) fail("flow:missing-tool", name)
-  return tool
-}
-
-const listToolsTool = need("trayambak__PentestListTools")
-if (listToolsTool) {
-  const all = await exec(listToolsTool, {})
-  if (all.state !== "ok") fail("flow:list-all", `${all.state}: ${all.detail ?? all.text?.slice(0, 200) ?? ""}`)
-  const byCategory = await exec(listToolsTool, { category: "network" })
-  if (byCategory.state !== "ok") fail("flow:list-category", `${byCategory.state}: ${byCategory.text?.slice(0, 200) ?? byCategory.detail ?? ""}`)
-}
-
-const startTool = need("trayambak__PentestStartEngagement")
-let engagementId = ""
-if (startTool) {
-  const start = await exec(startTool, { target: "127.0.0.1", scope: ["127.0.0.1"] })
-  if (start.state !== "ok") fail("flow:start", `${start.state}: ${start.text?.slice(0, 200) ?? start.detail ?? ""}`)
-  const match = /^ID:\s*(pentest-[0-9a-f-]+)/mi.exec(start.text ?? "")
-  if (!match) fail("flow:start-id", `no engagement ID in: ${(start.text ?? "").slice(0, 200)}`)
-  else engagementId = match[1]
-}
-
-if (engagementId) {
-  const statusTool = need("trayambak__PentestGetStatus")
-  if (statusTool) {
-    const status = await exec(statusTool, { engagementId })
-    if (status.state !== "ok" || !(status.text ?? "").includes("Engagement Status")) {
-      fail("flow:status", `${status.state}: ${(status.text ?? status.detail ?? "").slice(0, 200)}`)
-    }
-  }
-  const findingsTool = need("trayambak__PentestGetFindings")
-  if (findingsTool) {
-    const findings = await exec(findingsTool, { engagementId })
-    if (findings.state !== "ok") fail("flow:findings", `${findings.state}: ${(findings.text ?? findings.detail ?? "").slice(0, 200)}`)
-  }
-}
-
-const runTool = need("trayambak__PentestRunTool")
-if (runTool) {
-  const denial = await exec(runTool, { toolName: "__definitely_not_a_tool__", target: "example.com" })
-  if (denial.state !== "grace" || !/not found in registry/i.test(denial.text ?? "")) {
-    fail("flow:denial", `expected graceful unknown-tool denial, got ${denial.state}: ${(denial.text ?? denial.detail ?? "").slice(0, 200)}`)
-  }
-}
-
-// ── 5. The gates themselves: devmode-off / unlicensed / unreachable must ───
-// refuse fail-closed. Rebuild a toolset with devmode off, then with no key,
-// then pointed at a dead license server, and prove each choke still refuses
-// — otherwise a gate that silently stops gating would sail through sections
-// 1-4 with everything "working".
-async function gateProbe(label, overrides, expectRe) {
-  const probeConfig = { ...config, ...overrides }
-  const probe = createDefaultTools(
-    undefined, // devMode
-    async () => [],
-    async () => [],
-    async () => [],
-    probeConfig,
-    () => undefined,
-    { onListFleet: async () => [], onGetMode: () => "default", onSetMode: () => {} },
-  ).tools
-  const target = probe.find((t) => t.definition.name === "trayambak__PentestStartEngagement")
-  if (!target) {
-    fail(`gate:${label}`, "trayambak__PentestStartEngagement not model-facing")
-    return
-  }
-  const run = await exec(target, { target: "127.0.0.1", scope: ["127.0.0.1"] })
-  if (run.state !== "grace" || !expectRe.test(run.text ?? "")) {
-    fail(
-      `gate:${label}`,
-      `expected refusal ${String(expectRe)}, got ${run.state}: ${String(run.text ?? run.detail ?? "").slice(0, 200)}`,
-    )
-    return
-  }
-  console.log(`  ok  ${label}`)
-}
-// Devmode is the OUTER gate: with it off, the license key is never consulted
-// (offline-quiet by design). Prove it refuses before adding the key back.
-await gateProbe(
-  "refuses when developer mode is off",
-  { developerMode: { ...config.developerMode, enabled: false } },
-  /developer mode is OFF/i,
-)
-await gateProbe("refuses without a key", { licenseKey: undefined }, /refused: no license/i)
-await gateProbe(
-  "refuses when the license server is unreachable",
-  { licenseServerUrl: "http://127.0.0.1:1" },
-  /refused:.*unreachable/i,
-)
-
 // ── Summary ─────────────────────────────────────────────────────────────────
 console.log("")
 console.log(
   `stats: tools=${tools.length} ok=${states.ok} graceful_err=${states.grace} ` +
     `throw=${states.throw} hang=${states.hang} malformed=${states.malformed} ` +
-    `catalog=${catalog.length} categories=${categories.size} failures=${failures.length}`,
+    `failures=${failures.length}`,
 )
 if (permissionRequests.length > 0) {
   console.log(
@@ -549,7 +356,7 @@ if (permissionRequests.length > 0) {
 if (strayRejections > 0) fail("runtime:stray-rejection", `${strayRejections} unhandled promise rejection(s)`)
 
 if (failures.length === 0) {
-  console.log(`ALL_TOOLS_OK tools=${tools.length} catalog=${catalog.length}`)
+  console.log(`ALL_TOOLS_OK tools=${tools.length}`)
   process.exit(0)
 }
 console.error(`ALL_TOOLS_FAIL n=${failures.length}`)

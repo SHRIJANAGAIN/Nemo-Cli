@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
@@ -18,7 +18,7 @@ afterEach(() => {
 })
 
 function tempCwd(): string {
-  cwd = mkdtempSync(join(tmpdir(), "trayambak-pr-"))
+  cwd = mkdtempSync(join(tmpdir(), "nemo-pr-"))
   return cwd
 }
 
@@ -48,17 +48,17 @@ describe("prCheckout", () => {
 })
 
 describe("pr link/unlink", () => {
-  it("round-trips a link through .trayambak/pr.json", () => {
+  it("round-trips a link through .nemo/pr.json", () => {
     const dir = tempCwd()
 
     expect(prLink("https://github.com/o/r/pull/1", dir)).toBe("Linked https://github.com/o/r/pull/1")
     expect(readPrLink(dir)?.url).toBe("https://github.com/o/r/pull/1")
-    expect(JSON.parse(readFileSync(join(dir, ".trayambak", "pr.json"), "utf8")).url).toBe(
+    expect(JSON.parse(readFileSync(join(dir, ".nemo", "pr.json"), "utf8")).url).toBe(
       "https://github.com/o/r/pull/1",
     )
     expect(prUnlink(dir)).toBe("Unlinked PR")
     expect(readPrLink(dir)).toBeNull()
-    expect(existsSync(join(dir, ".trayambak", "pr.json"))).toBe(false)
+    expect(existsSync(join(dir, ".nemo", "pr.json"))).toBe(false)
   })
 
   it("rejects empty urls and reports a missing link", () => {

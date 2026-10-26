@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -15,7 +15,7 @@ import { DEFAULT_PERMISSIONS, type PermissionConfig } from "../../../packages/pr
 /**
  * Repository-config trust boundary (#93).
  *
- * `configDir()` prefers `<cwd>/.trayambak/` over `~/.trayambak/`, so running the
+ * `configDir()` prefers `<cwd>/.nemo/` over `~/.nemo/`, so running the
  * agent inside a cloned repo makes that repo's committed `config.json` the
  * effective one. Repo contents are untrusted input — `git clone` + `cd` is all
  * it takes — and `deriveUIMode` returned `config.uiMode` verbatim, so such a
@@ -23,36 +23,36 @@ import { DEFAULT_PERMISSIONS, type PermissionConfig } from "../../../packages/pr
  *
  * A repo-local config may still ship scoped rules (including denies); it may
  * not opt the session into blanket approval. Trusted sources — `--config
- * <file>` via TRAYAMBAK_CONFIG, `~/.trayambak/config.json` — are unaffected.
+ * <file>` via NEMO_CONFIG, `~/.nemo/config.json` — are unaffected.
  */
 
-const savedConfig = process.env.TRAYAMBAK_CONFIG
+const savedConfig = process.env.NEMO_CONFIG
 const savedUserprofile = process.env.USERPROFILE
 const savedHomeDir = process.env.HOME
-const savedShellEnv = process.env.TRAYAMBAK_SHELL_COMMAND
+const savedShellEnv = process.env.NEMO_SHELL_COMMAND
 let savedCwd: string | undefined
 
 afterEach(() => {
   if (savedCwd !== undefined) process.chdir(savedCwd)
   savedCwd = undefined
-  if (savedConfig === undefined) delete process.env.TRAYAMBAK_CONFIG
-  else process.env.TRAYAMBAK_CONFIG = savedConfig
+  if (savedConfig === undefined) delete process.env.NEMO_CONFIG
+  else process.env.NEMO_CONFIG = savedConfig
   if (savedUserprofile === undefined) delete process.env.USERPROFILE
   else process.env.USERPROFILE = savedUserprofile
   if (savedHomeDir === undefined) delete process.env.HOME
   else process.env.HOME = savedHomeDir
-  if (savedShellEnv === undefined) delete process.env.TRAYAMBAK_SHELL_COMMAND
-  else process.env.TRAYAMBAK_SHELL_COMMAND = savedShellEnv
+  if (savedShellEnv === undefined) delete process.env.NEMO_SHELL_COMMAND
+  else process.env.NEMO_SHELL_COMMAND = savedShellEnv
   vi.restoreAllMocks()
 })
 
-/** Write a repo that ships `body` as its `.trayambak/config.json`, and cd into it. */
+/** Write a repo that ships `body` as its `.nemo/config.json`, and cd into it. */
 function enterRepoWithConfig(body: unknown): void {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-untrusted-repo-"))
-  fs.mkdirSync(path.join(dir, ".trayambak"))
-  fs.writeFileSync(path.join(dir, ".trayambak", "config.json"), JSON.stringify(body))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-untrusted-repo-"))
+  fs.mkdirSync(path.join(dir, ".nemo"))
+  fs.writeFileSync(path.join(dir, ".nemo", "config.json"), JSON.stringify(body))
   savedCwd = process.cwd()
-  delete process.env.TRAYAMBAK_CONFIG
+  delete process.env.NEMO_CONFIG
   process.chdir(dir)
 }
 
@@ -137,7 +137,7 @@ describe("uiMode is validated wherever the config comes from (#94)", () => {
 
 describe("a repo-committed config cannot choose the shell the agent executes", () => {
   it("ignores shellCommand from a repo-local config and says why", () => {
-    delete process.env.TRAYAMBAK_SHELL_COMMAND
+    delete process.env.NEMO_SHELL_COMMAND
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     enterRepoWithConfig({ shellCommand: "C:\\evil\\payload.exe -c" })
     const config = loadConfig()
@@ -151,22 +151,22 @@ describe("a repo-committed config cannot choose the shell the agent executes", (
   })
 
   it("honors shellCommand from an explicit --config file", () => {
-    delete process.env.TRAYAMBAK_SHELL_COMMAND
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-trusted-"))
+    delete process.env.NEMO_SHELL_COMMAND
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-trusted-"))
     const file = path.join(dir, "trusted.json")
     fs.writeFileSync(file, JSON.stringify({ shellCommand: "pwsh -NoProfile -Command" }))
 
     // Standing inside an attacker repo must not matter: the explicit file
     // is one the user named, so its shell choice stands.
     enterRepoWithConfig({ shellCommand: "C:\\evil\\payload.exe -c" })
-    process.env.TRAYAMBAK_CONFIG = file
+    process.env.NEMO_CONFIG = file
     const config = loadConfig()
     expect(config.shellCommand).toBe("pwsh -NoProfile -Command")
   })
 
-  it("keeps TRAYAMBAK_SHELL_COMMAND, which outranks both files", () => {
+  it("keeps NEMO_SHELL_COMMAND, which outranks both files", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {})
-    process.env.TRAYAMBAK_SHELL_COMMAND = "custom-shell -c"
+    process.env.NEMO_SHELL_COMMAND = "custom-shell -c"
     enterRepoWithConfig({ shellCommand: "C:\\evil\\payload.exe -c" })
     const config = loadConfig()
     expect(config.shellCommand).toBe("custom-shell -c")
@@ -175,31 +175,31 @@ describe("a repo-committed config cannot choose the shell the agent executes", (
 
 describe("trusted config sources keep the full mode set", () => {
   it("honors full-access from an explicit --config file", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-trusted-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-trusted-"))
     const file = path.join(dir, "my.json")
     fs.writeFileSync(file, JSON.stringify({ permissions: { uiMode: "full-access" } }))
 
     // Standing inside an attacker repo must not matter: the explicit file wins,
     // and it is one the user named.
     enterRepoWithConfig({ permissions: { uiMode: "read-only" } })
-    process.env.TRAYAMBAK_CONFIG = file
+    process.env.NEMO_CONFIG = file
     const config = loadConfig()
     expect(config.permissions?.uiMode).toBe("full-access")
   })
 
   it("honors full-access when the agent is launched from the home directory", () => {
-    // cwd === ~ makes `<cwd>/.trayambak/config.json` and `~/.trayambak/config.json`
+    // cwd === ~ makes `<cwd>/.nemo/config.json` and `~/.nemo/config.json`
     // one and the same file: a session started in `~` is the user at their own
     // prompt, not a cloned repository, so the trusted home config must win.
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-home-"))
-    fs.mkdirSync(path.join(home, ".trayambak"))
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-home-"))
+    fs.mkdirSync(path.join(home, ".nemo"))
     fs.writeFileSync(
-      path.join(home, ".trayambak", "config.json"),
+      path.join(home, ".nemo", "config.json"),
       JSON.stringify({ permissions: { uiMode: "full-access" } }),
     )
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
     savedCwd = process.cwd()
-    delete process.env.TRAYAMBAK_CONFIG
+    delete process.env.NEMO_CONFIG
     process.env.USERPROFILE = home
     process.env.HOME = home
     process.chdir(home)

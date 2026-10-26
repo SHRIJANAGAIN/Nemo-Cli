@@ -1,4 +1,4 @@
-# Install trayambak on Windows (PowerShell).
+# Install nemo on Windows (PowerShell).
 # Usage: irm <raw-url>/install.ps1 | iex   (or: .\install.ps1 from the repo root)
 $ErrorActionPreference = "Stop"
 

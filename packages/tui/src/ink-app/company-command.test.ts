@@ -1,28 +1,28 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 import { handleCompanySlash, type CompanySlashDeps } from "./company-command.js"
 
 let root: string
 let emptyHome: string
 const savedUserProfile = process.env.USERPROFILE
 const savedHomeEnv = process.env.HOME
-const savedCompanyDir = process.env.TRAYAMBAK_COMPANY_DIR
-const savedConfigEnv = process.env.TRAYAMBAK_CONFIG
+const savedCompanyDir = process.env.NEMO_COMPANY_DIR
+const savedConfigEnv = process.env.NEMO_CONFIG
 
 function deps(args: string, overrides: Partial<CompanySlashDeps> = {}): CompanySlashDeps & {
   messages: string[]
   launches: Array<{ type: string; prompt: string; background: boolean }>
   manyLaunches: Array<{ items: Array<{ type: string; prompt: string }>; background: boolean }>
-  agentConfigRef: { current: TrayambakConfig | null }
+  agentConfigRef: { current: NemoConfig | null }
   agentRef: { current: unknown }
 } {
   const messages: string[] = []
@@ -54,14 +54,14 @@ function deps(args: string, overrides: Partial<CompanySlashDeps> = {}): CompanyS
 }
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-tui-"))
-  emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-tui-home-"))
-  // Persistence (saveConfig/loadConfig) prefers <cwd>/.trayambak when one
-  // exists (the checkout has one) — pin TRAYAMBAK_CONFIG at a temp file.
-  process.env.TRAYAMBAK_CONFIG = path.join(emptyHome, "config.json")
+  root = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-tui-"))
+  emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-tui-home-"))
+  // Persistence (saveConfig/loadConfig) prefers <cwd>/.nemo when one
+  // exists (the checkout has one) — pin NEMO_CONFIG at a temp file.
+  process.env.NEMO_CONFIG = path.join(emptyHome, "config.json")
   process.env.USERPROFILE = emptyHome
   process.env.HOME = emptyHome
-  delete process.env.TRAYAMBAK_COMPANY_DIR
+  delete process.env.NEMO_COMPANY_DIR
   const eng = path.join(root, "engineering")
   fs.mkdirSync(eng, { recursive: true })
   fs.writeFileSync(
@@ -79,10 +79,10 @@ afterEach(() => {
   else process.env.USERPROFILE = savedUserProfile
   if (savedHomeEnv === undefined) delete process.env.HOME
   else process.env.HOME = savedHomeEnv
-  if (savedCompanyDir === undefined) delete process.env.TRAYAMBAK_COMPANY_DIR
-  else process.env.TRAYAMBAK_COMPANY_DIR = savedCompanyDir
-  if (savedConfigEnv === undefined) delete process.env.TRAYAMBAK_CONFIG
-  else process.env.TRAYAMBAK_CONFIG = savedConfigEnv
+  if (savedCompanyDir === undefined) delete process.env.NEMO_COMPANY_DIR
+  else process.env.NEMO_COMPANY_DIR = savedCompanyDir
+  if (savedConfigEnv === undefined) delete process.env.NEMO_CONFIG
+  else process.env.NEMO_CONFIG = savedConfigEnv
   fs.rmSync(root, { recursive: true, force: true })
   fs.rmSync(emptyHome, { recursive: true, force: true })
 })
@@ -127,16 +127,16 @@ describe("handleCompanySlash", () => {
   })
 
   it("missing library reports where to point, without launching", () => {
-    const saved = process.env.TRAYAMBAK_COMPANY_DIR
-    delete process.env.TRAYAMBAK_COMPANY_DIR
+    const saved = process.env.NEMO_COMPANY_DIR
+    delete process.env.NEMO_COMPANY_DIR
     try {
       const d = deps("", { companyDir: path.join(root, "missing"), cwd: emptyHome, homeDir: emptyHome })
       handleCompanySlash(d)
       expect(d.messages[0]).toContain("Company library not found")
       expect(d.launches).toEqual([])
     } finally {
-      if (saved === undefined) delete process.env.TRAYAMBAK_COMPANY_DIR
-      else process.env.TRAYAMBAK_COMPANY_DIR = saved
+      if (saved === undefined) delete process.env.NEMO_COMPANY_DIR
+      else process.env.NEMO_COMPANY_DIR = saved
     }
   })
 

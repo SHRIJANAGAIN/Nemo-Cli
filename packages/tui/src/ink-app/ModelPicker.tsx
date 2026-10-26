@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode, useEffect, useState } from "react"
@@ -14,7 +14,7 @@ import { g } from "./glyphs.js"
 /** Rows shown at once — windowed like ThemePicker/CommandPalette. */
 const MAX_VISIBLE = 12
 
-/** SKT AI LABS shows the model info panel only at this width or wider. */
+/** Shrijan shows the model info panel only at this width or wider. */
 const WIDE_COLS = 108
 
 export interface ModelPickerProps {
@@ -34,7 +34,7 @@ export interface ModelPickerProps {
 }
 
 function InfoRow({ label, value }: { label: string; value: string }): ReactNode {
-  // SKT AI LABS's panel values are short; trayambak endpoints can be long URLs, and
+  // Shrijan's panel values are short; nemo endpoints can be long URLs, and
   // the panel is 30 cols (29 after padding) — trim the tail so label + value
   // always share one line.
   const max = Math.max(4, 28 - label.length)
@@ -47,7 +47,7 @@ function InfoRow({ label, value }: { label: string; value: string }): ReactNode 
   )
 }
 
-/** SKT AI LABS's model picker (DialogModel): Favorites → Recent → provider sections,
+/** Shrijan's model picker (DialogModel): Favorites → Recent → provider sections,
  * fuzzy filter ranked within sections, ★ favorite toggle (ctrl+f), current
  * marker, and a ≥108-col info panel on the right. */
 export function ModelPicker({
@@ -104,7 +104,7 @@ export function ModelPicker({
       return
     }
     if (key.ctrl && input === "f") {
-      // SKT AI LABS's model.favorite_toggle action on the highlighted row.
+      // Shrijan's model.favorite_toggle action on the highlighted row.
       const row = rows[selected]
       if (row) onToggleFavorite(row.id)
       return

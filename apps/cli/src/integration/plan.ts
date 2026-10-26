@@ -1,10 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-export * as TrayambakPlan from "./plan"
+export * as NemoPlan from "./plan"
 
 import * as fs from "fs"
 import * as os from "os"
@@ -33,7 +33,7 @@ export interface Plan {
  *  the store path depend on import-time environment (untestable without
  *  dynamic import gymnastics, and wrong if HOME changes later). */
 function plansFile(): string {
-  return path.join(os.homedir(), ".trayambak", "plans.json")
+  return path.join(os.homedir(), ".nemo", "plans.json")
 }
 
 interface PlanStore {

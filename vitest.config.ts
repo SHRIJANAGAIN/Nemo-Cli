@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { fileURLToPath } from "node:url"
@@ -15,13 +15,6 @@ const excludedTrees = [
   "**/tui.bak/**",
   "**/legacy-reference-tui/**",
   "**/legacy-reference-tui2/**",
-  // NOTE: **/trayambak-ink/** used to be excluded here — the fork's own
-  // 7-test suite is ENABLED: its `bun:test` imports resolve through the
-  // resolve.alias below, and its phantom @claude-code/repl dependency
-  // (registry E404) is vendored in-tree at
-  // packages/trayambak-ink/vendor/claude-code-repl (installed file: at the
-  // root). Fork coverage stays out of the repo ratchet via the explicit
-  // `packages/trayambak-ink/**` entry in coverage.exclude below.
   "**/repl/**",
 ]
 
@@ -33,7 +26,18 @@ export default defineConfig({
       "bun:test": "vitest",
       // bun's compile-time feature-flag module: the runtime stand-in keeps
       // every optional branch off (see vendor/bun-bundle.js).
-      "bun:bundle": fileURLToPath(new URL("./packages/trayambak-ink/vendor/bun-bundle.js", import.meta.url)),
+      "bun:bundle": fileURLToPath(new URL("./packages/nemo-ink/vendor/bun-bundle.js", import.meta.url)),
+      // The @claude-code/* packages are file: deps of packages/nemo-ink that
+      // the registry does not serve, so they are vendored in-tree instead.
+      "@claude-code/repl": fileURLToPath(
+        new URL("./packages/nemo-ink/vendor/claude-code-repl", import.meta.url),
+      ),
+      "@claude-code/output": fileURLToPath(
+        new URL("./packages/nemo-ink/vendor/claude-code-output", import.meta.url),
+      ),
+      "@claude-code/local-observability": fileURLToPath(
+        new URL("./packages/nemo-ink/vendor/claude-code-local-observability", import.meta.url),
+      ),
     },
   },
   test: {
@@ -42,13 +46,50 @@ export default defineConfig({
       "apps/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "hooks/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "servers/**/*.{test,spec}.?(c|m)[jt]s?(x)",
-      "skt/**/*.{test,spec}.?(c|m)[jt]s?(x)",
+      "nemo/**/*.{test,spec}.?(c|m)[jt]s?(x)",
       "packages/sandbox/**/*.test.ts",
       "packages/core/**/*.test.ts",
       "packages/execpolicy/**/*.test.ts",
     ],
     exclude: [...excludedTrees],
     setupFiles: ["./vitest.setup.ts"],
+
+    /*
+     * Concurrency and timeout, both set by what these tests actually DO.
+     *
+     * This suite spawns real child processes — `setInterval(() => {}, 1000)`
+     * loops that a test then waits on and kills — and asserts on timing windows
+     * that are deliberately short: `IO_DRAIN_TIMEOUT_MS` is 2s by design in
+     * core/src/process.ts. Under Vitest's default thread pool on a 16-core box
+     * (15 workers), several of those files run at once, each holding OS
+     * processes, and the windows blow.
+     *
+     * The signature was unmistakable once the failures were read rather than
+     * counted: three of them were literally `Test timed out in 5000ms`, and
+     * every affected file passes when run alone. That is contention, not
+     * flakiness, and it is worth naming because "flake" is what you write when
+     * you have not checked.
+     *
+     * Two settings, two reasons:
+     *
+     *  - **maxThreads 8.** Half the cores, leaving headroom for the children the
+     *    tests themselves spawn. The alternative — raising the timeout until a
+     *    loaded run passes — hides the contention instead of removing it, and
+     *    makes a genuine hang take three times as long to report.
+     *  - **testTimeout 20s.** Vitest's 5s default is shorter than the behaviour
+     *    under test: a test whose subject is "survives commands longer than the
+     *    IO drain window" must first outlast that window, then prove it, on a
+     *    loaded machine. This does not paper over a hang; a real hang still
+     *    fails, just with enough room for the legitimate case to finish.
+     */
+    poolOptions: {
+      threads: {
+        maxThreads: 8,
+        minThreads: 1,
+      },
+    },
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "json-summary", "html"],
@@ -66,8 +107,8 @@ export default defineConfig({
         // scratch, never product code — instrumented copies of smoke
         // drivers used to leak into the summary as 0%-covered files.
         ".smoke-tmp/**",
-        "packages/trayambak-ink/**",
-        // apps/** and skt/** are PRODUCT code and must stay in scope — a
+        "packages/nemo-ink/**",
+        // apps/** and nemo/** are PRODUCT code and must stay in scope — a
         // blanket exclusion for them once shrank the measured set from 45k
         // to 26k statements and inflated the gate by ~8 points. Only the
         // non-product trees below this comment may be excluded.

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -140,3 +140,23 @@ describe("MOUSE_REPORTING_OFF covers every mode", () => {
     expect(MOUSE_REPORTING_ON).not.toContain("\x1b[?1003h")
   })
 })
+
+describe("GenerationGate - alt-screen (App owns the wheel)", () => {
+  it("never writes reporting sequences when altScreen is set", () => {
+    const written: string[] = [];
+    const gate = new GenerationGate({ write: (s) => written.push(s), interactive: true, altScreen: true });
+    gate.enterWorking();
+    gate.park();
+    gate.enterIdle();
+    gate.release();
+    expect(written).toEqual([]);
+    expect(gate.intercepting).toBe(false);
+  });
+
+  it("defaults to App-unowned (inline) behavior without the flag", () => {
+    const written: string[] = [];
+    const gate = new GenerationGate({ write: (s) => written.push(s), interactive: true });
+    gate.enterWorking();
+    expect(written).toEqual([MOUSE_REPORTING_ON]);
+  });
+});

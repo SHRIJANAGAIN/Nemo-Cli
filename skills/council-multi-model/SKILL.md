@@ -1,6 +1,6 @@
 ---
 name: council-multi-model
-description: Add one optional external Trayambak Code critique after the existing council has produced a decision draft. Use when an ambiguous, high-consequence decision would benefit from a separate model invocation's attempt to break the synthesis. Requires explicit consent before sending the compact draft and disagreement to OpenAI, labels same-provider reviews honestly, and marks the review absent when the adapter is unavailable.
+description: Add one optional external Nemo Code critique after the existing council has produced a decision draft. Use when an ambiguous, high-consequence decision would benefit from a separate model invocation's attempt to break the synthesis. Requires explicit consent before sending the compact draft and disagreement to OpenAI, labels same-provider reviews honestly, and marks the review absent when the adapter is unavailable.
 metadata:
   origin: ECC
 ---
@@ -8,7 +8,7 @@ metadata:
 # Council - External Review
 
 Run the existing `council` workflow first. This skill adds only one optional
-post-draft node: ask Trayambak Code to attack the council synthesis before the user makes
+post-draft node: ask Nemo Code to attack the council synthesis before the user makes
 the final decision.
 
 It does not add independent proposals, voting, automatic judging, or another
@@ -34,9 +34,9 @@ An external process is not automatically a heterogeneous reviewer.
 
 | Current host            | Reviewer              | Label                              |
 | ----------------------- | --------------------- | ---------------------------------- |
-| SKT AI LABS / Trayambak | OpenAI Trayambak Code | `cross-provider external critique` |
-| OpenAI / Trayambak Code | OpenAI Trayambak Code | `same-provider external critique`  |
-| Unknown                 | OpenAI Trayambak Code | `provider relationship unverified` |
+| Shrijan / Nemo | OpenAI Nemo Code | `cross-provider external critique` |
+| OpenAI / Nemo Code | OpenAI Nemo Code | `same-provider external critique`  |
+| Unknown                 | OpenAI Nemo Code | `provider relationship unverified` |
 
 Use the label in the final result. Never claim provider diversity when the
 current host is already OpenAI-backed.
@@ -81,7 +81,7 @@ unnecessary private context before asking for consent.
 
 ### 3. Ask for transfer consent
 
-State that the packet will be sent to OpenAI Trayambak Code and show or summarize its
+State that the packet will be sent to OpenAI Nemo Code and show or summarize its
 contents. Continue only after an explicit yes for this review packet.
 
 ### 4. Run the bounded adapter
@@ -92,17 +92,17 @@ contains this `SKILL.md`, then pipe the packet over stdin:
 
 ```bash
 SKILL_DIR="<native-skill-dir>"
-node "$SKILL_DIR/scripts/review-with-trayambak.js" \
+node "$SKILL_DIR/scripts/review-with-nemo.js" \
   --consent-to-openai \
-  --host-provider skt-ai-labs < "$PROMPT_FILE"
+  --host-provider shrijan < "$PROMPT_FILE"
 ```
 
-Choose `openai`, `skt-ai-labs`, or `unknown` for `--host-provider`. The adapter:
+Choose `openai`, `shrijan`, or `unknown` for `--host-provider`. The adapter:
 
-- uses the installed `trayambak` CLI; it installs nothing;
+- uses the installed `nemo` CLI; it installs nothing;
 - runs in a new empty temporary directory, not the project;
 - ignores user configuration and project rules;
-- accepts only the exactly tested Trayambak Code CLI 0.146.0 boundary, verifies every
+- accepts only the exactly tested Nemo Code CLI 0.146.0 boundary, verifies every
   required stable feature toggle, and fails closed for every other version;
 - disables shell, file-execution, browser, app, plugin, multi-agent, image, and
   workspace-dependency tools, plus web search and inherited MCP servers;
@@ -114,10 +114,10 @@ Choose `openai`, `skt-ai-labs`, or `unknown` for `--host-provider`. The adapter:
 
 The regression suite also has an opt-in adversarial integration check that
 places an outside-directory sentinel beside the review sandbox and proves a
-real Trayambak Code invocation cannot read it:
+real Nemo Code invocation cannot read it:
 
 ```bash
-ECC_TRAYAMBAK_ISOLATION_INTEGRATION=1 \
+ECC_NEMO_ISOLATION_INTEGRATION=1 \
   node tests/scripts/council-multi-model.test.js
 ```
 
@@ -147,7 +147,7 @@ occurred.
 
 provider relationship unverified]
 
-> [Trayambak Code output verbatim, or "external review absent: <reason>"]
+> [Nemo Code output verbatim, or "external review absent: <reason>"]
 
 ### Over to you
 

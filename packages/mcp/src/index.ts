@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { spawn, type ChildProcess } from "child_process"
@@ -120,8 +120,8 @@ type JsonRpcResponse = {
  * core of the protocol - `initialize`, `tools/list`, `tools/call`, and
  * `resources/list`, `resources/read`, `prompts/list`, `prompts/get` - over
  * stdio (spawned subprocess) or a simple HTTP POST transport. This mirrors the
- * shape used by the reference agent projects in `tool/` (cline, SKT AI LABS,
- * trayambak) so existing MCP servers are drop-in compatible.
+ * shape used by the reference agent projects in `tool/` (cline, Shrijan,
+ * nemo) so existing MCP servers are drop-in compatible.
  */
 export class McpConnection {
   readonly name: string
@@ -177,7 +177,7 @@ export class McpConnection {
     const init = {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "trayambak", version: "0.3.0" },
+      clientInfo: { name: "nemo", version: "0.3.0" },
     }
     if (this.spec.url) {
       await this.request("initialize", init)
@@ -557,7 +557,7 @@ export class McpConnection {
       if (!process.stdin.isTTY) {
         // Headless (tests/CI/daemon): never block for a browser - tell the user how to auth.
         throw new McpAuthError(
-          `${err.message} Run \`trayambak mcp auth ${this.name}\` to authorize interactively.`,
+          `${err.message} Run \`nemo mcp auth ${this.name}\` to authorize interactively.`,
           "auth-required",
         )
       }

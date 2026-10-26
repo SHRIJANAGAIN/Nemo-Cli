@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as http from "http"
@@ -19,7 +19,7 @@ import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.
 import { clampTemperature } from "./types.js"
 import { expandWireMessages } from "./vision.js"
 
-interface SktTool {
+interface NemoTool {
   type: "function"
   function: { name: string; description: string; parameters: unknown }
 }
@@ -36,7 +36,7 @@ function isTransientNetworkError(err: unknown): boolean {
   return code === "ECONNRESET" || code === "EPIPE" || /socket hang up|ECONNRESET|EPIPE|connection closed/i.test(msg)
 }
 
-function toSktTools(tools: ToolDefinition[]): SktTool[] {
+function toNemoTools(tools: ToolDefinition[]): NemoTool[] {
   return tools.map((tool) => ({
     type: "function",
     function: {
@@ -111,7 +111,7 @@ export class LlamaCppProvider implements Provider {
     }
 
     if (input.tools && input.tools.length > 0) {
-      body.tools = toSktTools(input.tools)
+      body.tools = toNemoTools(input.tools)
       body.tool_choice = "auto"
       body.parallel_tool_calls = false
     }

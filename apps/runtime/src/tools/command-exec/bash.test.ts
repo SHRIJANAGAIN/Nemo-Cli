@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -10,7 +10,7 @@ import * as os from "os"
 import * as path from "path"
 import { buildBashEnv, createBashTool, resetBackgroundJobsForTests } from "./bash.js"
 import { DEFAULT_PERMISSIONS } from "../../../../../packages/protocol/src/permissions.js"
-import type { TrayambakConfig } from "../../config.js"
+import type { NemoConfig } from "../../config.js"
 import type { ToolContext, ToolResult } from "../types.js"
 
 const SHELL = process.platform === "win32" ? "cmd /c" : "sh -c"
@@ -24,7 +24,7 @@ const ctxFor = (dir: string): ToolContext =>
       shellCommand: SHELL,
       maxOutputLines: 500,
       maxOutputBytes: 64 * 1024,
-    } as unknown as TrayambakConfig,
+    } as unknown as NemoConfig,
     permissions: { ...DEFAULT_PERMISSIONS, askByDefault: false },
   }) as ToolContext
 
@@ -32,7 +32,7 @@ describe("bash tool", () => {
   let dir = ""
 
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bash-"))
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bash-"))
   })
 
   afterEach(() => {
@@ -178,7 +178,7 @@ describe("bash tool", () => {
     expect(out.TEMP).toBe("C:\\Temp")
     expect(out.USERPROFILE).toBe("C:\\Users\\dev")
     expect(out.LANG).toBe("en_US.UTF-8")
-    expect(out.CODEX_SANDBOX).toBe("policy-only")
+    expect(out.NEMO_SANDBOX).toBe("policy-only")
   })
 
   it("drops the secrets the deny-list-only filter misses", () => {

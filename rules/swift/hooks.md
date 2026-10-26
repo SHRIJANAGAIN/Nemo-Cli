@@ -10,7 +10,7 @@ paths:
 
 ## PostToolUse Hooks
 
-Configure in `~/.trayambak/settings.json`:
+Configure in `~/.nemo/settings.json`:
 
 - **SwiftFormat**: Auto-format `.swift` files after edit
 - **SwiftLint**: Run lint checks after editing `.swift` files

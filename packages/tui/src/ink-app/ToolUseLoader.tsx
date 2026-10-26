@@ -1,13 +1,15 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import React, { type ReactNode, useState, useEffect } from "react"
+import React, { type ReactNode } from "react"
 import { Box, Text } from "ink"
 import { useThemeColors } from "./themeColors.js"
 import { g } from "./glyphs.js"
+import { cycleIndex } from "./animations.js"
+import { useAnimationClock } from "./use-animation-clock.js"
 
 const BLINK_INTERVAL_MS = 600
 
@@ -25,17 +27,6 @@ export const ToolUseLoader = ({
   status,
 }: ToolUseLoaderProps): ReactNode => {
   const theme = useThemeColors()
-  const [isVisible, setIsVisible] = useState(/*initial*/ true)
-
-  useEffect(() => {
-    if (!shouldAnimate || (status !== "running" && status !== undefined)) return
-
-    const interval = setInterval(() => {
-      setIsVisible((v) => !v)
-    }, BLINK_INTERVAL_MS)
-
-    return () => clearInterval(interval)
-  }, [shouldAnimate, status])
 
   let color: string | undefined
   let dimColor: boolean | undefined
@@ -59,7 +50,11 @@ export const ToolUseLoader = ({
   // stable while the dot blinks. Affects every caller (ToolCallItem,
   // ExecToolCallItem, MCPToolCallItem).
   const isBlinking = shouldAnimate && (status === "running" || status === undefined)
-  const showDot = isBlinking ? (isVisible ? g("dot") : " ") : g("dot")
+  // Shared clock: with a dozen tool calls in flight this used to be a dozen
+  // private 600ms intervals, each forcing its own partial repaint of the same
+  // lines. Now they read one derived tick and blink in phase, in one commit.
+  const tick = useAnimationClock(BLINK_INTERVAL_MS, isBlinking)
+  const showDot = isBlinking ? (cycleIndex(tick, 2) === 0 ? g("dot") : " ") : g("dot")
 
   return (
     <Box minWidth={2}>

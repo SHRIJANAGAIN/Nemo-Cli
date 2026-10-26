@@ -1,11 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 /**
- * Port of the Trayambak Code reference `footer.rs` and `shimmer.rs`
+ * Port of the Codex reference `footer.rs` and `shimmer.rs`
  * — the FooterMode enum, FooterKeyHints, FooterProps, single-line collapse
  * layout, and time-based shimmer animation.
  */
@@ -565,7 +568,7 @@ function truncateWithEllipsis(s: string, max: number): string {
 const PROCESS_START = Date.now()
 
 /**
- * Port of the Trayambak Code reference `shimmer.rs` — time-based sweep animation.
+ * Port of the Codex reference `shimmer.rs` — time-based sweep animation.
  * Returns styled spans for the given text where a band of bright
  * characters sweeps across at a fixed period.
  */

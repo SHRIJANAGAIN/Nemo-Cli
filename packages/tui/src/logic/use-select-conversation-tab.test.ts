@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -9,7 +9,7 @@ import { useSelectConversationTab, type ConversationTab } from "./use-select-con
 
 /**
  * Tab navigation is an event, not React state: every ConversationTab value
- * must be broadcast as `trayambak:navigate` so the host shell can switch
+ * must be broadcast as `nemo:navigate` so the host shell can switch
  * panes. The `typeof window` guard keeps SSR rendering crash-free.
  */
 const dispatched: CustomEvent[] = []
@@ -41,9 +41,9 @@ describe("useSelectConversationTab", () => {
     for (const tab of tabs) navigateToTab(tab)
 
     expect(dispatched.map((event) => event.type)).toEqual([
-      "trayambak:navigate",
-      "trayambak:navigate",
-      "trayambak:navigate",
+      "nemo:navigate",
+      "nemo:navigate",
+      "nemo:navigate",
     ])
     expect(dispatched.map((event) => event.detail.tab)).toEqual(tabs)
   })

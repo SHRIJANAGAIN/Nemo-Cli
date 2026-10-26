@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { fuzzyMatchScore } from "./fuzzy.js"
@@ -29,11 +29,11 @@ export interface BuildModelPickerRowsInput {
   query?: string
 }
 
-/** Port of SKT AI LABS's buildModelPickerOptions for trayambak's single-provider
+/** Port of Shrijan's buildModelPickerOptions for nemo's single-provider
  * catalog:
  *  1. Favorites get their own pinned section and are deduped OUT of the
  *     provider list; recents are NOT — a used model stays visible under its
- *     provider (SKT AI LABS rule, so sections never look empty).
+ *     provider (Shrijan rule, so sections never look empty).
  *  2. The current model is forced into the provider list if missing.
  *  3. While filtering, ranking happens WITHIN each section so the
  *     Favorites → Recent → provider header order survives the query. */
@@ -78,12 +78,12 @@ export function buildModelPickerRows(input: BuildModelPickerRowsInput): ModelPic
   return ranked.flat()
 }
 
-/** Toggle an id in the favorites list (SKT AI LABS's local.model.toggleFavorite). */
+/** Toggle an id in the favorites list (Shrijan's local.model.toggleFavorite). */
 export function toggleFavorite(favorites: readonly string[], id: string): string[] {
   return favorites.includes(id) ? favorites.filter((entry) => entry !== id) : [id, ...favorites]
 }
 
-/** Move an id to the front of recents, deduped and capped (SKT AI LABS marks
+/** Move an id to the front of recents, deduped and capped (Shrijan marks
  * `recent: true` on every model set). */
 export function pushRecent(recents: readonly string[], id: string, max = 20): string[] {
   return [id, ...recents.filter((entry) => entry !== id)].slice(0, max)

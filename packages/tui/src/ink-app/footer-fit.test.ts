@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, it, expect } from "vitest"
@@ -191,7 +191,7 @@ describe("fitFooter", () => {
   it("omits empty optionals", () => {
     const fit = fitFooter({
       columns: 200,
-      model: "trayambak",
+      model: "nemo",
       statusText: "thinking",
       modeText: "Mode: PLAN",
       tokenText: "Tokens: 1234",
@@ -199,10 +199,10 @@ describe("fitFooter", () => {
     expect(fit.segments.map((s) => s.id)).toEqual(["status", "mode", "tokens"])
   })
 
-  it("adds a ctx % segment when provided (SKT AI LABS context indicator), after tokens", () => {
+  it("adds a ctx % segment when provided (Shrijan context indicator), after tokens", () => {
     const fit = fitFooter({
       columns: 160,
-      model: "trayambak",
+      model: "nemo",
       statusText: "idle",
       modeText: "Mode: ASK",
       tokenText: "Tokens: 12000",

@@ -10,13 +10,13 @@ metadata:
 
 -Based Architecture
 
-An advanced learning system that turns your Trayambak Code sessions into reusable knowledge through atomic "instincts" - small learned behaviors with confidence scoring.
+An advanced learning system that turns your Nemo Code sessions into reusable knowledge through atomic "instincts" - small learned behaviors with confidence scoring.
 
 **v2.1** adds **project-scoped instincts** — React patterns stay in your React project, Python conventions stay in your Python project, and universal patterns (like "always validate input") are shared globally.
 
 ## When to Activate
 
-- Setting up automatic learning from Trayambak Code sessions
+- Setting up automatic learning from Nemo Code sessions
 - Configuring instinct-based behavior extraction via hooks
 - Tuning confidence thresholds for learned behaviors
 - Reviewing, exporting, or importing instinct libraries
@@ -28,7 +28,7 @@ An advanced learning system that turns your Trayambak Code sessions into reusabl
 
 | Feature       | v2.0                                | v2.1                                                                                |
 | ------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
-| Storage       | Global (`~/.trayambak/homunculus/`) | Project-scoped (`${XDG_DATA_HOME:-~/.local/share}/ecc-homunculus/projects/<hash>/`) |
+| Storage       | Global (`~/.nemo/homunculus/`) | Project-scoped (`${XDG_DATA_HOME:-~/.local/share}/ecc-homunculus/projects/<hash>/`) |
 | Scope         | All instincts apply everywhere      | Project-scoped + global                                                             |
 | Detection     | None                                | git remote URL / repo path                                                          |
 | Promotion     | N/A                                 | Project → global when seen in 2+ projects                                           |
@@ -130,7 +130,7 @@ Session Activity (in a git repo)
 
 The system automatically detects your current project:
 
-1. **`TRAYAMBAK_PROJECT_DIR` env var** (highest priority) -- honored as an explicit override even when the directory is not a git repo (hashed by its absolute path)
+1. **`NEMO_PROJECT_DIR` env var** (highest priority) -- honored as an explicit override even when the directory is not a git repo (hashed by its absolute path)
 2. **`git remote get-url origin`** -- hashed to create a portable project ID (same repo on different machines gets the same ID)
 3. **`git rev-parse --show-toplevel`** -- fallback using repo path (machine-specific)
 4. **Global fallback** -- if no project is detected, instincts go to global scope
@@ -139,13 +139,13 @@ Each project gets a 12-character hash ID (e.g., `a1b2c3d4e5f6`). A registry file
 
 ### Data Directory
 
-Continuous-learning-v2 stores observer data outside `~/.trayambak` so Trayambak Code's sensitive-path guard does not block background instinct writes:
+Continuous-learning-v2 stores observer data outside `~/.nemo` so Nemo Code's sensitive-path guard does not block background instinct writes:
 
 1. `CLV2_HOMUNCULUS_DIR` when set to an absolute path
 2. `$XDG_DATA_HOME/ecc-homunculus`
 3. `$HOME/.local/share/ecc-homunculus`
 
-Existing users with data at `~/.trayambak/homunculus` can migrate once:
+Existing users with data at `~/.nemo/homunculus` can migrate once:
 
 ```bash
 bash skills/continuous-learning-v2/scripts/migrate-homunculus.sh
@@ -157,11 +157,11 @@ bash skills/continuous-learning-v2/scripts/migrate-homunculus.sh
 
 **If installed as a plugin** (recommended):
 
-No extra `settings.json` hook block is required. Trayambak Code v2.1+ auto-loads the plugin `hooks/hooks.json`, and `observe.sh` is already registered there.
+No extra `settings.json` hook block is required. Nemo Code v2.1+ auto-loads the plugin `hooks/hooks.json`, and `observe.sh` is already registered there.
 
-If you previously copied `observe.sh` into `~/.trayambak/settings.json`, remove that duplicate `PreToolUse` / `PostToolUse` block. Duplicating the plugin hook causes double execution and `${TRAYAMBAK_PLUGIN_ROOT}` resolution errors because that variable is only available inside plugin-managed `hooks/hooks.json` entries.
+If you previously copied `observe.sh` into `~/.nemo/settings.json`, remove that duplicate `PreToolUse` / `PostToolUse` block. Duplicating the plugin hook causes double execution and `${NEMO_PLUGIN_ROOT}` resolution errors because that variable is only available inside plugin-managed `hooks/hooks.json` entries.
 
-**If installed manually** to `~/.trayambak/skills`, add this to your `~/.trayambak/settings.json`:
+**If installed manually** to `~/.nemo/skills`, add this to your `~/.nemo/settings.json`:
 
 ```json
 {
@@ -172,7 +172,7 @@ If you previously copied `observe.sh` into `~/.trayambak/settings.json`, remove 
         "hooks": [
           {
             "type": "command",
-            "command": "~/.trayambak/skills/continuous-learning-v2/hooks/observe.sh"
+            "command": "~/.nemo/skills/continuous-learning-v2/hooks/observe.sh"
           }
         ]
       }
@@ -183,7 +183,7 @@ If you previously copied `observe.sh` into `~/.trayambak/settings.json`, remove 
         "hooks": [
           {
             "type": "command",
-            "command": "~/.trayambak/skills/continuous-learning-v2/hooks/observe.sh"
+            "command": "~/.nemo/skills/continuous-learning-v2/hooks/observe.sh"
           }
         ]
       }
@@ -356,7 +356,7 @@ Confidence evolves over time:
 
 ## Why Hooks vs Skills for Observation?
 
-> "v1 relied on skills to observe. Skills are probabilistic -- they fire ~50-80% of the time based on Trayambak's judgment."
+> "v1 relied on skills to observe. Skills are probabilistic -- they fire ~50-80% of the time based on Nemo's judgment."
 
 Hooks fire **100% of the time**, deterministically. This means:
 
@@ -368,8 +368,8 @@ Hooks fire **100% of the time**, deterministically. This means:
 
 v2.1 is fully compatible with v2.0 and v1:
 
-- Existing global instincts can be migrated from `~/.trayambak/homunculus/instincts/` with `scripts/migrate-homunculus.sh`
-- Existing `~/.trayambak/skills/learned/` skills from v1 still work
+- Existing global instincts can be migrated from `~/.nemo/homunculus/instincts/` with `scripts/migrate-homunculus.sh`
+- Existing `~/.nemo/skills/learned/` skills from v1 still work
 - Stop hook still runs (but now also feeds into v2)
 - Gradual migration: run both in parallel
 
@@ -389,4 +389,4 @@ v2.1 is fully compatible with v2.0 and v1:
 
 ---
 
-_Instinct-based learning: teaching Trayambak your patterns, one project at a time._
+_Instinct-based learning: teaching Nemo your patterns, one project at a time._

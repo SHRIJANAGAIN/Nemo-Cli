@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 import * as fs from "fs"
 import * as os from "os"
@@ -273,7 +273,7 @@ function redactPayloadInner(value: unknown, ancestors: WeakSet<object>): unknown
 }
 
 export function secureDir(dir?: string): string {
-  const d = dir ?? path.join(os.homedir(), ".trayambak")
+  const d = dir ?? path.join(os.homedir(), ".nemo")
   fs.mkdirSync(d, { recursive: true })
   try {
     fs.chmodSync(d, 0o700)

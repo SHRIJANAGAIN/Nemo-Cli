@@ -1,7 +1,7 @@
-# Trayambak docs
+# Nemo docs
 
-Documentation for **Trayambak CLI** (`trayambak` / `skt`) — a local-first
-terminal coding agent by SKT AI LABS PRIVATE LIMITED.
+Documentation for **Nemo CLI** (`nemo` / `nemo`) — a local-first
+terminal coding agent by Shrijan.
 
 ## Pages
 
@@ -9,10 +9,10 @@ terminal coding agent by SKT AI LABS PRIVATE LIMITED.
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | [Getting started](getting-started.md) | Install, launch, every subcommand, global flags, configuration precedence, env vars, where files live |
 | [Sessions](sessions.md)               | Transcript layout, picker keys, archive/delete, compaction, checkpoints                               |
-| [Providers](providers.md)             | The 22 backends, defaults, key handling, model listing, fully local models                            |
-| [MCP](mcp.md)                         | Configuring servers, `trayambak mcp …`, OAuth tokens, connector registry, `mcp-server`                |
-| [ACP](acp.md)                         | `trayambak acp` — stdio JSON-RPC methods, examples, when to use it                                    |
-| [Web](web.md)                         | `trayambak web` — endpoints, SSE agent runs, token auth, CORS                                         |
+| [Providers](providers.md)             | The 5 backends, defaults, key handling, model listing, fully local models                             |
+| [MCP](mcp.md)                         | Configuring servers, `nemo mcp …`, OAuth tokens, connector registry, `mcp-server`                |
+| [ACP](acp.md)                         | `nemo acp` — stdio JSON-RPC methods, examples, when to use it                                    |
+| [Web](web.md)                         | `nemo web` — endpoints, SSE agent runs, token auth, CORS                                         |
 | [Security](security.md)               | Permissions, sandbox, secret storage, hooks, network exposure                                         |
 | [Troubleshooting](troubleshooting.md) | `doctor`-driven diagnosis, 401s, config recovery, Windows shims, debug aids                           |
 | [Architecture](architecture.md)       | Monorepo layout, build pipeline, CI, runtime data flow                                                |
@@ -22,8 +22,8 @@ terminal coding agent by SKT AI LABS PRIVATE LIMITED.
 **Install & start**
 
 ```sh
-npm i -g @skt-ai-labs/trayambak-cli
-trayambak          # or: skt
+npm i -g @shrijan/nemo-cli
+nemo          # or: nemo
 ```
 
 Then inside the session: `/provider` → `/models`. Type `/help` for all
@@ -33,23 +33,23 @@ leader overlay.
 **Authentication**
 
 ```sh
-trayambak login --with-api-key <key>   # 0600 ~/.trayambak/credentials.json
-trayambak login status
-trayambak logout
+nemo login --with-api-key <key>   # 0600 ~/.nemo/credentials.json
+nemo login status
+nemo logout
 ```
 
-`TRAYAMBAK_API_KEY` is the environment fallback; the config file's `apiKey`
+`NEMO_API_KEY` is the environment fallback; the config file's `apiKey`
 is what the agent reads (see [Providers](providers.md#where-the-key-comes-from)).
 
 **Config**
 
-`~/.trayambak/config.json` (0600, atomic, `.bak` rotation); schema:
-`config.schema.json`. Precedence: **defaults < file < `TRAYAMBAK_*` env <
-CLI flags**. `trayambak config get|set`.
+`~/.nemo/config.json` (0600, atomic, `.bak` rotation); schema:
+`config.schema.json`. Precedence: **defaults < file < `NEMO_*` env <
+CLI flags**. `nemo config get|set`.
 
 **Sessions**
 
-Index `~/.trayambak/sessions.json` + transcripts
+Index `~/.nemo/sessions.json` + transcripts
 `sessions/<uuid>/{context.jsonl,wire.jsonl,state.json}`; `archive` /
 `unarchive` / `delete` move or remove them; empty sessions are skipped and
 legacy single-file transcripts migrate automatically. Details:
@@ -57,32 +57,29 @@ legacy single-file transcripts migrate automatically. Details:
 
 **Providers**
 
-22 backends: `llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `anthropic`,
-`google`, `xai`, `huggingface`, `ollama`, `groq`, `mistral`, `cerebras`,
-`together`, `deepinfra`, `cohere`, `perplexity`, `openrouter`, `fireworks`,
-`venice`, `azure`, `skt-gateway`, `custom`.
+5 backends: `nvidia`, `nvidia-nim`, `ollama`, `llamacpp`, `custom`.
 `verifyProviderKey` does a 1-token chat ping; `cleanApiKey` strips pasted
 prefixes. Details: [Providers](providers.md).
 
 **MCP**
 
 Client: stdio + HTTP/SSE transports, 60s default timeout, OAuth 2.0 + PKCE
-tokens in `~/.trayambak/mcp-auth.json` (0600). `trayambak mcp
-list|auth|logout|status`. `trayambak mcp-server` advertises
+tokens in `~/.nemo/mcp-auth.json` (0600). `nemo mcp
+list|auth|logout|status`. `nemo mcp-server` advertises
 `bash`/`read_file`/`write_file`/`grep`/`glob` over stdio (calls are currently
 acknowledged stubs). Details: [MCP](mcp.md).
 
 **ACP**
 
-`trayambak acp` — line-delimited JSON-RPC over stdio:
+`nemo acp` — line-delimited JSON-RPC over stdio:
 `initialize`, `new_session`, `load_session`, `list_sessions`, `set_model`,
 `prompt`, `cancel`. Details: [ACP](acp.md).
 
 **Web**
 
-`trayambak web --port 8787` → `/health`, `/v1/models`, `/v1/agent` (SSE),
+`nemo web --port 8787` → `/health`, `/v1/models`, `/v1/agent` (SSE),
 `/api/sessions`, `/openapi.json`; Bearer token via `--token` /
-`TRAYAMBAK_WEB_TOKEN` (loopback by default). Details: [Web](web.md).
+`NEMO_WEB_TOKEN` (loopback by default). Details: [Web](web.md).
 
 **Sandbox**
 
@@ -92,31 +89,31 @@ when the binary exists, else `fallback`); enforcement is `policy-only` —
 no OS sandbox process is spawned. Details: [Security](security.md).
 
 ```sh
-trayambak sandbox check <file>
-trayambak execpolicy check <cmd>
+nemo sandbox check <file>
+nemo execpolicy check <cmd>
 ```
 
 **Headless**
 
 ```sh
-trayambak exec "prompt"    # one prompt, JSON events on stdout
-trayambak review [target]  # review changes/files
-trayambak run "prompt"     # interactive session with the prompt queued
+nemo exec "prompt"    # one prompt, JSON events on stdout
+nemo review [target]  # review changes/files
+nemo run "prompt"     # interactive session with the prompt queued
 ```
 
 **SDK**
 
-`packages/sdk`: `TrayambakClient.startThread(prompt)` /
+`packages/sdk`: `NemoClient.startThread(prompt)` /
 `resumeThread(id, prompt)` / `exec(prompt)`.
 
 **Security**
 
 Sandbox + permission layers (deny rules win, read-only tools auto-approve,
-everything else asks by default), `0600` secret files, telemetry off by
-default. Details: [Security](security.md); reporting SLA and scope in
+everything else asks by default), `0600` secret files, no telemetry at all.
+Details: [Security](security.md); reporting SLA and scope in
 [`SECURITY.md`](../SECURITY.md). SBOM: `npm run sbom`; publishes use npm
 `--provenance`.
 
 **License**
 
-Proprietary — see [`LICENSE`](../LICENSE) (Trayambak CLI Proprietary License, SKT AI LABS PRIVATE LIMITED). Not open source, not Apache-2.0.
+Apache-2.0 — see [`LICENSE`](../LICENSE). Third-party components keep their own terms; see [`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).

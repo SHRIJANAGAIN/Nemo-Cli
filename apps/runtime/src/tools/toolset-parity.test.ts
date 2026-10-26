@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -11,7 +11,7 @@ import { TOOLSET_DEFS, createDefaultTools } from "./index.js"
  * Toolset parity, both directions:
  *  - every registered tool must appear in at least one toolset, or
  *    Arsenal.resolveTools silently strips it before it reaches the model
- *    (trayambak__AgentCatalog shipped this way: advertised in the system
+ *    (nemo__AgentCatalog shipped this way: advertised in the system
  *    prompt, unreachable in practice → "Unknown tool");
  *  - every toolset entry must name a registered tool (the inverse case the
  *    TOOLSET_DEFS comment already warns about).
@@ -39,11 +39,11 @@ describe("toolset parity", () => {
     expect(dangling).toEqual([])
   })
 
-  it("trayambak__AgentCatalog survives arsenal filtering when config is present", async () => {
+  it("nemo__AgentCatalog survives arsenal filtering when config is present", async () => {
     // Regression: the tool was advertised in the system prompt but stripped
     // by resolveTools whenever a config existed → "Unknown tool" at call time.
     const { loadConfig } = await import("../config.js")
     const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, loadConfig({ cwd: process.cwd() }))
-    expect(tools.map((t) => t.definition.name)).toContain("trayambak__AgentCatalog")
+    expect(tools.map((t) => t.definition.name)).toContain("nemo__AgentCatalog")
   })
 })

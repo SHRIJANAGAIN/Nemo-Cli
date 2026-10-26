@@ -32,7 +32,7 @@ Run `node scripts/harness-audit.js repo --format json` for a baseline signal (Co
 
 ### Step 2: Execute
 
-Before touching any file, snapshot the current state of every path you intend to change (e.g. `git diff` / `git stash create` baseline, or a copy of the file) so it can be restored exactly. Propose and apply minimal, reversible configuration changes per identified leverage area, keeping the diff allowlisted to the leverage area under test — no incidental edits. Preserve cross-platform behavior across Trayambak, Cursor, Trayambak, and Trayambak Code, and avoid fragile shell quoting.
+Before touching any file, snapshot the current state of every path you intend to change (e.g. `git diff` / `git stash create` baseline, or a copy of the file) so it can be restored exactly. Propose and apply minimal, reversible configuration changes per identified leverage area, keeping the diff allowlisted to the leverage area under test — no incidental edits. Preserve cross-platform behavior across Nemo, Cursor, Nemo, and Nemo Code, and avoid fragile shell quoting.
 
 ### Step 3: Verify
 

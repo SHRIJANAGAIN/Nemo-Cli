@@ -31,8 +31,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
 
-process.env.TRAYAMBAK_HOME = repo
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_HOME = repo
+process.env.NEMO_GLYPHS = "unicode"
 
 // Hostile argv (0/negative/NaN) must not kill the probe — a terminal's
 // smallest reportable geometry is 1x1, so clamp at parse.
@@ -61,8 +61,8 @@ const screen = createScreen(COLS, ROWS)
 // the time the first frame is laid out. The welcome frame is calibrated for a
 // pristine screen, so this is the difference between the probe and reality.
 const PRE =
-  "trayambak: ignoring blanket-approval settings from C:\\Users\\engli\\trayambak\\.trayambak\\config.json " +
-  "\u2014 a repository cannot put the session into blanket-approval mode. Set it in ~/.trayambak/config.json " +
+  "nemo: ignoring blanket-approval settings from C:\\Users\\engli\\nemo\\.nemo\\config.json " +
+  "\u2014 a repository cannot put the session into blanket-approval mode. Set it in ~/.nemo/config.json " +
   "or point at a file you trust with --config instead."
 const preLines = process.argv.includes("--pre") ? Math.ceil(PRE.length / COLS) + 1 : 0
 
@@ -105,21 +105,21 @@ if (alt) {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 const { loadConfig } = await import(
   pathToFileURL(path.join(repo, "dist", "apps", "runtime", "src", "config.js")).href,
 )
 
 // Raw file config for --prod: same CONTENT the parent CLI would serialize
-// into TRAYAMBAK_CONFIG_JSON, but without going through the dist
+// into NEMO_CONFIG_JSON, but without going through the dist
 // loadConfig() — that would consume warnOnce before render() and the whole
 // point of --prod is to let App's first render be the process's first
 // (patched) warning, exactly like the spawned child process.
 function readConfigFile() {
-  const explicit = process.env.TRAYAMBAK_CONFIG
+  const explicit = process.env.NEMO_CONFIG
   const candidates = explicit
     ? [explicit]
-    : [path.join(repo, ".trayambak", "config.json"), path.join(os.homedir(), ".trayambak", "config.json")]
+    : [path.join(repo, ".nemo", "config.json"), path.join(os.homedir(), ".nemo", "config.json")]
   for (const file of candidates) {
     try {
       if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"))
@@ -143,20 +143,20 @@ const shrinkBy = process.argv.includes("--shrink") ? 20 : 0
 // Mirror ink-repl.mjs exactly: the resize guard is constructed BEFORE render()
 // (ink-repl L95) and attached right after it returns (L247) — one synchronous
 // run with no event-loop turn in between, so no resize event can interleave.
-// The guard traces to TRAYAMBAK_RESIZE_LOG; keep the probe out of the repo's
-// real trayambak-resize.log.
-process.env.TRAYAMBAK_RESIZE_LOG = path.join(os.tmpdir(), "diag-boot-clone-resize.log")
+// The guard traces to NEMO_RESIZE_LOG; keep the probe out of the repo's
+// real nemo-resize.log.
+process.env.NEMO_RESIZE_LOG = path.join(os.tmpdir(), "diag-boot-clone-resize.log")
 const { createResizeRedrawGuard } = await import(`${distEsm}/resize-guard.js`)
 const resizeGuard = createResizeRedrawGuard(stdout)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     // --prod must NOT call the dist loadConfig() here: production ink-repl
     // hands over env-JSON only (parent already warned), so the child's
     // warnOnce stays fresh until App.tsx's first render calls the real
     // loadConfig() — firing the warning MID-PAINT through Ink's patched
     // console. The config CONTENT still comes from the file, mirroring
-    // what the parent would have put in TRAYAMBAK_CONFIG_JSON.
+    // what the parent would have put in NEMO_CONFIG_JSON.
     config: {
       ...(prod ? readConfigFile() : loadConfig()),
       baseUrl: "http://127.0.0.1:9/api",
@@ -203,7 +203,7 @@ const totalTops = view.filter(isRootTop).length
 const clears2J = (raw.match(/\x1b\[2J/g) ?? []).length
 const home = (raw.match(/\x1b\[H/g) ?? []).length
 const cursorUp = (raw.match(/\x1b\[\d+A/g) ?? []).length
-const composerWrites = (raw.match(/Ask Trayambak to do anything/g) ?? []).length
+const composerWrites = (raw.match(/Ask Nemo to do anything/g) ?? []).length
 const warningWrites = (raw.match(/ignoring blanket-approval/g) ?? []).length
 const clears3J = (raw.match(/\x1b\[3J/g) ?? []).length
 

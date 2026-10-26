@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -16,13 +16,14 @@ import {
   uniquePastePlaceholder,
 } from "./PromptInput.js"
 import { MessageList } from "./MessageList.js"
+import { DEFAULT_MASTER_INTERVAL_MS, clockIsRunning, clockRegistrationCount } from "./frame-clock.js"
 import { shouldShowSidebar, SIDEBAR_MIN_COLS } from "./Sidebar.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * Composer + transcript render guards (reported live with screenshots):
  *
- *  1. The composer placeholder must be Trayambak's own — a stale
+ *  1. The composer placeholder must be Nemo's own — a stale
  *     "Ask Codex to do anything" shipped in an old build and must never
  *     come back.
  *  2. Chooser arrows must move the highlight: Down then Enter picks a
@@ -105,10 +106,10 @@ function renderComposer(
 }
 
 describe("composer placeholder", () => {
-  it("invites with Trayambak's own ask line — never a rival brand", async () => {
+  it("invites with Nemo's own ask line — never a rival brand", async () => {
     const { instance, sink } = renderComposer(null)
     try {
-      expect(await waitFor(sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(sink, "Ask Nemo to do anything...")).toBe(true)
       expect(sink()).not.toContain("Codex")
     } finally {
       instance.unmount()
@@ -152,7 +153,7 @@ describe("arrow keys never scroll the transcript (mouse owns it alone)", () => {
   it("plain ↑/↓ on an empty composer do nothing", async () => {
     const c = renderComposer(null)
     try {
-      expect(await waitFor(c.sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(c.sink, "Ask Nemo to do anything...")).toBe(true)
       c.stdin.write("\x1b[A")
       await wait(300)
       c.stdin.write("\x1b[B")
@@ -166,7 +167,7 @@ describe("arrow keys never scroll the transcript (mouse owns it alone)", () => {
   it("PageUp/PageDown on an empty composer do nothing (key paging removed)", async () => {
     const c = renderComposer(null)
     try {
-      expect(await waitFor(c.sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(c.sink, "Ask Nemo to do anything...")).toBe(true)
       c.stdin.write("\x1b[5~")
       await wait(300)
       c.stdin.write("\x1b[6~")
@@ -187,7 +188,7 @@ describe("arrow keys never scroll the transcript (mouse owns it alone)", () => {
     ]
     const c = renderComposer(null, customs)
     try {
-      expect(await waitFor(c.sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(c.sink, "Ask Nemo to do anything...")).toBe(true)
       c.stdin.write("/")
       expect(await waitForFn(() => c.sink().includes("/help"))).toBe(true)
       // The 10-row window can't fit 50+ builtins + customs at once, so a
@@ -204,7 +205,7 @@ describe("arrow keys never scroll the transcript (mouse owns it alone)", () => {
     // Static side: /provider must surface on its prefix with no commandList.
     const first = renderComposer("/pro")
     try {
-      expect(await waitFor(first.sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(first.sink, "Ask Nemo to do anything...")).toBe(true)
       expect(await waitForFn(() => first.sink().includes("/provider"))).toBe(true)
     } finally {
       first.instance.unmount()
@@ -214,7 +215,7 @@ describe("arrow keys never scroll the transcript (mouse owns it alone)", () => {
       { name: "company", description: "Browse the company agent library", category: "Agent" },
     ])
     try {
-      expect(await waitFor(second.sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(second.sink, "Ask Nemo to do anything...")).toBe(true)
       expect(await waitForFn(() => second.sink().includes("/company"))).toBe(true)
     } finally {
       second.instance.unmount()
@@ -227,7 +228,7 @@ describe("user rows carry a background, answers never do", () => {
     const { stdin, stdout, sink } = openStdio()
     // Alone: any background SGR here can only be the user row (no boxes,
     // no sidebar in this render).
-    const messages: TrayambakMessage[] = [{ id: "u1", timestamp: 1, role: "user", content: "hello agent" }]
+    const messages: NemoMessage[] = [{ id: "u1", timestamp: 1, role: "user", content: "hello agent" }]
     let instance: Instance | undefined
     try {
       instance = render(React.createElement(MessageList, { messages }), {
@@ -252,7 +253,7 @@ describe("user rows carry a background, answers never do", () => {
 
   it("plain assistant text renders with foreground styling only", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "a1", timestamp: 2, role: "assistant", content: "hello human, here is your answer" },
     ]
     let instance: Instance | undefined
@@ -274,7 +275,7 @@ describe("user rows carry a background, answers never do", () => {
 
   it("user row is a markerless padded bubble (Codex look, no prompt glyph)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [{ id: "u1", timestamp: 1, role: "user", content: "hello agent" }]
+    const messages: NemoMessage[] = [{ id: "u1", timestamp: 1, role: "user", content: "hello agent" }]
     let instance: Instance | undefined
     try {
       instance = render(React.createElement(MessageList, { messages }), {
@@ -353,7 +354,7 @@ describe("paste collapse end to end (bracketed paste in, full text out)", () => 
         }),
         { stdin, stdout, patchConsole: false },
       )
-      expect(await waitFor(sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(sink, "Ask Nemo to do anything...")).toBe(true)
       bigPaste(stdin, "x".repeat(1275))
       expect(await waitFor(sink, "[Pasted Content 1275 chars]")).toBe(true)
       // The raw flood never renders — the box stays one line:
@@ -379,7 +380,7 @@ describe("paste collapse end to end (bracketed paste in, full text out)", () => 
         }),
         { stdin, stdout, patchConsole: false },
       )
-      expect(await waitFor(sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(sink, "Ask Nemo to do anything...")).toBe(true)
       bigPaste(stdin, "y".repeat(1275))
       expect(await waitFor(sink, "[Pasted Content 1275 chars]")).toBe(true)
       stdin.write("\r")
@@ -408,7 +409,7 @@ describe("paste collapse end to end (bracketed paste in, full text out)", () => 
         }),
         { stdin, stdout, patchConsole: false },
       )
-      expect(await waitFor(sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(sink, "Ask Nemo to do anything...")).toBe(true)
       bigPaste(stdin, "hi there")
       await wait(300)
       expect(sink()).toContain("hi there")
@@ -455,8 +456,15 @@ describe("idle silence (Windows inbuilt scrollbar contract)", () => {
     try {
       const r = renderComposer(false)
       instance = r.instance
-      expect(await waitFor(r.sink, "Ask Trayambak to do anything...")).toBe(true)
+      expect(await waitFor(r.sink, "Ask Nemo to do anything...")).toBe(true)
+      // The composer used to blink with its own 530ms interval. The pulse now
+      // comes off the shared frame clock, so the honest assertion is two-sided:
+      // no private timer AND no cadence registered at all — an idle composer
+      // subscribes to nothing, which is what keeps the frame byte-quiet and the
+      // native Windows scrollbar parked.
       expect(seen).not.toContain(530)
+      expect(clockRegistrationCount()).toBe(0)
+      expect(clockIsRunning()).toBe(false)
     } finally {
       globalThis.setInterval = orig
       instance?.unmount()
@@ -471,11 +479,47 @@ describe("idle silence (Windows inbuilt scrollbar contract)", () => {
     try {
       const r = renderComposer(true)
       instance = r.instance
-      expect(await waitFor(r.sink, "Ask Trayambak to do anything...")).toBe(true)
-      expect(seen).toContain(530)
+      expect(await waitFor(r.sink, "Ask Nemo to do anything...")).toBe(true)
+      // Mid-turn the pulse is live — as ONE cadence on the shared clock. The
+      // only interval this screen may create is the 20ms master tick itself, so
+      // a reintroduced per-widget blink shows up here as an extra entry.
+      expect(clockRegistrationCount()).toBeGreaterThanOrEqual(1)
+      expect(clockIsRunning()).toBe(true)
+      expect([...new Set(seen)]).toEqual([DEFAULT_MASTER_INTERVAL_MS])
     } finally {
       globalThis.setInterval = orig
       instance?.unmount()
     }
   }, 20000)
 })
+
+describe("PageUp/PageDown history paging (alt-screen handler)", () => {
+  it("reports paging intent when onHistoryScroll is provided", async () => {
+    const { stdin, stdout, sink } = openStdio();
+    const dirs: string[] = [];
+    const instance = render(
+      React.createElement(PromptInput, {
+        onSubmit: noop,
+        onSlashCommand: noop,
+        onChoose: noop,
+        commandList: [],
+        draftRequest: null,
+        onHistoryScroll: (dir) => dirs.push(dir),
+      }),
+      { stdin, stdout, patchConsole: false },
+    );
+    try {
+      expect(await waitFor(sink, "Ask Nemo to do anything...")).toBe(true);
+      stdin.write("\x1b[5~");
+      await wait(300);
+      stdin.write("\x1b[6~");
+      await wait(300);
+      // Intent reported up, never typed into the draft:
+      expect(dirs).toEqual(["up", "down"]);
+      expect(sink()).not.toContain("5~");
+      expect(sink()).not.toContain("6~");
+    } finally {
+      instance.unmount();
+    }
+  }, 20000);
+});

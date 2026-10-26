@@ -31,7 +31,7 @@ Do **not** use this for a throwaway script or create a parallel documentation sy
 
 Inspect the repository's current instruction and documentation surfaces first:
 
-- harness instructions such as `AGENTS.md`, `TRAYAMBAK.md`, `.cursor/rules`, or their equivalent;
+- harness instructions such as `AGENTS.md`, `NEMO.md`, `.cursor/rules`, or their equivalent;
 - `README`, architecture docs, ADRs, runbooks, roadmaps, changelogs, status pages, and docs indexes;
 - generated docs and external systems that may already be canonical.
 
@@ -58,8 +58,8 @@ The discipline is **one canonical owner per fact**. Other files link to that own
 
 Use the instruction surface for the harness that actually runs in the repository:
 
-- Trayambak Code and harness-neutral projects commonly use `AGENTS.md`.
-- Trayambak Code projects commonly use `TRAYAMBAK.md`.
+- Nemo Code and harness-neutral projects commonly use `AGENTS.md`.
+- Nemo Code projects commonly use `NEMO.md`.
 - Other harnesses should use their supported project-instruction surface.
 
 Keep the harness file short. Add signposts to the canonical map, status, and recent history instead of copying their contents.

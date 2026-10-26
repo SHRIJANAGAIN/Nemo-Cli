@@ -2,9 +2,9 @@
 """
 Stop hook: quality gate with delivery check.
 Detects incomplete work, stale learning logs, and low disk space.
-Blocks Trayambak from stopping when a complex task completed without learning capture.
+Blocks Nemo from stopping when a complex task completed without learning capture.
 
-Install: cp this file to ~/.trayambak/scripts/quality-gate.py
+Install: cp this file to ~/.nemo/scripts/quality-gate.py
 Configure: Add to settings.json hooks.Stop
 """
 from __future__ import annotations
@@ -54,9 +54,9 @@ def get_project_memory_dir() -> Optional[str]:
 
     Returns None if no memory directory exists for this project.
     Does NOT fall back to other projects (privacy boundary)."""
-    cwd = os.environ.get('TRAYAMBAK_PROJECT_DIR', os.getcwd())
+    cwd = os.environ.get('NEMO_PROJECT_DIR', os.getcwd())
     safe = cwd.replace(':', '-').replace('\\', '-').replace('/', '-')
-    mem = os.path.expanduser(f'~/.trayambak/projects/{safe}/memory')
+    mem = os.path.expanduser(f'~/.nemo/projects/{safe}/memory')
     log.info('Looking for memory dir: cwd=%s -> %s', cwd, mem)
     if os.path.isdir(mem):
         return mem
@@ -129,7 +129,7 @@ def count_edits(text: str) -> int:
 def main() -> None:
     raw = sys.stdin.read()
     # Stop hooks write feedback to stderr, not stdout.
-    # Trayambak Code reads stderr as the hook's response message.
+    # Nemo Code reads stderr as the hook's response message.
     # Do NOT echo raw JSON to stdout — it would overwrite the blocking reason.
 
     # Resolve transcript: Stop hooks may receive raw text OR JSON with transcript_path.

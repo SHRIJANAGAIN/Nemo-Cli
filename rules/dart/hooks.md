@@ -11,7 +11,7 @@ paths:
 
 ## PostToolUse Hooks
 
-Configure in `~/.trayambak/settings.json`:
+Configure in `~/.nemo/settings.json`:
 
 - **dart format**: Auto-format `.dart` files after edit
 - **dart analyze**: Run static analysis after editing Dart files and surface warnings
@@ -25,7 +25,7 @@ Configure in `~/.trayambak/settings.json`:
     "PostToolUse": [
       {
         "matcher": { "tool_name": "Edit", "file_paths": ["**/*.dart"] },
-        "hooks": [{ "type": "command", "command": "dart format $TRAYAMBAK_FILE_PATHS" }]
+        "hooks": [{ "type": "command", "command": "dart format $NEMO_FILE_PATHS" }]
       }
     ]
   }

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -10,7 +10,7 @@
  * In plan mode the agent explores and writes a step-by-step plan instead
  * of mutating the workspace. Only tools in READ_ONLY_TOOLS may run;
  * everything else is denied. Plans persist as markdown files under
- * `.trayambak/plans/` so they survive restarts and can be approved.
+ * `.nemo/plans/` so they survive restarts and can be approved.
  *
  * Approved-command matching (#71): a prefix rule approves argv tail only —
  * if the tail contains shell control characters (`;`, `&`, `|`, `` ` ``,
@@ -50,7 +50,7 @@ export interface PlanFile {
 }
 
 function plansDir(cwd: string): string {
-  return path.join(cwd, ".trayambak", "plans")
+  return path.join(cwd, ".nemo", "plans")
 }
 
 function planPath(cwd: string, name: string): string {

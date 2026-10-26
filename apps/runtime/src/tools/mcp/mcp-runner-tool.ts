@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { spawn, type ChildProcess } from "child_process"
@@ -45,7 +45,7 @@ export class McpProcess {
     const init = {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "trayambak", version: "0.3.0" },
+      clientInfo: { name: "nemo", version: "0.3.0" },
     }
     this.spawnStdio()
     await this.request("initialize", init)
@@ -318,7 +318,7 @@ export function getMcpProcess(name: string, spec: McpServerSpec): McpProcess {
 export function createMcpRunnerTool(): Tool {
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
-    name: "trayambak__run_mcp",
+    name: "nemo__run_mcp",
     description:
       "Run an installed MCP server, list its tools, resources, and prompts, and invoke them. Use this to run and think with MCP servers.",
     parameters: {
@@ -376,7 +376,7 @@ export function createMcpRunnerTool(): Tool {
         const entry = registry.get(serverId)
         if (!entry)
           return textResult(
-            `MCP server '${serverId}' not found in registry. Use trayambak__ToolSearch to find servers.`,
+            `MCP server '${serverId}' not found in registry. Use nemo__ToolSearch to find servers.`,
             /*isError*/ true,
           )
 

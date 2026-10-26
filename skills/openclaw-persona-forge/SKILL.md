@@ -292,7 +292,7 @@ python3 ${SKILL_DIR}/gacha.py [次数]
 
 本 Skill 遵循 Markdown 指令注入标准：
 
-- **Trayambak Code / Trayambak.ai**：原生支持
+- **Nemo Code / Nemo.ai**：原生支持
 - **OpenClaw Agent**：通过 SOUL.md 注入
 - **其他 Agent**：支持 SKILL.md 格式的框架均可使用
 

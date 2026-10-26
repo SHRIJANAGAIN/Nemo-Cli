@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import {
   detectBackend,
   describeEnforcement,
@@ -20,7 +24,7 @@ export function sandboxCommand(args: string[]): string {
     enforcement === "os-sandbox"
       ? `enforcement: os-sandbox (bash runs spawn under ${backend} while the sandboxSpawn flag is on)`
       : `enforcement: policy-only (in-process policy evaluation — no OS sandbox is spawned)`,
-    "Usage: trayambak sandbox check <file>",
+    "Usage: nemo sandbox check <file>",
   ].join("\n")
 }
 
@@ -34,5 +38,5 @@ export function execpolicyCommand(args: string[]): string {
     return r.allowed ? "allow" : `deny (${r.rule?.pattern})`
   }
   process.exitCode = EXIT_USAGE
-  return "Usage: trayambak execpolicy check <command>"
+  return "Usage: nemo execpolicy check <command>"
 }

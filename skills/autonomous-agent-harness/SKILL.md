@@ -1,13 +1,13 @@
 ---
 name: autonomous-agent-harness
-description: Transform Trayambak Code into a fully autonomous agent system with persistent memory, scheduled operations, computer use, and task queuing. Replaces standalone agent frameworks (Hermes, AutoGPT) by leveraging Trayambak Code's native crons, dispatch, MCP tools, and memory. Use when the user wants continuous autonomous operation, scheduled tasks, or a self-directing agent loop.
+description: Transform Nemo Code into a fully autonomous agent system with persistent memory, scheduled operations, computer use, and task queuing. Replaces standalone agent frameworks (Hermes, AutoGPT) by leveraging Nemo Code's native crons, dispatch, MCP tools, and memory. Use when the user wants continuous autonomous operation, scheduled tasks, or a self-directing agent loop.
 metadata:
   origin: ECC
 ---
 
 # Autonomous Agent Harness
 
-Turn Trayambak Code into a persistent, self-directing agent system using only native features and MCP servers.
+Turn Nemo Code into a persistent, self-directing agent system using only native features and MCP servers.
 
 ## Consent and Safety Boundaries
 
@@ -28,7 +28,7 @@ Prefer dry-run plans and local queue files before enabling recurring or event-dr
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                    Trayambak Code Runtime                        │
+│                    Nemo Code Runtime                        │
 │                                                              │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐ │
 │  │  Crons   │  │ Dispatch │  │ Memory   │  │ Computer    │ │
@@ -56,9 +56,9 @@ Prefer dry-run plans and local queue files before enabling recurring or event-dr
 
 ### 1. Persistent Memory
 
-Use Trayambak Code's built-in memory system enhanced with MCP memory server for structured data.
+Use Nemo Code's built-in memory system enhanced with MCP memory server for structured data.
 
-**Built-in memory** (`~/.trayambak/projects/*/memory/`):
+**Built-in memory** (`~/.nemo/projects/*/memory/`):
 
 - User preferences, feedback, project context
 - Stored as markdown files with frontmatter
@@ -77,7 +77,7 @@ Use Trayambak Code's built-in memory system enhanced with MCP memory server for 
 Use TodoWrite for in-session task tracking
 
 # Medium-term: project memory files
-Write to ~/.trayambak/projects/*/memory/ for cross-session recall
+Write to ~/.nemo/projects/*/memory/ for cross-session recall
 
 # Long-term: MCP knowledge graph
 Use mcp__memory__create_entities for permanent structured data
@@ -87,7 +87,7 @@ Use mcp__memory__add_observations for new facts about known entities
 
 ### 2. Scheduled Operations (Crons)
 
-Use Trayambak Code's scheduled tasks to create recurring agent operations.
+Use Nemo Code's scheduled tasks to create recurring agent operations.
 
 **Setting up a cron:**
 
@@ -96,12 +96,12 @@ Use Trayambak Code's scheduled tasks to create recurring agent operations.
 mcp__scheduled-tasks__create_scheduled_task({
   name: "daily-pr-review",
   schedule: "0 9 * * 1-5",  # 9 AM weekdays
-  prompt: "Review all open PRs in affaan-m/trayambak. For each: check CI status, review changes, flag issues. Post summary to memory.",
+  prompt: "Review all open PRs in affaan-m/nemo. For each: check CI status, review changes, flag issues. Post summary to memory.",
   project_dir: "/path/to/repo"
 })
 
-# Via trayambak -p (programmatic mode)
-echo "Review open PRs and summarize" | trayambak -p --project /path/to/repo
+# Via nemo -p (programmatic mode)
+echo "Review open PRs and summarize" | nemo -p --project /path/to/repo
 ```
 
 **Useful cron patterns:**
@@ -116,26 +116,26 @@ echo "Review open PRs and summarize" | trayambak -p --project /path/to/repo
 
 ### 3. Dispatch / Remote Agents
 
-Trigger Trayambak Code agents remotely for event-driven workflows.
+Trigger Nemo Code agents remotely for event-driven workflows.
 
 **Dispatch patterns:**
 
 ```bash
 # Trigger from CI/CD
-curl -X POST "https://api.skt-ai-labs.com/dispatch" \
-  -H "Authorization: Bearer $TRAYAMBAK_API_KEY" \
+curl -X POST "https://api.shrijan.com/dispatch" \
+  -H "Authorization: Bearer $NEMO_API_KEY" \
   -d '{"prompt": "Build failed on main. Diagnose and fix.", "project": "/repo"}'
 
 # Trigger from webhook
-# GitHub webhook → dispatch → Trayambak agent → fix → PR
+# GitHub webhook → dispatch → Nemo agent → fix → PR
 
 # Trigger from another agent
-trayambak -p "Analyze the output of the security scan and create issues for findings"
+nemo -p "Analyze the output of the security scan and create issues for findings"
 ```
 
 ### 4. Computer Use
 
-Leverage Trayambak's computer-use MCP for physical world interaction.
+Leverage Nemo's computer-use MCP for physical world interaction.
 
 **Capabilities:**
 
@@ -158,7 +158,7 @@ Manage a persistent queue of tasks that survive session boundaries.
 
 ```
 # Task persistence via memory
-Write task queue to ~/.trayambak/projects/*/memory/task-queue.md
+Write task queue to ~/.nemo/projects/*/memory/task-queue.md
 
 # Task format
 ---
@@ -180,8 +180,8 @@ description: Persistent task queue for autonomous operation
 
 | Hermes Component | ECC Equivalent                       | How                                     |
 | ---------------- | ------------------------------------ | --------------------------------------- |
-| Gateway/Router   | Trayambak Code dispatch + crons      | Scheduled tasks trigger agent sessions  |
-| Memory System    | Trayambak memory + MCP memory server | Built-in persistence + knowledge graph  |
+| Gateway/Router   | Nemo Code dispatch + crons      | Scheduled tasks trigger agent sessions  |
+| Memory System    | Nemo memory + MCP memory server | Built-in persistence + knowledge graph  |
 | Tool Registry    | MCP servers                          | Dynamically loaded tool providers       |
 | Orchestration    | ECC skills + agents                  | Skill definitions direct agent behavior |
 | Computer Use     | computer-use MCP                     | Native browser and desktop control      |
@@ -192,22 +192,22 @@ description: Persistent task queue for autonomous operation
 
 ### Step 1: Configure MCP Servers
 
-Ensure these are in `~/.trayambak.json`:
+Ensure these are in `~/.nemo.json`:
 
 ```json
 {
   "mcpServers": {
     "memory": {
       "command": "npx",
-      "args": ["-y", "@trayambak/memory-mcp-server"]
+      "args": ["-y", "@nemo/memory-mcp-server"]
     },
     "scheduled-tasks": {
       "command": "npx",
-      "args": ["-y", "@trayambak/scheduled-tasks-mcp-server"]
+      "args": ["-y", "@nemo/scheduled-tasks-mcp-server"]
     },
     "computer-use": {
       "command": "npx",
-      "args": ["-y", "@trayambak/computer-use-mcp-server"]
+      "args": ["-y", "@nemo/computer-use-mcp-server"]
     }
   }
 }
@@ -217,17 +217,17 @@ Ensure these are in `~/.trayambak.json`:
 
 ```bash
 # Daily morning briefing
-trayambak -p "Create a scheduled task: every weekday at 9am, review my GitHub notifications, open PRs, and calendar. Write a morning briefing to memory."
+nemo -p "Create a scheduled task: every weekday at 9am, review my GitHub notifications, open PRs, and calendar. Write a morning briefing to memory."
 
 # Continuous learning
-trayambak -p "Create a scheduled task: every Sunday at 8pm, extract patterns from this week's sessions and update the learned skills."
+nemo -p "Create a scheduled task: every Sunday at 8pm, extract patterns from this week's sessions and update the learned skills."
 ```
 
 ### Step 3: Initialize Memory Graph
 
 ```bash
 # Bootstrap your identity and context
-trayambak -p "Create memory entities for: me (user profile), my projects, my key contacts. Add observations about current priorities."
+nemo -p "Create memory entities for: me (user profile), my projects, my key contacts. Add observations about current priorities."
 ```
 
 ### Step 4: Enable Computer Use (Optional)

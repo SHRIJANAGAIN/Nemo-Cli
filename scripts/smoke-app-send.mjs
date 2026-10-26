@@ -1,8 +1,8 @@
 /* Full-App send E2E — "INPUT TYPE A MESSAGE ME KOI MESSAGE TYPE KRKR
  * SEND KARO NAHI JATA": the composer-only smoke (smoke-enter-ui.mjs) passes,
- * so this one renders the BUILT TrayambakApp itself (boot overlays, disabled
+ * so this one renders the BUILT NemoApp itself (boot overlays, disabled
  * prop, global useAppInput, PromptInput wiring — every gate the standalone
- * smoke bypasses) on fake TTY stdin/stdout with TRAYAMBAK_DEBUG_INPUT=1 and
+ * smoke bypasses) on fake TTY stdin/stdout with NEMO_DEBUG_INPUT=1 and
  * drives it exactly like a user:
  *
  *   boot → dismiss boot overlays (Esc x2) → type h,i,Enter → assert
@@ -30,12 +30,12 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-process.env.TRAYAMBAK_DEBUG_INPUT = "1"
+process.env.NEMO_DEBUG_INPUT = "1"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 // Isolate the debug log: a concurrent harness sharing %TEMP% can truncate
-// trayambak-input.log mid-run and eat our lines (observed: our in="\r"
+// nemo-input.log mid-run and eat our lines (observed: our in="\r"
 // vanished, replaced by a foreign entry seconds later).
 process.env.TEMP = path.join(repo, ".smoke-tmp")
 try {
@@ -43,26 +43,26 @@ try {
 } catch {
   /* best effort */
 }
-process.env.TRAYAMBAK_LOGO_PATH = pathToFileURL(
+process.env.NEMO_LOGO_PATH = pathToFileURL(
   path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm", "logo_ansi.txt"),
 ).href
 
 // Session hermeticity: a full-App boot creates real sessions in
-// skt/8-conversations — without isolation, completed runs flip the next
+// nemo/8-conversations — without isolation, completed runs flip the next
 // boot into the SessionPicker (no active session) and boot-state asserts
-// flake. Same TRAYAMBAK_HOME sandbox as smoke-theme-switch; nothing touches
+// flake. Same NEMO_HOME sandbox as smoke-theme-switch; nothing touches
 // real user sessions.
 {
   const fsMem = await import("node:fs")
-  const sandbox = fsMem.mkdtempSync(path.join(tmpdir(), "trayambak-send-"))
-  const convDir = path.join(sandbox, "skt", "8-conversations")
+  const sandbox = fsMem.mkdtempSync(path.join(tmpdir(), "nemo-send-"))
+  const convDir = path.join(sandbox, "nemo", "8-conversations")
   fsMem.mkdirSync(convDir, { recursive: true })
   fsMem.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "send-smoke" }))
   fsMem.writeFileSync(path.join(convDir, "sessions.json"), "[]")
-  process.env.TRAYAMBAK_HOME = sandbox
+  process.env.NEMO_HOME = sandbox
 }
 
-const logPath = path.join(tmpdir(), "trayambak-input.log")
+const logPath = path.join(tmpdir(), "nemo-input.log")
 try {
   unlinkSync(logPath)
 } catch {
@@ -103,7 +103,7 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(
+const { NemoApp } = await import(
   pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm", "index.js")).href
 )
 
@@ -165,10 +165,10 @@ function clearFrameHeight(raw) {
 }
 
 // ── Boot: mirrors the real launcher (parent CLI always passes
-//    TRAYAMBAK_CONFIG_JSON → themeName present → no boot ThemePicker) ───
+//    NEMO_CONFIG_JSON → themeName present → no boot ThemePicker) ───
 const instance = render(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark" },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark" },
     modelName: "smoke-model",
     permissionMode: "ask",
   }),

@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Violation detection and recording for sandboxed processes.
@@ -17,7 +21,7 @@ import { SandboxViolation } from "./types.js"
 /**
  * Violation log file path.
  */
-const VIOLATION_LOG_PATH = join(homedir(), ".trayambak", "violations.jsonl")
+const VIOLATION_LOG_PATH = join(homedir(), ".nemo", "violations.jsonl")
 
 /**
  * Record a filesystem sandbox violation.
@@ -159,7 +163,7 @@ export function isLikelySandboxDenied(command: string): boolean {
  */
 function writeViolation(violation: SandboxViolation): void {
   try {
-    mkdirSync(join(homedir(), ".trayambak"), { recursive: true })
+    mkdirSync(join(homedir(), ".nemo"), { recursive: true })
     appendFileSync(VIOLATION_LOG_PATH, JSON.stringify(violation) + "\n", "utf8")
   } catch {
     /* best effort — never let logging break the CLI */

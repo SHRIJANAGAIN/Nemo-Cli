@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -28,6 +28,7 @@ import { spawn } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import { IGNORED_DIRS } from "../file-edit/fs-walk.js"
+import { envPathList, envString } from "../../../../../packages/core/src/env_read.js"
 
 /** Hard cap on ripgrep stdout (repo-wide 256KB process-output rule). */
 export const MAX_OUTPUT_BYTES = 256 * 1024
@@ -75,24 +76,27 @@ function isFile(p: string): boolean {
 }
 
 function detect(): string | null {
-  // 1. Explicit env override (e.g. TRAYAMBAK_RG=C:\tools\rg.exe).
+  // 1. Explicit env override (e.g. NEMO_RG=C:\tools\rg.exe).
   try {
-    const envBin = process.env.TRAYAMBAK_RG
+    const envBin = envString("NEMO_RG")
     if (envBin && isFile(envBin)) return envBin
   } catch {
     /* env unreadable — keep probing */
   }
   // 2. PATH scan: rg.exe on Windows (PATHEXT variants), plain `rg` elsewhere.
   try {
-    const pathVar = process.env.PATH ?? ""
+    // envPathList splits on the PLATFORM separator and drops empty entries, so the
+    // empty-string PATH (`PATH=""`) yields [] instead of one bogus "" entry that
+    // every iteration then had to skip.
+    const pathDirs = envPathList("PATH")
     const exts =
       process.platform === "win32"
-        ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT")
+        ? (envString("PATHEXT") ?? ".EXE;.CMD;.BAT")
             .split(";")
-            .filter(Boolean)
-            .map((e) => e.toLowerCase())
+            .filter((e): boolean => e.length > 0)
+            .map((e: string) => e.toLowerCase())
         : [""]
-    for (const dir of pathVar.split(path.delimiter)) {
+    for (const dir of pathDirs) {
       if (!dir) continue
       for (const ext of exts) {
         const cand = path.join(dir, `rg${ext}`)
@@ -115,9 +119,9 @@ function editorBundles(): string[] {
   if (process.platform === "win32") {
     const roots: string[] = []
     try {
-      const local = process.env.LOCALAPPDATA
+      const local = envString("LOCALAPPDATA")
       if (local) roots.push(path.join(local, "Programs", "Microsoft VS Code"))
-      const pf = process.env.ProgramFiles
+      const pf = envString("ProgramFiles")
       if (pf) roots.push(path.join(pf, "Microsoft VS Code"))
     } catch {
       return out

@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Sandbox module — enhanced with OS-level enforcement types,
@@ -153,7 +157,7 @@ export function checkExecPolicy(command: string, rules: ExecRule[]): { allowed: 
 
 /**
  * Display/CLI variant that evaluates EVERY sub-command, not just the outer
- * string — the same segmentation the enforcement path uses, so `trayambak
+ * string — the same segmentation the enforcement path uses, so `nemo
  * execpolicy check` can never report `allowed` for a command the loop would
  * gate (or vice versa). A single denying segment denies the whole line and
  * the matched rule is reported, so the operator sees WHY it was refused.
@@ -222,7 +226,6 @@ export {
   SpawnedProcess,
   SandboxViolation,
   ManagedProxyConfig,
-  WindowsSandboxConfig,
 } from "./types.js"
 export {
   spawnProcess,
@@ -257,6 +260,52 @@ export {
   TemplatePattern,
   evaluateTemplate,
 } from "./types.js"
+
+/* Host policy. `allowedDomains`/`blockedDomains` were declared on
+ * NetworkSandboxPolicy and consulted by nothing; `isNetworkTool`, which
+ * AGENTS.md names as the mechanism requiring approval outside danger mode, did
+ * not exist at all. Both now live behind one entry point so a caller cannot end
+ * up with a second, subtly different matcher. */
+export {
+  HOST_POLICY_ENV,
+  domainMatches,
+  hostPolicyFromEnv,
+  hostPolicyFromPermissionsWithEnv,
+  extractHosts,
+  hostPolicyFromPermissions,
+  isNetworkTool,
+  networkToolNames,
+  networkViolationForCommand,
+  normalizeDomain,
+  type HostPolicy,
+} from "./network-policy.js"
+
+/* Socket-level policy: the authoritative per-connection decision.
+ *
+ * `networkViolationForCommand` above decides from the command TEXT. That catches
+ * `curl https://blocked.example` before a process exists and cannot be walked
+ * past by a destination assembled at runtime, an interpreter that opens a socket
+ * without naming one, or — the hole this closes — an IP literal, which matches no
+ * domain entry and was therefore reachable under a deny-list. `decideRoute` is
+ * total, has no I/O, and refuses address literals whatever the lists say, so the
+ * layer that enforces it can be swapped without the policy drifting from what was
+ * reviewed. */
+export {
+  addressVerdictReason,
+  classifyHost,
+  decideRoute,
+  isRefusedAddress,
+  proxyEndpoint,
+  routeTableFor,
+  tableIsEnforcing,
+  type AddressVerdict,
+  type EndpointProblem,
+  type ProxyEndpoint,
+  type RouteDecision,
+  type RoutePolicy,
+  type RouteRule,
+  type RouteTable,
+} from "./proxy-routing.js"
 export { ProcessManager, createCancellationToken, combineTokens } from "../../core/src/process.js"
 export {
   PolicyManager,

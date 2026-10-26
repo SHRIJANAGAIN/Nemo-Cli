@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * State database — persistent state management.
@@ -188,25 +192,25 @@ function verifyChainRows(rows: AuditRow[]): AuditChainResult {
 }
 
 /** Default state home directory. */
-function getCodexHome(): string {
-  return join(homedir(), ".trayambak")
+function getNemoHome(): string {
+  return join(homedir(), ".nemo")
 }
 
-function storePath(codexHome?: string): string {
-  return join(codexHome ?? getCodexHome(), "state", "state_1.json")
+function storePath(nemoHome?: string): string {
+  return join(nemoHome ?? getNemoHome(), "state", "state_1.json")
 }
 
-function sqlitePath(codexHome?: string): string {
-  return join(codexHome ?? getCodexHome(), "state", "state_1.db")
+function sqlitePath(nemoHome?: string): string {
+  return join(nemoHome ?? getNemoHome(), "state", "state_1.db")
 }
 
 /**
- * Absolute path of the LIVE state file. Exported for `trayambak db path`
+ * Absolute path of the LIVE state file. Exported for `nemo db path`
  * and diagnostics — flag-aware: the SQLite file while the sqliteState flag
  * engages it, otherwise the JSON file.
  */
-export function stateFilePath(codexHome?: string): string {
-  return sqliteEngaged() ? sqlitePath(codexHome) : storePath(codexHome)
+export function stateFilePath(nemoHome?: string): string {
+  return sqliteEngaged() ? sqlitePath(nemoHome) : storePath(nemoHome)
 }
 
 function loadStore(file: string): StoreShape {
@@ -293,14 +297,28 @@ function claimIsStale(lock: string): boolean {
  *  release in milliseconds, so the larger bound costs nothing in practice
  *  while still being a bound — a wedged (alive but stalled) owner can only
  *  delay the CLI for this long, never hang it. */
-const LOCK_WAIT_MS = 10_000
+/** Default bound; override for tests via `NEMO_STATE_LOCK_WAIT_MS`. */
+const DEFAULT_LOCK_WAIT_MS = 10_000
+
+/** How long an op waits for a live foreign claim before proceeding anyway.
+ *  Overridable for tests (the cross-process test pins a generous bound so
+ *  full-suite CPU saturation cannot deschedule a holder past it — a lost
+ *  append there would be an environment artifact, not a product regression).
+ *  Anything finite ≥ 0 wins, capped at 5 min; garbage falls back to default.
+ *  Read per wait (not cached) so spawned worker processes pick up the test's
+ *  value from their inherited env without a reload. */
+function lockWaitMs(): number {
+  const raw = Number(process.env.NEMO_STATE_LOCK_WAIT_MS ?? "")
+  if (Number.isFinite(raw) && raw >= 0) return Math.min(raw, 300_000)
+  return DEFAULT_LOCK_WAIT_MS
+}
 
 /**
  * Cross-process critical section for the JSON backend (#65).
  *
  * The claim is an exclusive-create lock file next to the store carrying
  * `{pid, at}`. A dead or leaked owner is stolen outright; a live owner is
- * waited out for at most `LOCK_WAIT_MS`, after which the op proceeds
+ * waited out for at most `lockWaitMs()`, after which the op proceeds
  * unlocked — a wedged lock must never hang the CLI (state is best-effort;
  * the atomic tmp+rename write still keeps the file valid). Same-thread
  * re-entry skips the claim entirely: sync code on one thread cannot
@@ -316,7 +334,7 @@ function withStateLock<T>(file: string, fn: () => T): T {
   } catch {
     /* saveStore reports the real failure if the dir is unwritable */
   }
-  const deadline = Date.now() + LOCK_WAIT_MS
+  const deadline = Date.now() + lockWaitMs()
   for (;;) {
     try {
       writeFileSync(lock, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx", mode: 0o600 })
@@ -959,8 +977,8 @@ export function verifyAuditChain(db: DatabaseDatabase): AuditChainResult {
 /**
  * Initialize the state store (creates directories; no native deps).
  */
-export function initDatabases(codexHome?: string): DatabaseDatabase {
-  return new DatabaseDatabase(codexHome ? join(codexHome, "state", "state_1.json") : undefined)
+export function initDatabases(nemoHome?: string): DatabaseDatabase {
+  return new DatabaseDatabase(nemoHome ? join(nemoHome, "state", "state_1.json") : undefined)
 }
 
 /**
@@ -968,9 +986,9 @@ export function initDatabases(codexHome?: string): DatabaseDatabase {
  */
 let _dbInstance: DatabaseDatabase | null = null
 
-export function getDatabase(codexHome?: string): DatabaseDatabase {
+export function getDatabase(nemoHome?: string): DatabaseDatabase {
   if (!_dbInstance) {
-    _dbInstance = initDatabases(codexHome)
+    _dbInstance = initDatabases(nemoHome)
   }
   return _dbInstance
 }

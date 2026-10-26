@@ -36,7 +36,7 @@ Check for:
 
 - `pubspec.yaml` — dependencies and project type
 - `analysis_options.yaml` — lint rules
-- `Trayambak.md` — project-specific conventions
+- `Nemo.md` — project-specific conventions
 - Whether this is a monorepo (melos) or single-package project
 - **Identify the state management approach** (BLoC, Riverpod, Provider, GetX, MobX, Signals, or built-in). Adapt review to the chosen solution's conventions.
 - **Identify the routing and DI approach** to avoid flagging idiomatic usage as violations

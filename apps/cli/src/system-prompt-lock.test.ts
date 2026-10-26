@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -26,8 +26,8 @@ describe("system-prompt dump lock", () => {
   let writeSpy: { mock: { calls: unknown[][] } }
   const realExitCode = process.exitCode
   // The refusal also appends to the security trail — point it at tmp so the
-  // suite never mines false hits into the real ~/.trayambak/security.log.
-  const trailFile = path.join(os.tmpdir(), `trayambak-lock-test-${process.pid}.log`)
+  // suite never mines false hits into the real ~/.nemo/security.log.
+  const trailFile = path.join(os.tmpdir(), `nemo-lock-test-${process.pid}.log`)
 
   beforeEach(() => {
     stderr = ""
@@ -37,7 +37,7 @@ describe("system-prompt dump lock", () => {
     } catch {
       /* best effort */
     }
-    vi.stubEnv("TRAYAMBAK_SECURITY_LOG", trailFile)
+    vi.stubEnv("NEMO_SECURITY_LOG", trailFile)
     writeSpy = vi.spyOn(process.stderr, "write").mockImplementation(((chunk: unknown) => {
       stderr += String(chunk)
       return true
@@ -57,11 +57,11 @@ describe("system-prompt dump lock", () => {
 
   it("refuses --dump-system-prompt in any argv position", () => {
     for (const argv of [
-      ["trayambak", "--dump-system-prompt"],
-      ["trayambak", "chat", "--dump-system-prompt", "hi"],
-      ["trayambak", "--dump-system-prompt", "--ink"],
+      ["nemo", "--dump-system-prompt"],
+      ["nemo", "chat", "--dump-system-prompt", "hi"],
+      ["nemo", "--dump-system-prompt", "--ink"],
     ]) {
-      expect(refuseSystemPromptDump(argv, "trayambak")).toBe(true)
+      expect(refuseSystemPromptDump(argv, "nemo")).toBe(true)
     }
     expect(process.exitCode).toBe(2)
     // Loud, not silent — and the message names the removal, never content.
@@ -72,20 +72,20 @@ describe("system-prompt dump lock", () => {
 
   it("lets ordinary argv through untouched (no writes, no exit code)", () => {
     for (const argv of [
-      ["trayambak", "chat", "hi"],
-      ["trayambak", "--help"],
-      ["trayambak", "--version"],
+      ["nemo", "chat", "hi"],
+      ["nemo", "--help"],
+      ["nemo", "--version"],
     ]) {
-      expect(refuseSystemPromptDump(argv, "trayambak")).toBe(false)
+      expect(refuseSystemPromptDump(argv, "nemo")).toBe(false)
     }
     expect(stderr).toBe("")
     expect(process.exitCode).toBeUndefined()
     expect(writeSpy.mock.calls).toHaveLength(0)
   })
 
-  it("uses the invoking shim name so the skt binary refuses identically", () => {
-    expect(refuseSystemPromptDump(["skt", "--dump-system-prompt"], "skt")).toBe(true)
-    expect(stderr.startsWith("skt:")).toBe(true)
+  it("uses the invoking shim name so the nemo binary refuses identically", () => {
+    expect(refuseSystemPromptDump(["nemo", "--dump-system-prompt"], "nemo")).toBe(true)
+    expect(stderr.startsWith("nemo:")).toBe(true)
   })
 
   it("no dump-flavoured flag exists under any name", () => {

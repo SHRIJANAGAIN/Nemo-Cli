@@ -41,8 +41,8 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -51,7 +51,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=junit --outputFile=junit-${{ matrix.os }}-${{ matrix.shard }}.xml --reporter=basic
       - name: Publish unit report
         if: always()
-        uses: mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@3585e9575db828022551b4231f165eb59a0e74e3 # v5
         with:
           report_paths: "junit-*.xml"
           annotate_only: true
@@ -61,7 +61,7 @@ jobs:
       - name: Upload unit artifacts
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: unit-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_attempt }}
           if-no-files-found: ignore

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -12,7 +12,7 @@ import { DeveloperModeEngine, RagCacheManager } from "./index.js"
 
 let tmp = ""
 
-const ragDir = (): string => path.join(tmp, "skt", "12-control", "devmode", "rag")
+const ragDir = (): string => path.join(tmp, "nemo", "12-control", "devmode", "rag")
 const ragFile = (): string => path.join(ragDir(), "rag-cache.json")
 
 const makeEngine = (): DeveloperModeEngine => new DeveloperModeEngine(tmp, { enabled: true })
@@ -22,7 +22,7 @@ const makeManager = (engine: DeveloperModeEngine): RagCacheManager => new RagCac
 const SENTENCES = Array.from({ length: 8 }, (_, i) => `Sentence number ${String(i + 1).padStart(2, "0")} ends here.`)
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-rag-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-rag-"))
 })
 
 afterEach(() => {

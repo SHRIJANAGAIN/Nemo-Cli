@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -25,7 +25,7 @@ describe("sandboxCommand", () => {
 
     expect(out).toContain("backend:")
     expect(out).toContain("enforcement: policy-only")
-    expect(out).toContain("Usage: trayambak sandbox check <file>")
+    expect(out).toContain("Usage: nemo sandbox check <file>")
   })
 
   it("stays policy-only on backends without an isolator even with the flag on", () => {

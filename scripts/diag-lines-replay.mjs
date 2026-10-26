@@ -1,6 +1,6 @@
 /* Lines-issue diagnostic: replay the REAL session behind the user's paste
- * (skt/8-conversations/sess_mugw35k9) through the full TrayambakApp in a
- * sandboxed TRAYAMBAK_HOME, feed every stdout byte into the VT100 screen
+ * (nemo/8-conversations/sess_mugw35k9) through the full NemoApp in a
+ * sandboxed NEMO_HOME, feed every stdout byte into the VT100 screen
  * emulator, and dump the EXACT rows the user sees (scrollback + viewport).
  *
  * Why: the user's pasted transcript shows line-rendering problems ("SUNO
@@ -11,7 +11,7 @@
  *   M1: raw written lines longer than COLS (soft-wrap → erase desync)
  *   M2: tool-box row widths (must be uniform across the transcript)
  *   M3: "Called …" header rows missing the • bullet
- *   M4: no TRAYAMBAK header rows (header removed — branding = WelcomeScreen)
+ *   M4: no NEMO header rows (header removed — branding = WelcomeScreen)
  *
  * Boot: the picker never auto-opens (first-screen boot) — this drives
  * /sessions to open it, then DOWN + Enter resumes the copied session
@@ -33,16 +33,16 @@ const COLS = Number(process.env.COLS || 120)
 const ROWS = Number(process.env.ROWS || 40)
 
 // ── Sandbox store seeded with the real session ─────────────────────────────
-const sandbox = path.join("C:\\Users\\engli\\AppData\\Local\\Temp\\opencode", `trayambak-diag-lines-${COLS}`)
+const sandbox = path.join("C:\\Users\\engli\\AppData\\Local\\Temp\\opencode", `nemo-diag-lines-${COLS}`)
 fs.rmSync(sandbox, { recursive: true, force: true })
-const convDir = path.join(sandbox, "skt", "8-conversations")
+const convDir = path.join(sandbox, "nemo", "8-conversations")
 fs.mkdirSync(convDir, { recursive: true })
 fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "diag-lines" }))
 // The fixture session lives in the store — or, after a factory reset, in the
 // newest reset backup (the store itself is wiped to keep boot on the first
 // screen; transcripts are preserved under backups/factory-reset-*).
 const srcCandidates = [
-  path.join(repo, "skt", "8-conversations", "sess_mugw35k9"),
+  path.join(repo, "nemo", "8-conversations", "sess_mugw35k9"),
   ...(fs.existsSync(path.join(repo, "backups"))
     ? fs
         .readdirSync(path.join(repo, "backups"), { withFileTypes: true })
@@ -73,7 +73,7 @@ fs.writeFileSync(
     2,
   ),
 )
-process.env.TRAYAMBAK_HOME = sandbox
+process.env.NEMO_HOME = sandbox
 
 // ── Fake TTY + VT screen ───────────────────────────────────────────────────
 const { createScreen } = await import("./vt-screen.mjs")
@@ -102,11 +102,11 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark", baseUrl: "http://127.0.0.1:9/api", apiKey: "k", model: "test/m", cwd: repo },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark", baseUrl: "http://127.0.0.1:9/api", apiKey: "k", model: "test/m", cwd: repo },
     modelName: "test/m",
     permissionMode: "ask",
     onExit: () => {},
@@ -204,14 +204,14 @@ calledRows
   .slice(0, 6)
   .forEach((r) => log(`  no-bullet: ${JSON.stringify(r.slice(0, 90))}`))
 
-// ── M4: TRAYAMBAK header rows ──────────────────────────────────────────────
+// ── M4: NEMO header rows ──────────────────────────────────────────────
 // The compact logo header (+ its padding row) was removed from the chat
 // frame — it burned 2 rows/transcript. A resumed transcript must therefore
-// contain ZERO rows carrying "TRAYAMBAK" (branding stays on the WelcomeScreen
+// contain ZERO rows carrying "NEMO" (branding stays on the WelcomeScreen
 // empty state and the ThemePicker only).
-const logoRows = rows.filter((r) => r.includes("TRAYAMBAK"))
+const logoRows = rows.filter((r) => r.includes("NEMO"))
 log(
-  `M4 TRAYAMBAK rows in frame: ${logoRows.length} (want 0) ${logoRows.length === 0 ? "ok" : "BAD — header still rendered"}`,
+  `M4 NEMO rows in frame: ${logoRows.length} (want 0) ${logoRows.length === 0 ? "ok" : "BAD — header still rendered"}`,
 )
 logoRows.forEach((r) => log(`  present: ${JSON.stringify(r.slice(0, 90))}`))
 

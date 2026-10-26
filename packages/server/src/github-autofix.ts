@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -9,14 +9,14 @@
  *
  * Safety design (read before relaxing anything):
  * - LABEL-GATED: only open issues carrying GITHUB_AUTOFIX_LABEL (default
- *   `trayambak`) are touched. A human applies the label = intent, same as
- *   typing /trayambak. unlabeled issues are invisible to the poller.
+ *   `nemo`) are touched. A human applies the label = intent, same as
+ *   typing /nemo. unlabeled issues are invisible to the poller.
  * - PRs, NEVER direct main commits: every fix lands on
- *   `trayambak/issue-N` and opens a pull request. A human merges.
+ *   `nemo/issue-N` and opens a pull request. A human merges.
  * - ONE issue per tick, jobs serialized server-wide: the 1GB VPS cannot
  *   survive concurrent agent runs.
  * - LEDGER: an issue number runs once ever (repo#num → PR url). Retry by
- *   commenting /trayambak (the manual path ignores the ledger).
+ *   commenting /nemo (the manual path ignores the ledger).
  * - REPO ALLOWLIST: GITHUB_AUTOFIX_REPOS="owner/a,owner/b". Empty = poller
  *   idle (logged once at boot). No allowlist, no surprises.
  */
@@ -55,7 +55,7 @@ export function autofixKey(repo: string, number: number): string {
 }
 
 export function autofixBranch(number: number): string {
-  return `trayambak/issue-${number}`
+  return `nemo/issue-${number}`
 }
 
 export class AutofixLedger {

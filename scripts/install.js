@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 // Local install helper. Runs `npm install` and then `npm run build` to set up
-// trayambak inside this directory. Use `trayambak` (CMD shim) or the
+// nemo inside this directory. Use `nemo` (CMD shim) or the
 // `node dist/apps/cli/src/index.js` entry point afterwards.
 const { spawnSync } = require("child_process")
 const path = require("path")
@@ -18,6 +18,6 @@ function run(cmd, args) {
 run("npm", ["install", "--no-audit", "--no-fund"])
 run("npx", ["tsc", "-p", "tsconfig.json"])
 
-process.stdout.write("\ntrayambak is ready.\n")
-process.stdout.write("Run it with: trayambak run --model-path <path-to-model.gguf>\n")
+process.stdout.write("\nnemo is ready.\n")
+process.stdout.write("Run it with: nemo run --model-path <path-to-model.gguf>\n")
 process.stdout.write("Project root: " + path.resolve(__dirname, "..") + "\n")

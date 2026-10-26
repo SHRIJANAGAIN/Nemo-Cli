@@ -3,10 +3,10 @@
 #
 # Fix for #521: Added re-entrancy guard, cooldown throttle, and
 # tail-based sampling to prevent memory explosion from runaway
-# parallel Trayambak analysis processes.
+# parallel Nemo analysis processes.
 
 set +e
-unset TRAYAMBAKCODE
+unset NEMOCODE
 
 SLEEP_PID=""
 USR1_FIRED=0
@@ -90,7 +90,7 @@ exit_if_idle_without_sessions() {
   fi
 }
 
-wait_for_trayambak_analysis() {
+wait_for_nemo_analysis() {
   local child_pid="$1"
   local wait_status=0
 
@@ -102,7 +102,7 @@ wait_for_trayambak_analysis() {
       return 0
     fi
 
-    # SIGUSR1 can interrupt wait while the Trayambak child is still running.
+    # SIGUSR1 can interrupt wait while the Nemo child is still running.
     # Re-wait in that case so a signal is not logged as a false child failure.
     if kill -0 "$child_pid" 2>/dev/null; then
       continue
@@ -125,12 +125,12 @@ analyze_observations() {
   echo "[$(date)] Analyzing $obs_count observations for project ${PROJECT_NAME}..." >> "$LOG_FILE"
 
   if [ "${CLV2_IS_WINDOWS:-false}" = "true" ] && [ "${ECC_OBSERVER_ALLOW_WINDOWS:-false}" != "true" ]; then
-    echo "[$(date)] Skipping trayambak analysis on Windows due to known non-interactive hang issue (#295). Set ECC_OBSERVER_ALLOW_WINDOWS=true to override." >> "$LOG_FILE"
+    echo "[$(date)] Skipping nemo analysis on Windows due to known non-interactive hang issue (#295). Set ECC_OBSERVER_ALLOW_WINDOWS=true to override." >> "$LOG_FILE"
     return
   fi
 
-  if ! command -v trayambak >/dev/null 2>&1; then
-    echo "[$(date)] trayambak CLI not found, skipping analysis" >> "$LOG_FILE"
+  if ! command -v nemo >/dev/null 2>&1; then
+    echo "[$(date)] nemo CLI not found, skipping analysis" >> "$LOG_FILE"
     return
   fi
 
@@ -153,11 +153,11 @@ analyze_observations() {
   analysis_count=$(wc -l < "$analysis_file" 2>/dev/null || echo 0)
   echo "[$(date)] Using last $analysis_count of $obs_count observations for analysis" >> "$LOG_FILE"
 
-  # Trayambak Code resolves relative paths against the user's home directory on
+  # Nemo Code resolves relative paths against the user's home directory on
   # macOS/Linux, even though the observer changes to PROJECT_DIR first. Use
   # the absolute path there so the analyzer reads the file that was sampled.
   # Keep the relative path on Windows (Git Bash/MSYS2), where absolute paths
-  # from mktemp can contain /c/ prefixes that the Trayambak subprocess cannot
+  # from mktemp can contain /c/ prefixes that the Nemo subprocess cannot
   # resolve (#842, #2673).
   if [ "${CLV2_IS_WINDOWS:-false}" = "true" ]; then
     analysis_relpath=".observer-tmp/$(basename "$analysis_file")"
@@ -208,9 +208,9 @@ Rules:
 - Examples of project patterns: use React functional components, follow Django REST framework conventions
 PROMPT
 
-  # Read the prompt into memory before the Trayambak subprocess is spawned.
+  # Read the prompt into memory before the Nemo subprocess is spawned.
   # On Windows/MSYS2, the mktemp path can differ from the shell's later path
-  # resolution, so relying on cat "$prompt_file" inside the trayambak invocation
+  # resolution, so relying on cat "$prompt_file" inside the nemo invocation
   # can fail even though the file was created successfully.
   prompt_content="$(cat "$prompt_file" 2>/dev/null || true)"
   rm -f "$prompt_file"
@@ -223,7 +223,7 @@ PROMPT
   timeout_seconds="${ECC_OBSERVER_TIMEOUT_SECONDS:-120}"
   # Auto-scale max_turns proportional to analysis batch size when not explicitly set.
   # The old hardcoded default of 20 is insufficient for the 500-line MAX_ANALYSIS_LINES
-  # default: Trayambak hits --max-turns before it can write all discovered instinct files.
+  # default: Nemo hits --max-turns before it can write all discovered instinct files.
   # Formula: 1 turn per 10 analysis lines, floor 20, cap 100. (#2035)
   if [ -n "${ECC_OBSERVER_MAX_TURNS:-}" ]; then
     max_turns="${ECC_OBSERVER_MAX_TURNS}"
@@ -256,33 +256,33 @@ PROMPT
   # prompt_content is already loaded in-memory so this no longer depends on the
   # mktemp absolute path continuing to resolve after cwd changes (#1296).
   # stdin is explicitly closed with </dev/null: on Git Bash/MSYS2 the backgrounded
-  # child otherwise inherits an open stdin, and trayambak waits on it, warns
+  # child otherwise inherits an open stdin, and nemo waits on it, warns
   # "no stdin data received", and exits 1 before reading the analysis file (#2452).
   # Model is configurable via ECC_OBSERVER_MODEL (defaults to haiku for cost efficiency);
   # e.g. ECC_OBSERVER_MODEL=opus for higher-quality instinct extraction. Heavier models are
   # slower — consider raising ECC_OBSERVER_TIMEOUT_SECONDS (default 120s) so the watchdog
   # doesn't kill the analysis mid-run.
-  ECC_SKIP_OBSERVE=1 ECC_HOOK_PROFILE=minimal trayambak --model "${ECC_OBSERVER_MODEL:-haiku}" --max-turns "$max_turns" --print \
+  ECC_SKIP_OBSERVE=1 ECC_HOOK_PROFILE=minimal nemo --model "${ECC_OBSERVER_MODEL:-haiku}" --max-turns "$max_turns" --print \
     --allowedTools "Read,Write" \
     -p "$prompt_content" < /dev/null >> "$LOG_FILE" 2>&1 &
-  trayambak_pid=$!
+  nemo_pid=$!
 
   (
     sleep "$timeout_seconds"
-    if kill -0 "$trayambak_pid" 2>/dev/null; then
-      echo "[$(date)] Trayambak analysis timed out after ${timeout_seconds}s; terminating process" >> "$LOG_FILE"
-      kill "$trayambak_pid" 2>/dev/null || true
+    if kill -0 "$nemo_pid" 2>/dev/null; then
+      echo "[$(date)] Nemo analysis timed out after ${timeout_seconds}s; terminating process" >> "$LOG_FILE"
+      kill "$nemo_pid" 2>/dev/null || true
     fi
   ) &
   watchdog_pid=$!
 
-  wait_for_trayambak_analysis "$trayambak_pid"
+  wait_for_nemo_analysis "$nemo_pid"
   exit_code=$?
   kill "$watchdog_pid" 2>/dev/null || true
   rm -f "$analysis_file"
 
   if [ "$exit_code" -ne 0 ]; then
-    echo "[$(date)] Trayambak analysis failed (exit $exit_code); retaining observations for retry" >> "$LOG_FILE"
+    echo "[$(date)] Nemo analysis failed (exit $exit_code); retaining observations for retry" >> "$LOG_FILE"
     return
   fi
 

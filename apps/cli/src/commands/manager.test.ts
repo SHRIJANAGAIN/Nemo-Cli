@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -14,10 +14,10 @@ import type * as ManagerModule from "./manager.js"
 /**
  * managerCommand fans out to plan/todo/tasks stores that all bake
  * `os.homedir()` at module load, plus loadConfig() which reads
- * `<cwd>/.trayambak/config.json` at call time. So: install a temp home AND a
- * temp cwd (with its own .trayambak) before the dynamic import, restore the
+ * `<cwd>/.nemo/config.json` at call time. So: install a temp home AND a
+ * temp cwd (with its own .nemo) before the dynamic import, restore the
  * environment immediately after, and keep cwd inside the sandbox for the whole
- * file — the real ~/.trayambak and the repo's .trayambak/ are never touched.
+ * file — the real ~/.nemo and the repo's .nemo/ are never touched.
  */
 
 let manager: typeof ManagerModule
@@ -29,19 +29,19 @@ let savedHome: string | undefined
 const savedEnv: Record<string, string | undefined> = {}
 
 const ENV_KEYS = [
-  "TRAYAMBAK_MODEL",
-  "TRAYAMBAK_PROVIDER",
-  "TRAYAMBAK_BASE_URL",
-  "TRAYAMBAK_API_KEY",
-  "TRAYAMBAK_CWD",
-  "TRAYAMBAK_MAX_TURNS",
-  "TRAYAMBAK_MAX_PARALLEL_TOOL_CALLS",
+  "NEMO_MODEL",
+  "NEMO_PROVIDER",
+  "NEMO_BASE_URL",
+  "NEMO_API_KEY",
+  "NEMO_CWD",
+  "NEMO_MAX_TURNS",
+  "NEMO_MAX_PARALLEL_TOOL_CALLS",
 ] as const
 
-const tasksFile = (): string => path.join(home, ".trayambak", "tasks.json")
-const planDir = (): string => path.join(home, ".trayambak", "plans")
-const todoFile = (): string => path.join(home, ".trayambak", "todos", "global.json")
-const agentFile = (): string => path.join(tmp, ".trayambak", "agents", "test-reviewer.md")
+const tasksFile = (): string => path.join(home, ".nemo", "tasks.json")
+const planDir = (): string => path.join(home, ".nemo", "plans")
+const todoFile = (): string => path.join(home, ".nemo", "todos", "global.json")
+const agentFile = (): string => path.join(tmp, ".nemo", "agents", "test-reviewer.md")
 
 function writeJson(file: string, value: unknown): void {
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -73,7 +73,7 @@ function seedTodo(): void {
 }
 
 function seedConfig(): void {
-  writeJson(path.join(tmp, ".trayambak", "config.json"), {
+  writeJson(path.join(tmp, ".nemo", "config.json"), {
     model: "mgr-model",
     provider: "ollama",
     maxTurns: 42,
@@ -93,18 +93,18 @@ function seedAgent(): void {
 
 beforeAll(async () => {
   originalCwd = process.cwd()
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-manager-home-"))
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-manager-cwd-"))
-  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-manager-home-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-manager-cwd-"))
+  fs.mkdirSync(path.join(tmp, ".nemo"), { recursive: true })
 
   for (const key of ENV_KEYS) savedEnv[key] = process.env[key]
-  delete process.env.TRAYAMBAK_MODEL
-  delete process.env.TRAYAMBAK_PROVIDER
-  delete process.env.TRAYAMBAK_BASE_URL
-  delete process.env.TRAYAMBAK_API_KEY
-  delete process.env.TRAYAMBAK_CWD
-  delete process.env.TRAYAMBAK_MAX_TURNS
-  delete process.env.TRAYAMBAK_MAX_PARALLEL_TOOL_CALLS
+  delete process.env.NEMO_MODEL
+  delete process.env.NEMO_PROVIDER
+  delete process.env.NEMO_BASE_URL
+  delete process.env.NEMO_API_KEY
+  delete process.env.NEMO_CWD
+  delete process.env.NEMO_MAX_TURNS
+  delete process.env.NEMO_MAX_PARALLEL_TOOL_CALLS
 
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
@@ -132,8 +132,8 @@ afterAll(() => {
 })
 
 beforeEach(() => {
-  fs.rmSync(path.join(tmp, ".trayambak"), { recursive: true, force: true })
-  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  fs.rmSync(path.join(tmp, ".nemo"), { recursive: true, force: true })
+  fs.mkdirSync(path.join(tmp, ".nemo"), { recursive: true })
   for (const dir of [path.dirname(tasksFile()), planDir(), path.dirname(todoFile())]) {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -145,7 +145,7 @@ describe("managerCommand status", () => {
 
     expect(manager.managerCommand({ action: "status" })).toBe(
       [
-        "trayambak Manager Status",
+        "nemo Manager Status",
         `cwd: ${tmp}`,
         "model: mgr-model",
         "provider: ollama",
@@ -214,7 +214,7 @@ describe("managerCommand summary", () => {
     seedTodo()
 
     expect(manager.managerCommand({ action: "summary" })).toMatch(
-      /^trayambak Manager Summary\nagents: \d+\ntasks: 1\nplans: 1\ntodos: 1$/,
+      /^nemo Manager Summary\nagents: \d+\ntasks: 1\nplans: 1\ntodos: 1$/,
     )
   })
 })

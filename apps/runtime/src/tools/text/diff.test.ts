@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -146,7 +146,7 @@ describe("diff and patch tools", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd()
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-diff-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-diff-"))
     process.chdir(tmp)
   })
 
@@ -236,7 +236,7 @@ describe("diff and patch tools resolve against the tool context cwd", () => {
   const textOf = (res: ToolResult): string => (res.content[0] as { text: string }).text
 
   it("diff reads files under context.cwd, not process.cwd()", async () => {
-    const other = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-diff-cwd-"))
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-diff-cwd-"))
     try {
       fs.writeFileSync(path.join(other, "a.txt"), "one\n", "utf8")
       fs.writeFileSync(path.join(other, "b.txt"), "two\n", "utf8")
@@ -257,7 +257,7 @@ describe("diff and patch tools resolve against the tool context cwd", () => {
   })
 
   it("patch writes under context.cwd, not process.cwd()", async () => {
-    const other = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-patch-cwd-"))
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-patch-cwd-"))
     try {
       fs.writeFileSync(path.join(other, "a.txt"), "l1\nl2", "utf8")
       const res = await createPatchTool().execute(
@@ -283,7 +283,7 @@ describe("multi-file atomic patch", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd()
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-patchmulti-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-patchmulti-"))
     process.chdir(tmp)
   })
 
@@ -422,7 +422,7 @@ describe("diff size guards", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd()
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-diffcap-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-diffcap-"))
     process.chdir(tmp)
   })
 

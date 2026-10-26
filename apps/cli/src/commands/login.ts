@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { loginWithApiKey, logout, loginStatus } from "../../../../packages/core/src/auth.js"
 
 export async function loginCommand(args: string[]): Promise<string> {
@@ -10,7 +14,7 @@ export async function loginCommand(args: string[]): Promise<string> {
     const s = loginStatus()
     return `auth: ${s.kind} (file=${s.hasFile} env=${s.hasEnv})`
   }
-  return "Usage: trayambak login [--with-api-key <key> | status]"
+  return "Usage: nemo login [--with-api-key <key> | status]"
 }
 
 export async function logoutCommand(): Promise<string> {

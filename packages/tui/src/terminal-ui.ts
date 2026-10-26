@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 // Legacy terminal renderer: the raw-terminal TerminalUI class (pre-ink) plus its
@@ -401,24 +401,24 @@ export class TerminalUI {
   }
 
   banner(text: string): void {
-    this.write(this.c("blue", this.c("bold", "TRAYAMBAK")))
+    this.write(this.c("blue", this.c("bold", "NEMO")))
 
     this.write("  ")
 
     this.line(this.c("dim", text))
   }
 
-  /** Sky-blue ====>> rule with a bright-green TRAYAMBAK CODE tag. */
+  /** Sky-blue ====>> rule with a bright-green NEMO CODE tag. */
 
   stcRule(): void {
     const equals = "=".repeat(38)
 
     if (this.colors) {
       this.line(
-        `${COLOR.skyBlue}${equals}>>${COLOR.reset} ${COLOR.brightGreen}${COLOR.bold}TRAYAMBAK CODE${COLOR.reset}`,
+        `${COLOR.skyBlue}${equals}>>${COLOR.reset} ${COLOR.brightGreen}${COLOR.bold}NEMO CODE${COLOR.reset}`,
       )
     } else {
-      this.line(`${equals}>> TRAYAMBAK CODE`)
+      this.line(`${equals}>> NEMO CODE`)
     }
   }
 
@@ -865,7 +865,7 @@ export class TerminalUI {
 
       const prefix = ts ? `[${ts}] ` : ""
 
-      const role = m.role === "user" ? "You" : m.role === "assistant" ? "trayambak" : m.role
+      const role = m.role === "user" ? "You" : m.role === "assistant" ? "nemo" : m.role
 
       return `${prefix}${role}: ${m.content}`
     })
@@ -1598,7 +1598,7 @@ export class TerminalUI {
     this.separator()
   }
 
-  /** Trayambak-style split logo: muted left + bold right with shadow gap. */
+  /** Nemo-style split logo: muted left + bold right with shadow gap. */
 
   splitLogo(art: string): void {
     for (const line of renderSplitLogo(art).split("\n")) this.line(line)
@@ -1691,7 +1691,7 @@ export class TerminalUI {
     const segs: string[] = []
 
     if (this.premium && t) {
-      segs.push(`${COLOR.bgBlue}${COLOR.white}${COLOR.bold} TRAYAMBAK ${COLOR.reset}`)
+      segs.push(`${COLOR.bgBlue}${COLOR.white}${COLOR.bold} NEMO ${COLOR.reset}`)
 
       segs.push(`${t.muted}model:${COLOR.reset} ${t.secondary}${opts.model}${COLOR.reset}`)
 
@@ -1721,7 +1721,7 @@ export class TerminalUI {
 
       this.line(left + " ".repeat(pad) + cwd)
     } else {
-      segs.push(`${COLOR.bgBlue}${COLOR.white}${COLOR.bold} TRAYAMBAK ${COLOR.reset}`)
+      segs.push(`${COLOR.bgBlue}${COLOR.white}${COLOR.bold} NEMO ${COLOR.reset}`)
 
       segs.push(`${this.c("dim", "model:")} ${this.c("cyan", opts.model)}`)
 
@@ -2000,7 +2000,7 @@ export class TerminalUI {
           eraseMenu()
           eraseBox()
           const modeTag = devMode ? " (DEV)" : ""
-          const header = `╭─ Trayambak Input${modeTag} ` + "─".repeat(Math.max(2, boxW - 20 - modeTag.length)) + "╮"
+          const header = `╭─ Nemo Input${modeTag} ` + "─".repeat(Math.max(2, boxW - 20 - modeTag.length)) + "╮"
           const footer =
             `╰─ ` +
             this.c("dim", "[Enter] Submit  [Ctrl+C] Exit  [↑/↓] History  [/] Commands") +
@@ -2422,7 +2422,7 @@ export class TerminalUI {
    *  Returns the chosen value, or null when cancelled. */
 
   handlePermissionEvent(event: { id: string; tool: string; args: unknown; reason: string }): void {
-    if (event.tool === "trayambak__AskUserQuestion") {
+    if (event.tool === "nemo__AskUserQuestion") {
       return
     }
 
@@ -2519,7 +2519,7 @@ export class TerminalUI {
     } catch {}
 
     try {
-      const cfgPath = path.join(os.homedir(), ".trayambak", "config.json")
+      const cfgPath = path.join(os.homedir(), ".nemo", "config.json")
 
       let cfg: Record<string, unknown> = {}
 

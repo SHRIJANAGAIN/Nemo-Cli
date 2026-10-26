@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 import { describe, expect, it } from "vitest"
 import { BLOCKED_ENV_PATTERNS, createMinimalEnv, filterEnv, getSafeEnv, validateEnv } from "./env_filter.js"
@@ -105,8 +109,8 @@ describe("getSafeEnv", () => {
     expect(out["KEEP"]).toBe("yes")
     expect(out["PATH"]).toBe("/bin")
     expect(out["SECRET_X"]).toBeUndefined()
-    expect(out["CODEX_SANDBOX"]).toBe("none")
-    expect(out["CODEX_SANDBOX_NETWORK_DISABLED"]).toBeUndefined()
+    expect(out["NEMO_SANDBOX"]).toBe("none")
+    expect(out["NEMO_SANDBOX_NETWORK_DISABLED"]).toBeUndefined()
   })
 
   it("flags a network-disabled sandbox without leaking secrets", () => {
@@ -114,8 +118,8 @@ describe("getSafeEnv", () => {
 
     expect(out["TOKEN_X"]).toBeUndefined()
     expect(out["OK"]).toBe("1")
-    expect(out["CODEX_SANDBOX"]).toBe("seatbelt")
-    expect(out["CODEX_SANDBOX_NETWORK_DISABLED"]).toBe("true")
+    expect(out["NEMO_SANDBOX"]).toBe("seatbelt")
+    expect(out["NEMO_SANDBOX_NETWORK_DISABLED"]).toBe("true")
   })
 })
 
@@ -135,9 +139,9 @@ describe("createMinimalEnv", () => {
   it("always carries the essentials plus the policy-only marker", () => {
     const env = createMinimalEnv()
 
-    for (const key of ["PATH", "HOME", "LANG", "TMPDIR", "TERM", "CODEX_SANDBOX"]) {
+    for (const key of ["PATH", "HOME", "LANG", "TMPDIR", "TERM", "NEMO_SANDBOX"]) {
       expect(typeof env[key]).toBe("string")
     }
-    expect(env["CODEX_SANDBOX"]).toBe("policy-only")
+    expect(env["NEMO_SANDBOX"]).toBe("policy-only")
   })
 })

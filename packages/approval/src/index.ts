@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /** Granular auto-approval: prefix allow/deny + protected files. */
 
@@ -11,7 +15,7 @@ export interface ApprovalPolicy {
 export const DEFAULT_APPROVAL: ApprovalPolicy = {
   allowedCommands: ["git log", "git diff", "git show"],
   deniedCommands: [],
-  protectedPatterns: [".trayambakignore", ".roomodes", ".trayambak/**", "AGENTS.md"],
+  protectedPatterns: [".nemoignore", ".roomodes", ".nemo/**", "AGENTS.md"],
 }
 
 function matchesPrefix(cmd: string, prefix: string): boolean {

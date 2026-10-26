@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type { KeyId } from "./keys.js"
@@ -133,6 +133,11 @@ export const GLOBAL_SHORTCUTS: readonly GlobalShortcut[] = [
   { keys: "ctrl+x", label: "Clear queued prompts", action: "tui.global.clearQueue" },
   { keys: "ctrl+z", label: "Undo checkpoint", action: "tui.global.undo" },
   { keys: "ctrl+y", label: "Redo checkpoint", action: "tui.global.redo" },
+  // Composer-local, but the user has to be told they exist: ↑/↓ recall is read
+  // by PromptInput through these two action ids, and a feature no screen lists
+  // is a feature nobody finds.
+  { keys: "up", label: "Recall previous prompt", action: "tui.input.historyPrevious" },
+  { keys: "down", label: "Recall newer prompt", action: "tui.input.historyNext" },
 ]
 
 /** The /keymap system message: "keys label" pairs, two-space separated. */

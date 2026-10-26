@@ -1,9 +1,3 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
- */
-
 # Compiled output (rebuilt by `npm run build`; publish/ is regenerated)
 dist/
 publish/
@@ -33,16 +27,16 @@ coverage/
 node_modules/
 
 # Local session / state (per-project + per-user)
-.trayambak/
+.nemo/
 *.log
 .cline-*
 backend-handlers/
 
 # Private self-improvement journal (user state; never committed, never published)
-skt/1-errors/mistakes.json
+nemo/1-errors/mistakes.json
 
 # Session conversation transcripts (machine-written runtime state)
-skt/8-conversations/
+nemo/8-conversations/
 
 # Backups & scratch (never commit)
 backups/
@@ -79,7 +73,7 @@ data/
 # Corrupt-config forensics (kept locally, never committed)
 *.corrupt-*
 
-skt/canary/
+nemo/canary/
 
 # Packed npm artifacts (npm pack output) -- never source
 *.tgz

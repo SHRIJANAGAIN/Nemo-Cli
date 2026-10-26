@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * `exec` is the CI-facing command: `trayambak exec "..." | tee log` inside a
+ * `exec` is the CI-facing command: `nemo exec "..." | tee log` inside a
  * pipeline. It used to exit 0 unconditionally, so a run in which policy refused
  * every tool call — or one the rollout budget cut short — reported success to
  * the shell while having accomplished nothing.
@@ -26,7 +26,7 @@ import { NO_RUN_SIGNALS, exitCodeForSignals, recordRunSignal, type RunSignalEven
 /**
  * Stand-in for a real agent event, typed structurally rather than as
  * `TaggedAgentEvent` because `apps/cli` may not import `packages/protocol`
- * (`trayambak/no-cross-package-import`). Every field the reducer reads is real,
+ * (`nemo/no-cross-package-import`). Every field the reducer reads is real,
  * so it sees exactly what the loop emits.
  */
 function event(fields: RunSignalEvent): RunSignalEvent {

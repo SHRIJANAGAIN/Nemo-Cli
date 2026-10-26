@@ -35,7 +35,7 @@ Run `git diff --staged` and `git diff` to see changes. If no diff, check `git lo
 Check for:
 
 - `build.gradle.kts` or `settings.gradle.kts` to understand module layout
-- `Trayambak.md` for project-specific conventions
+- `Nemo.md` for project-specific conventions
 - Whether this is Android-only, KMP, or Compose Multiplatform
 
 ### Step 2b: Security Review

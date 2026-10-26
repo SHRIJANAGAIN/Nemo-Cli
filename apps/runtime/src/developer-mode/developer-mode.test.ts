@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -26,7 +26,7 @@ let tmp = ""
 const makeEngine = (config: Partial<DeveloperModeConfig> = {}): DeveloperModeEngine =>
   new DeveloperModeEngine(tmp, config)
 
-const devmodeDir = (): string => path.join(tmp, "skt", "12-control", "devmode")
+const devmodeDir = (): string => path.join(tmp, "nemo", "12-control", "devmode")
 
 const mistakeLog = (): string => path.join(devmodeDir(), "mistakes.json")
 
@@ -45,7 +45,7 @@ const fakeTool = (name: string): Tool => ({
 })
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-devmode-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-devmode-"))
 })
 
 afterEach(() => {
@@ -194,7 +194,6 @@ describe("DeveloperModeEngine mistakes and penalties", () => {
     expect(isLocalProvider("custom")).toBe(false)
     expect(isLocalProvider("nvidia")).toBe(false)
     expect(isLocalProvider("nvidia-nim")).toBe(false)
-    expect(isLocalProvider("openai")).toBe(false)
     expect(isLocalProvider("NVIDIA")).toBe(false)
     expect(isLocalProvider("custom")).toBe(false)
     expect(isLocalProvider("typo-backend")).toBe(false)
@@ -206,7 +205,7 @@ describe("DeveloperModeEngine mistakes and penalties", () => {
     for (let i = 0; i < 30; i++) recordMistake(hosted, 2)
     // Base general-mode override survives; the 3.0 penalty sum never lands.
     expect(hosted.getConfigOverrides({ provider: "nvidia" }).temperature).toBe(0.2)
-    expect(hosted.getConfigOverrides({ provider: "openai" }).temperature).toBe(0.2)
+    expect(hosted.getConfigOverrides({ provider: "nvidia-nim" }).temperature).toBe(0.2)
     // …while local samplers still get the (capped) tuning.
     const local = makeEngine({ enabled: true })
     for (let i = 0; i < 30; i++) recordMistake(local, 2)
@@ -765,12 +764,12 @@ describe("backend supervisor (penalty decisions for local LLMs)", () => {
     const decoded = makeEngine({
       enabled: true,
       localSupervisor: JSON.stringify({
-        provider: "openai",
+        provider: "nvidia",
         model: "judge",
         timeoutMs: 99,
       }) as unknown as LocalSupervisorConfig,
     })
-    expect(decoded.config.localSupervisor.provider).toBe("openai")
+    expect(decoded.config.localSupervisor.provider).toBe("nvidia")
     expect(decoded.config.localSupervisor.model).toBe("judge")
     expect(decoded.config.localSupervisor.timeoutMs).toBe(1_000)
 

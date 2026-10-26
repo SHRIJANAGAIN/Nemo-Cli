@@ -112,7 +112,7 @@ Verify these do NOT exist:
 *.pem, *.key, *.p12, *.pfx, *.jks
 credentials.json, service-account*.json
 .secrets/, secrets/
-.Trayambak/settings.json
+.Nemo/settings.json
 sessions/
 *.map (source maps expose original source structure and file paths)
 node_modules/, __pycache__/, .venv/, venv/

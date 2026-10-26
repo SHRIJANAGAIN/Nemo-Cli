@@ -1,6 +1,6 @@
 # GitHub App (VPS) — setup guide
 
-Run Trayambak behind GitHub events: comment `/trayambak <task>` on any issue
+Run Nemo behind GitHub events: comment `/nemo <task>` on any issue
 or PR and the agent replies on the thread. Read-only by default in spirit —
 v1 only acts on explicit human comments, never on pushes or PR opens
 (untrusted fork code + unattended runs = prompt-injection hole).
@@ -8,12 +8,12 @@ v1 only acts on explicit human comments, never on pushes or PR opens
 ## 1. Register the App (browser, once)
 
 1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
-2. Name: `trayambak` (or yours). Homepage: your VPS URL or repo URL.
+2. Name: `nemo` (or yours). Homepage: your VPS URL or repo URL.
 3. Webhook: check **Active**, URL `https://YOUR-VPS/webhooks/github`,
    secret: generate one (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
 4. Permissions (minimum): **Issues: read-write**, **Pull requests: read-write**,
    **Metadata: read-only**. Add **Contents: read-write** once you want the
-   bot to write files / open PRs (self-service trial keys, `/trayambak`
+   bot to write files / open PRs (self-service trial keys, `/nemo`
    fixes, autofix below — all need it).
 5. Subscribe to events: **Issue comment** (and PR review comment, same switch).
 5. Subscribe to events: **Issue comment** (and PR review comment, same switch).
@@ -25,14 +25,14 @@ v1 only acts on explicit human comments, never on pushes or PR opens
 ```bash
 GITHUB_WEBHOOK_SECRET=<hex from step 3>
 GITHUB_APP_ID=123456
-GITHUB_PRIVATE_KEY=/etc/trayambak/github-app.pem   # path OR pasted PEM text
-TRAYAMBAK_GITHUB_WORKSPACE=/srv/trayambak-work      # where the agent works
+GITHUB_PRIVATE_KEY=/etc/nemo/github-app.pem   # path OR pasted PEM text
+NEMO_GITHUB_WORKSPACE=/srv/nemo-work      # where the agent works
 # Optional: GitHub Enterprise
 # GITHUB_API_BASE=https://ghe.example.com/api/v3
 ```
 
-Put them in `/etc/trayambak/trayambak.env` (mode 600) — see `.env.example`.
-Restart the service: `sudo systemctl restart trayambak`.
+Put them in `/etc/nemo/nemo.env` (mode 600) — see `.env.example`.
+Restart the service: `sudo systemctl restart nemo`.
 
 Without `GITHUB_WEBHOOK_SECRET` the route answers 503 (fail closed).
 Without App credentials, jobs still run but results only land in the
@@ -42,9 +42,9 @@ not silent.
 ## 3. Verify end to end
 
 1. `curl http://127.0.0.1:8787/health` → `{"status":"ok",...}`
-2. Open an issue, comment `/trayambak say hi with the repo name`.
-3. Watch `journalctl -u trayambak -f` for `[github-app] job … started`.
-4. The agent replies on the thread as `## Trayambak result`.
+2. Open an issue, comment `/nemo say hi with the repo name`.
+3. Watch `journalctl -u nemo -f` for `[github-app] job … started`.
+4. The agent replies on the thread as `## Nemo result`.
 
 ## 4. Rules of the road
 
@@ -59,19 +59,19 @@ not silent.
 
 The bot watches issues by itself — no comment needed:
 
-1. Label an issue `trayambak` (or your `GITHUB_AUTOFIX_LABEL`).
+1. Label an issue `nemo` (or your `GITHUB_AUTOFIX_LABEL`).
 2. Within one poll interval the server picks the oldest labeled, unhandled
    issue (one per tick), and the agent: reads it → creates branch
-   `trayambak/issue-N` → writes the fix via the API → opens a PR →
+   `nemo/issue-N` → writes the fix via the API → opens a PR →
    comments the PR link on the issue.
 3. You review + merge. The issue number runs once ever (ledger in
-   `data/github-autofix.json`); retry via `/trayambak` comment (ignores it).
+   `data/github-autofix.json`); retry via `/nemo` comment (ignores it).
 
 Env:
 
 ```bash
 GITHUB_AUTOFIX_REPOS=owner/repo,owner/other   # allowlist; "*" = every installed repo; empty = idle
-GITHUB_AUTOFIX_LABEL=trayambak                # the intent gate
+GITHUB_AUTOFIX_LABEL=nemo                # the intent gate
 GITHUB_AUTOFIX_INTERVAL_MIN=30                # 5..1440
 # GITHUB_AUTOFIX_TRIAGE_COMMENT=              # custom greeting; empty disables triage greetings
 ```

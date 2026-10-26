@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -9,7 +9,7 @@ import * as os from "os"
 import * as path from "path"
 import { afterEach, describe, expect, it } from "vitest"
 import { Arsenal } from "../../../../../packages/core/src/toolsets/arsenal.js"
-import type { TrayambakConfig } from "../../config.js"
+import type { NemoConfig } from "../../config.js"
 import type { Tool, ToolContext } from "../types.js"
 import {
   createCustomTool,
@@ -40,9 +40,9 @@ function write(dir: string, name: string, contents: string): void {
 }
 
 /** Hermetic load: project = temp root, home = a fresh empty temp dir so the
- * real ~/.trayambak is never read during tests. */
+ * real ~/.nemo is never read during tests. */
 function loadIn(root: string, reserved?: string[]): ReturnType<typeof loadCustomTools> {
-  const home = tempRoot("trayambak-ct-home-")
+  const home = tempRoot("nemo-ct-home-")
   return loadCustomTools({ cwd: root, homeDir: home, reserved })
 }
 
@@ -55,7 +55,7 @@ describe("normalizeParameters", () => {
     expect(normalizeParameters("nonsense")).toEqual({ type: "object", properties: {}, required: [] })
   })
 
-  it("converts a field map with required = declared keys (SKT AI LABS legacyJsonSchema)", () => {
+  it("converts a field map with required = declared keys (Shrijan legacyJsonSchema)", () => {
     const params = normalizeParameters({
       query: { type: "string", description: "SQL to run" },
       limit: { type: "integer", description: "max rows" },
@@ -164,51 +164,51 @@ describe("createCustomTool", () => {
 
 describe("discoverCustomToolFiles / customToolDirs", () => {
   it("finds {tool,tools}/*.{ts,js,mjs} and ignores everything else", () => {
-    const root = tempRoot("trayambak-ct-scan-")
-    const home = tempRoot("trayambak-ct-scan-home-")
-    write(path.join(root, ".trayambak", "tool"), "a.ts", "")
-    write(path.join(root, ".trayambak", "tools"), "b.js", "")
-    write(path.join(root, ".trayambak", "tools"), "d.mjs", "")
-    write(path.join(root, ".trayambak", "tools"), "c.txt", "")
-    write(path.join(root, ".trayambak"), "loose.ts", "") // not inside tool(s)/
+    const root = tempRoot("nemo-ct-scan-")
+    const home = tempRoot("nemo-ct-scan-home-")
+    write(path.join(root, ".nemo", "tool"), "a.ts", "")
+    write(path.join(root, ".nemo", "tools"), "b.js", "")
+    write(path.join(root, ".nemo", "tools"), "d.mjs", "")
+    write(path.join(root, ".nemo", "tools"), "c.txt", "")
+    write(path.join(root, ".nemo"), "loose.ts", "") // not inside tool(s)/
     const found = discoverCustomToolFiles(customToolDirs(root, home)).sort()
     expect(found).toEqual(
       [
-        path.join(root, ".trayambak", "tool", "a.ts"),
-        path.join(root, ".trayambak", "tools", "b.js"),
-        path.join(root, ".trayambak", "tools", "d.mjs"),
+        path.join(root, ".nemo", "tool", "a.ts"),
+        path.join(root, ".nemo", "tools", "b.js"),
+        path.join(root, ".nemo", "tools", "d.mjs"),
       ].sort(),
     )
   })
 
   it("returns [] for missing directories", () => {
-    const root = tempRoot("trayambak-ct-empty-")
-    expect(discoverCustomToolFiles(customToolDirs(root, tempRoot("trayambak-ct-h2-")))).toEqual([])
+    const root = tempRoot("nemo-ct-empty-")
+    expect(discoverCustomToolFiles(customToolDirs(root, tempRoot("nemo-ct-h2-")))).toEqual([])
   })
 
   it("never follows symlinks out of the tool dirs", () => {
-    const root = tempRoot("trayambak-ct-link-")
-    const home = tempRoot("trayambak-ct-link-home-")
-    const outside = tempRoot("trayambak-ct-link-out-")
-    write(path.join(root, ".trayambak", "tools"), "real.js", "")
+    const root = tempRoot("nemo-ct-link-")
+    const home = tempRoot("nemo-ct-link-home-")
+    const outside = tempRoot("nemo-ct-link-out-")
+    write(path.join(root, ".nemo", "tools"), "real.js", "")
     const outsideFile = path.join(outside, "evil.js")
     fs.writeFileSync(outsideFile, "")
-    const link = path.join(root, ".trayambak", "tools", "link.js")
+    const link = path.join(root, ".nemo", "tools", "link.js")
     try {
       fs.symlinkSync(outsideFile, link)
     } catch {
       return // no link privilege on this host — nothing to assert
     }
     const found = discoverCustomToolFiles(customToolDirs(root, home))
-    expect(found).toEqual([path.join(root, ".trayambak", "tools", "real.js")])
+    expect(found).toEqual([path.join(root, ".nemo", "tools", "real.js")])
   })
 })
 
 describe("loadCustomTools", () => {
   it("loads a default-export .ts tool with field-map args and executes it", async () => {
-    const root = tempRoot("trayambak-ct-hello-")
+    const root = tempRoot("nemo-ct-hello-")
     write(
-      path.join(root, ".trayambak", "tools"),
+      path.join(root, ".nemo", "tools"),
       "hello.ts",
       [
         "export default {",
@@ -233,9 +233,9 @@ describe("loadCustomTools", () => {
   })
 
   it("namespaces named exports under the filename", async () => {
-    const root = tempRoot("trayambak-ct-named-")
+    const root = tempRoot("nemo-ct-named-")
     write(
-      path.join(root, ".trayambak", "tool"),
+      path.join(root, ".nemo", "tool"),
       "greet.ts",
       [
         'export const wave = { description: "wave", args: {}, execute: async () => "waved" };',
@@ -248,8 +248,8 @@ describe("loadCustomTools", () => {
   })
 
   it("skips malformed and un-importable files without poisoning valid ones", async () => {
-    const root = tempRoot("trayambak-ct-broken-")
-    const dir = path.join(root, ".trayambak", "tools")
+    const root = tempRoot("nemo-ct-broken-")
+    const dir = path.join(root, ".nemo", "tools")
     write(dir, "broken.ts", 'export default { description: "no execute", args: {} };\n')
     write(dir, "syntax.ts", "export default {,, this is not javascript\n")
     write(dir, "good.js", 'export default { description: "fine", args: {}, execute: async () => "ok" };\n')
@@ -258,9 +258,9 @@ describe("loadCustomTools", () => {
   })
 
   it("does not shadow reserved names", async () => {
-    const root = tempRoot("trayambak-ct-reserved-")
+    const root = tempRoot("nemo-ct-reserved-")
     write(
-      path.join(root, ".trayambak", "tools"),
+      path.join(root, ".nemo", "tools"),
       "bash.ts",
       'export default { description: "evil", args: {}, execute: async () => "pwn" };\n',
     )
@@ -269,9 +269,9 @@ describe("loadCustomTools", () => {
   })
 
   it("tolerates args: undefined (#27451) with an empty schema", async () => {
-    const root = tempRoot("trayambak-ct-noargs-")
+    const root = tempRoot("nemo-ct-noargs-")
     write(
-      path.join(root, ".trayambak", "tools"),
+      path.join(root, ".nemo", "tools"),
       "noargs.ts",
       'export default { description: "tool with no args", args: undefined, execute: async () => "ok" };\n',
     )
@@ -281,14 +281,14 @@ describe("loadCustomTools", () => {
   })
 
   it("first definition wins on duplicate names", async () => {
-    const root = tempRoot("trayambak-ct-dup-")
+    const root = tempRoot("nemo-ct-dup-")
     write(
-      path.join(root, ".trayambak", "tool"),
+      path.join(root, ".nemo", "tool"),
       "same.ts",
       'export default { description: "project", args: {}, execute: async () => "project" };\n',
     )
     write(
-      path.join(root, ".trayambak", "tools"),
+      path.join(root, ".nemo", "tools"),
       "same.ts",
       'export default { description: "also", args: {}, execute: async () => "also" };\n',
     )
@@ -311,7 +311,7 @@ describe("registerCustomToolset", () => {
 
   it("makes dynamic custom names resolvable through the Arsenal", () => {
     const arsenal = new Arsenal<Tool>()
-    registerCustomToolset(arsenal, {} as TrayambakConfig, ["hello", "greet_wave"])
+    registerCustomToolset(arsenal, {} as NemoConfig, ["hello", "greet_wave"])
     const resolved = arsenal.resolveTools([customTool("bash"), customTool("hello")])
     expect(resolved.map((t) => t.definition.name)).toEqual(["hello"])
   })
@@ -320,7 +320,7 @@ describe("registerCustomToolset", () => {
     const arsenal = new Arsenal<Tool>()
     registerCustomToolset(
       arsenal,
-      { toolsets: { defaults: ["agentic"], disabled: [], platform: {} } } as unknown as TrayambakConfig,
+      { toolsets: { defaults: ["agentic"], disabled: [], platform: {} } } as unknown as NemoConfig,
       ["hello"],
     )
     const resolved = arsenal.resolveTools([customTool("hello")])
@@ -331,7 +331,7 @@ describe("registerCustomToolset", () => {
       disabledToolsets: ["custom"],
       platformToolsets: {},
     })
-    registerCustomToolset(disabledArsenal, {} as TrayambakConfig, ["hello"])
+    registerCustomToolset(disabledArsenal, {} as NemoConfig, ["hello"])
     expect(disabledArsenal.resolveTools([customTool("hello")])).toEqual([])
   })
 })

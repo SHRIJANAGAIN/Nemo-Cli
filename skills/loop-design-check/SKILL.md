@@ -94,7 +94,7 @@ Retry cap, hard stop, human flips the last switch = damping. **Negative feedback
 
 ### Step 5 · Land in three stages (don't go fully automatic on day one)
 
-① **Run it once by hand** (forces you to state exactly "how the judge decides") → ② harden into a skill / Trayambak Code sub-agents (a main Trayambak loops, dispatching plan/build/judge) → ③ hang it on cron for full automation.
+① **Run it once by hand** (forces you to state exactly "how the judge decides") → ② harden into a skill / Nemo Code sub-agents (a main Nemo loops, dispatching plan/build/judge) → ③ hang it on cron for full automation.
 
 ---
 
@@ -108,7 +108,7 @@ Retry cap, hard stop, human flips the last switch = damping. **Negative feedback
 | 2   | "Verification" written as "check if it looks ok" → **agent confidently says fine and stops** | Is the judge the defendant itself? Does verification rest on "looks right" or deterministic rules? | Reconcile + exit code rules + independent judge                  |
 | 3   | (worst) Only gates on "all tests pass" → **agent deletes the tests**                         | Is there a boundary ("what it must NOT do")? Or only a done-criterion?                             | Done-criterion **+ boundary** together (the Goodhart antibody)   |
 | 4   | Counts on the agent asking mid-run → **it won't; it runs the wrong answer to the end**       | Is there any "clarify only at runtime" point?                                                      | **Front-load every clarification**; settle it once before launch |
-| 5   | Bloated TRAYAMBAK.md + stale memory → **the faster it loops, the more it errs**              | Are the docs/memory it depends on fresh? Who maintains them?                                       | Layered memory + periodic lint                                   |
+| 5   | Bloated NEMO.md + stale memory → **the faster it loops, the more it errs**              | Are the docs/memory it depends on fresh? Who maintains them?                                       | Layered memory + periodic lint                                   |
 
 **Plus three red lines (violate any = not allowed to go automatic):**
 

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { useEffect, useRef, useState, type ReactNode } from "react"
@@ -18,10 +18,10 @@ import {
   renameSession,
   DEFAULT_SESSION_NAME,
   type SessionEntry,
-} from "../../../../skt/9-session/session.js"
+} from "../../../../nemo/9-session/session.js"
 import { Agent } from "../../../../apps/runtime/src/agent/agent.js"
 import type { Agent as AgentType } from "../../../../apps/runtime/src/agent/agent.js"
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 import type { TaggedAgentEvent, AgentEventSink } from "../../../protocol/src/index.js"
 import {
   evaluatePermission,
@@ -57,12 +57,12 @@ import {
   useTerminalRows,
   welcomeFillRows,
   welcomeLogoCompact,
-  type TrayambakAppProps,
+  type NemoAppProps,
 } from "./app-bootstrap.js"
 import { createSessionPickerActions } from "./session-picker-actions.js"
 import { runDevmode } from "./devmode-command.js"
 import { runMcp } from "./mcp-command.js"
-export { type TrayambakAppProps } from "./app-bootstrap.js"
+export { type NemoAppProps } from "./app-bootstrap.js"
 import { useAppInput } from "./useAppInput.js"
 import { useBorderPulse } from "./use-border-pulse.js"
 import { useThemeColors } from "./themeColors.js"
@@ -82,7 +82,6 @@ import type { SidebarTodo } from "./sidebar-data.js"
 import { saveConfig, loadConfig, cleanApiKey } from "../../../../apps/runtime/src/config.js"
 import {
   serverActivateLicenseKey,
-  serverCanUsePentest,
   serverMintTrial,
   serverVerifyLicenseKey,
 } from "../../../../apps/runtime/src/license.js"
@@ -100,19 +99,19 @@ import { generateChatTitle } from "../../../../apps/runtime/src/prompt/auto-titl
 import { CheckpointStore, CheckpointTooBigError } from "../../../../apps/runtime/src/checkpoints.js"
 import { extractAndStoreMemories, loadMemory } from "../../../../apps/runtime/src/tools/memory/memory.js"
 import { buildInitPrompt, buildReviewPrompt } from "../../../../apps/runtime/src/agent/review-init.js"
-import { listCronJobs, tickCronJobs } from "../../../../apps/runtime/src/tools/trayambak/cron.js"
+import { listCronJobs, tickCronJobs } from "../../../../apps/runtime/src/tools/nemo/cron.js"
 import { parseUnifiedDiff, renderDiffFiles } from "../../../../apps/runtime/src/tools/text/diff-render.js"
 import { execFileSync } from "node:child_process"
 import { compactMessages, policyFromConfig } from "../../../../apps/runtime/src/compaction.js"
 import { notifyPermissionRequest, notifyBalloon } from "../notifications.js"
 import {
-  setThemeByName as applyTrayambakTheme,
-  listThemes as getTrayambakThemes,
+  setThemeByName as applyNemoTheme,
+  listThemes as getNemoThemes,
   getTheme as getLiveTheme,
-  type Theme as TrayambakTheme,
+  type Theme as NemoTheme,
 } from "../ui/theme.js"
 import type {
-  TrayambakMessage,
+  NemoMessage,
   PermissionRequest,
   PermissionMode,
   AppStatus,
@@ -159,15 +158,15 @@ import {
   writeStoredKey,
 } from "./provider-model-support.js"
 
-export const TrayambakApp = ({
+export const NemoApp = ({
   config,
-  modelName = "trayambak",
+  modelName = "nemo",
   permissionMode: initialMode = "ask",
   onExit,
   initialPrompt,
-}: TrayambakAppProps): ReactNode => {
+}: NemoAppProps): ReactNode => {
   const theme = useThemeColors()
-  const [messages, setMessages] = useState<TrayambakMessage[]>([])
+  const [messages, setMessages] = useState<NemoMessage[]>([])
   /** Heap guard (observed 4GB Mark-Compact death spiral → Ink exit 134):
    *  the transcript keeps every row by design and each streamed token copies
    *  the array, so GBs of old tool outputs stall every token. foldTranscript
@@ -210,7 +209,7 @@ export const TrayambakApp = ({
     isPermissionMode(config?.permissions?.uiMode) ? config.permissions.uiMode : initialMode,
   )
   const [pendingPermissions, setPendingPermissions] = useState<PermissionRequest[]>([])
-  // SKT AI LABS-style prompt queue: prompts typed while a turn is running wait in a
+  // Shrijan-style prompt queue: prompts typed while a turn is running wait in a
   // FIFO and run automatically when the current turn finishes.
   const [queuedPrompts, setQueuedPrompts] = useState<string[]>([])
   const queueRef = useRef<string[]>([])
@@ -279,7 +278,7 @@ export const TrayambakApp = ({
   const [waitingCustom, setWaitingCustom] = useState(/*initial*/ false)
   const [tokenCount, setTokenCount] = useState(0)
   const [backgroundSubagents, setBackgroundSubagents] = useState<Map<string, BackgroundSubagentState>>(new Map())
-  /* Subagent UI (SKT AI LABS parity): overlay panel, agent picker, transient footer
+  /* Subagent UI (Shrijan parity): overlay panel, agent picker, transient footer
    * hint, and a derived count for status/notify effects. */
   const [showSubagentPanel, setShowSubagentPanel] = useState(/*initial*/ false)
   const [panelInitialTab, setPanelInitialTab] = useState<"all" | "background">("all")
@@ -352,7 +351,7 @@ export const TrayambakApp = ({
   /** Full persisted config snapshot — covers sidebar fields the boot prop may
    *  omit (contextWindow, mcpServers, cwd). */
   const [bootConfig] = useState(() => loadConfig())
-  /** Custom slash commands loaded from project/user prompt files (SKT AI LABS
+  /** Custom slash commands loaded from project/user prompt files (Shrijan
    *  `{command,commands}` + `**\/*.md` glob port) — expanded and submitted as prompts. */
   const [promptCommands, setPromptCommands] = useState<PromptCommand[]>([])
   /** Last prompt the user sent — /retry resends it, Ctrl+R loads it to edit. */
@@ -373,7 +372,7 @@ export const TrayambakApp = ({
   const agentRef = useRef<AgentType | null>(null)
   /** Agent config mirror — model switches update this and null agentRef so
    *  the next run rebuilds the provider with the new model. */
-  const agentConfigRef = useRef<TrayambakConfig | null>(null)
+  const agentConfigRef = useRef<NemoConfig | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const resolverQueueRef = useRef<Array<{ id: string; resolve: (approved: boolean) => void }>>([])
   const permissionModeRef = useRef<PermissionMode>(permissionMode)
@@ -385,10 +384,10 @@ export const TrayambakApp = ({
   const pendingAgentTypeRef = useRef<string | null>(null)
   /** subagentId → transcript card routing (messageId + live toolcall counts). */
   const subagentRoutingRef = useRef<Map<string, SubagentRouting>>(new Map())
-  /** Mode stack for plan-enter/exit (SKT AI LABS mode-stack parity). */
+  /** Mode stack for plan-enter/exit (Shrijan mode-stack parity). */
   const modeStackRef = useRef<PermissionMode[]>([])
 
-  /** Startup update check (SKT AI LABS auto-update port): fire-and-forget so boot
+  /** Startup update check (Shrijan auto-update port): fire-and-forget so boot
    *  never blocks; "update-available" surfaces a notice, "updated" (a patch
    *  auto-applied under autoupdate:true) says restart — the running process
    *  is still the old code. Errors stay silent: a failing npm install must
@@ -400,7 +399,7 @@ export const TrayambakApp = ({
         if (cancelled) return
         if (outcome.kind === "update-available") {
           addSystemMessage(
-            `Update available: ${outcome.current} → ${outcome.latest} (${outcome.releaseType}). Run \`trayambak upgrade\` to update.`,
+            `Update available: ${outcome.current} → ${outcome.latest} (${outcome.releaseType}). Run \`nemo upgrade\` to update.`,
           )
         } else if (outcome.kind === "updated") {
           addSystemMessage(
@@ -489,11 +488,11 @@ export const TrayambakApp = ({
     const cleanup = enableBracketedPaste()
     // Claim the tab/window title on mount. The shell (PowerShell/cmd) keeps
     // reporting its cwd as the title, so without this the tab reads "engli" (or
-    // whatever folder) and gives no hint that Trayambak is the thing running.
+    // whatever folder) and gives no hint that Nemo is the thing running.
     setTerminalTitle(buildTerminalTitle({ activity: "idle" }))
     const themeName = config?.themeName
     if (themeName) {
-      const matched = applyTrayambakTheme(themeName)
+      const matched = applyNemoTheme(themeName)
       if (!matched) {
         addSystemMessage(`Unknown theme "${themeName}". Run /themes to see available options.`)
       }
@@ -501,7 +500,7 @@ export const TrayambakApp = ({
     return cleanup
   }, [])
 
-  const addMessage = (msg: TrayambakMessage, opts?: { persist?: boolean }): void => {
+  const addMessage = (msg: NemoMessage, opts?: { persist?: boolean }): void => {
     setMessages((prev) => [...prev, msg])
     // opts.persist === false: transcript-only rows (e.g. the "Resumed
     // session" banner) that must never reach the session log — persisting
@@ -652,7 +651,7 @@ export const TrayambakApp = ({
   }, [turnActive, messages])
 
   /** Route a tagged child-loop event into the subagent's transcript card
-   * (nested tool activity — SKT AI LABS's task parts, flattened for Ink). */
+   * (nested tool activity — Shrijan's task parts, flattened for Ink). */
   const routeSubagentChildEvent = (event: TaggedAgentEvent): void => {
     const id = event.subagentId
     if (!id) return
@@ -853,7 +852,7 @@ export const TrayambakApp = ({
 
     if (event.type === "tool_execution_end") {
       if (event.isError) {
-        notifyBalloon("tool-error", "TRAYAMBAK – Tool Error", `${event.toolName} failed`)
+        notifyBalloon("tool-error", "NEMO – Tool Error", `${event.toolName} failed`)
         // Terminal attention for main-turn tool errors (was balloon-only).
         notifyTerminalActivity({ activity: "error", detail: `${event.toolName} failed` })
       }
@@ -885,7 +884,7 @@ export const TrayambakApp = ({
 
     if (event.type === "message_end") {
       const msg = event.message
-      // Stage tracer (TRAYAMBAK_DEBUG_INPUT=1): pins a silent turn end to
+      // Stage tracer (NEMO_DEBUG_INPUT=1): pins a silent turn end to
       // the exact message_end the loop produced (role/stopReason).
       debugInputLog(
         `STAGE message_end role=${msg?.role ?? "?"} stop=${(msg as { stopReason?: string } | undefined)?.stopReason ?? "-"}`,
@@ -935,7 +934,7 @@ export const TrayambakApp = ({
       // callback (it creates the queue row and the resolver together, so
       // parallel tool calls can never clobber each other). The event is
       // only used for notifications/status here.
-      if (event.tool !== "trayambak__AskUserQuestion") {
+      if (event.tool !== "nemo__AskUserQuestion") {
         notifyPermissionRequest(event.tool, event.reason)
       }
     }
@@ -1094,7 +1093,7 @@ export const TrayambakApp = ({
       // No "Done" balloon on abort: agent-loop emits agent_end on the abort
       // path too, and celebrating a cancellation is a lie (and steals focus).
       if (!abortControllerRef.current?.signal.aborted) {
-        notifyBalloon("done", "TRAYAMBAK – Done", "Agent finished")
+        notifyBalloon("done", "NEMO – Done", "Agent finished")
       }
     }
 
@@ -1162,7 +1161,7 @@ export const TrayambakApp = ({
           })
         },
         onRequestPermission: (tool, args, reason) => {
-          if (tool === "trayambak__AskUserQuestion") return Promise.resolve(/*value*/ true)
+          if (tool === "nemo__AskUserQuestion") return Promise.resolve(/*value*/ true)
           const cfg =
             ((agentRef.current?.config.permissions ?? DEFAULT_PERMISSIONS) as PermissionConfig | undefined) ??
             DEFAULT_PERMISSIONS
@@ -1277,7 +1276,7 @@ export const TrayambakApp = ({
         }
       }
 
-      // Stage tracer (TRAYAMBAK_DEBUG_INPUT=1): pins a stalled turn to
+      // Stage tracer (NEMO_DEBUG_INPUT=1): pins a stalled turn to
       // checkpoint vs agent construction vs provider connect vs first token
       // instead of an eternal "Thinking…" with no clues.
       let firstEventLogged = false
@@ -1458,7 +1457,7 @@ export const TrayambakApp = ({
       const v = value.trim()
       lastUserPromptRef.current = v
       if (isRunningRef.current || isLoading) {
-        // Queue instead of silently dropping (SKT AI LABS prompt queue).
+        // Queue instead of silently dropping (Shrijan prompt queue).
         queueRef.current.push(v)
         setQueuedPrompts([...queueRef.current])
         const shown = v.length > 80 ? `${v.slice(0, 80)}…` : v
@@ -1562,7 +1561,7 @@ export const TrayambakApp = ({
     }
   }
 
-  /** SKT AI LABS sparkle port: rewrite a draft via the configured chat model. Never
+  /** Shrijan sparkle port: rewrite a draft via the configured chat model. Never
    *  answers, never throws — failures come back as { ok: false } so the
    *  composer can show them inline without losing the draft. */
   const enhanceDraft = async (draft: string): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
@@ -1595,7 +1594,7 @@ export const TrayambakApp = ({
       )
       return
     }
-    // Project/user prompt files (SKT AI LABS command files): a matching .md template
+    // Project/user prompt files (Shrijan command files): a matching .md template
     // expands with the typed arguments and submits as a normal prompt.
     // Built-ins win a name collision — these can add commands, never shadow.
     const isBuiltin =
@@ -1977,7 +1976,7 @@ export const TrayambakApp = ({
           const repo = (m?.[1] ?? "").replace(/\.git$/, "")
           const num = Number(m?.[2] ?? m?.[3] ?? "")
           if (!repo || !Number.isFinite(num) || num < 1) {
-            addSystemMessage("Usage: /github issue <owner/repo#n> — e.g. /github issue SHRIJANAGAIN/SKT-AMD-FILES#1")
+            addSystemMessage("Usage: /github issue <owner/repo#n> — e.g. /github issue shrijan/nemo-amd-files#1")
             break
           }
           addSystemMessage(`Reading ${repo}#${num} via the server…`, { persist: false })
@@ -2343,7 +2342,7 @@ export const TrayambakApp = ({
         break
       case "theme": {
         if (args) {
-          const matched = applyTrayambakTheme(args)
+          const matched = applyNemoTheme(args)
           if (matched) {
             addSystemMessage(`Theme switched to ${matched.name}.`)
           } else {
@@ -2355,14 +2354,14 @@ export const TrayambakApp = ({
         return
       }
       case "themes": {
-        const allThemes = getTrayambakThemes()
+        const allThemes = getNemoThemes()
         // Live theme (not boot config): after an in-session /theme switch
         // the dot sat on the old boot theme.
         const liveName = getLiveTheme().name
-        const current = allThemes.find((t: TrayambakTheme) => t.name === liveName)
+        const current = allThemes.find((t: NemoTheme) => t.name === liveName)
         const list = allThemes
           .map(
-            (t: TrayambakTheme) => `  ${t === current ? `${g("dot")} ` : "  "}${t.name} (${t.dark ? "dark" : "light"})`,
+            (t: NemoTheme) => `  ${t === current ? `${g("dot")} ` : "  "}${t.name} (${t.dark ? "dark" : "light"})`,
           )
           .join("\n")
         addSystemMessage(`Available themes:\n${list}`)
@@ -2493,11 +2492,11 @@ export const TrayambakApp = ({
       }
       case "cron": {
         // Cron job visibility: create/delete stay model tools
-        // (trayambak__CronCreate/Delete); due jobs fire on the 60s scheduler.
+        // (nemo__CronCreate/Delete); due jobs fire on the 60s scheduler.
         const jobs = listCronJobs()
         if (jobs.length === 0) {
           addSystemMessage(
-            "No cron jobs scheduled. The model can create them with trayambak__CronCreate (5-field cron + prompt).",
+            "No cron jobs scheduled. The model can create them with nemo__CronCreate (5-field cron + prompt).",
           )
         } else {
           const lines = jobs.map((j) => {
@@ -2558,11 +2557,9 @@ export const TrayambakApp = ({
         break
       }
       case "devmode": {
-        // Bare /devmode toggles ON<->OFF; turning ON opens the pentest
-        // enable/disable menu (the "gate" line in it is the /gate state).
-        // Every write persists to config AND patches agentConfigRef + null
-        // agentRef, so the next message rebuilds the agent with the new
-        // toolsets/engine flags — no restart needed.
+        // Bare /devmode toggles ON<->OFF. Every write persists to config AND
+        // patches agentConfigRef + null agentRef, so the next message rebuilds
+        // the agent with the new engine flags — no restart needed.
         //
         // Implemented in devmode-command.ts: this file was over the
         // max-file-size cap and the handler is self-contained.
@@ -2585,7 +2582,7 @@ export const TrayambakApp = ({
                 return `  /${c.name}${c.argumentHint ? ` ${c.argumentHint}` : ""} — ${c.description}  (${short})`
               })
               .join("\n")
-          : "Custom prompt files: none — drop .md files into ./commands/, ./.trayambak/commands/ or ~/.trayambak/commands/"
+          : "Custom prompt files: none — drop .md files into ./commands/, ./.nemo/commands/ or ~/.nemo/commands/"
         addSystemMessage(
           `Slash commands: ${SLASH_COMMANDS.length} built-in + ${slashCommandService.registry.all().length} dispatched (agent, task, todo, plan, manager, compact, mode, worktree).\n${custom}`,
         )
@@ -2669,7 +2666,7 @@ export const TrayambakApp = ({
       }
       case "review": {
         // opencode /review port: submit a review turn — the agent collects
-        // the diff, reads full files, and runs trayambak__ParallelReview.
+        // the diff, reads full files, and runs nemo__ParallelReview.
         // Bare = working tree; `commit <sha>` = git show; `branch <name>` =
         // triple-dot diff. Submitted via handleInput so queueing works.
         handleInput(buildReviewPrompt(args))
@@ -2744,7 +2741,7 @@ export const TrayambakApp = ({
     }
   }
 
-  /** Resolve a queued permission decision by row id (SKT AI LABS-style queue:
+  /** Resolve a queued permission decision by row id (Shrijan-style queue:
    * each row owns its own resolver, so parallel requests never clobber). */
   const resolvePermission = (id: string, approved: boolean): void => {
     setPendingPermissions((prev) => prev.filter((p) => p.id !== id))
@@ -2974,7 +2971,7 @@ export const TrayambakApp = ({
       sweepOrphanedDialogs()
     }
     if (key.ctrl && input === "p" && !overlayOpen) {
-      // SKT AI LABS parity: ctrl+p opens the command palette; the permission-mode
+      // Shrijan parity: ctrl+p opens the command palette; the permission-mode
       // cycle remains on Ctrl+K P (leader table).
       setShowPalette(/*showPalette*/ true)
     }
@@ -3091,7 +3088,7 @@ export const TrayambakApp = ({
   runAgentRef.current = runAgent
 
   // Cron scheduler (hermes cron/scheduler.py port, in-process): model-created
-  // jobs via trayambak__CronCreate actually fire here. The 60s tick reaps due
+  // jobs via nemo__CronCreate actually fire here. The 60s tick reaps due
   // jobs; fired prompts join the normal prompt queue (same permission
   // overlays as typed prompts) and kick an idle turn. Previously
   // tickCronJobs had zero callers — jobs were write-only.
@@ -3528,7 +3525,7 @@ export const TrayambakApp = ({
     }
   }
 
-  /** Persist + hot-swap the active model (SKT AI LABS's local.model.set with
+  /** Persist + hot-swap the active model (Shrijan's local.model.set with
    *  `recent: true`). The agent bakes `model` into its provider at
    *  construction, so agentConfigRef is updated and agentRef nulled — the
    *  next run rebuilds against the new model. */
@@ -3635,7 +3632,7 @@ export const TrayambakApp = ({
   /** Command-palette rows: every leader chord (as an action) plus EVERY slash
    *  command — registry-dispatched rows first (their long-standing order),
    *  static rows the registry lacks appended (`/provider`, `/model`… never
-   *  reached the palette before). SKT AI LABS's palette over trayambak's own commands. */
+   *  reached the palette before). Shrijan's palette over nemo's own commands. */
   const paletteEntries: PaletteEntry[] = [
     ...leaderActions.map((a): PaletteEntry => ({
       id: `leader.${a.key}`,
@@ -3725,15 +3722,15 @@ export const TrayambakApp = ({
         />
       ) : showThemePicker ? (
         <ThemePicker
-          themes={getTrayambakThemes().map(themeToPickerOption)}
+          themes={getNemoThemes().map(themeToPickerOption)}
           defaultTheme={getLiveTheme().name}
           onSelect={(name) => {
-            applyTrayambakTheme(name)
+            applyNemoTheme(name)
             saveConfig({ themeName: name })
             setShowThemePicker(/*showThemePicker*/ false)
           }}
           onExit={() => {
-            applyTrayambakTheme(config?.themeName ?? "trayambak-dark")
+            applyNemoTheme(config?.themeName ?? "nemo-dark")
             setShowThemePicker(/*showThemePicker*/ false)
           }}
         />
@@ -3841,7 +3838,7 @@ export const TrayambakApp = ({
             ) : null}
             {messages.length === 0 ? null : (
               <Box flexDirection="column" flexGrow={1}>
-                {/* No TRAYAMBAK header row inside the frame: the compact logo
+                {/* No NEMO header row inside the frame: the compact logo
                   (+ its padding row) claimed 2 of the frame's rows on every
                   render and only ever sat there beside stray header text —
                   wasted vertical space at the top of the transcript box.
@@ -3964,8 +3961,8 @@ export const TrayambakApp = ({
   )
 }
 
-export const renderTrayambakApp = (props: TrayambakAppProps): void => {
-  render(<TrayambakApp {...props} />)
+export const renderNemoApp = (props: NemoAppProps): void => {
+  render(<NemoApp {...props} />)
 }
 
-export default TrayambakApp
+export default NemoApp

@@ -11,7 +11,7 @@ Testing patterns specifically designed for AI-assisted development, where the sa
 
 ## When to Activate
 
-- AI agent (Trayambak Code, Cursor, Trayambak Code) has modified API routes or backend logic
+- AI agent (Nemo Code, Cursor, Nemo Code) has modified API routes or backend logic
 - A bug was found and fixed — need to prevent re-introduction
 - Project has a sandbox/mock mode that can be leveraged for DB-free testing
 - Running `/bug-check` or similar review commands after code changes
@@ -198,7 +198,7 @@ describe("GET /api/user/messages (conversation list)", () => {
 ### Custom Command Definition
 
 ```markdown
-<!-- .trayambak/commands/bug-check.md -->
+<!-- .nemo/commands/bug-check.md -->
 
 # Bug Check
 

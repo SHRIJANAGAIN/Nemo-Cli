@@ -1,4 +1,4 @@
-export * as TrayambakSessionResumeCommand from "./session-resume"
+export * as NemoSessionResumeCommand from "./session-resume"
 
 import { sessionManager } from "../session/session-manager.js"
 import { sessionContinuation } from "../session/session-continuation.js"

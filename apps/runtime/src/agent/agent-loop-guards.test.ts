@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -30,7 +30,7 @@ import {
 import { Session } from "../session/session.js"
 import { textResult, type Tool } from "../tools/types.js"
 import type { HookShellExecutor } from "../tools/hook-exec.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { DeveloperModeEngine } from "../developer-mode/index.js"
 import type { ChatInput, Provider } from "../../../../packages/provider/src/index.js"
 import type { AgentEvent, AgentMessage, AssistantMessage } from "../../../../packages/protocol/src/index.js"
@@ -52,7 +52,7 @@ function makeProvider(replies: Reply[]): { provider: Provider; calls: () => numb
   return { provider, calls: () => calls }
 }
 
-function baseConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakConfig {
+function baseConfig(overrides: Partial<NemoConfig> = {}): NemoConfig {
   return {
     maxTurns: 4,
     maxRetries: 0,
@@ -63,7 +63,7 @@ function baseConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakConfig {
     cwd: os.tmpdir(),
     permissions: { mode: "default", rules: [], askByDefault: false },
     ...overrides,
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 }
 
 interface LoopOptions {
@@ -78,7 +78,7 @@ interface LoopOptions {
 }
 
 async function runLoop(
-  config: TrayambakConfig,
+  config: NemoConfig,
   provider: Provider,
   opts: LoopOptions = {},
 ): Promise<{ events: AgentEvent[]; messages: AgentMessage[]; session: Session }> {
@@ -301,8 +301,7 @@ describe("provider retry and streaming", () => {
 
   it("rides out a transient blip and completes the work (no early stop)", async () => {
     // Three straight ECONNRESETs — past the old give-up point — then the
-    // model answers: the run must finish the work, not die with an error
-    // row ("CODEX RUN UNTIL THE WORK IS COMPLETED").
+    // model answers: the run must finish the work, not surface an error row.
     const { provider, calls } = makeProvider([
       failReply("read ECONNRESET"),
       failReply("read ECONNRESET"),
@@ -482,7 +481,7 @@ describe("tool-call guards", () => {
 
     expect(executed).toHaveLength(0)
     const denied = toolTexts(messages).join("\n")
-    expect(denied).toContain("Trayambak permission denied for probe:")
+    expect(denied).toContain("Nemo permission denied for probe:")
     expect(denied).toContain("denied by rule")
     expect(eventsOfType(events, "permission_request")).toHaveLength(0) // deny never asks
   })
@@ -499,7 +498,7 @@ describe("tool-call guards", () => {
     })
 
     expect(executed).toHaveLength(0)
-    expect(toolTexts(messages).join("\n")).toContain("Trayambak permission denied for probe. Tool execution blocked.")
+    expect(toolTexts(messages).join("\n")).toContain("Nemo permission denied for probe. Tool execution blocked.")
     expect(eventsOfType(events, "permission_request").filter((e) => e.tool === "probe")).toHaveLength(1)
     expect(eventsOfType(events, "permission_response").filter((e) => e.allowed === false)).toHaveLength(1)
   })

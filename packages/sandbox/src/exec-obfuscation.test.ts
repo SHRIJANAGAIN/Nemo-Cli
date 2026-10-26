@@ -4,7 +4,7 @@ import { checkExecPolicyAll, DEFAULT_EXEC_RULES } from "./index.js"
 /**
  * Regression tests for the round-2 audit findings #21-25 (exec-policy
  * obfuscation bypasses), pinned at the display surface the operator actually
- * runs (`trayambak execpolicy check`).
+ * runs (`nemo execpolicy check`).
  */
 describe("obfuscated payloads are never reported as allowed (audit #21-25)", () => {
   const cases: Array<[string, string]> = [

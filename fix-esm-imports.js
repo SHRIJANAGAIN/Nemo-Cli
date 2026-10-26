@@ -29,7 +29,7 @@ function copyDirRecursive(src, dest) {
 if (fs.existsSync(srcDir)) {
   copyDirRecursive(srcDir, destDir)
   // Flattened deps: files pulled in from ../ui keep their own same-dir imports
-  // (theme.js -> ./skt-themes.js), which would dangle once the nested
+  // (theme.js -> ./nemo-themes.js), which would dangle once the nested
   // packages/ tree below is deleted. Pull them in transitively.
   const uiDir = path.join(destDir, "packages", "tui", "src", "ui")
   // keymap.ts lives one level ABOVE ink-app (packages/tui/src/keymap.ts) and is
@@ -76,7 +76,7 @@ if (fs.existsSync(srcDir)) {
     for (const m of content.matchAll(/require\s*\(\s*(["'])\.\/([^"']+\.js)\1\s*\)/g)) siblings.push(m[2])
     for (const s of siblings) queue.push(path.join(path.dirname(src), s))
   }
-  for (const dir of ["packages", "apps", "skt", "ink-app"]) {
+  for (const dir of ["packages", "apps", "nemo", "ink-app"]) {
     const dirPath = path.join(destDir, dir)
     if (fs.existsSync(dirPath)) {
       fs.rmSync(dirPath, { recursive: true, force: true })
@@ -154,7 +154,7 @@ function fixImports(dir) {
 fixImports(destDir)
 
 // Fail the build if a flattened ESM import points at a file that isn't there
-// (this is how a missing sibling copy like skt-themes.js surfaces — as a
+// (this is how a missing sibling copy like nemo-themes.js surfaces — as a
 // runtime ERR_MODULE_NOT_FOUND otherwise).
 function verifyImports(dir) {
   const missing = []

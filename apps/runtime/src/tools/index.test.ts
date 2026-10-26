@@ -1,22 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { Tool } from "./types.js"
-import { buildArsenalFromConfig, createDefaultTools } from "./index.js"
-
-/** The 5 model-facing pentest meta-tools (toolsets.pentest). */
-const PENTEST_TOOLS = [
-  "trayambak__PentestListTools",
-  "trayambak__PentestRunTool",
-  "trayambak__PentestStartEngagement",
-  "trayambak__PentestGetStatus",
-  "trayambak__PentestGetFindings",
-]
+import { buildArsenalFromConfig, createDefaultTools, TOOLSET_DEFS } from "./index.js"
 
 const namedTool = (name: string): Tool => ({
   definition: {
@@ -28,43 +19,58 @@ const namedTool = (name: string): Tool => ({
   execute: async () => ({ content: [{ type: "text", text: "ok" }], isError: false }),
 })
 
-describe("buildArsenalFromConfig — pentest default", () => {
-  it("keeps the pentest toolset in the defaults even when config omits it", () => {
-    const arsenal = buildArsenalFromConfig({} as TrayambakConfig)
-    const resolved = arsenal.resolveTools(PENTEST_TOOLS.map(namedTool))
-    expect(resolved.map((t) => t.definition.name).sort()).toEqual([...PENTEST_TOOLS].sort())
+describe("buildArsenalFromConfig — toolset resolution", () => {
+  it("resolves tools belonging to the default toolsets", () => {
+    const arsenal = buildArsenalFromConfig({} as NemoConfig)
+    const tools = ["bash", "read_file", "not_a_registered_tool"].map(namedTool)
+    expect(arsenal.resolveTools(tools).map((t) => t.definition.name).sort()).toEqual(["bash", "read_file"])
   })
 
-  it("keeps pentest when config pins defaults to a list without it", () => {
-    const arsenal = buildArsenalFromConfig({ toolsets: { defaults: ["core"] } } as TrayambakConfig)
-    const resolved = arsenal.resolveTools(PENTEST_TOOLS.map(namedTool))
-    expect(resolved).toHaveLength(PENTEST_TOOLS.length)
+  it("pins the defaults when config lists them", () => {
+    const arsenal = buildArsenalFromConfig({ toolsets: { defaults: ["core"] } } as NemoConfig)
+    const tools = ["bash", "nemo__Agent"].map(namedTool)
+    expect(arsenal.resolveTools(tools).map((t) => t.definition.name)).toEqual(["bash"])
   })
 
-  it("toolsets.disabled still wins — an explicit opt-out removes pentest", () => {
+  it("toolsets.disabled still wins — an explicit opt-out removes the toolset", () => {
     const arsenal = buildArsenalFromConfig({
-      toolsets: { defaults: ["core"], disabled: ["pentest"] },
-    } as TrayambakConfig)
-    expect(arsenal.resolveTools(PENTEST_TOOLS.map(namedTool))).toEqual([])
+      toolsets: { defaults: ["core"], disabled: ["core"] },
+    } as NemoConfig)
+    expect(arsenal.resolveTools(["bash"].map(namedTool))).toEqual([])
   })
 })
 
-describe("createDefaultTools — pentest reaches the model-facing set", () => {
-  it("returns all 5 Pentest* tools with a config present", () => {
-    const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, {} as TrayambakConfig)
+describe("the pentest toolset is gone", () => {
+  it("defines no pentest toolset", () => {
+    expect(TOOLSET_DEFS.map((d) => d.name)).not.toContain("pentest")
+  })
+
+  it("never resolves a pentest tool", () => {
+    const arsenal = buildArsenalFromConfig({} as NemoConfig)
+    const pentestNames = [
+      "nemo__PentestListTools",
+      "nemo__PentestRunTool",
+      "nemo__PentestStartEngagement",
+      "nemo__PentestGetStatus",
+      "nemo__PentestGetFindings",
+    ]
+    expect(arsenal.resolveTools(pentestNames.map(namedTool))).toEqual([])
+  })
+})
+
+describe("createDefaultTools — model-facing set", () => {
+  it("never exposes a pentest tool", () => {
+    const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, {} as NemoConfig)
     const names = new Set(tools.map((t) => t.definition.name))
-    for (const pentestTool of PENTEST_TOOLS) {
-      expect(names.has(pentestTool)).toBe(true)
+    for (const name of names) {
+      expect(name).not.toContain("Pentest")
     }
   })
 
-  it("drops the Pentest* tools when pentest is disabled", () => {
-    const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, {
-      toolsets: { defaults: ["core", "agentic", "ops", "tasks", "mcp", "skills"], disabled: ["pentest"] },
-    } as TrayambakConfig)
+  it("keeps the core tools model-facing with a config present", () => {
+    const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, {} as NemoConfig)
     const names = new Set(tools.map((t) => t.definition.name))
-    for (const pentestTool of PENTEST_TOOLS) {
-      expect(names.has(pentestTool)).toBe(false)
-    }
+    expect(names.has("bash")).toBe(true)
+    expect(names.has("read_file")).toBe(true)
   })
 })

@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /** File-snapshot checkpoints: capture/restore transcript + workdir file list. */
 
@@ -32,7 +36,7 @@ export function createCheckpoint(sessionId: string, workDir: string): Checkpoint
   }
   let gitStash: string | undefined
   try {
-    const out = execFileSync("git", ["stash", "push", "-m", `trayambak-${id}`, "--include-untracked"], {
+    const out = execFileSync("git", ["stash", "push", "-m", `nemo-${id}`, "--include-untracked"], {
       cwd: workDir,
       encoding: "utf8",
       timeout: 15_000,

@@ -1,9 +1,9 @@
 {
-  "name": "@trayambak/execpolicy",
+  "name": "@nemo/execpolicy",
   "version": "0.6.0",
   "private": true,
   "type": "commonjs",
-  "description": "Exec policy engine for Trayambak CLI — .rules file parsing and evaluation.",
+  "description": "Exec policy engine for Nemo CLI — .rules file parsing and evaluation.",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "dependencies": {}

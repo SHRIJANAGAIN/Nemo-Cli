@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as http from "http"
@@ -44,14 +44,14 @@ function localMenu(): void {
   process.stdout.write(`Device: ${device.ramGb} GB RAM • ${device.gpu ? "GPU detected" : "CPU/RAM mode"}\n`)
   process.stdout.write("Local-coder recommendations:\n")
   choices.forEach((choice, index) => process.stdout.write(`  ${index + 1}. ${choice}\n`))
-  process.stdout.write("\nDownload one with:\n  trayambak download <repo>\n")
+  process.stdout.write("\nDownload one with:\n  nemo download <repo>\n")
 }
 
 function searchHub(query: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const endpoint = `https://huggingface.co/api/models?search=${encodeURIComponent(query)}&filter=gguf&sort=downloads&direction=-1&limit=10`
     https
-      .get(endpoint, { headers: { "User-Agent": "trayambak", Accept: "application/json" } }, (res) => {
+      .get(endpoint, { headers: { "User-Agent": "nemo", Accept: "application/json" } }, (res) => {
         let body = ""
         res.setEncoding("utf8")
         res.on("data", (chunk) => (body += chunk))
@@ -82,7 +82,7 @@ export async function modelsCommand(args: string[] = []): Promise<void> {
     if (models.length === 0) {
       process.stdout.write(`No models reported by ${cfg.baseUrl}.\n`)
       process.stdout.write(`Current model: ${cfg.model}\n`)
-      process.stdout.write("Use /model <id> in trayambak to switch.\n")
+      process.stdout.write("Use /model <id> in nemo to switch.\n")
     } else {
       process.stdout.write(usingFallback ? `Available NVIDIA models (offline list):\n` : `Available NVIDIA models:\n`)
       models.forEach((id: string, index: number) => process.stdout.write(`  ${index + 1}. ${id}\n`))

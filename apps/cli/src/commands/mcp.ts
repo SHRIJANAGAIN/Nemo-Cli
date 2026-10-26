@@ -1,4 +1,4 @@
-import { loadConfig, type TrayambakConfig } from "../../../runtime/src/index.js"
+import { loadConfig, type NemoConfig } from "../../../runtime/src/index.js"
 import {
   authFilePath,
   authorizeMcpServer,
@@ -7,7 +7,7 @@ import {
   type McpOAuthConfig,
 } from "../../../../packages/mcp/src/oauth.js"
 
-export * as TrayambakMcpCommand from "./mcp"
+export * as NemoMcpCommand from "./mcp"
 
 export interface McpServer {
   readonly id: string
@@ -92,11 +92,11 @@ export function mcpCommand(options: {
   }
 }
 
-const MCP_CLI_USAGE = "Usage: trayambak mcp <list|auth|logout|status> [server]"
+const MCP_CLI_USAGE = "Usage: nemo mcp <list|auth|logout|status> [server]"
 
 type RemoteSpecResolution = { ok: true; url: string; oauth: McpOAuthConfig } | { ok: false; error: string }
 
-function remoteSpecFor(cfg: TrayambakConfig, name: string | undefined): RemoteSpecResolution {
+function remoteSpecFor(cfg: NemoConfig, name: string | undefined): RemoteSpecResolution {
   if (!name) return { ok: false, error: `Missing server name.\n${MCP_CLI_USAGE}` }
   const spec = cfg.mcpServers?.[name]
   if (!spec) {
@@ -112,7 +112,7 @@ function remoteSpecFor(cfg: TrayambakConfig, name: string | undefined): RemoteSp
 }
 
 /**
- * `trayambak mcp ...` - SKT AI LABS-parity MCP management:
+ * `nemo mcp ...` - Shrijan-parity MCP management:
  *   list    configured servers + transport + auth status
  *   auth    run the OAuth 2.0 + PKCE flow for a remote server
  *   logout  delete stored tokens for a server
@@ -127,7 +127,7 @@ export async function runMcpCli(args: string[]): Promise<void> {
     case "list": {
       const servers = Object.entries(cfg.mcpServers ?? {})
       if (servers.length === 0) {
-        process.stdout.write("No MCP servers configured (config `mcpServers` or TRAYAMBAK_MCP_SERVERS).\n")
+        process.stdout.write("No MCP servers configured (config `mcpServers` or NEMO_MCP_SERVERS).\n")
         return
       }
       for (const [serverName, spec] of servers) {
@@ -181,7 +181,7 @@ export async function runMcpCli(args: string[]): Promise<void> {
       const status = getMcpAuthStatus(name, spec?.url)
       process.stdout.write(`${name}: ${status}\n`)
       if (status === "not_authenticated" && spec?.url && spec.oauth !== false) {
-        process.stdout.write(`Run: trayambak mcp auth ${name}\n`)
+        process.stdout.write(`Run: nemo mcp auth ${name}\n`)
       }
       return
     }

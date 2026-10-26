@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -36,9 +36,9 @@ describe("/about", () => {
       "March 2023",
       "Sidhi, Madhya Pradesh",
       "Shrijan Kumar Tiwari",
-      "SKT AI LABS Private Limited",
+      "Shrijan Private Limited",
       "August 2026",
-      "SKT-ST-X-0-3B",
+      "NEMO-ST-X-0-3B",
       "July 2026",
       "model card",
     ]) {

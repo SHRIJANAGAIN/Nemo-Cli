@@ -1,4 +1,4 @@
-/* Tool-result restore smoke: boots the REAL TrayambakApp (dist) against a
+/* Tool-result restore smoke: boots the REAL NemoApp (dist) against a
  * sandbox session whose log holds tool rows WITH persisted outcomes, and
  * asserts the resumed transcript shows results + status marks. Guards the
  * persistence fix end to end (schema → updateConversationToolResult →
@@ -23,8 +23,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
 
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-persist-"))
-const convDir = path.join(sandbox, "skt", "8-conversations")
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-persist-"))
+const convDir = path.join(sandbox, "nemo", "8-conversations")
 fs.mkdirSync(path.join(convDir, "sess_tools"), { recursive: true })
 fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "persist-smoke" }))
 fs.writeFileSync(
@@ -81,10 +81,10 @@ const seeded = [
 const seededLines = seeded.length
 fs.writeFileSync(logFile, seeded.map((e) => JSON.stringify(e)).join("\n") + "\n")
 
-process.env.TRAYAMBAK_HOME = sandbox
+process.env.NEMO_HOME = sandbox
 // Pin Unicode glyphs (see smoke-theme-switch.mjs): status marks assert
 // ✓/✗ shapes, which render as v/x under the ASCII fallback.
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 
 const stdin = new PassThrough()
 stdin.isTTY = true
@@ -106,7 +106,7 @@ const sanitizedStdin = createSanitizedStdin(stdin)
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "")
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -122,9 +122,9 @@ const check = (ok, label) => {
 }
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark", // skip ThemePicker
+      themeName: "nemo-dark", // skip ThemePicker
       baseUrl: "http://127.0.0.1:9/api", // unroutable — no network ever needed
       apiKey: "test-key",
       model: "test/model",

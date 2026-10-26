@@ -1,25 +1,25 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Custom tool loader — port of SKT AI LABS Code's `./tools` file scan
- * (opencode/src/tool/registry.ts) to trayambak.
+ * Custom tool loader — port of Shrijan Code's `./tools` file scan
+ * (opencode/src/tool/registry.ts) to nemo.
  *
- * Users drop `.ts` / `.js` / `.mjs` files into `.trayambak/tool/` or
- * `.trayambak/tools/` (project cwd, plus the global `~/.trayambak`). Each
+ * Users drop `.ts` / `.js` / `.mjs` files into `.nemo/tool/` or
+ * `.nemo/tools/` (project cwd, plus the global `~/.nemo`). Each
  * export shaped like `{ args, description, execute }` becomes an LLM tool:
  *
- *   // .trayambak/tools/hello.ts  → tool name "hello"
+ *   // .nemo/tools/hello.ts  → tool name "hello"
  *   export default {
  *     description: "Greet someone",
  *     args: { name: { type: "string", description: "Who to greet" } },
  *     execute: async ({ name }) => `hello ${name}`,
  *   };
  *
- * Named exports are namespaced `<filename>_<exportName>` (SKT AI LABS's rule).
+ * Named exports are namespaced `<filename>_<exportName>` (Shrijan's rule).
  * A malformed or un-importable file is skipped — it must never poison the
  * rest of the registry (#27451, #27630).
  */
@@ -31,18 +31,18 @@ import { pathToFileURL } from "url"
 import type { ToolParameters, ToolParameterProperty } from "../../../../../packages/protocol/src/index.js"
 import { DEFAULT_TOOLSETS } from "../../../../../packages/protocol/src/toolsets.js"
 import type { Arsenal } from "../../../../../packages/core/src/toolsets/arsenal.js"
-import type { TrayambakConfig } from "../../config.js"
+import type { NemoConfig } from "../../config.js"
 import { textResult, type Tool, type ToolContext, type ToolResult } from "../types.js"
 
-/** A user-authored tool module export (SKT AI LABS's plugin-tool contract). */
+/** A user-authored tool module export (Shrijan's plugin-tool contract). */
 export interface CustomToolExport {
-  /** May be present-but-undefined (SKT AI LABS tolerated this via `args: undefined`). */
+  /** May be present-but-undefined (Shrijan tolerated this via `args: undefined`). */
   args?: unknown
   description?: string
   execute: (args: Record<string, unknown>, context: CustomToolContext) => unknown
 }
 
-/** Minimal context handed to user tool code (SKT AI LABS passes directory/worktree). */
+/** Minimal context handed to user tool code (Shrijan passes directory/worktree). */
 export interface CustomToolContext {
   cwd: string
   sessionId?: string
@@ -90,13 +90,13 @@ export function sanitizeToolName(raw: string): string {
 }
 
 /** Tool id: the `default` export becomes the filename; named exports are
- * namespaced `<filename>_<exportName>` (SKT AI LABS registry.ts scan rule). */
+ * namespaced `<filename>_<exportName>` (Shrijan registry.ts scan rule). */
 export function customToolName(filePath: string, exportId: string): string {
   const base = path.basename(filePath, path.extname(filePath))
   return sanitizeToolName(exportId === "default" ? base : `${base}_${exportId}`)
 }
 
-/** SKT AI LABS's isPluginTool: the three keys must exist (args may be undefined —
+/** Shrijan's isPluginTool: the three keys must exist (args may be undefined —
  * #27451), plus run-time sanity on description/execute. */
 export function isCustomToolExport(value: unknown): value is CustomToolExport {
   if (typeof value !== "object" || value === null) return false
@@ -127,12 +127,12 @@ function coerceProperties(value: unknown): Record<string, ToolParameterProperty>
   return properties
 }
 
-/** `args` contract (SKT AI LABS's legacyJsonSchema port, plus full-schema passthrough):
+/** `args` contract (Shrijan's legacyJsonSchema port, plus full-schema passthrough):
  *  - undefined / missing / malformed → empty object schema (#27451: a tool with
  *    `args: undefined` must still load with `{ type:"object", properties:{} }`)
  *  - a full JSON Schema (`{ type:"object", properties:{...} }`) → used as-is
  *  - otherwise a field map `{ field: propertySchema }` → properties with
- *    required = declared keys (SKT AI LABS: `required: Object.keys(properties)`) */
+ *    required = declared keys (Shrijan: `required: Object.keys(properties)`) */
 export function normalizeParameters(args: unknown): ToolParameters {
   const empty: ToolParameters = { type: "object", properties: {}, required: [] }
   if (args === undefined || args === null) return empty
@@ -165,7 +165,7 @@ function coerceResult(result: unknown): ToolResult {
       )
       if (content.length > 0) return { content, isError: record.isError === true }
     }
-    // SKT AI LABS-style `{ output, title?, metadata? }` payload.
+    // Shrijan-style `{ output, title?, metadata? }` payload.
     if (typeof record.output === "string") return textResult(record.output)
     try {
       return textResult(JSON.stringify(result, null, 2))
@@ -176,7 +176,7 @@ function coerceResult(result: unknown): ToolResult {
   return textResult(String(result))
 }
 
-/** Wrap a user export as a trayambak Tool. Returns undefined when the name
+/** Wrap a user export as a nemo Tool. Returns undefined when the name
  * would shadow a reserved (built-in) tool — built-ins win. */
 export function createCustomTool(
   name: string,
@@ -209,13 +209,13 @@ export function createCustomTool(
   }
 }
 
-/** Project `.trayambak` plus the global `~/.trayambak` (SKT AI LABS scans its
+/** Project `.nemo` plus the global `~/.nemo` (Shrijan scans its
  * config directories the same way). */
 export function customToolDirs(cwd: string, homeDir: string = os.homedir()): string[] {
-  return [path.join(cwd, ".trayambak"), path.join(homeDir, ".trayambak")]
+  return [path.join(cwd, ".nemo"), path.join(homeDir, ".nemo")]
 }
 
-/** `{tool,tools}/*.{js,mjs,ts}` inside each directory (SKT AI LABS's glob). */
+/** `{tool,tools}/*.{js,mjs,ts}` inside each directory (Shrijan's glob). */
 export function discoverCustomToolFiles(dirs: readonly string[]): string[] {
   const files: string[] = []
   for (const dir of dirs) {
@@ -276,10 +276,10 @@ export async function loadCustomTools(options: LoadCustomToolsOptions): Promise<
 /** Register the dynamically-named `custom` toolset with the Arsenal and make
  * sure it is part of the active defaults (user configs written before this
  * feature lack it). Users can opt out with `toolsets.disabled: ["custom"]`. */
-export function registerCustomToolset(arsenal: Arsenal<Tool>, config: TrayambakConfig, toolNames: string[]): void {
+export function registerCustomToolset(arsenal: Arsenal<Tool>, config: NemoConfig, toolNames: string[]): void {
   arsenal.registerToolset({
     name: "custom",
-    description: "User-defined tools loaded from .trayambak/{tool,tools}",
+    description: "User-defined tools loaded from .nemo/{tool,tools}",
     toolNames: [...toolNames],
     checkFn: () => true,
   })

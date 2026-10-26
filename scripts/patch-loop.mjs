@@ -1,6 +1,6 @@
 /* TEMP one-shot patch — delete after use. ASCII only. */
 import fs from "node:fs"
-const f = "C:/Users/engli/trayambak/apps/runtime/src/agent/agent-loop.ts"
+const f = "C:/Users/engli/nemo/apps/runtime/src/agent/agent-loop.ts"
 const src = fs.readFileSync(f, "utf8")
 const anchor =
   "  const state = { toolCalls: 0, callTimes: [] as number[], distinctTools: new Set<string>(), recentCalls: [] as string[] };\r\n"
@@ -17,7 +17,7 @@ const abortBlock =
   "    }\r\n"
 const poll =
   "    // Inbox delivery: a messageable subagent folds newly arrived inbox\r\n" +
-  "    // messages in as user turns, so trayambak__SendMessage continues it\r\n" +
+  "    // messages in as user turns, so nemo__SendMessage continues it\r\n" +
   "    // with context intact instead of appending to a file nobody reads.\r\n" +
   "    // Best-effort (never break a turn over inbox IO) and abort-aware.\r\n" +
   "    if (run.inboxId && !run.signal?.aborted) {\r\n" +

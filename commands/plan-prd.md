@@ -16,7 +16,7 @@ Produces a **Product Requirements Document** — the requirements-phase artifact
 | Frame the problem and users           | Design the architecture                         |
 | Capture success criteria and scope    | Pick files or write patterns                    |
 | List open questions and risks         | Enumerate implementation tasks                  |
-| Write `.trayambak/prds/{name}.prd.md` | Produce an implementation plan — that's `/plan` |
+| Write `.nemo/prds/{name}.prd.md` | Produce an implementation plan — that's `/plan` |
 
 If you find yourself writing implementation detail, stop and cut it. It belongs in `/plan`.
 
@@ -69,10 +69,10 @@ Wait for responses.
 Create the directory if needed, write the PRD, and report.
 
 ```bash
-mkdir -p .trayambak/prds
+mkdir -p .nemo/prds
 ```
 
-**Output path**: `.trayambak/prds/{kebab-case-name}.prd.md`
+**Output path**: `.nemo/prds/{kebab-case-name}.prd.md`
 
 #### PRD Template
 
@@ -139,7 +139,7 @@ _Status: DRAFT — requirements only. Implementation planning pending via /plan.
 #### Report to user
 
 ```
-PRD created: .trayambak/prds/{name}.prd.md
+PRD created: .nemo/prds/{name}.prd.md
 
 Problem:    {one line}
 Hypothesis: {one line}
@@ -152,7 +152,7 @@ Validation status:
 
 Open questions: {count}
 
-Next step: /plan .trayambak/prds/{name}.prd.md
+Next step: /plan .nemo/prds/{name}.prd.md
   → /plan will pick the next pending milestone and produce an implementation plan.
 ```
 

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -19,7 +19,7 @@ import { loadSkillsFromDir } from "../skills/skills.js"
  * Layout of a marketplace source dir:
  *   <source>/skills/<name>/SKILL.md
  *   <source>/agents/<name>.md
- * Install targets are the project's `.trayambak/skills/` + `.trayambak/agents/`,
+ * Install targets are the project's `.nemo/skills/` + `.nemo/agents/`,
  * so installed assets load through the normal skills/agents pipeline with no
  * special casing. Names are charset-gated (`[A-Za-z0-9_-]`), which makes path
  * traversal unrepresentable.
@@ -36,7 +36,7 @@ export interface MarketplaceEntry {
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/
 
 export function defaultMarketplaceSource(): string {
-  return path.join(os.homedir(), ".trayambak", "marketplace")
+  return path.join(os.homedir(), ".nemo", "marketplace")
 }
 
 function readAgentCard(file: string, fallback: string): { name: string; description: string } | null {
@@ -130,11 +130,11 @@ export function installMarketplaceEntry(
   destRoot: string,
 ): { ok: true; message: string } | { ok: false; error: string } {
   if (!NAME_RE.test(name)) return { ok: false, error: `Invalid name '${name}' (use letters, digits, -, _).` }
-  const trayambakDir = path.join(destRoot, ".trayambak")
+  const nemoDir = path.join(destRoot, ".nemo")
   if (kind === "skill") {
     const from = path.join(source, "skills", name)
     if (!fs.existsSync(path.join(from, "SKILL.md"))) return { ok: false, error: `Skill '${name}' is not on the shelf.` }
-    const to = path.join(trayambakDir, "skills", name)
+    const to = path.join(nemoDir, "skills", name)
     if (fs.existsSync(to)) return { ok: false, error: `Skill '${name}' is already installed (remove it first).` }
     copyDirFiltered(from, to)
     return { ok: true, message: `Installed skill '${name}' → ${to}` }
@@ -144,7 +144,7 @@ export function installMarketplaceEntry(
   // actual file instead of assuming `<name>.md` exists on the shelf.
   const from = findAgentFile(source, name)
   if (!from) return { ok: false, error: `Agent '${name}' is not on the shelf.` }
-  const to = path.join(trayambakDir, "agents", `${name}.md`)
+  const to = path.join(nemoDir, "agents", `${name}.md`)
   if (fs.existsSync(to)) return { ok: false, error: `Agent '${name}' is already installed (remove it first).` }
   fs.mkdirSync(path.dirname(to), { recursive: true })
   fs.copyFileSync(from, to)
@@ -160,8 +160,8 @@ export function removeMarketplaceEntry(
   if (!NAME_RE.test(name)) return { ok: false, error: `Invalid name '${name}' (use letters, digits, -, _).` }
   const target =
     kind === "skill"
-      ? path.join(destRoot, ".trayambak", "skills", name)
-      : path.join(destRoot, ".trayambak", "agents", `${name}.md`)
+      ? path.join(destRoot, ".nemo", "skills", name)
+      : path.join(destRoot, ".nemo", "agents", `${name}.md`)
   if (!fs.existsSync(target)) return { ok: false, error: `'${name}' is not installed.` }
   fs.rmSync(target, { recursive: true, force: true })
   return { ok: true, message: `Removed ${kind} '${name}'` }
@@ -185,7 +185,7 @@ const definition: ToolDefinition = {
       query: { type: "string", description: "Search text for the search action." },
       kind: { type: "string", description: "Asset kind for install/remove: skill or agent." },
       name: { type: "string", description: "Asset name for install/remove." },
-      source: { type: "string", description: "Marketplace shelf directory. Defaults to ~/.trayambak/marketplace." },
+      source: { type: "string", description: "Marketplace shelf directory. Defaults to ~/.nemo/marketplace." },
     },
   },
 }

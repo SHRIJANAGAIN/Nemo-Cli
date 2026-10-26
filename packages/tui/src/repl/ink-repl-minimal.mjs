@@ -1,13 +1,13 @@
-// Minimal Ink REPL for Trayambak - ESM entry point
+// Minimal Ink REPL for Nemo - ESM entry point
 // This avoids the cross-package import issues by implementing a simple UI inline
 
 import { render, Box, Text, useInput } from "ink"
 import { createElement, useState, useEffect } from "react"
-import { Agent } from "file:///C:/Users/engli/trayambak/dist/apps/runtime/src/agent/agent.js"
-import { loadConfig } from "file:///C:/Users/engli/trayambak/dist/apps/runtime/src/config.js"
+import { Agent } from "file:///C:/Users/engli/nemo/dist/apps/runtime/src/agent/agent.js"
+import { loadConfig } from "file:///C:/Users/engli/nemo/dist/apps/runtime/src/config.js"
 
 function loadConfigFromEnv() {
-  const raw = process.env.TRAYAMBAK_CONFIG_JSON
+  const raw = process.env.NEMO_CONFIG_JSON
   if (raw) {
     try {
       return JSON.parse(raw)
@@ -18,7 +18,7 @@ function loadConfigFromEnv() {
 
 const config = loadConfigFromEnv()
 
-const TrayambakMinimalApp = () => {
+const NemoMinimalApp = () => {
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -90,7 +90,7 @@ const TrayambakMinimalApp = () => {
   return createElement(
     Box,
     { flexDirection: "column", padding: 1 },
-    createElement(Text, { color: "cyan", bold: true }, "TRAYAMBAK Ink REPL"),
+    createElement(Text, { color: "cyan", bold: true }, "NEMO Ink REPL"),
     createElement(Text, { color: "dim" }, "Type your message. Ctrl+C to exit."),
     createElement(Box, { marginTop: 1 }),
     createElement(
@@ -121,4 +121,4 @@ const renderOptions = {
   stdout: process.stdout,
 }
 
-render(createElement(TrayambakMinimalApp, { onExit: () => process.exit(0) }), renderOptions)
+render(createElement(NemoMinimalApp, { onExit: () => process.exit(0) }), renderOptions)

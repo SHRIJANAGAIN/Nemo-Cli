@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -9,7 +9,7 @@ import React from "react"
 import { PassThrough } from "node:stream"
 import { render, type Instance } from "ink"
 import { SubagentPanel } from "./SubagentPanel.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * Narrow-panel regression: the title row was 7 unbounded Texts
@@ -41,12 +41,12 @@ describe("SubagentPanel narrow terminal", () => {
       rows: 30,
     }) as unknown as NodeJS.WriteStream
 
-    const cards: TrayambakMessage[] = [
+    const cards: NemoMessage[] = [
       {
         id: "card-1",
         timestamp: Date.now() - 5000,
         role: "assistant",
-        content: "Explore the trayambak directory exhaustively and report every bug",
+        content: "Explore the nemo directory exhaustively and report every bug",
         subagentId: "s1",
         subagentState: "completed",
         subagentType: "explore",
@@ -73,7 +73,7 @@ describe("SubagentPanel narrow terminal", () => {
       const lines = captured.split(/\r?\n/).map(stripAnsi)
       expect(lines.some((l) => l.includes("Subagents"))).toBe(true)
       // Title visible (possibly truncated) + badges intact …
-      expect(captured).toContain("Explore the trayambak")
+      expect(captured).toContain("Explore the nemo")
       expect(captured).toContain("[foreground]")
       expect(captured).toContain("12 toolcalls")
       // … and no row escapes the terminal (old overflow ≈ 113).

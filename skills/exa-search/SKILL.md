@@ -24,7 +24,7 @@ Neural search for web content, code, companies, and people via the Exa MCP serve
 
 ## MCP Requirement
 
-Exa MCP server must be configured. Add to `~/.trayambak.json`:
+Exa MCP server must be configured. Add to `~/.nemo.json`:
 
 ```json
 "exa-web-search": {
@@ -100,7 +100,7 @@ get_code_context_exa(query: "Rust error handling patterns Result type", tokensNu
 
 ```
 web_search_exa(query: "Vercel funding valuation 2026", numResults: 3, category: "company")
-web_search_exa(query: "site:linkedin.com/in AI safety researchers SKT AI LABS", numResults: 5)
+web_search_exa(query: "site:linkedin.com/in AI safety researchers Shrijan", numResults: 5)
 ```
 
 ### Technical Deep Dive

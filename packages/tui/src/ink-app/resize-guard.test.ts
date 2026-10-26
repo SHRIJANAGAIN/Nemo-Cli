@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -22,7 +22,11 @@ import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createResizeRedrawGuard, type InkInstanceLike } from "./resize-guard.js"
-import { registerSettleReprintHandler } from "./app-bootstrap.js"
+import {
+  registerFullRenderHandler,
+  registerSettleReprintHandler,
+  requestFullRender,
+} from "./app-bootstrap.js"
 
 const BLANK = "[2J[H"
 
@@ -201,13 +205,13 @@ describe("createResizeRedrawGuard", () => {
     expect(h.written.filter((w) => w === HOME)).toHaveLength(0)
   })
 
-  it("logs resize decisions when TRAYAMBAK_RESIZE_DEBUG=1, silent otherwise", () => {
+  it("logs resize decisions when NEMO_RESIZE_DEBUG=1, silent otherwise", () => {
     const tmp = path.join(
       fs.mkdtempSync(path.join(os.tmpdir(), "resize-guard-")),
       "resize.log",
     )
-    vi.stubEnv("TRAYAMBAK_RESIZE_DEBUG", "1")
-    vi.stubEnv("TRAYAMBAK_RESIZE_LOG", tmp)
+    vi.stubEnv("NEMO_RESIZE_DEBUG", "1")
+    vi.stubEnv("NEMO_RESIZE_LOG", tmp)
     try {
       const h = harness({ columns: 120, rows: 30 })
       h.resize(100)
@@ -374,16 +378,16 @@ describe("settle rebuild after shrink", () => {
   const ED3 = "\x1b[3J";
 
   function settleHarness() {
-    const written = [];
-    const listeners = [];
+    const written: string[] = [];
+    const listeners: Array<() => void> = [];
     const stdout = {
       columns: 120,
       rows: 30,
-      on(event, listener) {
+      on(event: string, listener: () => void) {
         if (event === "resize") listeners.push(listener);
         return stdout;
       },
-      write(chunk) {
+      write(chunk: string) {
         written.push(chunk);
         return true;
       },
@@ -400,7 +404,7 @@ describe("settle rebuild after shrink", () => {
     return {
       stdout,
       written,
-      fire(columns, rows) {
+      fire(columns: number, rows?: number) {
         stdout.columns = columns;
         if (rows !== undefined) stdout.rows = rows;
         for (const listener of listeners) listener();
@@ -415,7 +419,7 @@ describe("settle rebuild after shrink", () => {
 
   it("clears scrollback and requests the reprint after a shrink settles", () => {
     vi.useFakeTimers();
-    const reprints = [];
+    const reprints: string[] = [];
     registerSettleReprintHandler(() => reprints.push("reprint"));
     const h = settleHarness();
     h.fire(100, 30);
@@ -430,9 +434,39 @@ describe("settle rebuild after shrink", () => {
     expect(reprints).toEqual(["reprint"]);
   });
 
+  it("rebuilds the viewport but never the scrollback after a height-only shrink", () => {
+    // Height shrinks re-flow nothing terminal-side, so the scrollback above is
+    // undamaged: ED3 + reprint would only nuke the user's scrolled position for
+    // no reason. That part of the contract is unchanged.
+    //
+    // What CHANGED is the settle blank. This test used to require a SECOND
+    // `ESC[2J ESC[H` at settle time with no reprint behind it — which is the
+    // reported black screen: the viewport was wiped and nothing was scheduled to
+    // paint it back, so a height-only resize left the terminal fully black until
+    // some unrelated later repaint happened to fire.
+    //
+    // The settle blank is now gated on the same `damageSinceSettle` condition that
+    // gates the rebuild, so the two halves are atomic: wipe + refill, or nothing.
+    // Re-anchoring is still correct when there IS damage, and the scrollback is
+    // still preserved here, which is what the narrowing of the latch was for.
+    vi.useFakeTimers()
+    const reprints: string[] = []
+    registerSettleReprintHandler(() => reprints.push("reprint"))
+    const h = settleHarness()
+    h.fire(120, 24)
+    // The event-time anchor is unconditional: the resize itself must re-seat the
+    // frame before anything can scroll.
+    expect(h.written).toEqual(["\x1b[2J\x1b[H"])
+    vi.advanceTimersByTime(200)
+    // No second blank, because nothing was damaged — so nothing is left blank.
+    expect(h.written).toEqual(["\x1b[2J\x1b[H"])
+    expect(h.written.every((w) => w !== ED3)).toBe(true)
+    expect(reprints).toEqual([])
+  })
+
   it("stays quiet when only growth settled (nothing scrolled, nothing to rebuild)", () => {
     vi.useFakeTimers();
-    const reprints = [];
+    const reprints: string[] = [];
     registerSettleReprintHandler(() => reprints.push("reprint"));
     const h = settleHarness();
     h.fire(140, 30);
@@ -444,20 +478,89 @@ describe("settle rebuild after shrink", () => {
     expect(reprints).toEqual([]);
   });
 
+  it("rebuilds after a big growth jump (maximise outruns the window)", () => {
+    // Slow stretch repaints inside a tracking window and stays clean; a
+    // maximise jumps dozens of cells at once while the repaint outruns the
+    // window manager — the new-size frame paints into the still-old window
+    // and the overflow scrolls into scrollback before the window catches up.
+    // The settle then wipes viewport+scrollback and reprints, same as shrink.
+    vi.useFakeTimers();
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const h = settleHarness();
+    h.fire(240, 60);
+    // Immediate: viewport blank (throttle window is cold on the first jump).
+    expect(h.written).toEqual(["\x1b[2J\x1b[H"]);
+    expect(reprints).toEqual([]);
+    // Settle: blank again, scrollback clear, reprint — the burst's overflow
+    // rows are unreachable any other way.
+    vi.advanceTimersByTime(200);
+    expect(h.written).toEqual(["\x1b[2J\x1b[H", "\x1b[2J\x1b[H", ED3]);
+    expect(reprints).toEqual(["reprint"]);
+  });
+
+  it("rebuilds after a rows-only big jump (vertical maximise has no width signal)", () => {
+    // Height-only growth used to take the quiet path unconditionally — a
+    // vertical maximise overflowed rows with no rebuild ever scheduled. No
+    // immediate blank (nothing re-flowed; the quiet-growth contract stands),
+    // then the settle wipes + reprints once quiet.
+    vi.useFakeTimers();
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const h = settleHarness();
+    h.fire(120, 60);
+    expect(h.written).toEqual([]);
+    expect(reprints).toEqual([]);
+    vi.advanceTimersByTime(200);
+    expect(h.written).toEqual(["\x1b[2J\x1b[H", ED3]);
+    expect(reprints).toEqual(["reprint"]);
+  });
+
+  it("small growth stays quiet (drags never wipe the scrolled position)", () => {
+    // A few cells per event repaint inside a tracking window: blanking the
+    // viewport is already more than enough, and a scrollback wipe would nuke
+    // the user's scrolled-back reading position for no reason.
+    vi.useFakeTimers();
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const h = settleHarness();
+    h.fire(124, 32);
+    expect(h.written).toEqual(["\x1b[2J\x1b[H"]);
+    vi.advanceTimersByTime(200);
+    expect(h.written).toEqual(["\x1b[2J\x1b[H"]);
+    expect(h.written.every((w) => w !== ED3)).toBe(true);
+    expect(reprints).toEqual([]);
+  });
+
+  it("minimise-then-restore stays quiet (refused sizes keep the baseline)", () => {
+    // Minimise reports 0x0: refused without moving baselines, so the restore
+    // reads as a small delta — never a jump — and no wipe eats the history
+    // the user scrolled back to before minimising.
+    vi.useFakeTimers();
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const h = settleHarness();
+    h.fire(0, 0);
+    h.fire(120, 30);
+    vi.advanceTimersByTime(200);
+    expect(h.written).toEqual([]);
+    expect(reprints).toEqual([]);
+  });
+
   it("never wipes scrollback without a live owner (would eat shell history)", () => {
     vi.useFakeTimers();
-    const reprints = [];
+    const reprints: string[] = [];
     registerSettleReprintHandler(() => reprints.push("reprint"));
-    const written = [];
-    const listeners = [];
+    const written: string[] = [];
+    const listeners: Array<() => void> = [];
     const stdout = {
       columns: 120,
       rows: 30,
-      on(event, listener) {
+      on(event: string, listener: () => void) {
         if (event === "resize") listeners.push(listener);
         return stdout;
       },
-      write(chunk) {
+      write(chunk: string) {
         written.push(chunk);
         return true;
       },
@@ -466,5 +569,88 @@ describe("settle rebuild after shrink", () => {
     createResizeRedrawGuard(stdout);
     expect(written).toEqual([]);
     expect(reprints).toEqual([]);
+  });
+});
+
+/**
+ * Turn-end full re-render (streaming-clone fix): a grown turn stacked
+ * intermediate live frames terminal-side, so App calls requestFullRender()
+ * when it ends. Same bytes as the settle rebuild (viewport blank + home,
+ * scrollback clear, transcript reprint from item 0) — order load-bearing,
+ * wipe and reprint atomically paired (a remount with no wipe would reprint
+ * history UNDER the stale frames: clones, exactly what this kills).
+ */
+describe("turn-end fullRender", () => {
+  const ED3 = "\x1b[3J";
+
+  afterEach(() => {
+    vi.useRealTimers();
+    registerSettleReprintHandler(undefined);
+    registerFullRenderHandler(undefined);
+  });
+
+  it("wipes viewport+scrollback and reprints, in load-bearing order", () => {
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const h = harness();
+    expect(requestFullRender()).toBe(true);
+    // Viewport blank first, scrollback clear second, reprint requested last:
+    // a reprint before the clear would be wiped, a clear with no reprint
+    // would eat history.
+    expect(h.written).toEqual([BLANK, ED3]);
+    expect(reprints).toEqual(["reprint"]);
+    // Ink forgot the wiped frame: the reprint paints whole, never a
+    // stale-count erase over the clean screen.
+    expect(h.instance.lastOutput).toBe("");
+    expect(h.instance.lastOutputHeight).toBe(0);
+    expect(h.resetCalls()).toBeGreaterThan(0);
+  });
+
+  it("stands down with no attached instance (tests, pipes): no bytes, no reprint", () => {
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const written: string[] = [];
+    const stdout = {
+      columns: 120,
+      rows: 30,
+      on() {
+        return stdout;
+      },
+      write(chunk: string) {
+        written.push(chunk);
+        return true;
+      },
+    };
+    createResizeRedrawGuard(stdout);
+    expect(requestFullRender()).toBe(false);
+    expect(written).toEqual([]);
+    expect(reprints).toEqual([]);
+  });
+
+  it("stands down when the instance is non-interactive or torn down", () => {
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    const h = harness();
+    h.instance.interactive = false;
+    expect(requestFullRender()).toBe(false);
+    h.instance.interactive = true;
+    h.instance.isUnmounted = true;
+    expect(requestFullRender()).toBe(false);
+    h.instance.isUnmounted = undefined;
+    h.instance.isUnmounting = true;
+    expect(requestFullRender()).toBe(false);
+    expect(h.written).toEqual([]);
+    expect(reprints).toEqual([]);
+  });
+
+  it("latest guard owns the single slot (never two writers)", () => {
+    const first = harness();
+    const second = harness();
+    const reprints: string[] = [];
+    registerSettleReprintHandler(() => reprints.push("reprint"));
+    expect(requestFullRender()).toBe(true);
+    expect(second.written).toEqual([BLANK, ED3]);
+    expect(first.written).toEqual([]);
+    expect(reprints).toEqual(["reprint"]);
   });
 });

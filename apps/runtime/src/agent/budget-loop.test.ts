@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -9,7 +9,7 @@ import * as os from "node:os"
 import { runAgentLoop } from "./agent-loop.js"
 import { Session } from "../session/session.js"
 import { loadConfig } from "../config.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import { getRolloutBudget } from "../../../../packages/core/src/rollout_budget.js"
 import { estimateTokens, resetBudget } from "../../../../packages/core/src/token_budget.js"
 import { textResult, type Tool } from "../tools/types.js"
@@ -34,7 +34,7 @@ const PER_TURN_TEXT = "hello world!"
 /** Estimated output tokens charged per turn (text + tool-arg JSON). */
 const PER_TURN = estimateTokens(`${PER_TURN_TEXT}\n${JSON.stringify({ n: 1 })}`)
 
-function baseConfig(overrides: Partial<TrayambakConfig>): TrayambakConfig {
+function baseConfig(overrides: Partial<NemoConfig>): NemoConfig {
   return {
     maxTurns: 50,
     maxRetries: 0,
@@ -44,7 +44,7 @@ function baseConfig(overrides: Partial<TrayambakConfig>): TrayambakConfig {
     cwd: os.tmpdir(),
     permissions: { mode: "default", rules: [], askByDefault: false },
     ...overrides,
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 }
 
 /** Provider that keeps emitting tool calls forever (varied args = no doom loop). */
@@ -67,7 +67,7 @@ function makeToolLoopProvider(): { provider: never; calls: () => number } {
 }
 
 async function runLoop(
-  config: TrayambakConfig,
+  config: NemoConfig,
   provider: never,
   tools: Tool[] = [],
 ): Promise<{ events: AgentEvent[]; messages: Awaited<ReturnType<typeof runAgentLoop>> }> {
@@ -248,10 +248,10 @@ describe("runAgentLoop budget enforcement", () => {
 })
 
 describe("budget config loading", () => {
-  const savedBudget = process.env.TRAYAMBAK_BUDGET
+  const savedBudget = process.env.NEMO_BUDGET
   afterEach(() => {
-    if (savedBudget === undefined) delete process.env.TRAYAMBAK_BUDGET
-    else process.env.TRAYAMBAK_BUDGET = savedBudget
+    if (savedBudget === undefined) delete process.env.NEMO_BUDGET
+    else process.env.NEMO_BUDGET = savedBudget
   })
 
   it("accepts valid specs from overrides", () => {
@@ -275,8 +275,8 @@ describe("budget config loading", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("ignoring budget"))
   })
 
-  it("reads TRAYAMBAK_BUDGET like TRAYAMBAK_MAX_TURNS", () => {
-    process.env.TRAYAMBAK_BUDGET = "50k"
+  it("reads NEMO_BUDGET like NEMO_MAX_TURNS", () => {
+    process.env.NEMO_BUDGET = "50k"
     expect(loadConfig().budget).toBe("50k")
   })
 })

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -18,12 +18,12 @@ export interface TodoOptions {
   readonly dependsOn?: number[]
 }
 
-const TODO_DIR = path.join(os.homedir(), ".trayambak", "todos")
+const TODO_DIR = path.join(os.homedir(), ".nemo", "todos")
 
 /**
  * Session ids name a FILE under TODO_DIR, so they must be single path
  * segments (same rule as plan ids): `../config` would otherwise resolve to
- * ~/.trayambak/config.json — parsed as a todo list on read, or overwritten
+ * ~/.nemo/config.json — parsed as a todo list on read, or overwritten
  * with `{"items":[]}` by a `clear`. Mirrors core's assertSessionId.
  */
 const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/

@@ -42,14 +42,14 @@ Search installed and marketplace skill names first. Local sources are preferred
 because they are already part of the user's environment.
 
 ```bash
-find ~/.trayambak/skills -maxdepth 2 -name SKILL.md 2>/dev/null | grep -iE "keyword|synonym"
-find ~/.trayambak/plugins/marketplaces -path '*/skills/*/SKILL.md' 2>/dev/null | grep -iE "keyword|synonym"
+find ~/.nemo/skills -maxdepth 2 -name SKILL.md 2>/dev/null | grep -iE "keyword|synonym"
+find ~/.nemo/plugins/marketplaces -path '*/skills/*/SKILL.md' 2>/dev/null | grep -iE "keyword|synonym"
 ```
 
 Then search frontmatter descriptions:
 
 ```bash
-grep -RilE "keyword|synonym" ~/.trayambak/skills ~/.trayambak/plugins/marketplaces 2>/dev/null
+grep -RilE "keyword|synonym" ~/.nemo/skills ~/.nemo/plugins/marketplaces 2>/dev/null
 ```
 
 ### Step 3 - Search Remote Sources
@@ -57,16 +57,16 @@ grep -RilE "keyword|synonym" ~/.trayambak/skills ~/.trayambak/plugins/marketplac
 Use available GitHub and web search tools. Prefer concise queries:
 
 ```bash
-gh search repos "trayambak code skill keyword" --limit 10 --sort stars
+gh search repos "nemo code skill keyword" --limit 10 --sort stars
 gh search code "name: keyword" --filename SKILL.md --limit 10
 ```
 
 For web search, use at most three targeted queries such as:
 
 ```text
-"trayambak code skill" keyword
+"nemo code skill" keyword
 "SKILL.md" keyword
-"trayambak" keyword
+"nemo" keyword
 ```
 
 ### Step 4 - Vet External Matches

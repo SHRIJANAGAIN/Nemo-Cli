@@ -75,11 +75,11 @@ Categorize changed files: source, tests, docs, config, migrations.
 
 Check for related artifacts produced by `/plan-prd`, `/plan`, or the legacy PRP workflow:
 
-- `.trayambak/prds/` — PRDs this PR implements a milestone of
-- `.trayambak/plans/` — Plans executed by this PR
-- `.trayambak/PRPs/prds/` — legacy PRP PRDs
-- `.trayambak/PRPs/plans/` — legacy PRP implementation plans
-- `.trayambak/PRPs/reports/` — legacy PRP implementation reports
+- `.nemo/prds/` — PRDs this PR implements a milestone of
+- `.nemo/plans/` — Plans executed by this PR
+- `.nemo/PRPs/prds/` — legacy PRP PRDs
+- `.nemo/PRPs/plans/` — legacy PRP implementation plans
+- `.nemo/PRPs/reports/` — legacy PRP implementation reports
 
 Reference these in the PR body if they exist.
 

@@ -95,7 +95,7 @@ Everything between the gates flows without stopping.
 | Security            | `security-reviewer`                   | —                                                                                      |
 | MVP inner loop      | `/gan-build "<brief>" --skip-planner` | drives `gan-generator` → `gan-evaluator`; tune `--max-iterations` / `--pass-threshold` |
 
-Match the language reviewer to the repo (see the repo's own `TRAYAMBAK.md`).
+Match the language reviewer to the repo (see the repo's own `NEMO.md`).
 
 ## Security-review trigger
 

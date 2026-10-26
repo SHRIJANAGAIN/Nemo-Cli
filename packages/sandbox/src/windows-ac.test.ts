@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * windows-ac.ts units: the argv quoting handed to CreateProcessW, the
@@ -138,7 +142,7 @@ describe("WINDOWS_AC_SHIM_SCRIPT static contract", () => {
   it("reports readiness through the status handshake before waiting", () => {
     expect(WINDOWS_AC_SHIM_SCRIPT).toContain("Write-Status $true '' $acPid")
     expect(WINDOWS_AC_SHIM_SCRIPT).toContain("$cfg.statusPath")
-    expect(WINDOWS_AC_PROFILE_NAME).toBe("TrayambakSandbox")
+    expect(WINDOWS_AC_PROFILE_NAME).toBe("NemoSandbox")
   })
 
   it("holds the spawn-time process handle so exit codes survive child death", () => {

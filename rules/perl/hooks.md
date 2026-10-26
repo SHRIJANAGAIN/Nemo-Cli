@@ -13,7 +13,7 @@ paths:
 
 ## PostToolUse Hooks
 
-Configure in `~/.trayambak/settings.json`:
+Configure in `~/.nemo/settings.json`:
 
 - **perltidy**: Auto-format `.pl` and `.pm` files after edit
 - **perlcritic**: Run lint check after editing `.pm` files

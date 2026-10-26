@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -50,18 +50,18 @@ beforeAll(async () => {
   savedEnv.USERPROFILE = process.env.USERPROFILE
   savedEnv.HOME = process.env.HOME
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith("TRAYAMBAK_")) {
+    if (key.startsWith("NEMO_")) {
       savedEnv[key] = process.env[key]
       delete process.env[key]
     }
   }
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-todo-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-todo-"))
   process.env.USERPROFILE = tmp
   process.env.HOME = tmp
   // TODO_DIR bakes os.homedir() at module load, so import only after redirect.
   mod = await import("./todo.js")
   tool = mod.createTodoTool()
-  todosDir = path.join(tmp, ".trayambak", "todos")
+  todosDir = path.join(tmp, ".nemo", "todos")
   globalFile = path.join(todosDir, "global.json")
 })
 

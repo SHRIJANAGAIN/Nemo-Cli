@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -11,10 +11,10 @@ import {
   TRANSCRIPT_FOLD_KEEP_NEWEST_TOOLS,
   TRANSCRIPT_SOFT_CAP_BYTES,
 } from "./transcript-fold.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 let n = 0
-const tool = (content: string, over: Partial<TrayambakMessage> = {}): TrayambakMessage => ({
+const tool = (content: string, over: Partial<NemoMessage> = {}): NemoMessage => ({
   id: `tool-${(n += 1)}`,
   timestamp: n,
   role: "tool",
@@ -22,7 +22,7 @@ const tool = (content: string, over: Partial<TrayambakMessage> = {}): TrayambakM
   toolName: "bash",
   ...over,
 })
-const answer = (content: string, thinking = "", over: Partial<TrayambakMessage> = {}): TrayambakMessage => ({
+const answer = (content: string, thinking = "", over: Partial<NemoMessage> = {}): NemoMessage => ({
   id: `msg-${(n += 1)}`,
   timestamp: n,
   role: "assistant",
@@ -30,7 +30,7 @@ const answer = (content: string, thinking = "", over: Partial<TrayambakMessage> 
   thinking,
   ...over,
 })
-const user = (content: string): TrayambakMessage => ({
+const user = (content: string): NemoMessage => ({
   id: `u-${(n += 1)}`,
   timestamp: n,
   role: "user",
@@ -45,7 +45,7 @@ describe("foldTranscript", () => {
   })
 
   it("returns the same reference for an empty transcript", () => {
-    const messages: TrayambakMessage[] = []
+    const messages: NemoMessage[] = []
     expect(foldTranscript(messages)).toBe(messages)
   })
 
@@ -99,6 +99,22 @@ describe("foldTranscript", () => {
     // 2MB+ total forces a fold pass, but the user row must survive intact.
     expect(out[0]?.content).toBe(messages[0]?.content)
     expect(out[0]?.content.length).toBeGreaterThan(TRANSCRIPT_SOFT_CAP_BYTES)
+  })
+
+  it("counts subagentPrompt toward the soft cap (retained card heap)", () => {
+    // 9 x 100KB tool rows sit UNDER the 1.5MB cap on their own; the subagent
+    // card's 1.6MB prompt is retained heap too, so the cap check must see it
+    // and tip the pass — the oldest tool output then folds while the card's
+    // own prompt stays intact (cards render it).
+    const card = answer("subagent done", "", { subagentId: "s1", subagentPrompt: big(1600) })
+    const tools = Array.from({ length: TRANSCRIPT_FOLD_KEEP_NEWEST_TOOLS + 1 }, (_, i) =>
+      tool(`output-${i}\n${big(100)}`),
+    )
+    const messages = [user("run it"), card, ...tools]
+    const out = foldTranscript(messages)
+    expect(out).not.toBe(messages)
+    expect(out[2]?.content).toContain("[output folded: showing")
+    expect(out[1]?.subagentPrompt).toHaveLength(1600 * 1024)
   })
 
   it("is idempotent — a second pass changes nothing", () => {

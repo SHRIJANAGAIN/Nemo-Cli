@@ -63,30 +63,30 @@ rules/
 > common rules, and breaks the relative `../common/` references used by
 > language-specific files.
 >
-> Use the ECC-owned namespace below for user-level Trayambak installs. Flat
+> Use the ECC-owned namespace below for user-level Nemo installs. Flat
 > package-level destinations can collide with non-ECC rule packs and do not
 > match the main README guidance.
 
 ```bash
 # Create the ECC rule namespace once.
-mkdir -p ~/.trayambak/rules/ecc
+mkdir -p ~/.nemo/rules/ecc
 
 # Install common rules (required for all projects)
-cp -r rules/common ~/.trayambak/rules/ecc/
+cp -r rules/common ~/.nemo/rules/ecc/
 
 # Install language-specific rules based on your project's tech stack
-cp -r rules/typescript ~/.trayambak/rules/ecc/
-cp -r rules/angular ~/.trayambak/rules/ecc/
-cp -r rules/vue ~/.trayambak/rules/ecc/
-cp -r rules/nuxt ~/.trayambak/rules/ecc/
-cp -r rules/python ~/.trayambak/rules/ecc/
-cp -r rules/golang ~/.trayambak/rules/ecc/
-cp -r rules/web ~/.trayambak/rules/ecc/
-cp -r rules/react-native ~/.trayambak/rules/ecc/
-cp -r rules/swift ~/.trayambak/rules/ecc/
-cp -r rules/php ~/.trayambak/rules/ecc/
-cp -r rules/ruby ~/.trayambak/rules/ecc/
-cp -r rules/arkts ~/.trayambak/rules/ecc/
+cp -r rules/typescript ~/.nemo/rules/ecc/
+cp -r rules/angular ~/.nemo/rules/ecc/
+cp -r rules/vue ~/.nemo/rules/ecc/
+cp -r rules/nuxt ~/.nemo/rules/ecc/
+cp -r rules/python ~/.nemo/rules/ecc/
+cp -r rules/golang ~/.nemo/rules/ecc/
+cp -r rules/web ~/.nemo/rules/ecc/
+cp -r rules/react-native ~/.nemo/rules/ecc/
+cp -r rules/swift ~/.nemo/rules/ecc/
+cp -r rules/php ~/.nemo/rules/ecc/
+cp -r rules/ruby ~/.nemo/rules/ecc/
+cp -r rules/arkts ~/.nemo/rules/ecc/
 
 # Attention ! ! ! Configure according to your actual project requirements; the configuration here is for reference only.
 ```
@@ -94,9 +94,9 @@ cp -r rules/arkts ~/.trayambak/rules/ecc/
 For project-local rules, use the same namespace under the project root:
 
 ```bash
-mkdir -p .trayambak/rules/ecc
-cp -r rules/common .trayambak/rules/ecc/
-cp -r rules/typescript .trayambak/rules/ecc/
+mkdir -p .nemo/rules/ecc
+cp -r rules/common .nemo/rules/ecc/
+cp -r rules/typescript .nemo/rules/ecc/
 ```
 
 ## Rules vs Skills

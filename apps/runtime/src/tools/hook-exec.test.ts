@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -22,7 +22,7 @@ import {
 import { runAgentLoop } from "../agent/agent-loop.js"
 import { Session } from "../session/session.js"
 import { textResult } from "./types.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { AgentMessage } from "../../../../packages/protocol/src/index.js"
 
 function stubExecutor(handler: (command: string) => { stdout: string; exitCode?: number }): HookShellExecutor {
@@ -44,8 +44,8 @@ function stubExecutor(handler: (command: string) => { stdout: string; exitCode?:
 
 const seenOf = (e: HookShellExecutor): string[] => (e as unknown as { seen: string[] }).seen
 
-function cfgWith(hooks: TrayambakConfig["hooks"]): TrayambakConfig {
-  return { hooks, cwd: process.cwd() } as TrayambakConfig
+function cfgWith(hooks: NemoConfig["hooks"]): NemoConfig {
+  return { hooks, cwd: process.cwd() } as NemoConfig
 }
 
 // Order independence: the programmatic-layer tests below register handlers
@@ -182,9 +182,9 @@ describe("agent loop hook wiring", () => {
     maxDistinctToolCalls: 1000,
     cwd: os.tmpdir(),
     permissions: { mode: "default", rules: [], askByDefault: true },
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 
-  function loopHarness(executor: HookShellExecutor, hooks: TrayambakConfig["hooks"]) {
+  function loopHarness(executor: HookShellExecutor, hooks: NemoConfig["hooks"]) {
     let ran = false
     const tool = {
       definition: {
@@ -434,7 +434,7 @@ describe("hook payload redaction", () => {
 })
 
 describe("hook child environment", () => {
-  const seededKeys = ["TRAYAMBAK_API_KEY", "OPENAI_API_KEY", "NVIDIA_API_KEY"]
+  const seededKeys = ["NEMO_API_KEY", "OPENAI_API_KEY", "NVIDIA_API_KEY"]
   let saved: Record<string, string | undefined> = {}
 
   beforeEach(() => {
@@ -454,7 +454,7 @@ describe("hook child environment", () => {
 
   it("strips credential-shaped vars but keeps PATH", () => {
     const env = hookChildEnv()
-    expect(env.TRAYAMBAK_API_KEY).toBeUndefined()
+    expect(env.NEMO_API_KEY).toBeUndefined()
     expect(env.OPENAI_API_KEY).toBeUndefined()
     expect(env.NVIDIA_API_KEY).toBeUndefined()
     expect(env.PATH).toBeTruthy()
@@ -470,18 +470,18 @@ describe("hook child environment", () => {
   it("a real hook child process does not inherit API keys but keeps PATH", async () => {
     const out = await execHookShell.run({
       command:
-        'node -p "JSON.stringify({ trayambakKey: typeof process.env.TRAYAMBAK_API_KEY, openaiKey: typeof process.env.OPENAI_API_KEY, path: !!process.env.PATH })"',
+        'node -p "JSON.stringify({ nemoKey: typeof process.env.NEMO_API_KEY, openaiKey: typeof process.env.OPENAI_API_KEY, path: !!process.env.PATH })"',
       stdin: "",
       timeoutMs: 30_000,
       signal: new AbortController().signal,
     })
     expect(out.exitCode).toBe(0)
     const parsed = JSON.parse(out.stdout.text.trim()) as {
-      trayambakKey: string
+      nemoKey: string
       openaiKey: string
       path: boolean
     }
-    expect(parsed.trayambakKey).toBe("undefined")
+    expect(parsed.nemoKey).toBe("undefined")
     expect(parsed.openaiKey).toBe("undefined")
     expect(parsed.path).toBe(true)
   }, 30_000)

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest"
+import { describe, expect, it, vi, beforeEach } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
@@ -12,11 +12,12 @@ import {
   listTranscripts,
   isEmptyTranscript,
   sessionDir,
+  sessionsRoot,
 } from "./transcript.js"
 
 beforeEach(() => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-tx-"))
-  process.env.TRAYAMBAK_SESSIONS_DIR = dir
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-tx-"))
+  process.env.NEMO_SESSIONS_DIR = dir
 })
 
 describe("transcript store", () => {
@@ -67,10 +68,42 @@ describe("session id validation (finding #28)", () => {
   })
 
   it("listTranscripts skips hostile directory names instead of dying", () => {
-    const root = process.env.TRAYAMBAK_SESSIONS_DIR as string
+    const root = process.env.NEMO_SESSIONS_DIR as string
     fs.mkdirSync(path.join(root, "..evil"), { recursive: true })
     const { id } = createTranscript(process.cwd())
     appendContext(id, { role: "user" })
     expect(listTranscripts().map((t) => t.id)).toContain(id)
+  })
+})
+
+describe("sessions root UNC refusal", () => {
+  it("falls back to the default dir with a loud warning, never the UNC share", () => {
+    // Same NTLM/SMB class as config/session UNC paths: every transcript op
+    // would authenticate to the remote host. Refusal precedes any fs probe,
+    // so this never touches the network (and never the real home dir).
+    process.env.NEMO_SESSIONS_DIR = "\\\\192.0.2.1\\share\\sessions"
+    const errSpy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as never)
+    try {
+      const root = sessionsRoot()
+      expect(root).not.toContain("192.0.2.1")
+      expect(root.endsWith("sessions")).toBe(true)
+      expect(errSpy).toHaveBeenCalledOnce()
+      expect(String(errSpy.mock.calls[0]?.[0] ?? "")).toContain("refusing remote UNC")
+    } finally {
+      errSpy.mockRestore()
+    }
+  })
+
+  it("honours a local override silently", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-tx-local-"))
+    process.env.NEMO_SESSIONS_DIR = dir
+    const errSpy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as never)
+    try {
+      expect(sessionsRoot()).toBe(dir)
+      expect(errSpy).not.toHaveBeenCalled()
+    } finally {
+      errSpy.mockRestore()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

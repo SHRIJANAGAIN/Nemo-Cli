@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { getTheme, fg, RESET, type Rgb, type Theme } from "./theme.js"
@@ -38,7 +38,7 @@ export function spinnerFrame(frame: number, token: keyof Theme = "primary"): str
 
 /**
  * Animated tool-run spinner: cycling glyphs with rotating colors, then
- * letter-spelled "TRAYAMBAK CODE", then settles on </> (matches run.ts loop).
+ * letter-spelled "NEMO CODE", then settles on </> (matches run.ts loop).
  */
 export const TOOL_GLYPHS = ["<", "/", "-", ">", "~", "x", "s", "y", "@", "#", "^"]
 export const TOOL_COLORS: Array<keyof Theme> = ["primary", "info", "success", "error", "primary", "info"]
@@ -51,7 +51,7 @@ export function toolSpinnerGlyph(frame: number): string {
 }
 
 export function toolSpinnerLabel(frame: number): string {
-  const word = "TRAYAMBAK CODE"
+  const word = "NEMO CODE"
   const phase = Math.floor(frame / TOOL_GLYPHS.length)
   if (phase < word.length) return word.slice(0, phase)
   return word

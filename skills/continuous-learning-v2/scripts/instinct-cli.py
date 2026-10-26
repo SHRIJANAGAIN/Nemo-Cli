@@ -299,11 +299,11 @@ def detect_project() -> dict:
             "observations_file": GLOBAL_OBSERVATIONS_FILE,
         }
 
-    # 1. TRAYAMBAK_PROJECT_DIR env var (explicit override)
-    env_dir = os.environ.get("TRAYAMBAK_PROJECT_DIR")
+    # 1. NEMO_PROJECT_DIR env var (explicit override)
+    env_dir = os.environ.get("NEMO_PROJECT_DIR")
     if env_dir and os.path.isdir(env_dir):
         project_root = _git_repo_root(env_dir)
-        # Non-git directory explicitly pointed at by TRAYAMBAK_PROJECT_DIR: honor it
+        # Non-git directory explicitly pointed at by NEMO_PROJECT_DIR: honor it
         # as a project root (path-hash identity) rather than collapsing to the
         # shared `global` bucket. Mirrors detect-project.sh so the observer
         # (shell) and this CLI agree on the project id for the same directory;
@@ -815,9 +815,9 @@ def cmd_status(args) -> int:
 
 
 def _warn_legacy_data() -> None:
-    """Warn if legacy ~/.trayambak/homunculus/ contains data while the active
+    """Warn if legacy ~/.nemo/homunculus/ contains data while the active
     path has moved to the XDG directory."""
-    legacy_dir = Path.home() / ".trayambak" / "homunculus"
+    legacy_dir = Path.home() / ".nemo" / "homunculus"
     if legacy_dir == HOMUNCULUS_DIR:
         return  # CLV2_HOMUNCULUS_DIR explicitly points at the legacy path
     if not legacy_dir.is_dir():
@@ -1753,7 +1753,7 @@ def cmd_projects(args) -> int:
 
     if not registry:
         print("No projects registered yet.")
-        print("Projects are auto-detected when you use Trayambak Code in a git repo.")
+        print("Projects are auto-detected when you use Nemo Code in a git repo.")
         return 0
 
     print(f"\n{'='*60}")
@@ -1937,7 +1937,7 @@ def _cmd_projects_merge(args) -> int:
 def _evolved_description(trigger: str, instincts: list, kind: str) -> str:
     """Build the frontmatter `description` for a generated artifact.
 
-    Trayambak Code (and every spec-compliant Agent Skills client) injects only
+    Nemo Code (and every spec-compliant Agent Skills client) injects only
     `name` + `description` at startup and will not load an artifact that lacks
     them, so a generated skill/agent without frontmatter is inert on disk.
     """

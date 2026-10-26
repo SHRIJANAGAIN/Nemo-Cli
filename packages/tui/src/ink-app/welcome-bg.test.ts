@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -26,7 +26,7 @@ describe("welcome screen paints every blank with the theme background", () => {
       path.join(process.cwd(), "packages", "tui", "src", "ink-app", "logo_ansi.txt"),
       out,
     )
-    process.env.TRAYAMBAK_LOGO_PATH = out
+    process.env.NEMO_LOGO_PATH = out
     try {
       const pass = new PassThrough()
       let sink = ""
@@ -63,7 +63,7 @@ describe("welcome screen paints every blank with the theme background", () => {
       expect(unthemed).toBe(0)
     } finally {
       fs.rmSync(out, { force: true })
-      delete process.env.TRAYAMBAK_LOGO_PATH
+      delete process.env.NEMO_LOGO_PATH
     }
   }, 20000)
 })

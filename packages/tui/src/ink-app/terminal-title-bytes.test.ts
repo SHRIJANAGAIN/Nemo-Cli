@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -50,8 +50,8 @@ afterEach(() => {
 describe("terminal title bytes on a TTY", () => {
   it("writes a BEL-terminated OSC 0 sequence carrying the product name", () => {
     setTerminalTitle(buildTerminalTitle({ activity: "idle" }))
-    expect(captured).toEqual(["\x1b]0;Trayambak\x07"])
-    expect(observedTitles()).toEqual(["Trayambak"])
+    expect(captured).toEqual(["\x1b]0;Nemo\x07"])
+    expect(observedTitles()).toEqual(["Nemo"])
   })
 
   it("animates across distinct frames, then settles on the static title", () => {
@@ -65,8 +65,8 @@ describe("terminal title bytes on a TTY", () => {
     expect(titles.length).toBeGreaterThanOrEqual(6)
     // Really animating: several distinct titles while spinning.
     expect(new Set(titles.slice(0, -1)).size).toBeGreaterThan(1)
-    for (const title of titles) expect(title).toContain("Trayambak")
-    expect(titles[titles.length - 1]).toBe("Trayambak")
+    for (const title of titles) expect(title).toContain("Nemo")
+    expect(titles[titles.length - 1]).toBe("Nemo")
 
     // Nothing more arrives after stop() — no leaked interval.
     const afterStop = captured.length
@@ -84,29 +84,29 @@ describe("terminal title bytes on a TTY", () => {
   })
 
   it("dedupes: setting the same title repeatedly writes once", () => {
-    setTerminalTitle("Trayambak - working")
-    setTerminalTitle("Trayambak - working")
-    setTerminalTitle("Trayambak - working")
+    setTerminalTitle("Nemo - working")
+    setTerminalTitle("Nemo - working")
+    setTerminalTitle("Nemo - working")
     expect(captured).toHaveLength(1)
   })
 
   it("writes nothing when the kill-switch is set", () => {
     vi.useFakeTimers()
-    process.env.TRAYAMBAK_NO_NOTIFY = "1"
+    process.env.NEMO_NO_NOTIFY = "1"
     try {
-      setTerminalTitle("Trayambak")
+      setTerminalTitle("Nemo")
       startTitleAnimation()
       vi.advanceTimersByTime(500)
       stopTitleAnimation()
       expect(captured).toHaveLength(0)
     } finally {
-      delete process.env.TRAYAMBAK_NO_NOTIFY
+      delete process.env.NEMO_NO_NOTIFY
     }
   })
 
   it("writes nothing when stdout is not a TTY (pipes stay clean)", () => {
     Object.defineProperty(process.stdout, "isTTY", { value: false, configurable: true })
-    setTerminalTitle("Trayambak")
+    setTerminalTitle("Nemo")
     startTitleAnimation()
     stopTitleAnimation()
     expect(captured).toHaveLength(0)

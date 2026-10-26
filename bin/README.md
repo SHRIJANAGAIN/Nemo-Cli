@@ -2,12 +2,12 @@
 
 This directory mixes two very different kinds of files:
 
-## Trayambak shims (committed to git)
+## Nemo shims (committed to git)
 
 | File            | Purpose                                                                                                                                                                                              |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trayambak.cmd` | Windows CMD shim: locates the project root (`TRAYAMBAK_HOME` or walk-up), **rebuilds when `dist/` is missing or stale** (via `scripts/check-dist.mjs`), then runs `node dist/apps/cli/src/index.js`. |
-| `skt.cmd`       | Same shim, exports `TRAYAMBAK_BIN_NAME=skt` so help text shows `skt`.                                                                                                                                |
+| `nemo.cmd` | Windows CMD shim: locates the project root (`NEMO_HOME` or walk-up), **rebuilds when `dist/` is missing or stale** (via `scripts/check-dist.mjs`), then runs `node dist/apps/cli/src/index.js`. |
+| `nemo-code.cmd`       | Same shim, exports `NEMO_BIN_NAME=nemo` so help text shows `nemo`.                                                                                                                                |
 
 Both are covered by CI's Windows smoke test (`.github/workflows/ci.yml`).
 
@@ -21,15 +21,15 @@ are large third-party artifacts that are trivially re-downloadable.
 
 How they get (re)populated:
 
-1. **Automatically** — `trayambak serve` resolves a usable server binary
+1. **Automatically** — `nemo serve` resolves a usable server binary
    via `apps/runtime/src/llama-cpp-bin.ts`, downloading a release build
    (default tag `b10754`) into this directory when none is found.
 2. **Manually** — download a Windows build from the llama.cpp releases
-   page and place `llama-server.exe` + its DLLs here, or point Trayambak
-   at any location with `TRAYAMBAK_LLAMACPP_BIN`.
+   page and place `llama-server.exe` + its DLLs here, or point Nemo
+   at any location with `NEMO_LLAMACPP_BIN`.
 
 Licensing: the llama.cpp binaries are distributed under the terms of their
 upstream project (see the LICENSE files shipped with each release; the
 OpenMP runtime's license is kept alongside as `LICENSE-LLVM-OpenMP`).
-They are **not** covered by Trayambak's proprietary license and are
+They are **not** covered by Nemo's Apache-2.0 license and are
 never published to npm (the tarball only ships `dist/` and `Img/`).

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -9,7 +9,7 @@
  * node:crypto for HMAC/JWT, global fetch for API calls).
  *
  * Flow: GitHub delivers a webhook to POST /webhooks/github → signature is
- * verified with GITHUB_WEBHOOK_SECRET → comment commands (`/trayambak …`)
+ * verified with GITHUB_WEBHOOK_SECRET → comment commands (`/nemo …`)
  * become agent jobs → the result lands back as an issue/PR comment.
  *
  * Pure where it matters (signature, command parse, routing are unit-tested
@@ -22,8 +22,8 @@ import { createHmac, createSign, timingSafeEqual } from "node:crypto"
 const SIGNATURE_PREFIX = "sha256="
 
 /** A comment triggers the agent when it contains one of these prefixes.
- *  `/skt` is the short form — same bot, less typing. */
-const COMMAND_PREFIXES = ["/trayambak", "@trayambak", "/skt", "@skt"] as const
+ *  `/nemo` is the short form — same bot, less typing. */
+const COMMAND_PREFIXES = ["/nemo", "@nemo"] as const
 
 /**
  * Verify an X-Hub-Signature-256 header against the raw request body.
@@ -43,18 +43,18 @@ export function verifyWebhookSignature(secret: string, rawBody: Buffer, signatur
   return timingSafeEqual(theirs, ours)
 }
 
-export interface TrayambakCommand {
+export interface NemoCommand {
   /** The task text after the prefix, trimmed. */
   task: string
 }
 
 /**
- * Extract `/trayambak <task>` (or `@trayambak <task>`) from a comment body.
+ * Extract `/nemo <task>` (or `@nemo <task>`) from a comment body.
  * Returns null for empty tasks, bare mentions, and non-command chatter.
- * The prefix match is case-insensitive (`/TRAYAMBAK`, `@SkT`, …) but the
+ * The prefix match is case-insensitive (`/NEMO`, `@Nemo`, …) but the
  * task is sliced from the ORIGINAL body — its case is the user's content.
  */
-export function parseTrayambakCommand(body: string): TrayambakCommand | null {
+export function parseNemoCommand(body: string): NemoCommand | null {
   if (!body) return null
   for (const prefix of COMMAND_PREFIXES) {
     const idx = body.search(new RegExp(escapeRegExp(prefix), "i"))
@@ -109,7 +109,7 @@ export function routeGithubEvent(event: GithubEventName, payload: unknown): Gith
       return { kind: "ignored", reason: `action=${action}` }
     }
     // Never answer our own (or any bot's) comments: agent replies echo the
-    // triggering "/trayambak …" text, and without this guard each reply
+    // triggering "/nemo …" text, and without this guard each reply
     // re-triggers a full job — an infinite self-spam loop (observed live:
     // back-to-back bot comments the user had to delete by hand).
     const commentUser = (body.comment as { user?: { type?: unknown } } | undefined)?.user
@@ -118,8 +118,8 @@ export function routeGithubEvent(event: GithubEventName, payload: unknown): Gith
       return { kind: "ignored", reason: "bot comment (self-trigger guard)" }
     }
     const comment = body.comment as { body?: unknown } | undefined
-    const command = parseTrayambakCommand(typeof comment?.body === "string" ? comment.body : "")
-    if (!command) return { kind: "ignored", reason: "no /trayambak command" }
+    const command = parseNemoCommand(typeof comment?.body === "string" ? comment.body : "")
+    if (!command) return { kind: "ignored", reason: "no /nemo command" }
     const issue = body.issue as { number?: unknown } | undefined
     const issueNumber = typeof issue?.number === "number" ? issue.number : 0
     if (!issueNumber) return { kind: "ignored", reason: "missing issue.number" }
@@ -132,7 +132,7 @@ export function routeGithubEvent(event: GithubEventName, payload: unknown): Gith
   if (event === "pull_request") {
     // v1 does not auto-run on PR open/sync — a human must ask via comment.
     // (Unattended runs on untrusted fork code is a prompt-injection hole.)
-    return { kind: "ignored", reason: "pull_request needs an explicit /trayambak comment" }
+    return { kind: "ignored", reason: "pull_request needs an explicit /nemo comment" }
   }
 
   if (event === "push") {

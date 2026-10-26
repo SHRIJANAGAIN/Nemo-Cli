@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -67,7 +67,7 @@ export function checkRequestLimits(req: { url?: string | null; rawHeaders?: stri
 }
 
 export const SECURITY_TXT_PATH = "/.well-known/security.txt"
-export const SECURITY_TXT_CONTACT_ENV = "TRAYAMBAK_SECURITY_CONTACT"
+export const SECURITY_TXT_CONTACT_ENV = "NEMO_SECURITY_CONTACT"
 export const DEFAULT_SECURITY_CONTACT = "mailto:support@sktailabs.in"
 
 /** Contact override without a rebuild (VPS env). */

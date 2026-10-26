@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -15,7 +15,7 @@ let tmp = ""
 let jobsFile = ""
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-cron-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-cron-"))
   // Parent directory intentionally missing so save() exercises mkdir.
   jobsFile = path.join(tmp, "state", "jobs.json")
 })

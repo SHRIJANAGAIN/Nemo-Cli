@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { createBashTool } from "./command-exec/bash.js"
@@ -33,37 +33,35 @@ import { createTodoReadTool } from "./planning/todoread.js"
 import { createArtifactTool } from "./artifacts/artifact.js"
 import { createGithubTool } from "./github/github.js"
 import { createModeTool, createGetModeTool } from "./mode/mode.js"
-import { createAskUserQuestionTool } from "./trayambak/ask-question.js"
-import { createAgentTool } from "./trayambak/agent.js"
-import { createTeamTool } from "./trayambak/team.js"
-import { createSwarmTool } from "./trayambak/swarm.js"
-import { createAgentCatalogTool } from "./trayambak/agent-catalog.js"
-import { createCronCreateTool, createCronDeleteTool, createCronListTool } from "./trayambak/cron.js"
-import { createMonitorTool } from "./trayambak/monitor.js"
-import { createEnterWorktreeTool, createExitWorktreeTool } from "./trayambak/worktree.js"
-import { createSendMessageTool } from "./trayambak/send-message.js"
+import { createAskUserQuestionTool } from "./nemo/ask-question.js"
+import { createAgentTool } from "./nemo/agent.js"
+import { createTeamTool } from "./nemo/team.js"
+import { createSwarmTool } from "./nemo/swarm.js"
+import { createAgentCatalogTool } from "./nemo/agent-catalog.js"
+import { createCronCreateTool, createCronDeleteTool, createCronListTool } from "./nemo/cron.js"
+import { createMonitorTool } from "./nemo/monitor.js"
+import { createEnterWorktreeTool, createExitWorktreeTool } from "./nemo/worktree.js"
+import { createSendMessageTool } from "./nemo/send-message.js"
 import {
   createTaskCreateTool,
   createTaskUpdateTool,
   createTaskGetTool,
   createTaskListTool,
   createTaskOutputTool,
-} from "./trayambak/tasks.js"
-import { createParallelReviewTool } from "./trayambak/parallel-review.js"
-import { createParallelExecuteTool } from "./trayambak/parallel-execute.js"
-import { createDebateTool } from "./trayambak/debate.js"
-import { createFleetTool, type FleetLister } from "./trayambak/fleet.js"
-import { createAgentManagerTool } from "./trayambak/agent-manager.js"
-import { createSotaSolveTool } from "./trayambak/sota-solve.js"
-import { createRunWorkflowTool } from "./trayambak/workflow.js"
-import { createNotebookEditTool } from "./trayambak/notebook-edit.js"
-import { createRulesTool } from "./trayambak/rules.js"
-import { createGenerateAgentTool } from "./trayambak/generate-agent.js"
-import { createPentestTools } from "./pentest/pentest-tools.js"
+} from "./nemo/tasks.js"
+import { createParallelReviewTool } from "./nemo/parallel-review.js"
+import { createParallelExecuteTool } from "./nemo/parallel-execute.js"
+import { createDebateTool } from "./nemo/debate.js"
+import { createFleetTool, type FleetLister } from "./nemo/fleet.js"
+import { createAgentManagerTool } from "./nemo/agent-manager.js"
+import { createSotaSolveTool } from "./nemo/sota-solve.js"
+import { createRunWorkflowTool } from "./nemo/workflow.js"
+import { createNotebookEditTool } from "./nemo/notebook-edit.js"
+import { createRulesTool } from "./nemo/rules.js"
+import { createGenerateAgentTool } from "./nemo/generate-agent.js"
 import * as fs from "fs"
 import * as path from "path"
-import type { TrayambakConfig } from "../config.js"
-import { reportToolUsage, serverCanUsePentest } from "../license.js"
+import type { NemoConfig } from "../config.js"
 import { createMcpTools } from "./mcp/mcp.js"
 import { createMarketplaceTool } from "./marketplace/marketplace.js"
 import { createToolSearchTool } from "./mcp/tool-search.js"
@@ -75,7 +73,7 @@ import { createDiagnosticsTool } from "./diagnostics/diagnostics-tool.js"
 import { createMemoryTool } from "./memory/memory.js"
 import { createDreamTool } from "./memory/dream.js"
 import type { Tool } from "./types.js"
-import { textResult } from "./types.js"
+import { validateArguments } from "./validate-args.js"
 import type { Provider } from "../../../../packages/provider/src/index.js"
 import { FunctionRegistry, createFunctionRegistry } from "../../../../packages/function/src/index.js"
 import { Arsenal } from "../../../../packages/core/src/toolsets/arsenal.js"
@@ -154,8 +152,8 @@ export { getConnectorRegistry, searchConnectors, ConnectorRegistry } from "./mcp
 export type { ConnectorEntry } from "./mcp/registry.js"
 export { createMcpInstallTool, listAvailableMcpServers, searchMcpServers, installMcpServer } from "./mcp/mcp-install.js"
 export { createMcpRunnerTool, getMcpProcess, type McpProcess, type McpToolDefinition } from "./mcp/mcp-runner-tool.js"
-export { createRulesTool, getRulesContextBlock, loadRules } from "./trayambak/rules.js"
-export { createGenerateAgentTool } from "./trayambak/generate-agent.js"
+export { createRulesTool, getRulesContextBlock, loadRules } from "./nemo/rules.js"
+export { createGenerateAgentTool } from "./nemo/generate-agent.js"
 export { createDiagnosticsTool } from "./diagnostics/diagnostics-tool.js"
 export { createDreamTool, planDreamConsolidation, runDreamConsolidation } from "./memory/dream.js"
 export type { Diagnostic } from "./diagnostics/tsc-diagnostics.js"
@@ -182,23 +180,23 @@ export { sanitizeSingleLine, repairFrontmatterScalarFields, validateSkillFrontma
 export { collectExplicitSkillMentions, selectSkillsFromMentions, normalizeSkillPath } from "./skills/skill-selection.js"
 export { MemorySkillRootSnapshots } from "./skills/skill-loading.js"
 export { createModeTool, createGetModeTool } from "./mode/mode.js"
-export { createAskUserQuestionTool } from "./trayambak/ask-question.js"
-export { createAgentTool } from "./trayambak/agent.js"
-export { createTeamTool } from "./trayambak/team.js"
-export { createSwarmTool } from "./trayambak/swarm.js"
-export type { SwarmStrategy, SwarmTask, SwarmWorker } from "./trayambak/swarm.js"
-export { createAgentCatalogTool } from "./trayambak/agent-catalog.js"
-export { createNotebookEditTool } from "./trayambak/notebook-edit.js"
+export { createAskUserQuestionTool } from "./nemo/ask-question.js"
+export { createAgentTool } from "./nemo/agent.js"
+export { createTeamTool } from "./nemo/team.js"
+export { createSwarmTool } from "./nemo/swarm.js"
+export type { SwarmStrategy, SwarmTask, SwarmWorker } from "./nemo/swarm.js"
+export { createAgentCatalogTool } from "./nemo/agent-catalog.js"
+export { createNotebookEditTool } from "./nemo/notebook-edit.js"
 export {
   createCronCreateTool,
   createCronDeleteTool,
   createCronListTool,
   listCronJobs,
   tickCronJobs,
-} from "./trayambak/cron.js"
-export { createMonitorTool } from "./trayambak/monitor.js"
-export { createEnterWorktreeTool, createExitWorktreeTool } from "./trayambak/worktree.js"
-export { createSendMessageTool } from "./trayambak/send-message.js"
+} from "./nemo/cron.js"
+export { createMonitorTool } from "./nemo/monitor.js"
+export { createEnterWorktreeTool, createExitWorktreeTool } from "./nemo/worktree.js"
+export { createSendMessageTool } from "./nemo/send-message.js"
 export {
   createTaskCreateTool,
   createTaskUpdateTool,
@@ -207,31 +205,30 @@ export {
   createTaskOutputTool,
   listTasks,
   resetTasks,
-} from "./trayambak/tasks.js"
+} from "./nemo/tasks.js"
 export { createArtifactTool } from "./artifacts/artifact.js"
 export { createGithubTool } from "./github/github.js"
-export { createParallelReviewTool } from "./trayambak/parallel-review.js"
-export { createDebateTool, buildDebateTasks, synthesizeDebate } from "./trayambak/debate.js"
-export { createFleetTool, fleetListText, fleetPeekText } from "./trayambak/fleet.js"
-export type { FleetJob, FleetLister } from "./trayambak/fleet.js"
+export { createParallelReviewTool } from "./nemo/parallel-review.js"
+export { createDebateTool, buildDebateTasks, synthesizeDebate } from "./nemo/debate.js"
+export { createFleetTool, fleetListText, fleetPeekText } from "./nemo/fleet.js"
+export type { FleetJob, FleetLister } from "./nemo/fleet.js"
 export {
   createAgentManagerTool,
   formatAgentOverview,
   summarizeAgents,
   truncateAgentName,
-} from "./trayambak/agent-manager.js"
-export type { AgentSessionRow, AgentManagerDeps, AgentSummary } from "./trayambak/agent-manager.js"
-export type { ParallelReviewResult, ReviewFinding } from "./trayambak/parallel-review.js"
-export { createParallelExecuteTool } from "./trayambak/parallel-execute.js"
-export type { ParallelExecuteOptions } from "./trayambak/parallel-execute.js"
-export { createSotaSolveTool } from "./trayambak/sota-solve.js"
+} from "./nemo/agent-manager.js"
+export type { AgentSessionRow, AgentManagerDeps, AgentSummary } from "./nemo/agent-manager.js"
+export type { ParallelReviewResult, ReviewFinding } from "./nemo/parallel-review.js"
+export { createParallelExecuteTool } from "./nemo/parallel-execute.js"
+export type { ParallelExecuteOptions } from "./nemo/parallel-execute.js"
+export { createSotaSolveTool } from "./nemo/sota-solve.js"
 export {
   discoverAgentProfiles,
   getAgentProfile,
   findReviewersForFiles,
   findBuildResolversForLanguage,
 } from "../agent/specialist-agents.js"
-export { createPentestTools } from "./pentest/pentest-tools.js"
 export type { AgentProfile, AgentCategory } from "../agent/specialist-agents.js"
 export function createDefaultTools(
   devMode?: Partial<import("../developer-mode").DeveloperModeConfig>,
@@ -261,7 +258,7 @@ export function createDefaultTools(
       multi_select: boolean
     }>,
   ) => Promise<string[]>,
-  config?: TrayambakConfig,
+  config?: NemoConfig,
   onResolveSendTarget?: (to: string) => { id: string; name: string; running: boolean } | undefined,
   extra?: {
     onListFleet?: FleetLister
@@ -333,7 +330,6 @@ export function createDefaultTools(
     createRunWorkflowTool(),
     createRulesTool(),
     createGenerateAgentTool(),
-    ...createPentestTools(),
     createAgentCatalogTool(),
     createCronCreateTool(),
     createCronDeleteTool(),
@@ -362,52 +358,7 @@ export function createDefaultTools(
     arsenal = buildArsenalFromConfig(config)
     tools = arsenal.resolveTools(allTools)
   }
-  // License choke (single point, server-side): pentest tools stay registered
-  // (prompt/toolset parity invariants forbid silent drops) but EVERY
-  // execution passes TWO gates: developer mode ON (local, no network) and a
-  // LIVE license check against the license server, and reports usage back
-  // for the audit trail. No local checksum is trusted
-  // for access — a forged code dies server-side as an unknown license.
-  // The TUI menu explains this up front; this wrapper enforces it for
-  // CLI/server/headless too.
-  const gateLicenseKey = config?.licenseKey
-  const gateServerUrl = config?.licenseServerUrl
-  const gatePentest = (t: Tool): Tool => ({
-    ...t,
-    execute: async (toolCallId, args, signal, onUpdate, context) => {
-      // Developer-mode master switch: pentest tools only run inside an
-      // explicit devmode session. The license check below used to be the
-      // only gate, so a live trial key executed scans with devmode OFF
-      // (observed live) — and every refused call below skips the network
-      // entirely, so OFF also means offline-quiet.
-      if (config?.developerMode?.enabled !== true) {
-        return textResult(
-          `${t.definition.name} refused: developer mode is OFF — turn it on with /devmode on (pentest tools only run under an explicit devmode session).`,
-          /*isError*/ true,
-        )
-      }
-      const v = await serverCanUsePentest(gateLicenseKey, { serverUrl: gateServerUrl })
-      if (v.valid !== true) {
-        return textResult(
-          `${t.definition.name} refused: ${v.reason ?? "no valid pentest license"} — bind a key with /devmode on 1102-XXXX-XXXX-XXXX (needs internet: the license is verified live).`,
-          /*isError*/ true,
-        )
-      }
-      const result = await t.execute(toolCallId, args, signal, onUpdate, context)
-      const rawTarget = args !== null && typeof args === "object" ? (args as Record<string, unknown>).target : undefined
-      void reportToolUsage(
-        gateLicenseKey,
-        {
-          tool: t.definition.name,
-          target: typeof rawTarget === "string" ? rawTarget : "",
-          ok: result.isError !== true,
-        },
-        { serverUrl: gateServerUrl },
-      )
-      return result
-    },
-  })
-  tools = tools.map((t) => (t.definition.name.startsWith("trayambak__Pentest") ? gatePentest(t) : t))
+  tools = tools.map((t) => validateArguments(t))
 
   return { tools, arsenal }
 }
@@ -417,7 +368,7 @@ export function createDefaultTools(
  * default set - same extensibility as the reference agent projects.
  */
 export async function buildOptionalTools(
-  config: TrayambakConfig,
+  config: NemoConfig,
   baseTools: Tool[] = [],
   arsenal?: Arsenal<Tool>,
 ): Promise<Tool[]> {
@@ -438,7 +389,7 @@ export async function buildOptionalTools(
     }
   }
 
-  // User-defined tools: `.trayambak/{tool,tools}/*.{ts,js,mjs}` (SKT AI LABS's
+  // User-defined tools: `.nemo/{tool,tools}/*.{ts,js,mjs}` (Shrijan's
   // `./tools` port). Built-ins and already-loaded tools are reserved so
   // custom files cannot shadow them.
   const customTools = await loadCustomTools({
@@ -477,7 +428,7 @@ export async function buildOptionalTools(
           ...mcpDef,
           toolNames: byName(
             mcpDef.toolNames.filter(
-              (n) => !n.startsWith("mcp__") || ["tool_search", "mcp__install", "trayambak__run_mcp"].includes(n),
+              (n) => !n.startsWith("mcp__") || ["tool_search", "mcp__install", "nemo__run_mcp"].includes(n),
             ),
           ),
         })
@@ -517,8 +468,8 @@ export const TOOLSET_DEFS: ToolsetDefinition[] = [
       "write_file",
       "edit_file",
       "view_image",
-      "trayambak__Checkpoint",
-      "trayambak__Rewind",
+      "nemo__Checkpoint",
+      "nemo__Rewind",
       "list_dir",
       "grep",
       "glob",
@@ -545,7 +496,7 @@ export const TOOLSET_DEFS: ToolsetDefinition[] = [
       "dream",
       "artifact",
       "github",
-      "trayambak__AskUserQuestion",
+      "nemo__AskUserQuestion",
       "set_mode",
       "get_mode",
     ],
@@ -554,62 +505,50 @@ export const TOOLSET_DEFS: ToolsetDefinition[] = [
     name: "agentic",
     description: "Agent delegation, planning, and execution tools",
     toolNames: [
-      "trayambak__Agent",
-      "trayambak__RunTeam",
-      "skt__Swarm",
-      "trayambak__Debate",
-      "trayambak__ParallelReview",
-      "trayambak__ParallelExecute",
+      "nemo__Agent",
+      "nemo__RunTeam",
+      "nemo__Swarm",
+      "nemo__Debate",
+      "nemo__ParallelReview",
+      "nemo__ParallelExecute",
       "sota_solve",
-      "trayambak__RunWorkflow",
-      "trayambak__NotebookEdit",
-      "trayambak__GenerateAgent",
-      "trayambak__AgentCatalog",
-      "trayambak__Rules",
+      "nemo__RunWorkflow",
+      "nemo__NotebookEdit",
+      "nemo__GenerateAgent",
+      "nemo__AgentCatalog",
+      "nemo__Rules",
     ],
   },
   {
     name: "ops",
     description: "Operational tools: cron, monitoring, worktrees, messaging",
     toolNames: [
-      "trayambak__CronCreate",
-      "trayambak__CronDelete",
-      "trayambak__CronList",
-      "trayambak__Fleet",
-      "trayambak__AgentManager",
-      "trayambak__Monitor",
-      "trayambak__EnterWorktree",
-      "trayambak__ExitWorktree",
-      "trayambak__SendMessage",
+      "nemo__CronCreate",
+      "nemo__CronDelete",
+      "nemo__CronList",
+      "nemo__Fleet",
+      "nemo__AgentManager",
+      "nemo__Monitor",
+      "nemo__EnterWorktree",
+      "nemo__ExitWorktree",
+      "nemo__SendMessage",
     ],
   },
   {
     name: "tasks",
     description: "Task management tools",
     toolNames: [
-      "trayambak__TaskCreate",
-      "trayambak__TaskUpdate",
-      "trayambak__TaskGet",
-      "trayambak__TaskList",
-      "trayambak__TaskOutput",
+      "nemo__TaskCreate",
+      "nemo__TaskUpdate",
+      "nemo__TaskGet",
+      "nemo__TaskList",
+      "nemo__TaskOutput",
     ],
-  },
-  {
-    name: "pentest",
-    description: "Security assessment toolkit",
-    toolNames: [
-      "trayambak__PentestListTools",
-      "trayambak__PentestRunTool",
-      "trayambak__PentestStartEngagement",
-      "trayambak__PentestGetStatus",
-      "trayambak__PentestGetFindings",
-    ],
-    checkFn: () => true,
   },
   {
     name: "mcp",
     description: "Model Context Protocol tools and installers",
-    toolNames: ["tool_search", "marketplace", "mcp__install", "trayambak__run_mcp"],
+    toolNames: ["tool_search", "marketplace", "mcp__install", "nemo__run_mcp"],
   },
   {
     name: "skills",
@@ -619,18 +558,12 @@ export const TOOLSET_DEFS: ToolsetDefinition[] = [
   },
 ]
 
-export function buildArsenalFromConfig(config: TrayambakConfig): Arsenal<Tool> {
+export function buildArsenalFromConfig(config: NemoConfig): Arsenal<Tool> {
   const cfg = config.toolsets
-  // Pentest ships enabled: the config DEFAULTS predate the toolset, and a
-  // defaults list without "pentest" filters the 5 Pentest* meta-tools out
-  // before the model ever sees them (every security request then dies with
-  // "Unknown tool"). Force it into the defaults; toolsets.disabled still
-  // wins in resolveTools, so an explicit opt-out keeps working.
   const defaults = cfg?.defaults?.length ? cfg.defaults : DEFAULT_TOOLSETS
-  const defaultToolsets = defaults.includes("pentest") ? defaults : [...defaults, "pentest"]
   const arsenal = new Arsenal<Tool>(
     {
-      defaultToolsets,
+      defaultToolsets: defaults,
       disabledToolsets: cfg?.disabled ?? [],
       platformToolsets: cfg?.platform,
     },
@@ -645,7 +578,7 @@ export function buildArsenalFromConfig(config: TrayambakConfig): Arsenal<Tool> {
 }
 
 /** Build a FunctionRegistry pre-populated with the default tool set. */
-export function buildFunctionRegistry(config?: TrayambakConfig): FunctionRegistry {
+export function buildFunctionRegistry(config?: NemoConfig): FunctionRegistry {
   const { tools } = createDefaultTools(undefined, undefined, undefined, undefined, config)
   return createFunctionRegistry(tools)
 }

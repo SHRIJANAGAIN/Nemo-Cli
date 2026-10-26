@@ -1,28 +1,29 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Startup clear contract — the one place this terminal is allowed to wipe.
+ * Startup clear contract — the one place this terminal touches the screen
+ * before the renderer exists.
  *
  * Three requirements have to hold together, and earlier attempts broke one each:
  *
- *  - No PowerShell banner. `\x1b[2J` alone does NOT achieve this: it clears the
- *    viewport, the banner survives in the scrollback, and it comes back on the
- *    first scroll up. ED3 (`\x1b[3J`) is what actually removes it.
- *  - Scrolling up works, and auto-scroll follows generation. So the clear must
- *    happen ONCE, before the renderer exists, and nothing may clear scrollback
- *    afterwards. The renderer's flicker recovery used to emit ED3 on every
- *    resize, deleting the printed transcript; that path is screen-only now
- *    (`trayambak-ink/core/clearTerminal.ts`).
- *  - The alternate screen IS the default (clone-free frames beat scroll-back
- *    history), reached only through the TTY-gated resolveAltScreen gate —
- *    no raw 1049 literal may appear in the entry file. Its buffer has no
- *    scrollback at all, so rows the UI settles into <Static> cannot be
- *    scrolled back to: --no-alt-screen / TRAYAMBAK_ALT_SCREEN=0 restores
- *    the inline path (and the reflow clones it can strand) explicitly.
+ *  - Viewport starts clean: `\x1b[2J` + `\x1b[H`, once, pre-render, so the
+ *    host shell's banner is not the first thing under the frame.
+ *  - Scrollback is NEVER touched at launch: ED3 (`\x1b[3J`) is forbidden
+ *    here — scrollback IS the transcript, so the banner, prompt and earlier
+ *    sessions stay intact above the app. (The only scrollback clear left in
+ *    the product is the resize guard's shrink-settle, which reprints the
+ *    transcript from item 0 after clearing; nothing may clear scrollback in
+ *    the render path — the retired fork's renderer used to emit ED3 on every
+ *    resize; the surviving path is screen-only.)
+ *  - The alternate screen is OPT-IN (--alt-screen / NEMO_ALT_SCREEN=1),
+ *    reached only through the TTY-gated resolveAltScreen gate — no raw 1049
+ *    literal may appear in the entry file. Its buffer has no scrollback at
+ *    all, so rows the UI settles into <Static> cannot be scrolled back to:
+ *    default runs stay inline and the resize guard keeps them clone-free.
  *
  * The repl tree is excluded from vitest discovery, so this lives one level up
  * and reads the entrypoint by path.
@@ -65,17 +66,17 @@ describe("ink-repl startup clear", () => {
     }
   })
 
-  it("erases the scrollback, which is the only thing that removes the banner", () => {
-    expect(rawEscapeWrites().some((seq) => seq.includes("[3J"))).toBe(true)
+  it("never erases the scrollback — it IS the transcript (no ED3 at launch)", () => {
+    expect(rawEscapeWrites().some((seq) => seq.includes("[3J"))).toBe(false)
   })
 
-  it("erases the viewport, homes the cursor, and clears scrollback", () => {
-    // The full clear is the default path's literal (the alt path writes only
-    // its mouse-off tail; the 1049h comes from the helper, asserted above).
+  it("erases the viewport and homes the cursor, without touching scrollback", () => {
+    // The full clear is the default inline path's literal (the alt path writes
+    // only its mouse-off tail; the 1049h comes from the helper, asserted above).
     const seq = rawEscapeWrites().find((s) => s.includes("[2J")) ?? ""
     expect(seq).toContain("[2J")
-    expect(seq).toContain("[3J")
     expect(seq).toContain("[H")
+    expect(seq).not.toContain("[3J")
   })
 
   it("takes the alternate screen only through the resolved gate, never a raw literal", () => {
@@ -83,7 +84,8 @@ describe("ink-repl startup clear", () => {
     // app-bootstrap (ALT_SCREEN_ENTER/LEAVE) and are only reachable through
     // enter/leaveAltScreen, so a future edit cannot half-wire a new path.
     expect(rawEscapeWrites().some((seq) => seq.includes("1049"))).toBe(false)
-    // The gate itself: flag/env-resolved (default ON), and only on a TTY
+    // The gate itself: flag/env-resolved (default OFF — inline stays the
+    // default because scrollback IS the transcript), and only on a TTY
     // (1049h into a pipe would corrupt piped output with an escape the reader
     // never asked for).
     expect(source).toContain("resolveAltScreen({ env: process.env })")
@@ -124,13 +126,13 @@ describe("ink-repl startup clear", () => {
     expect(source).toContain("leaveAltScreen(")
   })
 
-  it("states the cost it accepts, so nobody is surprised by it later", () => {
-    expect(source).toContain("scrollback is erased along with")
+  it("states what startup costs, so nobody is surprised by it later", () => {
+    expect(source).toContain("Nothing above the frame is ever erased at startup")
   })
 
   it("still renders and attaches the resize guard", () => {
     expect(source).toContain("const instance = render(")
     expect(source).toContain("resizeGuard.attach(instance)")
-    expect(source).toContain("export { TrayambakApp }")
+    expect(source).toContain("export { NemoApp }")
   })
 })

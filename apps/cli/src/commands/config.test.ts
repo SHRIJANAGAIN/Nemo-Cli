@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -12,25 +12,26 @@ import * as path from "node:path"
 import { configCommand } from "./config.js"
 
 /**
- * `trayambak config get/set` round-trips through <cwd>/.trayambak/config.json
- * (configDir() prefers a project-local .trayambak over ~/.trayambak), so every
- * case here chdirs into a throwaway dir with its own .trayambak — the real
- * home directory and the repo's own .trayambak/ are never touched.
+ * `nemo config get/set` round-trips through <cwd>/.nemo/config.json
+ * (configDir() prefers a project-local .nemo over ~/.nemo), so every
+ * case here chdirs into a throwaway dir with its own .nemo — the real
+ * home directory and the repo's own .nemo/ are never touched.
  *
- * TRAYAMBAK_* env vars that loadConfig() folds over the file are cleared for
+ * NEMO_* env vars that loadConfig() folds over the file are cleared for
  * the duration of each test so assertions are about FILE state.
  */
 
 const ENV_KEYS = [
-  "TRAYAMBAK_MODEL",
-  "TRAYAMBAK_BASE_URL",
-  "TRAYAMBAK_API_KEY",
-  "TRAYAMBAK_PROVIDER",
-  "TRAYAMBAK_MAX_TURNS",
-  "TRAYAMBAK_TEMPERATURE",
-  "TRAYAMBAK_THEME",
-  "TRAYAMBAK_MCP_SERVERS",
-  "TRAYAMBAK_CWD",
+  "NEMO_CONFIG",
+  "NEMO_MODEL",
+  "NEMO_BASE_URL",
+  "NEMO_API_KEY",
+  "NEMO_PROVIDER",
+  "NEMO_MAX_TURNS",
+  "NEMO_TEMPERATURE",
+  "NEMO_THEME",
+  "NEMO_MCP_SERVERS",
+  "NEMO_CWD",
 ] as const
 
 let tmp = ""
@@ -45,7 +46,7 @@ let savedExitCode: number | undefined
 let writeSpy: { mockRestore: () => void } | undefined
 let errSpy: { mockRestore: () => void } | undefined
 
-const configFile = (): string => path.join(tmp, ".trayambak", "config.json")
+const configFile = (): string => path.join(tmp, ".nemo", "config.json")
 
 function seedConfig(value: unknown): void {
   fs.mkdirSync(path.dirname(configFile()), { recursive: true })
@@ -58,14 +59,19 @@ function readConfig(): Record<string, unknown> {
 
 beforeEach(() => {
   originalCwd = process.cwd()
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-config-"))
-  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-config-"))
+  fs.mkdirSync(path.join(tmp, ".nemo"), { recursive: true })
   process.chdir(tmp)
 
   for (const key of ENV_KEYS) {
     savedEnv[key] = process.env[key]
     delete process.env[key]
   }
+  // Pin the active file explicitly, after the env scrub: a bare .nemo/ directory
+  // no longer selects the project config (the app creates one for harness
+  // state), and without this every write here would land in the real
+  // ~/.nemo/config.json.
+  process.env.NEMO_CONFIG = configFile()
 
   out = ""
   errOut = ""
@@ -170,13 +176,13 @@ describe("configCommand set", () => {
 
   it("refuses to write when the value is missing", () => {
     configCommand(["set", "model"])
-    expect(out).toBe("Usage: trayambak config set <key> <value>\n")
+    expect(out).toBe("Usage: nemo config set <key> <value>\n")
     expect(fs.existsSync(configFile())).toBe(false)
   })
 
   it("refuses to write when the key is missing", () => {
     configCommand(["set"])
-    expect(out).toBe("Usage: trayambak config set <key> <value>\n")
+    expect(out).toBe("Usage: nemo config set <key> <value>\n")
     expect(fs.existsSync(configFile())).toBe(false)
   })
 })
@@ -226,9 +232,9 @@ describe("configCommand get", () => {
     expect(out).toBe("8192\n")
   })
 
-  it("lets TRAYAMBAK_MODEL win over the file value", () => {
+  it("lets NEMO_MODEL win over the file value", () => {
     seedConfig({ model: "file-model" })
-    process.env.TRAYAMBAK_MODEL = "env-model"
+    process.env.NEMO_MODEL = "env-model"
     configCommand(["get", "model"])
     expect(out).toBe("env-model\n")
   })
@@ -244,12 +250,13 @@ describe("configCommand get", () => {
 describe("configCommand usage", () => {
   it("prints the usage block for an unknown subcommand", () => {
     configCommand(["frobnicate", "x"])
-    expect(out).toBe("Usage:\n  trayambak config get [key]\n  trayambak config set <key> <value>\n")
+    expect(out).toBe("Usage:\n  nemo config path\n  nemo config get [key]\n  nemo config set <key> <value>\n")
   })
 
   it("prints the usage block when called with no arguments", () => {
     configCommand([])
-    expect(out).toContain("trayambak config get [key]")
-    expect(out).toContain("trayambak config set <key> <value>")
+    expect(out).toContain("nemo config path")
+    expect(out).toContain("nemo config get")
+    expect(out).toContain("nemo config set <key> <value>")
   })
 })

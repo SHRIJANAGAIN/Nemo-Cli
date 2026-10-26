@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * OS-sandbox engagement gate — the single decision point for whether a tool
@@ -19,17 +23,35 @@ import { SandboxType } from "./types.js"
 
 /** Backends with a real OS isolator behind them. */
 export function osCapableBackend(backend: string): boolean {
-  return backend === "seatbelt" || backend === "landlock" || backend === "bwrap" || backend === "windows-restricted"
+  // "landlock" is DELIBERATELY absent. It is a member of `SandboxBackend`, it is
+  // accepted here, and `enforcementFor("landlock")` reported `os-sandbox` — while
+  // `detectBackend()` can never produce it, because no code path implements
+  // Landlock. A status surface asked about it would be told the sandbox is
+  // enforced when the only enforcement available is bubblewrap's namespaces.
+  //
+  // `landlock.ts` now plans Landlock rulesets, and what it plans is real: the
+  // syscall that installs one is what is missing. Listing the backend before that
+  // exists would put a capability in the label that the code cannot deliver —
+  // the same shape as stamping `LinuxSeccomp` before a filter was staged.
+  return backend === "seatbelt" || backend === "bwrap" || backend === "windows-restricted"
 }
 
 /** True when this run must go through spawnProcess under OS isolation. */
 export function shouldUseOsSandbox(sandboxType: SandboxType): boolean {
   if (!isEnabled("sandboxSpawn")) return false
-  return (
-    sandboxType === SandboxType.MacosSeatbelt ||
-    sandboxType === SandboxType.LinuxSeccomp ||
-    sandboxType === SandboxType.WindowsRestrictedToken
-  )
+  switch (sandboxType) {
+    case SandboxType.MacosSeatbelt:
+    case SandboxType.LinuxSeccomp:
+    case SandboxType.LinuxNamespace:
+    case SandboxType.WindowsRestrictedToken:
+      return true
+    case SandboxType.None:
+    default:
+      // Exhaustive with a default, and the default fails CLOSED: an unknown or
+      // unhandled type gets no OS isolation rather than whatever a new enum
+      // member happened to default to.
+      return false
+  }
 }
 
 /**

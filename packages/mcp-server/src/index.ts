@@ -1,16 +1,20 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
- * MCP server over stdio (JSON-RPC 2.0): exposes Trayambak tools to MCP clients.
+ * MCP server over stdio (JSON-RPC 2.0): exposes Nemo tools to MCP clients.
  * Methods: initialize, tools/list, tools/call, resources/list, prompts/list.
- * Run: `trayambak mcp-server`
+ * Run: `nemo mcp-server`
  */
 
 import * as readline from "readline"
 import * as fs from "fs"
 import * as path from "path"
 import { execFileSync } from "child_process"
-import { loadConfig, type TrayambakConfig } from "../../../apps/runtime/src/config.js"
+import { loadConfig, type NemoConfig } from "../../../apps/runtime/src/config.js"
 import { approvalFor } from "../../../packages/core/src/approval.js"
 import { getSafeEnv } from "../../../packages/core/src/env_filter.js"
 import {
@@ -80,7 +84,7 @@ function sendError(id: unknown, code: number, message: string): void {
  *  `policyDecide` stub wherever the exec-policy layer must be deterministic
  *  (the default reads the process-wide singleton, which is CWD-sensitive). */
 export interface McpServerDeps {
-  config?: TrayambakConfig
+  config?: NemoConfig
   hookExecutor?: HookShellExecutor
   policyDecide?: (command: string) => ExecDecision
 }
@@ -123,7 +127,7 @@ type GateVerdict = { ok: true } | { ok: false; reason: string }
  */
 async function gateTool(
   deps: McpServerDeps,
-  config: TrayambakConfig,
+  config: NemoConfig,
   toolName: string,
   args: Record<string, unknown>,
   cwd: string,
@@ -140,7 +144,7 @@ async function gateTool(
   const effectivePermissions = (config.permissions ?? DEFAULT_PERMISSIONS) as PermissionConfig
   const outcome = approvalFor(toolName, args, { uiMode: effectivePermissions.uiMode, config: effectivePermissions })
   if (outcome.decision === "deny") {
-    return { ok: false, reason: `Trayambak permission denied for ${toolName}. Tool execution blocked.` }
+    return { ok: false, reason: `Nemo permission denied for ${toolName}. Tool execution blocked.` }
   }
   if (outcome.decision === "ask") {
     return { ok: false, reason: `${toolName} requires approval (no interactive approver over MCP)` }
@@ -152,7 +156,7 @@ async function gateTool(
  *  context into the result, mirroring the loop. */
 async function postHookContext(
   deps: McpServerDeps,
-  config: TrayambakConfig,
+  config: NemoConfig,
   toolName: string,
   args: Record<string, unknown>,
   cwd: string,
@@ -169,7 +173,7 @@ async function postHookContext(
  *  32KB cap). Every call passes the tool gate first (see gateTool). */
 async function executeLocalTool(
   deps: McpServerDeps,
-  config: TrayambakConfig,
+  config: NemoConfig,
   cwd: string,
   name: string,
   args: Record<string, unknown>,
@@ -229,7 +233,7 @@ export async function dispatchMcpServer(
     case "initialize":
       send(req.id, {
         protocolVersion: "2024-11-05",
-        serverInfo: { name: "trayambak", version: VERSION }, // stamped from root package.json by sync-version
+        serverInfo: { name: "nemo", version: VERSION }, // stamped from root package.json by sync-version
         capabilities: { tools: {} },
       })
       break

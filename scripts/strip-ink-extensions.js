@@ -1,6 +1,6 @@
 const fs = require("fs")
 const path = require("path")
-const root = "packages/trayambak-ink/src"
+const root = "packages/nemo-ink/src"
 
 function stripJsExtensions(dir) {
   const entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -18,4 +18,4 @@ function stripJsExtensions(dir) {
 }
 
 stripJsExtensions(root)
-console.log("Done stripping .js extensions from trayambak-ink")
+console.log("Done stripping .js extensions from nemo-ink")

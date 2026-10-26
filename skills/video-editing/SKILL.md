@@ -26,7 +26,7 @@ AI video editing is useful when you stop asking it to create the whole video and
 
 ```
 Screen Studio / raw footage
-  → Trayambak / Trayambak Code
+  → Nemo / Nemo Code
   → FFmpeg
   → Remotion
   → ElevenLabs / fal.ai
@@ -45,9 +45,9 @@ Collect the source material:
 
 Output: raw files ready for organization.
 
-## Layer 2: Organization (Trayambak / Trayambak Code)
+## Layer 2: Organization (Nemo / Nemo Code)
 
-Use Trayambak Code or Trayambak Code to:
+Use Nemo Code or Nemo Code to:
 
 - **Transcribe and label**: generate transcript, identify topics and themes
 - **Plan structure**: decide what stays, what gets cut, what order works
@@ -288,7 +288,7 @@ ffmpeg -i input.mp4 -af silencedetect=noise=-30dB:d=2 -f null - 2>&1 | grep sile
 
 ### Highlight extraction
 
-Use Trayambak to analyze transcript + scene timestamps:
+Use Nemo to analyze transcript + scene timestamps:
 
 ```
 "Given this transcript with timestamps and these scene change points,
@@ -299,7 +299,7 @@ identify the 5 most engaging 30-second clips for social media."
 
 | Tool                       | Strength                                                     | Weakness                       |
 | -------------------------- | ------------------------------------------------------------ | ------------------------------ |
-| Trayambak / Trayambak Code | Organization, planning, code generation                      | Not the creative taste layer   |
+| Nemo / Nemo Code | Organization, planning, code generation                      | Not the creative taste layer   |
 | FFmpeg                     | Deterministic cuts, batch processing, format conversion      | No visual editing UI           |
 | Remotion                   | Programmable overlays, composable scenes, reusable templates | Learning curve for non-devs    |
 | Screen Studio              | Polished screen recordings immediately                       | Only screen capture            |

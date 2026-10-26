@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { spawn } from "node:child_process"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /** PowerShell reads the payload over a UTF-8 pipe (the console codepage
  *  would mangle non-ASCII) and hands it to Set-Clipboard. */
@@ -53,7 +53,7 @@ const pipeToClipboard = (cmd: string, args: string[], text: string): Promise<voi
     child.stdin?.end(text, "utf8")
   })
 
-/** Copy text to the system clipboard — SKT AI LABS's "Copy transcript" parity
+/** Copy text to the system clipboard — Shrijan's "Copy transcript" parity
  *  without new dependencies: PowerShell Set-Clipboard on Windows, pbcopy
  *  on macOS, wl-copy → xclip → xsel on Linux. NOT OSC 52 (invisible to
  *  the terminal, real system clipboard). Rejects when no helper exists. */
@@ -96,7 +96,7 @@ export const copyTextToClipboard = async (text: string): Promise<void> => {
 
 export type TranscriptScope = "all" | "last"
 
-const roleLabel = (m: TrayambakMessage): string => {
+const roleLabel = (m: NemoMessage): string => {
   if (m.role === "user") return "You"
   if (m.role === "system") return "System"
   if (m.role === "tool") return `Tool result · ${m.toolName ?? "tool"}`
@@ -104,7 +104,7 @@ const roleLabel = (m: TrayambakMessage): string => {
   return "Assistant"
 }
 
-const messageBody = (m: TrayambakMessage): string => {
+const messageBody = (m: NemoMessage): string => {
   // Verbatim copy: the display normalizer (stair-indent) must never rewrite
   // clipboard bytes — /copy of a diff/diagram used to lose a column per
   // line (copy ≠ source).
@@ -124,8 +124,8 @@ const messageBody = (m: TrayambakMessage): string => {
 /** Plain-text transcript for the clipboard: role-prefixed blocks in
  *  conversation order. "last" returns only the newest assistant reply
  *  (empty string when there is none — the caller reports it). */
-export const formatTranscript = (messages: TrayambakMessage[], scope: TranscriptScope = "all"): string => {
-  const selected: TrayambakMessage[] = []
+export const formatTranscript = (messages: NemoMessage[], scope: TranscriptScope = "all"): string => {
+  const selected: NemoMessage[] = []
   if (scope === "last") {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const m = messages[i]

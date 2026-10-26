@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -14,11 +14,14 @@ import {
   GRID_ROWS,
   gridLevel,
   gridPaint,
+  gridSettled,
   ORBIT_CELLS,
   orbitPaint,
   orbitRowText,
+  orbitSettled,
   shimmerLevel,
   shimmerPaint,
+  shimmerSettled,
   SILVER_GLINT,
   SILVER_HOT,
   SILVER_RAMP,
@@ -225,6 +228,49 @@ describe("thinking eyes (three dots riding the square track)", () => {
     const a = gridPaint(5, true).flat().map((c) => c.glyph).join("")
     const b = gridPaint(5).flat().map((c) => c.glyph).join("")
     expect(a).toBe(b)
+  })
+})
+
+/* The still that `reduced` and `off` show. Sampling a travelling animation at
+ * frame 0 does not produce a resting picture — it produces one corner of the
+ * movement, which reads as a widget that failed to draw. */
+describe("resting frames", () => {
+  it("lights the whole grid instead of the three eyes", () => {
+    const rows = gridSettled()
+    expect(rows).toHaveLength(GRID_ROWS)
+    for (const row of rows) {
+      expect(row).toHaveLength(GRID_COLS)
+      for (const cell of row) {
+        expect(cell.glyph).toBe("·")
+        expect(BLUE_RAMP as readonly string[]).toContain(cell.color)
+      }
+    }
+    // The contrast that justifies the function: a sampled frame is mostly empty.
+    const sampled = gridPaint(0).flat()
+    expect(sampled.filter((c) => c.glyph === "·")).toHaveLength(3)
+  })
+
+  it("never dims the status word", () => {
+    // Pinning the bug, not the preference: at frame 0 the band has not reached
+    // the label yet, so every char falls outside it and renders dim.
+    expect(shimmerPaint("Thinking…", 0).every((c) => c.dim)).toBe(true)
+    const still = shimmerSettled("Thinking…")
+    expect(still.every((c) => !c.dim && !c.bold)).toBe(true)
+    expect(still.every((c) => c.color === SILVER_RAMP[SILVER_HOT])).toBe(true)
+    expect(still.map((c) => c.ch).join("")).toBe("Thinking…")
+  })
+
+  it("holds the footer square to the same two cells and one shade", () => {
+    const still = orbitSettled()
+    expect(still).toHaveLength(ORBIT_CELLS)
+    expect(still.every((c) => c.color === SILVER_RAMP[2])).toBe(true)
+    // No glint, and the glyph footprint is identical to any animated frame, so
+    // the footer fit cannot measure one width and paint another.
+    expect(still.some((c) => c.color === SILVER_RAMP[SILVER_GLINT])).toBe(false)
+    for (const frame of [0, 3, 11]) {
+      expect(orbitSettled().map((c) => c.glyph)).toEqual(orbitPaint(frame).map((c) => c.glyph))
+      expect([...orbitRowText(frame)]).toHaveLength(ORBIT_CELLS)
+    }
   })
 })
 

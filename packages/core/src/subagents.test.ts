@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -11,6 +11,7 @@ import {
   formatWorkerUsage,
   MaxDepthExceeded,
   MAX_SUBAGENT_DEPTH,
+  MAX_USAGE_ENTRIES,
   runSubagent,
   SubagentEngine,
   SubagentWorkerError,
@@ -39,6 +40,24 @@ describe("subagents", () => {
     await expect(runSubagent(stubRunner("x", 0), { prompt: "y", depth: MAX_SUBAGENT_DEPTH })).rejects.toBeInstanceOf(
       MaxDepthExceeded,
     )
+  })
+
+  it("refuses corrupt caller depths instead of running unbounded (NaN/-1/negative)", async () => {
+    // `NaN >= max` is false and negatives can never reach the cap — both
+    // used to wave the spawn straight through the guard.
+    for (const depth of [Number.NaN, -1, -100, Number.NEGATIVE_INFINITY]) {
+      let ran = false
+      await expect(
+        runSubagent(
+          async () => {
+            ran = true
+            return { output: "x", toolCalls: 0 }
+          },
+          { prompt: "y", depth: depth as number },
+        ),
+      ).rejects.toBeInstanceOf(MaxDepthExceeded)
+      expect(ran).toBe(false)
+    }
   })
 })
 
@@ -148,6 +167,56 @@ describe("SubagentEngine foreground", () => {
     expect(engine.resolveDepth(2)).toEqual({ depth: 3 })
     expect(engine.resolveDepth(MAX_SUBAGENT_DEPTH).failure?.code).toBe("depth_limit_exceeded")
     expect(engine.depthLimit).toBe(MAX_SUBAGENT_DEPTH)
+  })
+
+  it("refuses corrupt caller depths with a structured failure (never runs)", async () => {
+    let workerCalls = 0
+    const engine = new SubagentEngine({
+      runWorker: async () => {
+        workerCalls++
+        return { text: "", usage: { turns: 0, toolCalls: 0, durationMs: 0 } }
+      },
+    })
+    for (const depth of [Number.NaN, -1, Number.NEGATIVE_INFINITY]) {
+      const outcome = await engine.run(task(), { depth: depth as number })
+      expect(outcome.ok).toBe(false)
+      expect(outcome.error?.code).toBe("depth_limit_exceeded")
+    }
+    expect(workerCalls).toBe(0)
+  })
+
+  it("falls back to the default cap for a corrupt maxDepth (never runs open)", () => {
+    // NaN/Infinity disabled the guard entirely (`x >= NaN` is always false);
+    // a negative refused everything. All three now mean "default cap".
+    for (const maxDepth of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+      const engine = new SubagentEngine({
+        runWorker: async () => ({ text: "", usage: { turns: 0, toolCalls: 0, durationMs: 0 } }),
+        maxDepth: maxDepth as number,
+      })
+      expect(engine.depthLimit).toBe(MAX_SUBAGENT_DEPTH)
+    }
+    expect(
+      new SubagentEngine({
+        runWorker: async () => ({ text: "", usage: { turns: 0, toolCalls: 0, durationMs: 0 } }),
+        maxDepth: 0,
+      }).depthLimit,
+    ).toBe(0) // explicit 0 still means "no subagents"
+  })
+
+  it("caps retained usage records (oldest-first eviction past MAX_USAGE_ENTRIES)", async () => {
+    const engine = new SubagentEngine({
+      runWorker: async () => ({ text: "ok", usage: { turns: 1, toolCalls: 1, durationMs: 1 } }),
+    })
+    const total = MAX_USAGE_ENTRIES + 50
+    let lastId = ""
+    for (let i = 0; i < total; i++) {
+      const t = task()
+      lastId = t.id
+      await engine.run(t, { depth: 0 })
+    }
+    // Newest retained, oldest evicted, aggregate covers the window.
+    expect(engine.usageFor(lastId)).toBeDefined()
+    expect(engine.aggregateUsage().turns).toBe(MAX_USAGE_ENTRIES)
   })
 
   it("turns worker errors into worker_failed + subagent_fail (no throw)", async () => {

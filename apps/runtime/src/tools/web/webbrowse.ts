@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as https from "https"
@@ -52,7 +52,7 @@ function createSession(): BrowserSession {
     history: [],
     cookies: [],
     headers: {
-      "User-Agent": "trayambak-browser/0.3 (+agent)",
+      "User-Agent": "nemo-browser/0.3 (+agent)",
       Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5",
       "Accept-Language": "en-US,en;q=0.9",
     },

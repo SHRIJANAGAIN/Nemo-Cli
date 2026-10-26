@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -52,13 +52,13 @@ describe("resolveCors — allowed origins", () => {
 
   it("allows any loopback port, not just the API's own port", () => {
     // Deliberate: a loopback origin is same-machine (local dev servers,
-    // another trayambak instance). The web-origin model calls a different
+    // another nemo instance). The web-origin model calls a different
     // port cross-origin, and it is — we allow it on loopback only.
     expect(resolveCors("http://127.0.0.1:3000", HOST, "").allowed).toBe(true)
   })
 
   it("refuses a different-port origin on a NON-loopback host (same host, not same origin)", () => {
-    expect(resolveCors("http://console.skt.dev:3000", "console.skt.dev:8787", "").allowed).toBe(false)
+    expect(resolveCors("http://console.nemo.dev:3000", "console.nemo.dev:8787", "").allowed).toBe(false)
   })
 
   it("allows loopback origins so a local dev server keeps working", () => {
@@ -70,10 +70,10 @@ describe("resolveCors — allowed origins", () => {
   })
 
   it("allows an explicitly listed origin (exact match, not prefix)", () => {
-    expect(resolveCors("https://console.skt.dev", HOST, "https://console.skt.dev").allowed).toBe(true)
+    expect(resolveCors("https://console.nemo.dev", HOST, "https://console.nemo.dev").allowed).toBe(true)
     // A near-miss (subdomain or extra path) is NOT covered by the entry.
-    expect(resolveCors("https://evil.console.skt.dev", HOST, "https://console.skt.dev").allowed).toBe(false)
-    expect(resolveCors("https://console.skt.dev/evil", HOST, "https://console.skt.dev").allowed).toBe(false)
+    expect(resolveCors("https://evil.console.nemo.dev", HOST, "https://console.nemo.dev").allowed).toBe(false)
+    expect(resolveCors("https://console.nemo.dev/evil", HOST, "https://console.nemo.dev").allowed).toBe(false)
   })
 
   it("restores the wildcard only when explicitly asked for", () => {
@@ -104,7 +104,7 @@ describe("resolveCors — refused origins", () => {
   })
 
   it("refuses a non-loopback origin when the Host header is missing (nothing to anchor on)", () => {
-    expect(resolveCors("http://console.skt.dev", undefined, "").allowed).toBe(false)
+    expect(resolveCors("http://console.nemo.dev", undefined, "").allowed).toBe(false)
     // Loopback needs no anchor, so it still passes without a Host header.
     expect(resolveCors("http://127.0.0.1:8787", undefined, "").allowed).toBe(true)
   })

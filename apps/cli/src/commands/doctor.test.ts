@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -12,11 +12,12 @@ import * as path from "node:path"
 import type { AddressInfo } from "node:net"
 
 import type * as DoctorModule from "./doctor.js"
+import { VERSION } from "../version.js"
 
 /**
  * doctorCommand/infoCommand print via process.stdout.write and flip
  * process.exitCode on failure — both are captured and restored around every
- * test. Config comes from `<cwd>/.trayambak/config.json` in a throwaway cwd,
+ * test. Config comes from `<cwd>/.nemo/config.json` in a throwaway cwd,
  * and a temp home is installed while doctor.js loads so llama-cpp-bin's
  * module-load path constants (KNOWN_CANDIDATES, GPU cache) point into the
  * sandbox instead of the real profile. The server check is exercised against
@@ -41,23 +42,23 @@ const savedEnv: Record<string, string | undefined> = {}
 const servers: http.Server[] = []
 
 const ENV_KEYS = [
-  "TRAYAMBAK_BASE_URL",
-  "TRAYAMBAK_MODEL_PATH",
-  "TRAYAMBAK_LLAMACPP_BIN",
-  "TRAYAMBAK_MODEL",
-  "TRAYAMBAK_PROVIDER",
-  "TRAYAMBAK_API_KEY",
-  "TRAYAMBAK_CWD",
-  "TRAYAMBAK_MAX_TURNS",
-  "TRAYAMBAK_NATIVE_TOOLS",
-  "TRAYAMBAK_SHELL_COMMAND",
+  "NEMO_BASE_URL",
+  "NEMO_MODEL_PATH",
+  "NEMO_LLAMACPP_BIN",
+  "NEMO_MODEL",
+  "NEMO_PROVIDER",
+  "NEMO_API_KEY",
+  "NEMO_CWD",
+  "NEMO_MAX_TURNS",
+  "NEMO_NATIVE_TOOLS",
+  "NEMO_SHELL_COMMAND",
   // AGENTS.md: config tests must not depend on ambient env. Without this,
-  // an exported TRAYAMBAK_HOME points global config resolution outside the
+  // an exported NEMO_HOME points global config resolution outside the
   // sandbox and the developer's own overrides reach the defaults assertions.
-  "TRAYAMBAK_HOME",
+  "NEMO_HOME",
 ] as const
 
-const configFile = (): string => path.join(tmp, ".trayambak", "config.json")
+const configFile = (): string => path.join(tmp, ".nemo", "config.json")
 
 function writeConfig(value: Record<string, unknown>): void {
   fs.mkdirSync(path.dirname(configFile()), { recursive: true })
@@ -112,7 +113,7 @@ async function closeServers(): Promise<void> {
 
 beforeAll(async () => {
   originalCwd = process.cwd()
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-doctor-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-doctor-home-"))
 
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
@@ -122,7 +123,7 @@ beforeAll(async () => {
   // USERPROFILE/HOME stay sandboxed for the WHOLE file (restored in
   // afterAll), not just during import: infoCommand resolves the global
   // config at print time, so restoring here let the developer's real
-  // ~/.trayambak/config.json (provider/baseUrl/model overrides) bleed into
+  // ~/.nemo/config.json (provider/baseUrl/model overrides) bleed into
   // the "prints the defaults" assertions and made this suite fail on any
   // machine that had ever customized its profile.
 }, 60_000)
@@ -143,8 +144,8 @@ afterAll(() => {
 })
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-doctor-"))
-  fs.mkdirSync(path.join(tmp, ".trayambak"), { recursive: true })
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-doctor-"))
+  fs.mkdirSync(path.join(tmp, ".nemo"), { recursive: true })
   process.chdir(tmp)
 
   for (const key of ENV_KEYS) {
@@ -182,7 +183,6 @@ afterEach(async () => {
 
 describe("infoCommand", () => {
   it("prints version, runtime and the resolved config", () => {
-    fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ version: "9.9.9" }), "utf8")
     // baseUrl is pinned EXPLICITLY at the project layer. The old
     // expectation ("integrate.api.nvidia.com") asserted a value this test
     // never set — it leaked in from DEFAULTS or the machine's profile and
@@ -193,7 +193,7 @@ describe("infoCommand", () => {
 
     doctor.infoCommand()
 
-    expect(out.split("\n")[0]).toBe("trayambak 9.9.9")
+    expect(out.split("\n")[0]).toBe(`nemo ${VERSION}`)
     expect(out).toContain(`node      v${process.versions.node}`)
     expect(out).toContain(`platform  ${process.platform} ${process.arch}`)
     expect(out).toContain(`cwd       ${tmp}`)
@@ -214,7 +214,7 @@ describe("doctorCommand", () => {
     writeConfig({ baseUrl: `http://127.0.0.1:${portOf(server)}` })
     const bin = path.join(tmp, "llama-server.exe")
     fs.writeFileSync(bin, "fake binary", "utf8")
-    process.env.TRAYAMBAK_LLAMACPP_BIN = bin
+    process.env.NEMO_LLAMACPP_BIN = bin
 
     await doctor.doctorCommand()
 
@@ -249,7 +249,7 @@ describe("doctorCommand", () => {
     // deterministic regardless of llama.cpp installs on the host machine.
     const bin = path.join(tmp, "llama-server.exe")
     fs.writeFileSync(bin, "fake binary", "utf8")
-    process.env.TRAYAMBAK_LLAMACPP_BIN = bin
+    process.env.NEMO_LLAMACPP_BIN = bin
 
     await doctor.doctorCommand()
 
@@ -260,5 +260,63 @@ describe("doctorCommand", () => {
     expect(failedSection).not.toContain("GGUF model")
     expect(failedSection).not.toContain("llama.cpp server binary")
     expect(exitCode()).toBe(1)
+  })
+
+  it("caps an oversized-but-finite response instead of buffering it whole", async () => {
+    const server = await startServer((_req, res) => {
+      res.setHeader("content-type", "application/json")
+      // 200 KB of almost-valid JSON: the probe must answer from the capped
+      // prefix, never materialise the whole body.
+      res.end(`{"data": [` + `"${"x".repeat(200 * 1024)}"`)
+    })
+    writeConfig({ baseUrl: `http://127.0.0.1:${portOf(server)}` })
+    const bin = path.join(tmp, "llama-server.exe")
+    fs.writeFileSync(bin, "fake binary", "utf8")
+    process.env.NEMO_LLAMACPP_BIN = bin
+
+    await doctor.doctorCommand()
+
+    // Capped mid-body: answered from the prefix (or refused at the cap),
+    // never buffered whole, never hung.
+    expect(out).toMatch(/closed mid-response|unparseable/)
+    expect(exitCode()).toBe(1)
+  })
+
+  it("answers promptly when the server never stops sending (trickle-OOM guard)", async () => {
+    const server = await startServer((_req, res) => {
+      res.setHeader("content-type", "application/octet-stream")
+      const timer = setInterval(() => {
+        try {
+          res.write("x".repeat(4096))
+        } catch {
+          /* client went away */
+        }
+      }, 5)
+      res.on("close", () => clearInterval(timer))
+    })
+    writeConfig({ baseUrl: `http://127.0.0.1:${portOf(server)}` })
+    const bin = path.join(tmp, "llama-server.exe")
+    fs.writeFileSync(bin, "fake binary", "utf8")
+    process.env.NEMO_LLAMACPP_BIN = bin
+
+    // Would hang forever uncapped (socket timeout needs 3 s of silence and
+    // the trickle never goes silent); must settle via the cap instead.
+    await doctor.doctorCommand()
+
+    expect(out).toContain("Failed checks:")
+    expect(out).toMatch(/closed mid-response|connection failed/)
+    expect(exitCode()).toBe(1)
+  }, 30_000)
+})
+
+describe("appendProbeChunk", () => {
+  it("accumulates under the cap and reports over only past it", () => {
+    const cap = doctor.DOCTOR_PROBE_MAX_BYTES
+    expect(cap).toBe(64 * 1024)
+    expect(doctor.appendProbeChunk("", "abc")).toEqual({ buf: "abc", over: false })
+    const almost = "y".repeat(cap - 3)
+    expect(doctor.appendProbeChunk(almost, "abcdef")).toEqual({ buf: `${almost}abc`, over: true })
+    // At the cap: nothing more buffered, still over.
+    expect(doctor.appendProbeChunk("y".repeat(cap), "z")).toEqual({ buf: "y".repeat(cap), over: true })
   })
 })

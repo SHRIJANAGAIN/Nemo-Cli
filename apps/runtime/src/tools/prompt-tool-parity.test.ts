@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -12,15 +12,15 @@
  * model wastes turns calling tools that do not exist (and reports a failed
  * tool call to the user instead of doing work).
  *
- * This caught 8 phantom tools before it existed: trayambak__EnterPlanMode,
- * trayambak__RunWorkflow, plan, open_plan, and six trayambak__Pentest* names
+ * This caught 8 phantom tools before it existed: nemo__EnterPlanMode,
+ * nemo__RunWorkflow, plan, open_plan, and six nemo__Pentest* names
  * that appeared only in power-prompt.ts.
  */
 
 import { describe, expect, it } from "vitest"
 import { createDefaultTools, toolDefinitions, buildArsenalFromConfig, TOOLSET_DEFS } from "./index.js"
 import { buildSystemPrompt } from "../prompt/power-prompt.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 
 function builtPrompt(): { prompt: string; registered: Set<string> } {
   const { tools } = createDefaultTools()
@@ -34,9 +34,9 @@ function builtPrompt(): { prompt: string; registered: Set<string> } {
   return { prompt, registered }
 }
 
-/** Every `trayambak__Foo` token appearing anywhere in the prompt. */
+/** Every `nemo__Foo` token appearing anywhere in the prompt. */
 function promisedPrefixedTools(prompt: string): string[] {
-  return [...new Set([...prompt.matchAll(/trayambak__([A-Za-z0-9_]+)/g)].map((m) => "trayambak__" + m[1]))].sort()
+  return [...new Set([...prompt.matchAll(/nemo__([A-Za-z0-9_]+)/g)].map((m) => "nemo__" + m[1]))].sort()
 }
 
 /**
@@ -57,7 +57,7 @@ function promisedBulletTools(prompt: string): string[] {
 }
 
 describe("system prompt promises only registered tools", () => {
-  it("every trayambak__* name in the prompt is a real registered tool", () => {
+  it("every nemo__* name in the prompt is a real registered tool", () => {
     const { prompt, registered } = builtPrompt()
     const promised = promisedPrefixedTools(prompt)
     expect(promised.length).toBeGreaterThan(10)
@@ -80,7 +80,7 @@ describe("system prompt promises only registered tools", () => {
     const { prompt } = builtPrompt()
     // These appeared only in power-prompt.ts and had no implementation. The
     // real plan mode is the /plan permission uiMode, not a tool call.
-    for (const ghost of ["open_plan", "trayambak__EnterPlanMode", "trayambak__PentestWebApp"]) {
+    for (const ghost of ["open_plan", "nemo__EnterPlanMode", "nemo__PentestWebApp"]) {
       expect(prompt, `${ghost} is advertised but has no implementation`).not.toContain(ghost)
     }
   })
@@ -97,7 +97,7 @@ describe("system prompt promises only registered tools", () => {
     const config = {
       cwd: process.cwd(),
       toolsets: { defaults: TOOLSET_DEFS.map((def) => def.name) },
-    } as unknown as TrayambakConfig
+    } as unknown as NemoConfig
     const arsenal = buildArsenalFromConfig(config)
     const resolved = new Set(arsenal.resolveTools(createDefaultTools().tools).map((t) => t.definition.name))
     const declared = new Set(TOOLSET_DEFS.flatMap((def) => def.toolNames))
@@ -110,7 +110,7 @@ describe("system prompt promises only registered tools", () => {
     const names = new Set(tools.map((t) => t.definition.name))
     expect(names.has("set_mode")).toBe(true)
     expect(names.has("get_mode")).toBe(true)
-    expect(names.has("trayambak__NotebookEdit")).toBe(true)
-    expect(names.has("trayambak__RunWorkflow")).toBe(true)
+    expect(names.has("nemo__NotebookEdit")).toBe(true)
+    expect(names.has("nemo__RunWorkflow")).toBe(true)
   })
 })

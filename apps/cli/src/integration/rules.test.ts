@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -14,7 +14,7 @@ import { ensureDefaultAgentsMd, getRulePaths, getRulesContextBlock, loadRules, w
 /**
  * loadRules walks UP from cwd, so the project root is a fresh temp dir (wiped
  * per test) whose ancestors contain no rule files; os.homedir() is pinned to a
- * temp home for the whole file so the `global` origin reads ~/.trayambak from
+ * temp home for the whole file so the `global` origin reads ~/.nemo from
  * there and never from the real profile. Assertions target OUR entries (cwd
  * always sorts first) so an ambient ancestor file can't flip them.
  */
@@ -26,8 +26,8 @@ let savedHome: string | undefined
 const projectFile = (name: string): string => path.join(project, name)
 
 beforeAll(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-rules-home-"))
-  project = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-rules-proj-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-rules-home-"))
+  project = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-rules-proj-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -46,7 +46,7 @@ afterAll(() => {
 beforeEach(() => {
   fs.rmSync(project, { recursive: true, force: true })
   fs.mkdirSync(project, { recursive: true })
-  fs.rmSync(path.join(home, ".trayambak"), { recursive: true, force: true })
+  fs.rmSync(path.join(home, ".nemo"), { recursive: true, force: true })
 })
 
 describe("loadRules", () => {
@@ -77,15 +77,15 @@ describe("loadRules", () => {
     expect(rules.some((rule) => rule.path === path.resolve(projectFile("AGENTS.md")))).toBe(true)
   })
 
-  it("surfaces global ~/.trayambak rules tagged with origin global", () => {
+  it("surfaces global ~/.nemo rules tagged with origin global", () => {
     const globalPath = writeRule("CONTEXT.md", "global context rules", home, "global")
-    expect(globalPath).toBe(path.join(home, ".trayambak", "CONTEXT.md"))
+    expect(globalPath).toBe(path.join(home, ".nemo", "CONTEXT.md"))
 
     const rules = loadRules(project)
     const globalRule = rules.find((rule) => rule.origin === "global")
     expect(globalRule?.name).toBe("CONTEXT.md")
     expect(globalRule?.content).toBe("global context rules")
-    expect(globalRule?.path).toBe(path.resolve(path.join(home, ".trayambak", "CONTEXT.md")))
+    expect(globalRule?.path).toBe(path.resolve(path.join(home, ".nemo", "CONTEXT.md")))
   })
 
   it("returns no project rules for an empty tree walk of our own files", () => {
@@ -148,7 +148,7 @@ describe("writeRule", () => {
     expect(loaded?.content).toBe("hello rules")
   })
 
-  it("global scope writes into the stubbed home's .trayambak", () => {
+  it("global scope writes into the stubbed home's .nemo", () => {
     const written = writeRule("AGENTS.md", "home rules", home, "global")
     expect(written.startsWith(home)).toBe(true)
     expect(fs.readFileSync(written, "utf8")).toBe("home rules")
@@ -164,13 +164,13 @@ describe("ensureDefaultAgentsMd", () => {
     expect(created).toBe(projectFile("AGENTS.md"))
 
     const content = fs.readFileSync(projectFile("AGENTS.md"), "utf8")
-    expect(content).toContain("# Trayambak Project Rules")
+    expect(content).toContain("# Nemo Project Rules")
     expect(content).toContain("npm run build")
 
     // While the template is in place, loadRules discovers it.
     const templateRule = loadRules(project).find((rule) => rule.path === path.resolve(projectFile("AGENTS.md")))
     expect(templateRule?.origin).toBe("project")
-    expect(templateRule?.content).toContain("# Trayambak Project Rules")
+    expect(templateRule?.content).toContain("# Nemo Project Rules")
 
     // Existing file wins: no regeneration, no overwrite.
     fs.writeFileSync(projectFile("AGENTS.md"), "user's own rules", "utf8")

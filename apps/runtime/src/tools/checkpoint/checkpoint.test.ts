@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "node:fs"
@@ -16,7 +16,7 @@ import type { ToolContext, ToolResult } from "../types.js"
 const dirs: string[] = []
 
 function tmpCtx(): { dir: string; ctx: ToolContext } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-checkpoint-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-checkpoint-"))
   dirs.push(dir)
   return { dir, ctx: { cwd: dir } as unknown as ToolContext }
 }
@@ -33,7 +33,7 @@ function resultText(r: ToolResult): string {
 }
 
 function checkpointRoot(dir: string): string {
-  return path.join(dir, ".trayambak", "checkpoints")
+  return path.join(dir, ".nemo", "checkpoints")
 }
 
 function readManifest(dir: string, id: string): Record<string, unknown> {
@@ -62,7 +62,7 @@ async function rewind(ctx: ToolContext, args: Record<string, unknown>): Promise<
 }
 
 function supportsSymlinks(): boolean {
-  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-symlink-probe-"))
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-symlink-probe-"))
   try {
     const target = path.join(probeDir, "target.txt")
     fs.writeFileSync(target, "x", "utf8")
@@ -78,7 +78,7 @@ function supportsSymlinks(): boolean {
 const SYMLINKS_SUPPORTED = supportsSymlinks()
 
 function supportsDirectorySymlinks(): boolean {
-  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-junction-probe-"))
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-junction-probe-"))
   try {
     const target = path.join(probeDir, "target")
     fs.mkdirSync(target)
@@ -94,7 +94,7 @@ function supportsDirectorySymlinks(): boolean {
 
 const DIRECTORY_SYMLINKS_SUPPORTED = supportsDirectorySymlinks()
 
-describe("trayambak__Checkpoint + trayambak__Rewind round trip", () => {
+describe("nemo__Checkpoint + nemo__Rewind round trip", () => {
   it("restores snapshotted bytes and stashes the current ones", async () => {
     const { dir, ctx } = tmpCtx()
     fs.mkdirSync(path.join(dir, "src"))
@@ -162,7 +162,7 @@ describe("trayambak__Checkpoint + trayambak__Rewind round trip", () => {
   })
 })
 
-describe("trayambak__Checkpoint manifest", () => {
+describe("nemo__Checkpoint manifest", () => {
   it("records the sha256 and size of exactly the bytes it stored", async () => {
     const { dir, ctx } = tmpCtx()
     fs.mkdirSync(path.join(dir, "src"))
@@ -186,13 +186,13 @@ describe("trayambak__Checkpoint manifest", () => {
   })
 })
 
-describe("trayambak__Checkpoint refusals", () => {
+describe("nemo__Checkpoint refusals", () => {
   it("reports a missing file as a structured error and writes nothing", async () => {
     const { dir, ctx } = tmpCtx()
     const result = await createCheckpointTool().execute("cp", { paths: ["nope.txt"] }, undefined, undefined, ctx)
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain("not found")
-    expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
   })
 
   it("refuses an empty paths list", async () => {
@@ -213,12 +213,12 @@ describe("trayambak__Checkpoint refusals", () => {
     )
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain("Access denied")
-    expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
   })
 
   it("refuses an absolute path outside the workspace cwd", async () => {
     const { ctx } = tmpCtx()
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-checkpoint-outside-"))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-checkpoint-outside-"))
     dirs.push(outside)
     fs.writeFileSync(path.join(outside, "secret.txt"), "outside\n", "utf8")
 
@@ -252,7 +252,7 @@ describe("trayambak__Checkpoint refusals", () => {
     const result = await createCheckpointTool().execute("cp", { paths: ["big.bin"] }, undefined, undefined, ctx)
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain("per-file cap")
-    expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
   })
 
   it("refuses a snapshot over the 100MB total cap without creating storage", async () => {
@@ -269,12 +269,12 @@ describe("trayambak__Checkpoint refusals", () => {
     const result = await createCheckpointTool().execute("cp", { paths }, undefined, undefined, ctx)
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain("checkpoint cap")
-    expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
   })
 
   it.skipIf(!SYMLINKS_SUPPORTED)("refuses a symlink whose target escapes the workspace", async () => {
     const { dir, ctx } = tmpCtx()
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-checkpoint-link-"))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-checkpoint-link-"))
     dirs.push(outside)
     const outsideFile = path.join(outside, "secret.txt")
     fs.writeFileSync(outsideFile, "outside\n", "utf8")
@@ -283,14 +283,14 @@ describe("trayambak__Checkpoint refusals", () => {
     const result = await createCheckpointTool().execute("cp", { paths: ["link.txt"] }, undefined, undefined, ctx)
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain("Access denied")
-    expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
   })
 
   it.skipIf(!DIRECTORY_SYMLINKS_SUPPORTED)(
     "refuses a file reached through a directory symlink that escapes the workspace",
     async () => {
       const { dir, ctx } = tmpCtx()
-      const outside = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-checkpoint-dirlink-"))
+      const outside = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-checkpoint-dirlink-"))
       dirs.push(outside)
       fs.writeFileSync(path.join(outside, "secret.txt"), "outside\n", "utf8")
       fs.symlinkSync(outside, path.join(dir, "linkdir"), "junction")
@@ -304,12 +304,12 @@ describe("trayambak__Checkpoint refusals", () => {
       )
       expect(result.isError).toBe(true)
       expect(resultText(result)).toContain("Access denied")
-      expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+      expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
     },
   )
 })
 
-describe("trayambak__Rewind refusals", () => {
+describe("nemo__Rewind refusals", () => {
   it("refuses an unknown checkpoint id", async () => {
     const { ctx } = tmpCtx()
     const { result, text } = await rewind(ctx, { checkpoint_id: "does-not-exist" })

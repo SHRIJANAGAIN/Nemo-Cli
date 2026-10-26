@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Per-session transcript store (Kimi parity):
- *   ~/.trayambak/sessions/<uuid>/context.jsonl  (message history, JSONL)
- *   ~/.trayambak/sessions/<uuid>/wire.jsonl      (event log, JSONL)
- *   ~/.trayambak/sessions/<uuid>/state.json      (title, updatedAt, workDir)
+ *   ~/.nemo/sessions/<uuid>/context.jsonl  (message history, JSONL)
+ *   ~/.nemo/sessions/<uuid>/wire.jsonl      (event log, JSONL)
+ *   ~/.nemo/sessions/<uuid>/state.json      (title, updatedAt, workDir)
  * Atomic 0600 writes, legacy single-file migrate, empty-session skip.
  */
 
@@ -16,7 +16,7 @@ import * as crypto from "crypto"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
-import { assertSessionId } from "../../core/src/validate.js"
+import { assertSessionId, isRemoteUncPath } from "../../core/src/validate.js"
 
 // The choke point lives in packages/core so apps/cli (and any other
 // consumer) shares ONE rule instead of a drifting copy. Re-exported here
@@ -31,8 +31,22 @@ export interface TranscriptState {
 }
 
 export function sessionsRoot(): string {
-  if (process.env.TRAYAMBAK_SESSIONS_DIR) return process.env.TRAYAMBAK_SESSIONS_DIR
-  return path.join(os.homedir(), ".trayambak", "sessions")
+  const explicit = process.env.NEMO_SESSIONS_DIR
+  if (explicit) {
+    // Same NTLM/SMB class as config/session UNC paths: every transcript op
+    // below (existsSync, mkdir, read, atomic write) would authenticate to
+    // the remote host. Refuse BEFORE any probe, loudly, and fall back.
+    if (isRemoteUncPath(explicit)) {
+      try {
+        process.stderr.write(
+          `nemo: refusing remote UNC sessions dir ${JSON.stringify(explicit)} — using the default sessions location instead.\n`,
+        )
+      } catch {
+        /* stderr unavailable */
+      }
+    } else return explicit
+  }
+  return path.join(os.homedir(), ".nemo", "sessions")
 }
 
 export function newTranscriptId(): string {

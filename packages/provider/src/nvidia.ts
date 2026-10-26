@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as http from "http"
@@ -14,7 +14,7 @@ import { clampTemperature } from "./types.js"
 import { expandWireMessages } from "./vision.js"
 import { buildPromptCacheKey, withPromptCacheKey } from "./prompt-cache.js"
 
-interface SktTool {
+interface NemoTool {
   type: "function"
   function: { name: string; description: string; parameters: unknown }
 }
@@ -30,7 +30,7 @@ function isTransientNetworkError(err: unknown): boolean {
   return code === "ECONNRESET" || code === "EPIPE" || /socket hang up|ECONNRESET|EPIPE|connection closed/i.test(msg)
 }
 
-function toSktTools(tools: ToolDefinition[]): SktTool[] {
+function toNemoTools(tools: ToolDefinition[]): NemoTool[] {
   return tools.map((tool) => ({
     type: "function",
     function: {
@@ -65,7 +65,7 @@ export function nvidiaReasoningParamsAllowed(baseUrl: string): boolean {
 /**
  * Whether `prompt_cache_key` may be sent at all (#123 follow-up).
  *
- * Default OFF, explicit opt-in only (`TRAYAMBAK_PROMPT_CACHE_KEY_ENABLED=1`).
+ * Default OFF, explicit opt-in only (`NEMO_PROMPT_CACHE_KEY_ENABLED=1`).
  * Proven by live 400s: NVIDIA's cloud rejects the key outright, and OpenAI +
  * strict gateways reject unrecognized arguments the same documented way —
  * and this base class serves OpenAI direct, xAI, Ollama, HuggingFace, custom
@@ -75,7 +75,7 @@ export function nvidiaReasoningParamsAllowed(baseUrl: string): boolean {
  * documents the key re-enable it with the env flag.
  */
 export function promptCacheKeyAllowed(): boolean {
-  return process.env.TRAYAMBAK_PROMPT_CACHE_KEY_ENABLED === "1"
+  return process.env.NEMO_PROMPT_CACHE_KEY_ENABLED === "1"
 }
 
 /**
@@ -121,6 +121,7 @@ export class NvidiaProvider implements Provider {
   }
 
   protected postCompletion(path: string, payload: unknown, signal: AbortSignal | undefined): Promise<string> {
+    this.assertUsableKey()
     const base = new url.URL(this.options.baseUrl.replace(/\/+$/, ""))
     const isHttps = base.protocol === "https:"
     const lib = isHttps ? https : http
@@ -243,7 +244,7 @@ export class NvidiaProvider implements Provider {
     this.applyReasoning(body)
 
     if (input.tools && input.tools.length > 0) {
-      body.tools = toSktTools(input.tools)
+      body.tools = toNemoTools(input.tools)
       body.tool_choice = "auto"
       body.parallel_tool_calls = false
     }
@@ -256,6 +257,25 @@ export class NvidiaProvider implements Provider {
     return withPromptCacheKey(body, buildPromptCacheKey(input.system, input.tools))
   }
 
+  /**
+   * Preflight for NVIDIA's own cloud only: a junk or missing key produces an
+   * opaque 401 ("Invalid JWT serialization: Missing dot delimiter(s)") after a
+   * full round trip, so reject it here with the same fix `/provider key` offers.
+   * Local and gateway targets are exempt — they define their own key format.
+   */
+  private assertUsableKey(): void {
+    if (!nvidiaReasoningParamsAllowed(this.options.baseUrl)) return
+    const key = (this.options.apiKey ?? "").trim()
+    if (key.length === 0) {
+      throw new Error("No NVIDIA API key configured — run `/provider key` to add one (nvapi-… from build.nvidia.com).")
+    }
+    if (!/^nvapi-/i.test(key)) {
+      throw new Error(
+        `NVIDIA API key looks wrong (${key.length} chars, does not start with "nvapi-") — run \`/provider key\` to re-paste the bare key from build.nvidia.com.`,
+      )
+    }
+  }
+
   protected postJson(
     path: string,
     payload: unknown,
@@ -263,6 +283,7 @@ export class NvidiaProvider implements Provider {
     callbacks: ChatInput["callbacks"],
     retried = false,
   ): Promise<AssistantMessage> {
+    this.assertUsableKey()
     const base = new url.URL(this.options.baseUrl.replace(/\/+$/, ""))
     const isHttps = base.protocol === "https:"
     const lib = isHttps ? https : http

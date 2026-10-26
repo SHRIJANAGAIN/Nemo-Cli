@@ -1,27 +1,27 @@
 ---
 name: security-scan
-description: Scan your Trayambak Code configuration (.trayambak/ directory) for security vulnerabilities, misconfigurations, and injection risks using AgentShield. Checks TRAYAMBAK.md, settings.json, MCP servers, hooks, and agent definitions. Use when auditing a .trayambak/ directory — TRAYAMBAK.md, settings.json, MCP servers, hooks, or agent definitions.
+description: Scan your Nemo Code configuration (.nemo/ directory) for security vulnerabilities, misconfigurations, and injection risks using AgentShield. Checks NEMO.md, settings.json, MCP servers, hooks, and agent definitions. Use when auditing a .nemo/ directory — NEMO.md, settings.json, MCP servers, hooks, or agent definitions.
 metadata:
   origin: ECC
 ---
 
 # Security Scan Skill
 
-Audit your Trayambak Code configuration for security issues using [AgentShield](https://github.com/affaan-m/agentshield).
+Audit your Nemo Code configuration for security issues using [AgentShield](https://github.com/affaan-m/agentshield).
 
 ## When to Activate
 
-- Setting up a new Trayambak Code project
-- After modifying `.trayambak/settings.json`, `TRAYAMBAK.md`, or MCP configs
+- Setting up a new Nemo Code project
+- After modifying `.nemo/settings.json`, `NEMO.md`, or MCP configs
 - Before committing configuration changes
-- When onboarding to a new repository with existing Trayambak Code configs
+- When onboarding to a new repository with existing Nemo Code configs
 - Periodic security hygiene checks
 
 ## What It Scans
 
 | File            | Checks                                                                           |
 | --------------- | -------------------------------------------------------------------------------- |
-| `TRAYAMBAK.md`  | Hardcoded secrets, auto-run instructions, prompt injection patterns              |
+| `NEMO.md`  | Hardcoded secrets, auto-run instructions, prompt injection patterns              |
 | `settings.json` | Overly permissive allow lists, missing deny lists, dangerous bypass flags        |
 | `mcp.json`      | Risky MCP servers, hardcoded env secrets, npx supply chain risks                 |
 | `hooks/`        | Command injection via interpolation, data exfiltration, silent error suppression |
@@ -46,14 +46,14 @@ npx ecc-agentshield scan .
 
 ### Basic Scan
 
-Run against the current project's `.trayambak/` directory:
+Run against the current project's `.nemo/` directory:
 
 ```bash
 # Scan current project
 npx ecc-agentshield scan
 
 # Scan a specific path
-npx ecc-agentshield scan --path /path/to/.trayambak
+npx ecc-agentshield scan --path /path/to/.nemo
 
 # Scan with minimum severity filter
 npx ecc-agentshield scan --min-severity medium
@@ -94,8 +94,8 @@ This will:
 Run the adversarial three-agent pipeline for deeper analysis:
 
 ```bash
-# Requires TRAYAMBAK_API_KEY
-export TRAYAMBAK_API_KEY=your-key
+# Requires NEMO_API_KEY
+export NEMO_API_KEY=your-key
 npx ecc-agentshield scan --opus --stream
 ```
 
@@ -107,7 +107,7 @@ This runs:
 
 ### Initialize Secure Config
 
-Scaffold a new secure `.trayambak/` configuration from scratch:
+Scaffold a new secure `.nemo/` configuration from scratch:
 
 ```bash
 npx ecc-agentshield init
@@ -116,7 +116,7 @@ npx ecc-agentshield init
 Creates:
 
 - `settings.json` with scoped permissions and deny list
-- `TRAYAMBAK.md` with security best practices
+- `NEMO.md` with security best practices
 - `mcp.json` placeholder
 
 ### GitHub Action
@@ -152,7 +152,7 @@ Add to your CI pipeline:
 
 ### High Findings (fix before production)
 
-- Auto-run instructions in TRAYAMBAK.md (prompt injection vector)
+- Auto-run instructions in NEMO.md (prompt injection vector)
 - Missing deny lists in permissions
 - Agents with unnecessary Bash access
 

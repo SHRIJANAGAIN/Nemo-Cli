@@ -1,10 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * In-memory transcript bound — the fix for heap-death freezes (observed:
@@ -36,9 +36,14 @@ export const TRANSCRIPT_FOLD_KEEP_NEWEST_THINKING = 2
 /** Bytes kept at each end of a folded tool output. */
 export const TRANSCRIPT_FOLD_HEAD_TAIL_BYTES = 600
 
-function rowBytes(m: TrayambakMessage): number {
+function rowBytes(m: NemoMessage): number {
   let n = m.content.length + (m.thinking?.length ?? 0) + (m.result?.length ?? 0)
   n += m.subagentDetail?.length ?? 0
+  // The full task prompt rides on every subagent card until the row dies.
+  // It is never folded itself (cards render it), but it IS retained heap, so
+  // the cap must see it — otherwise a transcript of prompt-heavy cards reads
+  // as "under the cap" while holding megabytes the guard never accounts for.
+  n += m.subagentPrompt?.length ?? 0
   if (m.parts) {
     for (const p of m.parts) {
       const text = p.text
@@ -58,7 +63,7 @@ function foldToolContent(content: string): string {
   return `${head}\n…[output folded: showing ${keptKb}KB of ${totalKb}KB]\n${tail}`
 }
 
-export function foldTranscript(messages: TrayambakMessage[]): TrayambakMessage[] {
+export function foldTranscript(messages: NemoMessage[]): NemoMessage[] {
   let total = 0
   for (const m of messages) total += rowBytes(m)
   if (total <= TRANSCRIPT_SOFT_CAP_BYTES) return messages

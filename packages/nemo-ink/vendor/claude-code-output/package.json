@@ -1,0 +1,11 @@
+{
+  "name": "@claude-code/output",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vendored stand-in for the unpublished @claude-code/output package (registry E404): grapheme and string helpers the nemo-ink fork's vim layer consumes. See the files for scope.",
+  "type": "module",
+  "exports": {
+    "./utils/intl.js": "./utils/intl.js",
+    "./utils/stringUtils.js": "./utils/stringUtils.js"
+  }
+}

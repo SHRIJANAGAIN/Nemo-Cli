@@ -1,6 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
+ */
 import { existsSync } from "fs"
 
+import { isEnabled } from "../../core/src/feature_flags.js"
 import { windowsAcCapable } from "./windows-ac.js"
 
 /**
@@ -17,13 +25,21 @@ import { windowsAcCapable } from "./windows-ac.js"
  *
  * - None: No sandbox (fallback for unsupported platforms)
  * - MacosSeatbelt: macOS sandbox-exec with .sbpl policy files
- * - LinuxSeccomp: Linux landlock + seccomp + bubblewrap
+ * - LinuxSeccomp: Linux namespaces + seccomp filter + bubblewrap
+ * - LinuxNamespace: Linux namespaces + bubblewrap, NO seccomp filter
  * - WindowsRestrictedToken: Windows restricted token sandbox
+ *
+ * `LinuxNamespace` exists because `LinuxSeccomp` was reported unconditionally
+ * while no seccomp filter was ever installed. A handle naming a layer it does not
+ * have is worse than one naming the layer it does have: the caller cannot warn
+ * about a protection it believes is present. It is set only when the filter could
+ * not be staged, and `fallbackReason` says so on the same handle.
  */
 export enum SandboxType {
   None = "none",
   MacosSeatbelt = "seatbelt",
   LinuxSeccomp = "seccomp",
+  LinuxNamespace = "linux_namespace",
   WindowsRestrictedToken = "windows_sandbox",
 }
 
@@ -82,15 +98,6 @@ export interface FileSystemSandboxPolicy {
 }
 
 /**
- * Windows sandbox configuration.
- */
-export interface WindowsSandboxConfig {
-  level: "none" | "restricted-token" | "elevated"
-  workspaceRoots: string[]
-  desktop: "public" | "private"
-}
-
-/**
  * Complete sandbox request for spawning a process.
  */
 export interface SpawnRequest {
@@ -105,13 +112,22 @@ export interface SpawnRequest {
   /** Network sandbox policy. */
   networkPolicy: NetworkSandboxPolicy
   /**
-   * Filesystem sandbox policy. Carries writable roots and read-only carve-
-   * outs for policy consumers; spawnProcess does not yet apply these to the
-   * OS sandbox itself (enforcement defaults to policy-only).
+   * Filesystem sandbox policy. Carries writable roots and read-only carve-outs.
+   *
+   * Applied to the OS sandbox: `seatbeltProfile` and `landlockArgs` both read it.
+   * It used to be threaded this far and read by neither backend, which is why
+   * both reported `isSandboxed: true` over a writable workspace during a
+   * read-only session.
    */
   filesystemPolicy: FileSystemSandboxPolicy
-  /** Windows-specific configuration. */
-  windowsConfig?: WindowsSandboxConfig
+  /**
+   * Linux only. False to spawn without the seccomp filter.
+   *
+   * Defaults to true: an absent field must not mean "off", because every
+   * existing caller was written before the filter existed and would otherwise
+   * silently keep the thinner sandbox. Callers that want it off have to say so.
+   */
+  seccomp?: boolean
   /** Output byte cap — the default ceiling for SpawnedProcess.readAll. */
   outputCap: number
   /** Timeout in milliseconds. Enforced by spawnProcess (<= 0 disables). */
@@ -263,11 +279,11 @@ export function filterEnv(
 
   // Add sandbox metadata
   const sandboxType = (permissions.__sandboxType as string | undefined) ?? "none"
-  filtered["CODEX_SANDBOX"] = sandboxType
+  filtered["NEMO_SANDBOX"] = sandboxType
 
   const networkPolicy = permissions.__networkPolicy as NetworkSandboxPolicy | undefined
   if (networkPolicy?.disableNetwork) {
-    filtered["CODEX_SANDBOX_NETWORK_DISABLED"] = "true"
+    filtered["NEMO_SANDBOX_NETWORK_DISABLED"] = "true"
   }
 
   return filtered
@@ -275,22 +291,39 @@ export function filterEnv(
 
 /**
  * Detect the appropriate sandbox type for the current platform and permissions.
+ *
+ * Every mode engages the OS isolator when the platform has one. The two
+ * short-circuits that used to report `SandboxType.None` are gone:
+ *
+ *  - **`yolo` / `full-access` no longer disables the sandbox.** "Full access"
+ *    meant "stop asking me", never "turn the kernel off". The escape hatch
+ *    for a genuinely unrestricted shell is `FEATURE_SANDBOXSPAWN=0`, which is
+ *    explicit, documented, and reviewable — unlike a config alias that
+ *    silently removed OS containment.
+ *  - **`read-only` / `plan` no longer report `None`.** This was the
+ *    unimplemented placeholder that promised a filesystem sandbox and
+ *    delivered `None`, and it was backwards: the two modes that promise the
+ *    MOST restriction were the only two carrying NO OS containment, so a
+ *    "safe" session ran with nothing behind it but the in-process screen.
+ *
+ * The mode still matters — it now selects the *filesystem* policy
+ * (`osSpawnRequest({ readOnly: true })` in the bash tool) instead of switching
+ * the isolator off. That is the correct shape: the isolator is a property of
+ * the platform, the restriction is a property of the mode.
+ *
+ * The feature flag is consulted HERE and not only in `shouldUseOsSandbox`,
+ * because `getSafeEnv` stamps this value verbatim into the child environment
+ * as `NEMO_SANDBOX`. A capability detected while the flag is off would put an
+ * unapplied "sandboxed" claim on every spawn, which is the exact
+ * marker-claims-enforcement-that-never-applied failure the repo's honest-
+ * descriptor rules exist to prevent.
+ *
+ * The permissions bag is retained on the signature because every caller
+ * already builds it (`bash.ts` derives it from the tool context); the mode it
+ * carries is consumed by the filesystem policy, not by this decision.
  */
-export function detectSandboxType(permissions: Record<string, unknown>): SandboxType {
-  const mode = permissions.mode as string
-  const uiMode = permissions.uiMode as string
-
-  // Yolo/full-access modes get no sandbox (for backward compat)
-  if (mode === "yolo" || uiMode === "full-access") {
-    return SandboxType.None
-  }
-
-  // Read-only/plan modes get filesystem sandbox
-  if (uiMode === "read-only" || uiMode === "plan") {
-    return SandboxType.None // TODO: Implement once OS sandboxing is wired
-  }
-
-  // Default: detect best available
+export function detectSandboxType(_permissions: Record<string, unknown>): SandboxType {
+  if (!isEnabled("sandboxSpawn")) return SandboxType.None
   return detectAvailableSandbox()
 }
 
@@ -301,12 +334,17 @@ function detectAvailableSandbox(): SandboxType {
       return SandboxType.MacosSeatbelt
     }
     if (platform === "linux" && existsSync("/usr/bin/bwrap")) {
+      // This probe answers CAPABILITY, not what gets applied. bwrap being present
+      // says nothing about whether the seccomp filter can be staged, so the
+      // applied truth comes from the spawn handle, which reports `LinuxNamespace`
+      // when the filter is missing. Overstating it here would put the optimistic
+      // value back on the same handle this path just fixed.
       return SandboxType.LinuxSeccomp
     }
     // Windows: AppContainer via the PowerShell shim (windows-ac.ts). The
     // probe answers infrastructure-only — if the helper cannot run,
     // spawnUnderWindowsAppContainer falls back to an honest unsandboxed
-    // spawn, and returning None here keeps the CODEX_SANDBOX stamp truthful
+    // spawn, and returning None here keeps the NEMO_SANDBOX stamp truthful
     // before anything has even spawned.
     if (platform === "win32" && windowsAcCapable()) {
       return SandboxType.WindowsRestrictedToken

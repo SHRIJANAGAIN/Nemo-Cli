@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -9,7 +9,7 @@
  * App.tsx (max-file-size rule).
  *
  * Fully deterministic: no network, no timers, no ambient state — every
- * config read/write is redirected to a temp file through TRAYAMBAK_CONFIG,
+ * config read/write is redirected to a temp file through NEMO_CONFIG,
  * which configPath() honors. If a case here needs the real user config to
  * pass, it is a bad test.
  */
@@ -33,9 +33,9 @@ let tmpDir: string
 let configFile: string
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-provider-support-"))
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-provider-support-"))
   configFile = path.join(tmpDir, "config.json")
-  vi.stubEnv("TRAYAMBAK_CONFIG", configFile)
+  vi.stubEnv("NEMO_CONFIG", configFile)
 })
 
 afterEach(() => {
@@ -81,7 +81,7 @@ describe("themeToPickerOption", () => {
 
 describe("providerHostFor", () => {
   it("extracts the host from a base URL", () => {
-    expect(providerHostFor("https://api.openai.com/v1")).toBe("api.openai.com")
+    expect(providerHostFor("https://integrate.api.nvidia.com/v1")).toBe("integrate.api.nvidia.com")
     expect(providerHostFor("http://127.0.0.1:8080")).toBe("127.0.0.1:8080")
   })
 
@@ -119,7 +119,7 @@ describe("providerLabelFor", () => {
   })
 
   it("returns a non-empty label for the built-in providers", () => {
-    for (const id of ["anthropic", "openai", "ollama", "xai", "llamacpp"]) {
+    for (const id of ["nvidia", "nvidia-nim", "ollama", "llamacpp", "custom"]) {
       expect(providerLabelFor(id).length).toBeGreaterThan(0)
     }
   })
@@ -178,14 +178,14 @@ describe("per-backend key memory", () => {
   })
 
   it("keeps every backend's key when switching back and forth — no keyless reset", () => {
-    writeStoredKey("openai", "sk-openai", "https://api.openai.com/v1")
+    writeStoredKey("nvidia", "nvapi-test", "https://integrate.api.nvidia.com/v1")
     writeStoredKey("custom", "sk-custom", "https://api.example.dev/v1")
-    expect(readStoredKey("openai").apiKey).toBe("sk-openai")
+    expect(readStoredKey("nvidia").apiKey).toBe("nvapi-test")
     expect(readStoredKey("custom").apiKey).toBe("sk-custom")
 
     // Rewriting one backend must merge, not replace the list.
-    writeStoredKey("openai", "sk-openai-2", "https://api.openai.com/v1")
-    expect(readStoredKey("openai").apiKey).toBe("sk-openai-2")
+    writeStoredKey("nvidia", "nvapi-test-2", "https://integrate.api.nvidia.com/v1")
+    expect(readStoredKey("nvidia").apiKey).toBe("nvapi-test-2")
     expect(readStoredKey("custom").apiKey).toBe("sk-custom")
   })
 

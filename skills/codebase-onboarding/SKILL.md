@@ -1,20 +1,20 @@
 ---
 name: codebase-onboarding
-description: Analyze an unfamiliar codebase and generate a structured onboarding guide with architecture map, key entry points, conventions, and a starter TRAYAMBAK.md. Use when joining a new project or setting up Trayambak Code for the first time in a repo.
+description: Analyze an unfamiliar codebase and generate a structured onboarding guide with architecture map, key entry points, conventions, and a starter NEMO.md. Use when joining a new project or setting up Nemo Code for the first time in a repo.
 metadata:
   origin: ECC
 ---
 
 # Codebase Onboarding
 
-Systematically analyze an unfamiliar codebase and produce a structured onboarding guide. Designed for developers joining a new project or setting up Trayambak Code in an existing repo for the first time.
+Systematically analyze an unfamiliar codebase and produce a structured onboarding guide. Designed for developers joining a new project or setting up Nemo Code in an existing repo for the first time.
 
 ## When to Use
 
-- First time opening a project with Trayambak Code
+- First time opening a project with Nemo Code
 - Joining a new team or repository
 - User asks "help me understand this codebase"
-- User asks to generate a TRAYAMBAK.md for a project
+- User asks to generate a NEMO.md for a project
 - User says "onboard me" or "walk me through this repo"
 
 ## How It Works
@@ -188,9 +188,9 @@ Produce two outputs:
 | Change build config  | `next.config.ts`                  |
 ```
 
-#### Output 2: Starter TRAYAMBAK.md
+#### Output 2: Starter NEMO.md
 
-Generate or update a project-specific TRAYAMBAK.md based on detected conventions. If `TRAYAMBAK.md` already exists, read it first and enhance it — preserve existing project-specific instructions and clearly call out what was added or changed.
+Generate or update a project-specific NEMO.md based on detected conventions. If `NEMO.md` already exists, read it first and enhance it — preserve existing project-specific instructions and clearly call out what was added or changed.
 
 ```markdown
 # Project Instructions
@@ -231,13 +231,13 @@ Generate or update a project-specific TRAYAMBAK.md based on detected conventions
 
 1. **Don't read everything** — reconnaissance should use Glob and Grep, not Read on every file. Read selectively only for ambiguous signals.
 2. **Verify, don't guess** — if a framework is detected from config but the actual code uses something different, trust the code.
-3. **Respect existing TRAYAMBAK.md** — if one already exists, enhance it rather than replacing it. Call out what's new vs existing.
+3. **Respect existing NEMO.md** — if one already exists, enhance it rather than replacing it. Call out what's new vs existing.
 4. **Stay concise** — the onboarding guide should be scannable in 2 minutes. Details belong in the code, not the guide.
 5. **Flag unknowns** — if a convention can't be confidently detected, say so rather than guessing. "Could not determine test runner" is better than a wrong answer.
 
 ## Anti-Patterns to Avoid
 
-- Generating a TRAYAMBAK.md that's longer than 100 lines — keep it focused
+- Generating a NEMO.md that's longer than 100 lines — keep it focused
 - Listing every dependency — highlight only the ones that shape how you write code
 - Describing obvious directory names — `src/` doesn't need an explanation
 - Copying the README — the onboarding guide adds structural insight the README lacks
@@ -247,17 +247,17 @@ Generate or update a project-specific TRAYAMBAK.md based on detected conventions
 ### Example 1: First time in a new repo
 
 **User**: "Onboard me to this codebase"
-**Action**: Run full 4-phase workflow → produce Onboarding Guide + Starter TRAYAMBAK.md
-**Output**: Onboarding Guide printed directly to the conversation, plus a `TRAYAMBAK.md` written to the project root
+**Action**: Run full 4-phase workflow → produce Onboarding Guide + Starter NEMO.md
+**Output**: Onboarding Guide printed directly to the conversation, plus a `NEMO.md` written to the project root
 
-### Example 2: Generate TRAYAMBAK.md for existing project
+### Example 2: Generate NEMO.md for existing project
 
-**User**: "Generate a TRAYAMBAK.md for this project"
-**Action**: Run Phases 1-3, skip Onboarding Guide, produce only TRAYAMBAK.md
-**Output**: Project-specific `TRAYAMBAK.md` with detected conventions
+**User**: "Generate a NEMO.md for this project"
+**Action**: Run Phases 1-3, skip Onboarding Guide, produce only NEMO.md
+**Output**: Project-specific `NEMO.md` with detected conventions
 
-### Example 3: Enhance existing TRAYAMBAK.md
+### Example 3: Enhance existing NEMO.md
 
-**User**: "Update the TRAYAMBAK.md with current project conventions"
-**Action**: Read existing TRAYAMBAK.md, run Phases 1-3, merge new findings
-**Output**: Updated `TRAYAMBAK.md` with additions clearly marked
+**User**: "Update the NEMO.md with current project conventions"
+**Action**: Read existing NEMO.md, run Phases 1-3, merge new findings
+**Output**: Updated `NEMO.md` with additions clearly marked

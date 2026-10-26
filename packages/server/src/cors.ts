@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -16,11 +16,11 @@
  * Decision order:
  *   1. No Origin header (curl, node client, the CLI itself) → not a browser
  *      cross-origin request: no CORS headers emitted, nothing refused.
- *   2. Allowlist contains "*" (explicit TRAYAMBAK_WEB_ORIGINS=*) → wildcard,
+ *   2. Allowlist contains "*" (explicit NEMO_WEB_ORIGINS=*) → wildcard,
  *      the pre-hardening behavior, now opt-in only.
  *   3. Same-origin (origin host:port === the request's Host header) → echo.
  *   4. Loopback origin (localhost / 127.0.0.1 / [::1] over http/https) → echo,
- *      so a local dev server or a second trayambak instance still works.
+ *      so a local dev server or a second nemo instance still works.
  *   5. Exact match in the comma-separated allowlist → echo.
  *   6. Otherwise REFUSED: no CORS headers and `allowed: false`, so the caller
  *      can reject the request server-side. That last part is load-bearing —
@@ -56,7 +56,7 @@ export function parseCorsAllowlist(raw: string | undefined): string[] {
  *
  * @param origin        the request's Origin header (undefined for non-browser clients)
  * @param host          the request's Host header — same-origin comparison anchor
- * @param allowlistRaw  TRAYAMBAK_WEB_ORIGINS, comma-separated; "*" re-allows everything
+ * @param allowlistRaw  NEMO_WEB_ORIGINS, comma-separated; "*" re-allows everything
  */
 export function resolveCors(
   origin: string | undefined,

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -9,7 +9,7 @@ import React from "react"
 import { PassThrough } from "node:stream"
 import { render, type Instance } from "ink"
 import { MessageList } from "./MessageList.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * The live window + the generation animation.
@@ -76,7 +76,7 @@ const openStdio = (columns = 80): { stdin: NodeJS.ReadStream; stdout: NodeJS.Wri
 describe("MessageList live window (newest always in-frame, print-once prefix)", () => {
   it("shows the newest message in-frame and the old prefix above, NO hint row", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
       role: "user",
@@ -108,7 +108,7 @@ describe("MessageList live window (newest always in-frame, print-once prefix)", 
 
   it("mid-generation the SAME live rule holds: newest visible + Generating… (auto-scroll)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) =>
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) =>
       i === 39
         ? { id: `m${i}`, timestamp: i, role: "assistant" as const, content: "LIVE-STREAMING-ANSWER" }
         : { id: `m${i}`, timestamp: i, role: "user" as const, content: `MSG-${i}` },
@@ -138,9 +138,8 @@ describe("MessageList live window (newest always in-frame, print-once prefix)", 
     }
   }, 15000)
 
-  it("reports the window start index to onScrollDepth (the ↑N depth chip)", async () => {
-    const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+  it("reports the window start index to onScrollDepth (the ↑N depth chip)", async () => {    const { stdin, stdout, sink } = openStdio()
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
       role: "user",
@@ -167,7 +166,7 @@ describe("MessageList live window (newest always in-frame, print-once prefix)", 
 describe("MessageList generation animation (phase-aware bottom line)", () => {
   it("phase 'running' → 'Generating…' animates, and NO stale 'Thinking…' anywhere", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "q", timestamp: 1, role: "user", content: "question" },
       { id: "a", timestamp: 2, role: "assistant", content: "partial answer", thinking: "reasoning done" },
     ]
@@ -197,7 +196,7 @@ describe("MessageList generation animation (phase-aware bottom line)", () => {
 
   it("phase 'thinking' keeps the old 'Generating'-free 'Thinking…' line", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "q", timestamp: 1, role: "user", content: "question" },
       { id: "a", timestamp: 2, role: "assistant", content: "partial answer" },
     ]
@@ -222,7 +221,7 @@ describe("MessageList generation animation (phase-aware bottom line)", () => {
 
   it("status line carries elapsed seconds while loading (slow model never reads as dead)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "q", timestamp: 1, role: "user", content: "ELAPSED-Q" },
       { id: "a", timestamp: 2, role: "assistant", content: "ELAPSED-A" },
     ]
@@ -235,13 +234,18 @@ describe("MessageList generation animation (phase-aware bottom line)", () => {
           isLoading: true,
           isStreaming: true,
           phase: "thinking",
-          turnStartedAt: Date.now(),
+          // A turn that has worked for 75s. The SHAPE is the point: "1m 15s"
+          // reads, "75s" makes the user do arithmetic — and this line used to
+          // pass while the product showed nothing, because App never supplied
+          // the prop the widget was built to render.
+          turnClock: { startedAt: Date.now() - 75_000, pausedMs: 0 },
         }),
         { stdin, stdout, patchConsole: false },
       )
       expect(await waitFor(sink, "ELAPSED-A")).toBe(true)
-      // "Thinking… Ns" — the seconds prove the turn is alive, not stuck:
-      expect(stripAnsi(sink())).toMatch(/Thinking… \d+s/)
+      // The turn is alive AND readable: minutes-and-seconds, not a 75s pile.
+      expect(stripAnsi(sink())).toMatch(/Thinking… 1m 1[45]s/)
+      expect(stripAnsi(sink())).not.toMatch(/Thinking… \d{2,}s/)
     } finally {
       instance?.unmount()
     }
@@ -249,7 +253,7 @@ describe("MessageList generation animation (phase-aware bottom line)", () => {
 
   it("status line shows no seconds without a turn start (old renders unchanged)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [{ id: "q", timestamp: 1, role: "user", content: "PLAIN-Q" }]
+    const messages: NemoMessage[] = [{ id: "q", timestamp: 1, role: "user", content: "PLAIN-Q" }]
 
     let instance: Instance | undefined
     try {
@@ -268,7 +272,7 @@ describe("MessageList generation animation (phase-aware bottom line)", () => {
 describe("TTL-hidden notices in the live frame", () => {
   it("drops the flagged row from the frame while its neighbours still render", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "m0", timestamp: 1, role: "user", content: "VISIBLE-BEFORE" },
       { id: "m1", timestamp: 2, role: "system", content: "MODE-NOTICE-TEXT", transientHidden: true },
       { id: "m2", timestamp: 3, role: "assistant", content: "VISIBLE-AFTER" },
@@ -293,7 +297,7 @@ describe("TTL-hidden notices in the live frame", () => {
 })
 
 describe("live windows (no strip — there is no parked state to flicker)", () => {
-  const shortMessages = (): TrayambakMessage[] => [
+  const shortMessages = (): NemoMessage[] => [
     ...Array.from({ length: 5 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
@@ -321,7 +325,7 @@ describe("live windows (no strip — there is no parked state to flicker)", () =
 
   it("a faded (transientHidden) last row pins no strip", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       ...Array.from({ length: 5 }, (_, i) => ({
         id: `m${i}`,
         timestamp: i,
@@ -353,7 +357,7 @@ describe("MessageList has no custom gutter (Windows inbuilt owns the edge)", () 
     // it — borders use │/─/corners everywhere, so its absence is exact:
     // overflow content still renders, with zero drawn bar.
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
       role: "user" as const,
@@ -383,7 +387,7 @@ describe("MessageList live frame (no pill line)", () => {
     // the completed blob splits once — head to scrollback, tail in-frame.
     // Either half printed twice would read as the user's "USER KA DUPLICATE".
     const lines = Array.from({ length: 30 }, (_, i) => `BLOB-LINE-${String(i).padStart(2, "0")}`)
-    const messages: TrayambakMessage[] = [{ id: "blob", timestamp: 1, role: "user", content: lines.join("\n") }]
+    const messages: NemoMessage[] = [{ id: "blob", timestamp: 1, role: "user", content: lines.join("\n") }]
     let instance: Instance | undefined
     try {
       instance = render(React.createElement(MessageList, { messages }), {
@@ -404,7 +408,7 @@ describe("MessageList live frame (no pill line)", () => {
 
   it("a live window shows no pill (byte-identical old behavior)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "q", timestamp: 1, role: "user", content: "PILL-LIVE-Q" },
       { id: "a", timestamp: 2, role: "assistant", content: "PILL-LIVE-A" },
     ]
@@ -417,6 +421,67 @@ describe("MessageList live frame (no pill line)", () => {
       })
       expect(await waitFor(sink, "PILL-LIVE-A")).toBe(true)
       expect(sink()).not.toContain("new below")
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+})
+
+/**
+ * Parked window (alt-screen paging): endIdx below length pins the frame on
+ * older history for in-app reading (the alternate buffer has no scrollback).
+ * Rows at/after endIdx stay hidden until the window snaps back to live —
+ * newer turns never leak into a parked frame, and the parked frame never
+ * re-shows rows the live tail already owns.
+ */
+describe("MessageList parked window (endIdx, alt-screen paging)", () => {
+  it("hides newer rows and shows the parked older window instead", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) => ({
+      id: `m${i}`,
+      timestamp: i,
+      role: "user",
+      content: `MSG-${i}`,
+    }))
+
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages, endIdx: 10 }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      // Newest rows hidden: the live tail must not leak into the parked frame.
+      await wait(300)
+      expect(stripAnsi(sink())).not.toContain("MSG-39")
+      expect(stripAnsi(sink())).not.toContain("MSG-10")
+      // Parked window shows older history instead.
+      expect(await waitFor(sink, "MSG-9")).toBe(true)
+    } finally {
+      instance?.unmount()
+    }
+  }, 15000)
+
+  it("snapping back to live restores the newest window", async () => {
+    const { stdin, stdout, sink } = openStdio()
+    const messages: NemoMessage[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `m${i}`,
+      timestamp: i,
+      role: "user",
+      content: `SNAP-${i}`,
+    }))
+
+    let instance: Instance | undefined
+    try {
+      instance = render(React.createElement(MessageList, { messages, endIdx: 3 }), {
+        stdin,
+        stdout,
+        patchConsole: false,
+      })
+      await wait(300)
+      expect(stripAnsi(sink())).not.toContain("SNAP-9")
+      instance.rerender(React.createElement(MessageList, { messages }))
+      expect(await waitFor(sink, "SNAP-9")).toBe(true)
     } finally {
       instance?.unmount()
     }

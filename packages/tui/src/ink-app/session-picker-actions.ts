@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -24,16 +24,16 @@ import {
   titleFromConversation,
   DEFAULT_SESSION_NAME,
   type SessionEntry,
-} from "../../../../skt/9-session/session.js"
+} from "../../../../nemo/9-session/session.js"
 import { restoreMessages } from "./restore-messages.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /** The slice of App state these handlers close over. */
 export interface SessionPickerState {
   setShowPicker: (open: boolean) => void
   sessionIdRef: { current: string | null }
   currentSessionRef: { current: SessionEntry | null }
-  setMessages: (messages: TrayambakMessage[]) => void
+  setMessages: (messages: NemoMessage[]) => void
   setStaticEpoch: (update: (epoch: number) => number) => void
   addSystemMessage: (content: string, opts?: { persist?: boolean; ttlMs?: number }) => string
 }

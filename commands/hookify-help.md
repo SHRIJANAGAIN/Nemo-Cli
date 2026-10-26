@@ -6,7 +6,7 @@ Display comprehensive hookify documentation.
 
 ## Hook System Overview
 
-Hookify creates rule files that integrate with Trayambak Code's hook system to prevent unwanted behaviors.
+Hookify creates rule files that integrate with Nemo Code's hook system to prevent unwanted behaviors.
 
 ### Event Types
 
@@ -18,7 +18,7 @@ Hookify creates rule files that integrate with Trayambak Code's hook system to p
 
 ### Rule File Format
 
-Files are stored as `.trayambak/hookify.{name}.local.md`:
+Files are stored as `.nemo/hookify.{name}.local.md`:
 
 ```yaml
 ---

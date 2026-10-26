@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -23,10 +23,10 @@ import { DEFAULT_LICENSE_SERVER, getMachineId } from "./license.js"
 import { spawn } from "node:child_process"
 
 /** Open the system browser at `url`. Returns false when suppressed
- *  (TRAYAMBAK_NO_BROWSER=1, headless) or the launch fails — callers then
+ *  (NEMO_NO_BROWSER=1, headless) or the launch fails — callers then
  *  fall back to printing the URL for manual copy-paste. */
 export function openBrowser(url: string): boolean {
-  if (process.env.TRAYAMBAK_NO_BROWSER === "1") return false
+  if (process.env.NEMO_NO_BROWSER === "1") return false
   try {
     if (process.platform === "win32") {
       // rundll32 avoids cmd.exe's `&`/quote parsing entirely (OAuth URLs
@@ -53,7 +53,7 @@ export interface GithubAuthOptions {
 }
 
 function authServerBase(serverUrl?: string): string {
-  const raw = (serverUrl ?? process.env.TRAYAMBAK_LICENSE_SERVER ?? DEFAULT_LICENSE_SERVER).trim()
+  const raw = (serverUrl ?? process.env.NEMO_LICENSE_SERVER ?? DEFAULT_LICENSE_SERVER).trim()
   return (raw || DEFAULT_LICENSE_SERVER).replace(/\/+$/, "")
 }
 

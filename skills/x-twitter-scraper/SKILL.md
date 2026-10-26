@@ -9,12 +9,12 @@ AI agent skill for X (Twitter) data extraction — tweet search, user lookup, fo
 
 ## Quick Start
 
-Install as a Trayambak Code skill:
+Install as a Nemo Code skill:
 
 ```bash
 # Copy to your project
-mkdir -p .trayambak/skills
-cp -r skills/x-twitter-scraper .trayambak/skills/
+mkdir -p .nemo/skills
+cp -r skills/x-twitter-scraper .nemo/skills/
 
 # Or for GitHub Copilot
 mkdir -p .github/skills
@@ -91,7 +91,7 @@ Monitor competitor accounts, track follower growth, and extract engagement data.
 
 - **MCP Server**: Port 3100, API key auth, 20 tools
 - **REST API**: `/api/v1/*` endpoints with HMAC webhooks
-- **Agent Skill**: SKILL.md format for Trayambak Code, Copilot, Cursor, Windsurf
+- **Agent Skill**: SKILL.md format for Nemo Code, Copilot, Cursor, Windsurf
 
 ## Resources
 

@@ -16,7 +16,7 @@ tools: Read, Grep
 
 # Conversation Analyzer Agent
 
-You analyze conversation history to identify problematic Trayambak behaviors that should be prevented with hooks.
+You analyze conversation history to identify problematic Nemo behaviors that should be prevented with hooks.
 
 ## What to Look For
 
@@ -29,29 +29,29 @@ You analyze conversation history to identify problematic Trayambak behaviors tha
 
 ### Frustrated Reactions
 
-- User reverting changes Trayambak made
+- User reverting changes Nemo made
 - Repeated "no" or "wrong" responses
-- User manually fixing Trayambak's output
+- User manually fixing Nemo's output
 - Escalating frustration in tone
 
 ### Repeated Issues
 
 - Same mistake appearing multiple times in the conversation
-- Trayambak repeatedly using a tool in an undesired way
+- Nemo repeatedly using a tool in an undesired way
 - Patterns of behavior the user keeps correcting
 
 ### Reverted Changes
 
-- `git checkout -- file` or `git restore file` after Trayambak's edit
-- User undoing or reverting Trayambak's work
-- Re-editing files Trayambak just edited
+- `git checkout -- file` or `git restore file` after Nemo's edit
+- User undoing or reverting Nemo's work
+- Re-editing files Nemo just edited
 
 ## Output Format
 
 For each identified behavior:
 
 ```yaml
-behavior: "Description of what Trayambak did wrong"
+behavior: "Description of what Nemo did wrong"
 frequency: "How often it occurred"
 severity: high|medium|low
 suggested_rule:

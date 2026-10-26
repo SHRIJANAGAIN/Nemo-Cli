@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -53,7 +53,7 @@ rl.on("line", (line) => {
 `
 
 function startFakeServer() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mcp-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-"))
   const script = path.join(dir, "server.cjs")
   fs.writeFileSync(script, SERVER_SCRIPT)
   const log = path.join(dir, "notes.log")
@@ -168,7 +168,7 @@ describe("createMcpTools exposure fixes", () => {
   })
 
   it("resolveInstalledEntry finds dist/index.js payloads", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mcp-inst-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-inst-"))
     try {
       const dist = path.join(dir, "node_modules", "some-pkg", "dist")
       fs.mkdirSync(dist, { recursive: true })
@@ -219,9 +219,9 @@ describe("mcp__install execution", () => {
     // Installers run arbitrary package code (postinstall scripts) — they get
     // the same filtered env as bash, never raw process.env. PATH must survive
     // so npm/pip keep working.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mcp-env-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-env-"))
     const outFile = path.join(dir, "child-env.json")
-    process.env.ZZ_TRAYAMBAK_INSTALL_PROBE_SECRET = "s3cr3t-probe"
+    process.env.ZZ_NEMO_INSTALL_PROBE_SECRET = "s3cr3t-probe"
     try {
       await execAsync(
         process.execPath,
@@ -229,10 +229,10 @@ describe("mcp__install execution", () => {
         process.cwd(),
       )
       const childEnv = JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<string, string>
-      expect(childEnv.ZZ_TRAYAMBAK_INSTALL_PROBE_SECRET).toBeUndefined()
+      expect(childEnv.ZZ_NEMO_INSTALL_PROBE_SECRET).toBeUndefined()
       expect(childEnv.PATH).toBeTruthy()
     } finally {
-      delete process.env.ZZ_TRAYAMBAK_INSTALL_PROBE_SECRET
+      delete process.env.ZZ_NEMO_INSTALL_PROBE_SECRET
       fs.rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -259,7 +259,7 @@ describe("mcp__install execution", () => {
 
 describe("MCP transport buffer cap (#82a)", () => {
   it("kills a stdio server that floods stdout past 256KB with no frame boundary", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-mcp-flood-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-flood-"))
     const script = path.join(dir, "flood.cjs")
     // Never frames a newline and never exits: readline used to buffer this
     // unboundedly (OOM class); the capped framer must reject instead. The

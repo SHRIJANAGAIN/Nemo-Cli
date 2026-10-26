@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Exec policy engine — .rules file parsing and evaluation.
@@ -394,8 +398,8 @@ let defaultManager: PolicyManager | null = null
 
 /**
  * Get the default PolicyManager singleton. On FIRST construction it
- * discovers a user-authored rules file (`<cwd>/.trayambak/policy.rules`,
- * then `~/.trayambak/policy.rules`) and loads it MERGED over the
+ * discovers a user-authored rules file (`<cwd>/.nemo/policy.rules`,
+ * then `~/.nemo/policy.rules`) and loads it MERGED over the
  * defaults - previously nothing ever called `load()`, so the whole DSL
  * was dead config. No file (or an unreadable one) keeps the hardcoded
  * default policy, default denies included.
@@ -417,8 +421,8 @@ export function getPolicyManager(): PolicyManager {
  */
 export function userPolicyCandidates(cwd: string, home: string): string[] {
   const files: string[] = []
-  if (cwd) files.push(path.join(cwd, ".trayambak", "policy.rules"))
-  if (home) files.push(path.join(home, ".trayambak", "policy.rules"))
+  if (cwd) files.push(path.join(cwd, ".nemo", "policy.rules"))
+  if (home) files.push(path.join(home, ".nemo", "policy.rules"))
   return files
 }
 

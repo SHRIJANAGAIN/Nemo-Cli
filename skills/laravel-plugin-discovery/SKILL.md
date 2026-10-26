@@ -19,7 +19,7 @@ Find, evaluate, and choose healthy Laravel packages using the LaraPlugins.io MCP
 
 ## MCP Requirement
 
-LaraPlugins MCP server must be configured. Add to your `~/.trayambak.json` mcpServers:
+LaraPlugins MCP server must be configured. Add to your `~/.nemo.json` mcpServers:
 
 ```json
 "laraplugins": {

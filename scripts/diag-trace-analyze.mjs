@@ -1,4 +1,4 @@
-/* Byte-stream analyzer for a TRAYAMBAK_TRACE capture (or any captured stdout).
+/* Byte-stream analyzer for a NEMO_TRACE capture (or any captured stdout).
  *
  * The boot frame leak is a line-accounting desync: ink counts LINES, the
  * console reflows them into ROWS. So the two numbers that matter are
@@ -29,7 +29,7 @@ const cursorUp = count(/\x1b\[\d*A/g)
 const eraseLine = count(/\x1b\[2K/g)
 const caretHidden = count(/\x1b\[\?25l/g)
 const mouseOff = count(/\x1b\[\?100[06]l/g)
-const composer = count(/Ask Trayambak to do anything/g)
+const composer = count(/Ask Nemo to do anything/g)
 const topBorder = count(/╭─/g)
 const bottomBorder = count(/╰─/g)
 

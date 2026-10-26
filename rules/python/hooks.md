@@ -10,7 +10,7 @@ paths:
 
 ## PostToolUse Hooks
 
-Configure in `~/.trayambak/settings.json`:
+Configure in `~/.nemo/settings.json`:
 
 - **black/ruff**: Auto-format `.py` files after edit
 - **mypy/pyright**: Run type checking after editing `.py` files

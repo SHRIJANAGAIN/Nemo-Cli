@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -13,7 +13,7 @@
  * history replay on fork (AGENTS.md: behavioral code gets tests).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { DEFAULT_SESSION_NAME, type SessionEntry } from "../../../../skt/9-session/session.js"
+import { DEFAULT_SESSION_NAME, type SessionEntry } from "../../../../nemo/9-session/session.js"
 import { createSessionPickerActions, type SessionPickerState } from "./session-picker-actions.js"
 
 const io = vi.hoisted(() => ({
@@ -28,7 +28,7 @@ const io = vi.hoisted(() => ({
 
 const restore = vi.hoisted(() => ({ restoreMessages: vi.fn() }))
 
-vi.mock("../../../../skt/9-session/session.js", () => ({
+vi.mock("../../../../nemo/9-session/session.js", () => ({
   ...io,
   DEFAULT_SESSION_NAME: "New Session",
 }))

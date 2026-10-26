@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -49,7 +49,7 @@ export function activitySequence(state: ActivityState, timestamp: number): strin
  * inside the user's shell profile, which is sourced after this module loads.
  */
 export function activityEnabled(): boolean {
-  return process.env.TRAYAMBAK_TERMINAL_ACTIVITY === "1"
+  return process.env.NEMO_TERMINAL_ACTIVITY === "1"
 }
 
 /** Publish a state. A no-op when disabled, so call sites stay unconditional. */

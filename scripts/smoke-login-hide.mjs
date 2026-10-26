@@ -4,7 +4,7 @@
  * "Provider connect cancelled." had no TTL at all — the exact box in the bug
  * report: Choose a provider + enter Base URL + cancelled, all still there).
  *
- * Renders the BUILT TrayambakApp on fake TTY stdin/stdout and drives it like
+ * Renders the BUILT NemoApp on fake TTY stdin/stdout and drives it like
  * a user:
  *
  *   boot → dismiss overlays → /provider (bare) → provider picker opens
@@ -32,21 +32,21 @@ try {
 } catch {
   /* best effort */
 }
-process.env.TRAYAMBAK_LOGO_PATH = pathToFileURL(
+process.env.NEMO_LOGO_PATH = pathToFileURL(
   path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm", "logo_ansi.txt"),
 ).href
 
 // Session hermeticity (same sandbox as smoke-app-send): a fresh
-// TRAYAMBAK_HOME keeps real sessions out of the run and starts with an
+// NEMO_HOME keeps real sessions out of the run and starts with an
 // empty picker state.
 {
   const fsMem = await import("node:fs")
-  const sandbox = fsMem.mkdtempSync(path.join(tmpdir(), "trayambak-loginhide-"))
-  const convDir = path.join(sandbox, "skt", "8-conversations")
+  const sandbox = fsMem.mkdtempSync(path.join(tmpdir(), "nemo-loginhide-"))
+  const convDir = path.join(sandbox, "nemo", "8-conversations")
   fsMem.mkdirSync(convDir, { recursive: true })
   fsMem.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "login-hide-smoke" }))
   fsMem.writeFileSync(path.join(convDir, "sessions.json"), "[]")
-  process.env.TRAYAMBAK_HOME = sandbox
+  process.env.NEMO_HOME = sandbox
 }
 
 // Hard-fail policy: log and exit non-zero immediately — a logged-but-alive
@@ -83,7 +83,7 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(
+const { NemoApp } = await import(
   pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm", "index.js")).href
 )
 
@@ -126,8 +126,8 @@ function assert(cond, label, detail = "") {
 
 // ── Boot ─────────────────────────────────────────────────────────────────
 const instance = render(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark" },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark" },
     modelName: "smoke-model",
     permissionMode: "ask",
   }),

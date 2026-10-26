@@ -36,7 +36,7 @@ Read the project to understand stack and sensitive surface area:
 - Tech stack: `package.json`, `requirements.txt`, `Cargo.toml`, `go.mod`
 - Config files: `.env`, `config/`, `docker-compose.yml`
 - CI/CD: `.github/`, `.gitlab-ci.yml`
-- Docs: `README.md`, `Trayambak.md`
+- Docs: `README.md`, `Nemo.md`
 
 ```bash
 find SOURCE_DIR -type f | grep -v node_modules | grep -v .git | grep -v __pycache__
@@ -48,7 +48,7 @@ find SOURCE_DIR -type f | grep -v node_modules | grep -v .git | grep -v __pycach
 mkdir -p TARGET_DIR
 rsync -av --exclude='.git' --exclude='node_modules' --exclude='__pycache__' \
   --exclude='.env*' --exclude='*.pyc' --exclude='.venv' --exclude='venv' \
-  --exclude='.Trayambak/' --exclude='.secrets/' --exclude='secrets/' \
+  --exclude='.Nemo/' --exclude='.secrets/' --exclude='secrets/' \
   SOURCE_DIR/ TARGET_DIR/
 ```
 
@@ -98,7 +98,7 @@ key-[A-Za-z0-9]{32}
 - `*.pem`, `*.key`, `*.p12`, `*.pfx` (private keys)
 - `credentials.json`, `service-account.json`
 - `.secrets/`, `secrets/`
-- `.Trayambak/settings.json`
+- `.Nemo/settings.json`
 - `sessions/`
 - `*.map` (source maps expose original source structure and file paths)
 

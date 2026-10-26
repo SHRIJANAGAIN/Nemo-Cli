@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as http from "http"
@@ -23,13 +23,13 @@ const MAX_JSON_BYTES = 256 * 1024
  *  ended before). Matches the byte-transport-cap pattern used for MCP. */
 const MAX_RUN_BYTES = 16 * 1024 * 1024
 
-/** Minimal client for the trayambak local server. */
-export class TrayambakClient {
+/** Minimal client for the nemo local server. */
+export class NemoClient {
   private readonly baseUrl: URL
   private readonly timeoutMs: number
 
   constructor(options: ClientOptions = {}) {
-    this.baseUrl = new URL(options.baseUrl ?? `http://127.0.0.1:${process.env.TRAYAMBAK_SERVER_PORT ?? 8787}`)
+    this.baseUrl = new URL(options.baseUrl ?? `http://127.0.0.1:${process.env.NEMO_SERVER_PORT ?? 8787}`)
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   }
 

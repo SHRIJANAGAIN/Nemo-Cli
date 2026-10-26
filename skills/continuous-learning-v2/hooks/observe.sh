@@ -2,25 +2,25 @@
 # Continuous Learning v2 - Observation Hook
 #
 # Captures tool use events for pattern analysis.
-# Trayambak Code passes hook data via stdin as JSON.
+# Nemo Code passes hook data via stdin as JSON.
 #
 # v2.1: Project-scoped observations — detects current project context
 #       and writes observations to project-specific directory.
 #
 # Registered via plugin hooks/hooks.json (auto-loaded when plugin is enabled).
-# Can also be registered manually in ~/.trayambak/settings.json.
+# Can also be registered manually in ~/.nemo/settings.json.
 
 set -e
 
 # Hook phase from CLI argument: "pre" (PreToolUse) or "post" (PostToolUse).
 # Manual settings.json installs can call this script without the plugin
-# wrapper's positional phase argument, but Trayambak Code still exposes the hook
-# event name in TRAYAMBAK_HOOK_EVENT_NAME.  Fall back to that env var before
+# wrapper's positional phase argument, but Nemo Code still exposes the hook
+# event name in NEMO_HOOK_EVENT_NAME.  Fall back to that env var before
 # defaulting to post so manually registered PreToolUse hooks are recorded as
 # tool_start instead of being silently misclassified as tool_complete.
 HOOK_PHASE="${1:-}"
 if [ -z "$HOOK_PHASE" ]; then
-  case "${TRAYAMBAK_HOOK_EVENT_NAME:-}" in
+  case "${NEMO_HOOK_EVENT_NAME:-}" in
     PreToolUse|pretooluse|pre_tool_use|pre) HOOK_PHASE="pre" ;;
     PostToolUse|posttooluse|post_tool_use|post) HOOK_PHASE="post" ;;
     *) HOOK_PHASE="post" ;;
@@ -31,7 +31,7 @@ fi
 # Read stdin first (before project detection)
 # ─────────────────────────────────────────────
 
-# Read JSON from stdin (Trayambak Code hook format)
+# Read JSON from stdin (Nemo Code hook format)
 INPUT_JSON=$(cat)
 
 # Exit if no input
@@ -117,10 +117,10 @@ except(KeyError, TypeError, ValueError):
 if [ -n "$STDIN_CWD" ] && [ -d "$STDIN_CWD" ]; then
   _GIT_ROOT=$(git -C "$STDIN_CWD" rev-parse --show-toplevel 2>/dev/null || true)
   if [ -n "$_GIT_ROOT" ]; then
-    export TRAYAMBAK_PROJECT_DIR="$_GIT_ROOT"
+    export NEMO_PROJECT_DIR="$_GIT_ROOT"
     unset CLV2_NO_PROJECT
   else
-    unset TRAYAMBAK_PROJECT_DIR
+    unset NEMO_PROJECT_DIR
     export CLV2_NO_PROJECT=1
   fi
 fi
@@ -154,8 +154,8 @@ fi
 # sdk-ts: Agent SDK sessions can be human-interactive (e.g. via Happy).
 # Non-interactive SDK automation is still filtered by Layers 2-5 below
 # (ECC_HOOK_PROFILE=minimal, ECC_SKIP_OBSERVE=1, agent_id, path exclusions).
-case "${TRAYAMBAK_CODE_ENTRYPOINT:-cli}" in
-  cli|sdk-ts|trayambak-desktop|trayambak-vscode) ;;
+case "${NEMO_CODE_ENTRYPOINT:-cli}" in
+  cli|sdk-ts|nemo-desktop|nemo-vscode) ;;
   *) exit 0 ;;
 esac
 
@@ -170,7 +170,7 @@ _ECC_AGENT_ID=$(echo "$INPUT_JSON" | "$PYTHON_CMD" -c "import json,sys; print(js
 [ -n "$_ECC_AGENT_ID" ] && exit 0
 
 # Layer 5: known observer-session path exclusions.
-_ECC_SKIP_PATHS="${ECC_OBSERVE_SKIP_PATHS:-observer-sessions,.trayambak-mem}"
+_ECC_SKIP_PATHS="${ECC_OBSERVE_SKIP_PATHS:-observer-sessions,.nemo-mem}"
 if [ -n "$STDIN_CWD" ]; then
   IFS=',' read -ra _ECC_SKIP_ARRAY <<< "$_ECC_SKIP_PATHS"
   for _pattern in "${_ECC_SKIP_ARRAY[@]}"; do
@@ -208,7 +208,7 @@ if [ ! -f "$PURGE_MARKER" ] || [ "$(find "$PURGE_MARKER" -mtime +1 2>/dev/null)"
 fi
 
 # Parse using Python via stdin pipe (safe for all JSON payloads)
-# Pass HOOK_PHASE via env var since Trayambak Code does not include hook type in stdin JSON
+# Pass HOOK_PHASE via env var since Nemo Code does not include hook type in stdin JSON
 PARSED=$(echo "$INPUT_JSON" | HOOK_PHASE="$HOOK_PHASE" "$PYTHON_CMD" -c '
 import json
 import sys
@@ -218,12 +218,12 @@ try:
     data = json.load(sys.stdin)
 
     # Determine event type from CLI argument passed via env var.
-    # Trayambak Code does NOT include a "hook_type" field in the stdin JSON,
+    # Nemo Code does NOT include a "hook_type" field in the stdin JSON,
     # so we rely on the shell argument ("pre" or "post") instead.
     hook_phase = os.environ.get("HOOK_PHASE", "post")
     event = "tool_start" if hook_phase == "pre" else "tool_complete"
 
-    # Extract fields - Trayambak Code hook format
+    # Extract fields - Nemo Code hook format
     tool_name = data.get("tool_name", data.get("tool", "unknown"))
     tool_input = data.get("tool_input", data.get("input", {}))
     tool_output = data.get("tool_response")
@@ -566,7 +566,7 @@ fi
 
 # Throttle SIGUSR1: only signal observer every N observations (#521)
 # This prevents rapid signaling when tool calls fire every second,
-# which caused runaway parallel Trayambak analysis processes.
+# which caused runaway parallel Nemo analysis processes.
 SIGNAL_EVERY_N="${ECC_OBSERVER_SIGNAL_EVERY_N:-20}"
 SIGNAL_COUNTER_FILE="${PROJECT_DIR}/.observer-signal-counter"
 SIGNAL_COUNTER_LOCK="${SIGNAL_COUNTER_FILE}.lock"

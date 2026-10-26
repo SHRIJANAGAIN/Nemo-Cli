@@ -1,13 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
-import React, { type ReactNode, useEffect, useState } from "react"
+import React, { type ReactNode, useEffect, useRef } from "react"
 import { Box, Text } from "ink"
 import { useAppInput } from "./useAppInput.js"
 import { isEnter } from "./keys.js"
 import { cinePalette, useThemeColors, type CinePalette } from "./themeColors.js"
+import { useAnimationClock, useMotionLevel } from "./use-animation-clock.js"
 import { VERSION } from "../../../../apps/cli/src/version.js"
 import { bootCodename } from "./thinking-ribbon.js"
 
@@ -20,6 +21,13 @@ export interface BootCineProps {
 
 /** Frame tick: brisk enough to feel alive, slow enough to read the eye. */
 export const BOOT_CINE_TICK_MS = 150
+
+/** The eye opens in stages, `EYE_TICKS_PER_STAGE` frames each, and holds. */
+const EYE_TICKS_PER_STAGE = 4
+const EYE_LAST_STAGE = 3
+
+/** The codename types in at one character every two frames. */
+const CODENAME_TICKS_PER_CHAR = 2
 
 export interface CineEye {
   /** The eye glyph line for this frame. */
@@ -37,11 +45,26 @@ export interface CineEye {
  * mount timing.
  */
 export function bootCineEye(frame: number, palette: CinePalette): CineEye {
-  const stage = Math.min(3, Math.floor(Math.max(0, frame) / 4))
+  const stage = Math.min(EYE_LAST_STAGE, Math.floor(Math.max(0, frame) / EYE_TICKS_PER_STAGE))
   if (stage === 0) return { eye: "( - )", color: palette.shut, showTagline: false }
   if (stage === 1) return { eye: "( o )", color: palette.stirring, showTagline: false }
   if (stage === 2) return { eye: "( O )", color: palette.half, showTagline: false }
   return { eye: "( ◉ )", color: palette.blazing, showTagline: true }
+}
+
+/**
+ * The frame at which the whole cinematic is DONE: eye fully open, tagline up,
+ * codename fully typed.
+ *
+ * Reduced-motion and `off` render this instead of frame 0. A resting frame that
+ * is mid-animation is not "less motion", it is a broken boot screen — half a
+ * codename and an eye that never opened — so the settled frame is derived from
+ * the same arithmetic the reveal uses rather than guessed at a call site.
+ */
+export function cineSettledFrame(name: string): number {
+  const chars = [...name].length
+  const fullyTyped = chars > 0 ? CODENAME_TICKS_PER_CHAR * (chars - 1) : 0
+  return Math.max(EYE_TICKS_PER_STAGE * EYE_LAST_STAGE, fullyTyped)
 }
 
 /** Title sweep position: one letter burns bright, the rest hold dim. */
@@ -65,7 +88,7 @@ export function cineTitleColor(index: number, hot: number, palette: CinePalette)
  */
 export function cineCodenameRow(frame: number, name: string): string[] {
   const chars = [...name]
-  const shown = Math.min(chars.length, Math.floor(Math.max(0, frame) / 2) + 1)
+  const shown = Math.min(chars.length, Math.floor(Math.max(0, frame) / CODENAME_TICKS_PER_CHAR) + 1)
   return chars.map((ch, i) => (i < shown ? ch : " "))
 }
 
@@ -82,17 +105,20 @@ const CODENAME = bootCodename(VERSION || "dev")
  * the timer auto-advances. Short by design — this is a knock, not a movie.
  */
 export function BootCine({ onDone, durationMs = 2600 }: BootCineProps): ReactNode {
-  const [frame, setFrame] = useState(0)
-  const doneRef = React.useRef(onDone)
+  const doneRef = useRef(onDone)
   doneRef.current = onDone
+
+  // The reveal rides the shared clock; the auto-advance deadline is a real
+  // deadline and stays one. Under `reduced`/`off` nothing subscribes and the
+  // cinematic renders at its settled frame — see cineSettledFrame — so a
+  // reduced-motion boot is a complete logo, not a reveal stuck halfway.
+  const animating = useMotionLevel() === "full"
+  const tick = useAnimationClock(BOOT_CINE_TICK_MS, animating)
+  const frame = animating ? tick : cineSettledFrame(CODENAME)
 
   useEffect(() => {
     const timer = setTimeout(() => doneRef.current(), durationMs)
-    const tick = setInterval(() => setFrame((f) => f + 1), BOOT_CINE_TICK_MS)
-    return () => {
-      clearTimeout(timer)
-      clearInterval(tick)
-    }
+    return () => clearTimeout(timer)
   }, [durationMs])
 
   useAppInput((input, key) => {

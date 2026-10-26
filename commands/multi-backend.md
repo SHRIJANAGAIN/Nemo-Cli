@@ -4,9 +4,9 @@ description: Run a backend-focused multi-model workflow for APIs, algorithms, da
 
 # Backend - Backend-Focused Development
 
-Backend-focused workflow (Research → Ideation → Plan → Execute → Optimize → Review), Trayambak Code-led.
+Backend-focused workflow (Research → Ideation → Plan → Execute → Optimize → Review), Nemo Code-led.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.trayambak/bin/codeagent-wrapper` and the `~/.trayambak/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.nemo/bin/codeagent-wrapper` and the `~/.nemo/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
 
 ## Usage
 
@@ -17,7 +17,7 @@ Backend-focused workflow (Research → Ideation → Plan → Execute → Optimiz
 ## Context
 
 - Backend task: $ARGUMENTS
-- Trayambak Code-led, Gemini for auxiliary reference
+- Nemo Code-led, Gemini for auxiliary reference
 - Applicable: API design, algorithm implementation, database optimization, business logic
 
 ## Your Role
@@ -26,9 +26,9 @@ You are the **Backend Orchestrator**, coordinating multi-model collaboration for
 
 **Collaborative Models**:
 
-- **Trayambak Code** – Backend logic, algorithms (**Backend authority, trustworthy**)
+- **Nemo Code** – Backend logic, algorithms (**Backend authority, trustworthy**)
 - **Gemini** – Frontend perspective (**Backend opinions for reference only**)
-- **Trayambak (self)** – Orchestration, planning, execution, delivery
+- **Nemo (self)** – Orchestration, planning, execution, delivery
 
 ---
 
@@ -39,7 +39,7 @@ You are the **Backend Orchestrator**, coordinating multi-model collaboration for
 ```
 # New session call
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend trayambak - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend nemo - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -54,7 +54,7 @@ EOF",
 
 # Resume session call
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend trayambak resume <SESSION_ID> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend nemo resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -70,13 +70,13 @@ EOF",
 
 **Role Prompts**:
 
-| Phase    | Trayambak Code                                     |
+| Phase    | Nemo Code                                     |
 | -------- | -------------------------------------------------- |
-| Analysis | `~/.trayambak/.ccg/prompts/trayambak/analyzer.md`  |
-| Planning | `~/.trayambak/.ccg/prompts/trayambak/architect.md` |
-| Review   | `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`  |
+| Analysis | `~/.nemo/.ccg/prompts/nemo/analyzer.md`  |
+| Planning | `~/.nemo/.ccg/prompts/nemo/architect.md` |
+| Review   | `~/.nemo/.ccg/prompts/nemo/reviewer.md`  |
 
-**Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` for subsequent phases. Save `TRAYAMBAK_SESSION` in Phase 2, use `resume` in Phases 3 and 5.
+**Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` for subsequent phases. Save `NEMO_SESSION` in Phase 2, use `resume` in Phases 3 and 5.
 
 ---
 
@@ -92,7 +92,7 @@ EOF",
 
 ### Phase 0: Prompt Enhancement (Optional)
 
-`[Mode: Prepare]` - If ace-tool MCP available, call `mcp__ace-tool__enhance_prompt`, **replace original $ARGUMENTS with enhanced result for subsequent Trayambak Code calls**. If unavailable, use `$ARGUMENTS` as-is.
+`[Mode: Prepare]` - If ace-tool MCP available, call `mcp__ace-tool__enhance_prompt`, **replace original $ARGUMENTS with enhanced result for subsequent Nemo Code calls**. If unavailable, use `$ARGUMENTS` as-is.
 
 ### Phase 1: Research
 
@@ -103,31 +103,31 @@ EOF",
 
 ### Phase 2: Ideation
 
-`[Mode: Ideation]` - Trayambak Code-led analysis
+`[Mode: Ideation]` - Nemo Code-led analysis
 
-**MUST call Trayambak Code** (follow call specification above):
+**MUST call Nemo Code** (follow call specification above):
 
-- ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/analyzer.md`
+- ROLE_FILE: `~/.nemo/.ccg/prompts/nemo/analyzer.md`
 - Requirement: Enhanced requirement (or $ARGUMENTS if not enhanced)
 - Context: Project context from Phase 1
 - OUTPUT: Technical feasibility analysis, recommended solutions (at least 2), risk assessment
 
-**Save SESSION_ID** (`TRAYAMBAK_SESSION`) for subsequent phase reuse.
+**Save SESSION_ID** (`NEMO_SESSION`) for subsequent phase reuse.
 
 Output solutions (at least 2), wait for user selection.
 
 ### Phase 3: Planning
 
-`[Mode: Plan]` - Trayambak Code-led planning
+`[Mode: Plan]` - Nemo Code-led planning
 
-**MUST call Trayambak Code** (use `resume <TRAYAMBAK_SESSION>` to reuse session):
+**MUST call Nemo Code** (use `resume <NEMO_SESSION>` to reuse session):
 
-- ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/architect.md`
+- ROLE_FILE: `~/.nemo/.ccg/prompts/nemo/architect.md`
 - Requirement: User's selected solution
 - Context: Analysis results from Phase 2
 - OUTPUT: File structure, function/class design, dependency relationships
 
-Trayambak synthesizes plan, save to `.trayambak/plan/task-name.md` after user approval.
+Nemo synthesizes plan, save to `.nemo/plan/task-name.md` after user approval.
 
 ### Phase 4: Implementation
 
@@ -139,11 +139,11 @@ Trayambak synthesizes plan, save to `.trayambak/plan/task-name.md` after user ap
 
 ### Phase 5: Optimization
 
-`[Mode: Optimize]` - Trayambak Code-led review
+`[Mode: Optimize]` - Nemo Code-led review
 
-**MUST call Trayambak Code** (follow call specification above):
+**MUST call Nemo Code** (follow call specification above):
 
-- ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`
+- ROLE_FILE: `~/.nemo/.ccg/prompts/nemo/reviewer.md`
 - Requirement: Review the following backend code changes
 - Context: git diff or code content
 - OUTPUT: Security, performance, error handling, API compliance issues list
@@ -162,7 +162,7 @@ Integrate review feedback, execute optimization after user confirmation.
 
 ## Key Rules
 
-1. **Trayambak Code backend opinions are trustworthy**
+1. **Nemo Code backend opinions are trustworthy**
 2. **Gemini backend opinions for reference only**
 3. External models have **zero filesystem write access**
-4. Trayambak handles all code writes and file operations
+4. Nemo handles all code writes and file operations

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -71,8 +71,23 @@ export function childDepth(parentDepth: number | undefined): number {
   return (parentDepth ?? 0) + 1
 }
 
+/**
+ * Corrupt caller depths fail closed. Depths are constructed ≥ 0 by this
+ * module, so NaN / ±Infinity / negatives can only arrive corrupted — and
+ * `NaN >= max` is false, which used to wave the spawn straight through the
+ * guard (same for a negative, which can never reach the cap). Refusing here
+ * keeps the "never unbounded nesting" contract total over all inputs.
+ */
+function cleanParentDepth(parentDepth: number | undefined): number | null {
+  if (parentDepth === undefined) return 0
+  if (typeof parentDepth !== "number" || !Number.isFinite(parentDepth) || parentDepth < 0) return null
+  return Math.floor(parentDepth)
+}
+
 export async function runSubagent(runner: SubagentRunner, req: SubagentRequest): Promise<SubagentResult> {
-  const depth = childDepth(req.depth)
+  const parent = cleanParentDepth(req.depth)
+  if (parent === null) throw new MaxDepthExceeded(req.depth as number)
+  const depth = parent + 1
   if (depth > MAX_SUBAGENT_DEPTH) throw new MaxDepthExceeded(depth)
   const { output, toolCalls } = await runner({ ...req, prompt: req.prompt })
   return {
@@ -238,6 +253,10 @@ interface BackgroundRecord {
 /** Finished background entries beyond this count are pruned (oldest first). */
 const MAX_BACKGROUND_HISTORY = 50
 
+/** Per-task usage records retained (see rememberUsage): usageFor() stays
+ *  exact for recent tasks; the aggregate covers the retained window. */
+export const MAX_USAGE_ENTRIES = 500
+
 export class SubagentEngine {
   private readonly runWorker: SubagentWorker
   private readonly maxDepth: number
@@ -246,9 +265,27 @@ export class SubagentEngine {
   private readonly background: Map<string, BackgroundRecord> = new Map()
   private readonly usageById: Map<string, WorkerUsage> = new Map()
 
+  /** Per-task usage records retained: the map is keyed by task id and would
+   *  otherwise grow without bound across a long session (every run adds an
+   *  entry, nothing removed it). Oldest-first eviction past the cap; the
+   *  aggregate summary just covers the retained window. */
+  private rememberUsage(id: string, usage: WorkerUsage): void {
+    this.usageById.set(id, usage)
+    while (this.usageById.size > MAX_USAGE_ENTRIES) {
+      const oldest = this.usageById.keys().next()
+      if (oldest.done) break
+      this.usageById.delete(oldest.value)
+    }
+  }
+
   constructor(options: SubagentEngineOptions) {
     this.runWorker = options.runWorker
-    this.maxDepth = options.maxDepth ?? MAX_SUBAGENT_DEPTH
+    // A non-finite or negative cap would either never refuse (NaN/Infinity:
+    // every comparison is false) or refuse everything (negative) — both are
+    // corruption, so fall back to the default cap instead of running open.
+    // An explicit 0 still means "no subagents" and is honoured.
+    const maxDepth = options.maxDepth ?? MAX_SUBAGENT_DEPTH
+    this.maxDepth = Number.isFinite(maxDepth) && maxDepth >= 0 ? Math.floor(maxDepth) : MAX_SUBAGENT_DEPTH
     this.defaultEmit = options.emit
     this.now = options.now ?? ((): number => Date.now())
   }
@@ -264,7 +301,16 @@ export class SubagentEngine {
    * `depth_limit_exceeded` failure — never unbounded nesting.
    */
   resolveDepth(parentDepth: number | undefined): { depth: number; failure?: SubagentFailure } {
-    const parent = parentDepth ?? 0
+    const parent = cleanParentDepth(parentDepth)
+    if (parent === null) {
+      return {
+        depth: 0,
+        failure: {
+          code: "depth_limit_exceeded",
+          message: `depth_limit_exceeded: caller depth ${String(parentDepth)} is not a usable depth (refused)`,
+        },
+      }
+    }
     const depth = parent + 1
     if (parent >= this.maxDepth) {
       return {
@@ -305,7 +351,7 @@ export class SubagentEngine {
         signal: opts.signal,
         emit,
       })
-      this.usageById.set(task.id, result.usage)
+      this.rememberUsage(task.id, result.usage)
       await emit?.({ type: "subagent_end", subagentId: task.id, name: task.description, result: result.text })
       return { id: task.id, depth, ok: true, background: false, text: result.text, usage: result.usage }
     } catch (error) {
@@ -313,7 +359,7 @@ export class SubagentEngine {
       // A failed run still cost something — keep it out of the silent-zero
       // bucket so a failing subagent can't look like one that never ran.
       const usage = usageFromError(error)
-      if (usage) this.usageById.set(task.id, usage)
+      if (usage) this.rememberUsage(task.id, usage)
       await emit?.({ type: "subagent_fail", subagentId: task.id, name: task.description, error: message })
       return {
         id: task.id,
@@ -420,7 +466,7 @@ export class SubagentEngine {
         signal: controller.signal,
         emit,
       })
-      this.usageById.set(task.id, result.usage)
+      this.rememberUsage(task.id, result.usage)
       status.completedAt = this.now()
       status.output = result.text
       status.usage = result.usage
@@ -461,7 +507,7 @@ export class SubagentEngine {
       // recorded even when the run ends in an error or a cancellation.
       const usage = usageFromError(error)
       if (usage) {
-        this.usageById.set(task.id, usage)
+        this.rememberUsage(task.id, usage)
         status.usage = usage
       }
       this.fireEmit(emit, {

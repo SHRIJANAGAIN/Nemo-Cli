@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -65,7 +65,7 @@ describe("buildSystemPrompt senior upgrade", () => {
     // cut): guards against accidental section loss, not for bulk.
     expect(corpus.length).toBeGreaterThan(45_000)
     expect(prompt).toContain(corpus)
-    expect(prompt).not.toContain("middle of Trayambak operating corpus omitted")
+    expect(prompt).not.toContain("middle of Nemo operating corpus omitted")
     // Trimmed corpus + power-prompt sections: prompt ships whole but bounded.
     expect(prompt.length).toBeGreaterThan(corpus.length + 10_000)
     expect(prompt.length).toBeLessThan(corpus.length + 60_000)

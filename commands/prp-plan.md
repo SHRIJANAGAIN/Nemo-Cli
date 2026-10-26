@@ -208,12 +208,12 @@ Define the implementation approach:
 
 ## Phase 6 — GENERATE
 
-Write the full plan document using the template below. Save to `.trayambak/PRPs/plans/{kebab-case-feature-name}.plan.md`.
+Write the full plan document using the template below. Save to `.nemo/PRPs/plans/{kebab-case-feature-name}.plan.md`.
 
 Create the directory if it doesn't exist:
 
 ```bash
-mkdir -p .trayambak/PRPs/plans
+mkdir -p .nemo/PRPs/plans
 ```
 
 ### Plan Template
@@ -464,7 +464,7 @@ EXPECT: Feature works as designed
 Write the generated plan to:
 ```
 
-.trayambak/PRPs/plans/{kebab-case-feature-name}.plan.md
+.nemo/PRPs/plans/{kebab-case-feature-name}.plan.md
 
 ```
 
@@ -480,7 +480,7 @@ If this plan was generated from a PRD phase:
 
 ## Plan Created
 
-- **File**: .trayambak/PRPs/plans/{kebab-case-feature-name}.plan.md
+- **File**: .nemo/PRPs/plans/{kebab-case-feature-name}.plan.md
 - **Source PRD**: [path or "N/A"]
 - **Phase**: [phase name or "standalone"]
 - **Complexity**: [level]
@@ -490,7 +490,7 @@ If this plan was generated from a PRD phase:
 - **Risks**: [top risk or "none identified"]
 - **Confidence Score**: [1-10] — likelihood of single-pass implementation
 
-> Next step: Run `/prp-implement .trayambak/PRPs/plans/{name}.plan.md` to execute this plan.
+> Next step: Run `/prp-implement .nemo/PRPs/plans/{name}.plan.md` to execute this plan.
 
 ```
 

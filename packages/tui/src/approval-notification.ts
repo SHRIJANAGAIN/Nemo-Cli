@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { notifyPermissionRequest, osNotify } from "./notifications"
@@ -92,7 +92,7 @@ export class ApprovalManager {
   ): Promise<ApprovalChoice | null> {
     if (this.readOnly) {
       try {
-        osNotify("TRAYAMBAK – READ-ONLY", toolName + " blocked (read-only mode)")
+        osNotify("NEMO – READ-ONLY", toolName + " blocked (read-only mode)")
       } catch {}
       const id = `approval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
       const req: ApprovalRequest = {
@@ -161,7 +161,7 @@ export class ApprovalManager {
             ? "Approved — don’t ask again"
             : "Denied"
     try {
-      osNotify("TRAYAMBAK – " + choiceLabel, (request?.title ?? "Approval") + (toolName ? " (" + toolName + ")" : ""))
+      osNotify("NEMO – " + choiceLabel, (request?.title ?? "Approval") + (toolName ? " (" + toolName + ")" : ""))
     } catch {}
 
     if (value === "approve_session" && toolName) {

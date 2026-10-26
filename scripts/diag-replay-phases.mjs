@@ -35,7 +35,7 @@ const report = (label, bytes) => {
     return t.startsWith("╭") && [...t].length >= Math.floor(cols * 0.8)
   }
   const tops = view.filter(isRootTop).length
-  const composers = view.filter((l) => l.includes("Ask Trayambak")).length
+  const composers = view.filter((l) => l.includes("Ask Nemo")).length
   log(
     `${label.padEnd(22)} bytes=${String(bytes.length).padStart(8)}  rootTops=${tops}  composers=${composers}` +
       `${tops > 1 || composers > 1 ? "   <-- CLONES" : ""}`,
@@ -44,7 +44,7 @@ const report = (label, bytes) => {
 }
 
 // Phase split: the idle screen is the WelcomeScreen (logo art + clock + cwd).
-// The first user message ends it. "Ask Trayambak" plus a second frame's worth
+// The first user message ends it. "Ask Nemo" plus a second frame's worth
 // of content is the give-away, so use the first full-width border that is NOT
 // the opening one.
 const borders = []

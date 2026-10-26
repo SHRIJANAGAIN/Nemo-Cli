@@ -113,7 +113,7 @@ Minimum prep checks:
 
 ```bash
 node tests/plugin-manifest.test.js
-node tests/scripts/build-trayambak.test.js
+node tests/scripts/build-nemo.test.js
 node tests/ci/release-packed-artifact-workflow.test.js
 ```
 
@@ -185,7 +185,7 @@ npx --yes ecc-universal@latest setup --help
 ```
 
 Also run the clean install, doctor, repair, uninstall, and rollback canaries
-required by the checked-in runbook, and verify the native Trayambak marketplace
+required by the checked-in runbook, and verify the native Nemo marketplace
 path remains installable:
 
 ```text

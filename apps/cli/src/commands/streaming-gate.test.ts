@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeEach, describe, expect, it } from "vitest"
@@ -17,7 +17,7 @@ const dirs: string[] = []
 const benign = "Hello world. How are you? Fine!"
 
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-gate-"))
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-gate-"))
   dirs.push(tmp)
   // A non-existent script path keeps the optional python daemon out of the
   // picture so every test exercises the built-in JS checker.

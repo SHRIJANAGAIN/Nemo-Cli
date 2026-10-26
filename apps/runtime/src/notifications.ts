@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 import { execFileSync } from "child_process"
 import type { AgentEvent } from "../../../packages/protocol/src/index.js"
@@ -64,11 +64,11 @@ export function shouldNotify(event: AgentEvent, config: NotificationConfig): boo
 export function notifyForEvent(event: AgentEvent, config: NotificationConfig = DEFAULT_NOTIFICATION_CONFIG): void {
   if (!shouldNotify(event, config)) return
   if (event.type === "tool_execution_end") {
-    osNotify("Trayambak – Tool Error", `${event.toolName} failed`)
+    osNotify("Nemo – Tool Error", `${event.toolName} failed`)
   } else if (event.type === "permission_request") {
-    osNotify("Trayambak – Approval Required", `${event.tool} needs approval`)
+    osNotify("Nemo – Approval Required", `${event.tool} needs approval`)
   } else if (event.type === "agent_end") {
-    osNotify("Trayambak – Done", "Agent finished")
+    osNotify("Nemo – Done", "Agent finished")
   }
 }
 

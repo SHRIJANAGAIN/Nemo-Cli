@@ -4,9 +4,9 @@ description: Run a full multi-model development workflow with research, planning
 
 # Workflow - Multi-Model Collaborative Development
 
-Multi-model collaborative development workflow (Research → Ideation → Plan → Execute → Optimize → Review), with intelligent routing: Frontend → Antigravity, Backend → Trayambak Code.
+Multi-model collaborative development workflow (Research → Ideation → Plan → Execute → Optimize → Review), with intelligent routing: Frontend → Antigravity, Backend → Nemo Code.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.trayambak/bin/codeagent-wrapper` and the `~/.trayambak/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.nemo/bin/codeagent-wrapper` and the `~/.nemo/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
 
 Structured development workflow with quality gates, MCP services, and multi-model collaboration.
 
@@ -20,7 +20,7 @@ Structured development workflow with quality gates, MCP services, and multi-mode
 
 - Task to develop: $ARGUMENTS
 - Structured 6-phase workflow with quality gates
-- Multi-model collaboration: Trayambak Code (backend) + Antigravity (frontend) + Trayambak (orchestration)
+- Multi-model collaboration: Nemo Code (backend) + Antigravity (frontend) + Nemo (orchestration)
 - MCP service integration (ace-tool, optional) for enhanced capabilities
 
 ## Your Role
@@ -30,9 +30,9 @@ You are the **Orchestrator**, coordinating a multi-model collaborative system (R
 **Collaborative Models**:
 
 - **ace-tool MCP** (optional) – Code retrieval + Prompt enhancement
-- **Trayambak Code** – Backend logic, algorithms, debugging (**Backend authority, trustworthy**)
+- **Nemo Code** – Backend logic, algorithms, debugging (**Backend authority, trustworthy**)
 - **Antigravity** – Frontend UI/UX, visual design (**Frontend expert, backend opinions for reference only**)
-- **Trayambak (self)** – Orchestration, planning, execution, delivery
+- **Nemo (self)** – Orchestration, planning, execution, delivery
 
 ---
 
@@ -43,7 +43,7 @@ You are the **Orchestrator**, coordinating a multi-model collaborative system (R
 ```
 # New session call
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <trayambak|antigravity> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <nemo|antigravity> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -58,7 +58,7 @@ EOF",
 
 # Resume session call
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <trayambak|antigravity> resume <SESSION_ID> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <nemo|antigravity> resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -74,15 +74,15 @@ EOF",
 
 **Model Parameter Notes**:
 
-- No extra model flag is needed for `--backend antigravity` or `--backend trayambak`; `codeagent-wrapper` picks each backend's default model.
+- No extra model flag is needed for `--backend antigravity` or `--backend nemo`; `codeagent-wrapper` picks each backend's default model.
 
 **Role Prompts**:
 
-| Phase    | Trayambak Code                                     | Antigravity                                          |
+| Phase    | Nemo Code                                     | Antigravity                                          |
 | -------- | -------------------------------------------------- | ---------------------------------------------------- |
-| Analysis | `~/.trayambak/.ccg/prompts/trayambak/analyzer.md`  | `~/.trayambak/.ccg/prompts/antigravity/analyzer.md`  |
-| Planning | `~/.trayambak/.ccg/prompts/trayambak/architect.md` | `~/.trayambak/.ccg/prompts/antigravity/architect.md` |
-| Review   | `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`  | `~/.trayambak/.ccg/prompts/antigravity/reviewer.md`  |
+| Analysis | `~/.nemo/.ccg/prompts/nemo/analyzer.md`  | `~/.nemo/.ccg/prompts/antigravity/analyzer.md`  |
+| Planning | `~/.nemo/.ccg/prompts/nemo/architect.md` | `~/.nemo/.ccg/prompts/antigravity/architect.md` |
+| Review   | `~/.nemo/.ccg/prompts/nemo/reviewer.md`  | `~/.nemo/.ccg/prompts/antigravity/reviewer.md`  |
 
 **Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` subcommand for subsequent phases (note: `resume`, not `--resume`).
 
@@ -115,7 +115,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 Use external tmux/worktree orchestration when the work must be split across parallel workers that need isolated git state, independent terminals, or separate build/test execution. Use in-process subagents for lightweight analysis, planning, or review where the main session remains the only writer.
 
 ```bash
-node scripts/orchestrate-worktrees.js .trayambak/plan/workflow-e2e-test.json --execute
+node scripts/orchestrate-worktrees.js .nemo/plan/workflow-e2e-test.json --execute
 ```
 
 ---
@@ -128,7 +128,7 @@ node scripts/orchestrate-worktrees.js .trayambak/plan/workflow-e2e-test.json --e
 
 `[Mode: Research]` - Understand requirements and gather context:
 
-1. **Prompt Enhancement** (if ace-tool MCP available): Call `mcp__ace-tool__enhance_prompt`, **replace original $ARGUMENTS with enhanced result for all subsequent Trayambak Code/Antigravity calls**. If unavailable, use `$ARGUMENTS` as-is.
+1. **Prompt Enhancement** (if ace-tool MCP available): Call `mcp__ace-tool__enhance_prompt`, **replace original $ARGUMENTS with enhanced result for all subsequent Nemo Code/Antigravity calls**. If unavailable, use `$ARGUMENTS` as-is.
 2. **Context Retrieval** (if ace-tool MCP available): Call `mcp__ace-tool__search_context`. If unavailable, use built-in tools: `Glob` for file discovery, `Grep` for symbol search, `Read` for context gathering, `Task` (Explore agent) for deeper exploration.
 3. **Requirement Completeness Score** (0-10):
    - Goal clarity (0-3), Expected outcome (0-3), Scope boundaries (0-2), Constraints (0-2)
@@ -140,10 +140,10 @@ node scripts/orchestrate-worktrees.js .trayambak/plan/workflow-e2e-test.json --e
 
 **Parallel Calls** (`run_in_background: true`):
 
-- Trayambak Code: Use analyzer prompt, output technical feasibility, solutions, risks
+- Nemo Code: Use analyzer prompt, output technical feasibility, solutions, risks
 - Antigravity: Use analyzer prompt, output UI feasibility, solutions, UX evaluation
 
-Wait for results with `TaskOutput`. **Save SESSION_ID** (`TRAYAMBAK_SESSION` and `ANTIGRAVITY_SESSION`).
+Wait for results with `TaskOutput`. **Save SESSION_ID** (`NEMO_SESSION` and `ANTIGRAVITY_SESSION`).
 
 **Follow the `IMPORTANT` instructions in `Multi-Model Call Specification` above**
 
@@ -155,14 +155,14 @@ Synthesize both analyses, output solution comparison (at least 2 options), wait 
 
 **Parallel Calls** (resume session with `resume <SESSION_ID>`):
 
-- Trayambak Code: Use architect prompt + `resume $TRAYAMBAK_SESSION`, output backend architecture
+- Nemo Code: Use architect prompt + `resume $NEMO_SESSION`, output backend architecture
 - Antigravity: Use architect prompt + `resume $ANTIGRAVITY_SESSION`, output frontend architecture
 
 Wait for results with `TaskOutput`.
 
 **Follow the `IMPORTANT` instructions in `Multi-Model Call Specification` above**
 
-**Trayambak Synthesis**: Adopt Trayambak Code backend plan + Antigravity frontend plan, save to `.trayambak/plan/task-name.md` after user approval.
+**Nemo Synthesis**: Adopt Nemo Code backend plan + Antigravity frontend plan, save to `.nemo/plan/task-name.md` after user approval.
 
 ### Phase 4: Implementation
 
@@ -178,7 +178,7 @@ Wait for results with `TaskOutput`.
 
 **Parallel Calls**:
 
-- Trayambak Code: Use reviewer prompt, focus on security, performance, error handling
+- Nemo Code: Use reviewer prompt, focus on security, performance, error handling
 - Antigravity: Use reviewer prompt, focus on accessibility, design consistency
 
 Wait for results with `TaskOutput`. Integrate review feedback, execute optimization after user confirmation.
@@ -199,5 +199,5 @@ Wait for results with `TaskOutput`. Integrate review feedback, execute optimizat
 ## Key Rules
 
 1. Phase sequence cannot be skipped (unless user explicitly instructs)
-2. External models have **zero filesystem write access**, all modifications by Trayambak
+2. External models have **zero filesystem write access**, all modifications by Nemo
 3. **Force stop** when score < 7 or user does not approve

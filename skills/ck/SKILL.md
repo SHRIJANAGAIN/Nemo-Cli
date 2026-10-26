@@ -1,6 +1,6 @@
 ---
 name: ck
-description: Persistent per-project memory for Trayambak Code. Auto-loads project context on session start, tracks sessions with git activity, and writes to native memory. Commands run deterministic Node.js scripts — behavior is consistent across model versions. Use when a project needs context to survive across Trayambak Code sessions instead of being re-explained each time.
+description: Persistent per-project memory for Nemo Code. Auto-loads project context on session start, tracks sessions with git activity, and writes to native memory. Commands run deterministic Node.js scripts — behavior is consistent across model versions. Use when a project needs context to survive across Nemo Code sessions instead of being re-explained each time.
 metadata:
   version: 2.0.0
   origin: community
@@ -12,14 +12,14 @@ repo: https://github.com/sreedhargs89/context-keeper
 
 You are the **Context Keeper** assistant. When the user invokes any `/ck:*` command,
 run the corresponding Node.js script and present its stdout to the user verbatim.
-Scripts live at: `~/.trayambak/skills/ck/commands/` (expand `~` with `$HOME`).
+Scripts live at: `~/.nemo/skills/ck/commands/` (expand `~` with `$HOME`).
 
 ---
 
 ## Data Layout
 
 ```
-~/.trayambak/ck/
+~/.nemo/ck/
 ├── projects.json              ← path → {name, contextDir, lastUpdated}
 └── contexts/<name>/
     ├── context.json           ← SOURCE OF TRUTH (structured JSON, v2)
@@ -33,7 +33,7 @@ Scripts live at: `~/.trayambak/skills/ck/commands/` (expand `~` with `$HOME`).
 ### `/ck:init` — Register a Project
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/init.mjs"
+node "$HOME/.nemo/skills/ck/commands/init.mjs"
 ```
 
 The script outputs JSON with auto-detected info. Present it as a confirmation draft:
@@ -51,7 +51,7 @@ Repo:        <repo or "none">
 Wait for user approval. Apply any edits. Then pipe confirmed JSON to save.mjs --init:
 
 ```bash
-echo '<confirmed-json>' | node "$HOME/.trayambak/skills/ck/commands/save.mjs" --init
+echo '<confirmed-json>' | node "$HOME/.nemo/skills/ck/commands/save.mjs" --init
 ```
 
 Confirmed JSON schema: `{"name":"...","path":"...","description":"...","stack":["..."],"goal":"...","constraints":["..."],"repo":"..." }`
@@ -73,7 +73,7 @@ Show a draft summary to the user: `"Session: '<summary>' — save this? (yes / e
 Wait for confirmation. Then pipe to save.mjs:
 
 ```bash
-echo '<json>' | node "$HOME/.trayambak/skills/ck/commands/save.mjs"
+echo '<json>' | node "$HOME/.nemo/skills/ck/commands/save.mjs"
 ```
 
 JSON schema (exact): `{"summary":"...","leftOff":"...","nextSteps":["..."],"decisions":[{"what":"...","why":"..."}],"blockers":["..."]}`
@@ -84,7 +84,7 @@ Display the script's stdout confirmation verbatim.
 ### `/ck:resume [name|number]` — Full Briefing
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/resume.mjs" [arg]
+node "$HOME/.nemo/skills/ck/commands/resume.mjs" [arg]
 ```
 
 Display output verbatim. Then ask: "Continue from here? Or has anything changed?"
@@ -95,7 +95,7 @@ If user reports changes → run `/ck:save` immediately.
 ### `/ck:info [name|number]` — Quick Snapshot
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/info.mjs" [arg]
+node "$HOME/.nemo/skills/ck/commands/info.mjs" [arg]
 ```
 
 Display output verbatim. No follow-up question.
@@ -105,7 +105,7 @@ Display output verbatim. No follow-up question.
 ### `/ck:list` — Portfolio View
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/list.mjs"
+node "$HOME/.nemo/skills/ck/commands/list.mjs"
 ```
 
 Display output verbatim. If user replies with a number or name → run `/ck:resume`.
@@ -119,7 +119,7 @@ Ask: `"This will permanently delete context for '<name>'. Are you sure? (yes/no)
 If yes:
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/forget.mjs" [name]
+node "$HOME/.nemo/skills/ck/commands/forget.mjs" [name]
 ```
 
 Display confirmation verbatim.
@@ -129,13 +129,13 @@ Display confirmation verbatim.
 ### `/ck:migrate` — Convert v1 Data to v2
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/migrate.mjs"
+node "$HOME/.nemo/skills/ck/commands/migrate.mjs"
 ```
 
 For a dry run first:
 
 ```bash
-node "$HOME/.trayambak/skills/ck/commands/migrate.mjs" --dry-run
+node "$HOME/.nemo/skills/ck/commands/migrate.mjs" --dry-run
 ```
 
 Display output verbatim. Migrates all v1 CONTEXT.md + meta.json files to v2 context.json.
@@ -145,21 +145,21 @@ Originals are backed up as `meta.json.v1-backup` — nothing is deleted.
 
 ## SessionStart Hook
 
-The hook at `~/.trayambak/skills/ck/hooks/session-start.mjs` must be registered in
-`~/.trayambak/settings.json` to auto-load project context on session start:
+The hook at `~/.nemo/skills/ck/hooks/session-start.mjs` must be registered in
+`~/.nemo/settings.json` to auto-load project context on session start:
 
 ```json
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "node \"~/.trayambak/skills/ck/hooks/session-start.mjs\"" }] }
+      { "hooks": [{ "type": "command", "command": "node \"~/.nemo/skills/ck/hooks/session-start.mjs\"" }] }
     ]
   }
 }
 ```
 
 The hook injects ~100 tokens per session (compact 5-line summary). It also detects
-unsaved sessions, git activity since last save, and goal mismatches vs TRAYAMBAK.md.
+unsaved sessions, git activity since last save, and goal mismatches vs NEMO.md.
 
 ---
 

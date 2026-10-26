@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Draw the Trayambak lockup PROCEDURALLY: the TRAYAMBAK CLI wordmark in
+ * Draw the Nemo lockup PROCEDURALLY: the NEMO CLI wordmark in
  * silver, under a twinkling starfield.
  *
  * The hexagon ring and T monogram are gone on request — the wordmark alone
@@ -16,7 +16,7 @@
  * glyphs and the mark cannot regress.
  *
  * Twinkle is NOT baked: every star cell carries its own brightness, and the
- * idle animation (logoShimmer in TrayambakLogo.tsx) scales each cell by a
+ * idle animation (logoShimmer in NemoLogo.tsx) scales each cell by a
  * position-hashed phase — brighter cells breathe harder, so the field reads
  * as twinkling metal rather than a static gradient.
  *
@@ -24,9 +24,13 @@
  */
 
 import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
+const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const outPath =
-  process.argv[2] ?? "C:/Users/engli/trayambak/packages/tui/src/ink-app/logo_ansi.txt"
+  process.argv[2] ??
+  path.join(scriptDir, "..", "packages", "tui", "src", "ink-app", "logo_ansi.txt")
 
 /** Terminal rows for the whole lockup: star band, then the wordmark. */
 const ROWS = 8
@@ -65,9 +69,12 @@ const FONT = {
   C: [".###", "#...", "#...", "#...", ".###"],
   L: ["#...", "#...", "#...", "#...", "####"],
   I: ["####", ".#..", ".#..", ".#..", "####"],
+  N: ["#..#", "##.#", "#.##", "#..#", "#..#"],
+  E: ["####", "#...", "###.", "#...", "####"],
+  O: [".##.", "#..#", "#..#", "#..#", ".##."],
 }
 
-const WORDMARK = "TRAYAMBAK CLI"
+const WORDMARK = "NEMO CLI"
 const WORDMARK_ROWS = 5
 /** Blank columns between letters. */
 const LETTER_GAP = 2

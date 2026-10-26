@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Subagents overlay — SKT AI LABS's foreground-task list + background-task inspector
+ * Subagents overlay — Shrijan's foreground-task list + background-task inspector
  * ported to Ink. Replaces the content pane while open (so MessageList's and
  * PromptInput's input handlers are unmounted, no key conflicts): tabs for
  * all/background, selectable rows with live elapsed time, and an expandable
@@ -15,19 +15,22 @@
  *   tab  all ⇄ background · esc/q  close
  */
 
-import React, { useState, useEffect, type ReactNode } from "react"
+import React, { useState, type ReactNode } from "react"
 import { Box, Text, useStdout } from "ink"
 import { Spinner } from "./Spinner.js"
-import type { TrayambakMessage, BackgroundSubagentState } from "./types.js"
+import { Shimmer } from "./Shimmer.js"
+import type { NemoMessage, BackgroundSubagentState } from "./types.js"
 import { buildSubagentRows, type SubagentPanelRow } from "./subagent-view.js"
 import { useThemeColors } from "./themeColors.js"
 import { stringWidth, sliceByWidth } from "./utils/stringWidth.js"
+import { useTicker } from "./use-animation-clock.js"
+import { formatDuration, formatElapsed } from "./duration-text.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
 import { g } from "./glyphs.js"
 
 export interface SubagentPanelProps {
-  cards: TrayambakMessage[]
+  cards: NemoMessage[]
   background: BackgroundSubagentState[]
   initialTab?: "all" | "background"
   onClose: () => void
@@ -40,12 +43,6 @@ const STATUS_ICON: Record<SubagentPanelRow["status"], string> = {
   completed: g("dot"),
   error: g("fail"),
   cancelled: g("ring"),
-}
-
-function formatElapsed(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
 }
 
 function statusColor(theme: ReturnType<typeof useThemeColors>, status: SubagentPanelRow["status"]): string {
@@ -67,18 +64,18 @@ export const SubagentPanel = ({
   const [tab, setTab] = useState<"all" | "background">(initialTab)
   const [selected, setSelected] = useState(0)
   const [expanded, setExpanded] = useState(/*initial*/ false)
-  const [, setTick] = useState(0)
-
-  // 1s tick keeps elapsed times and spinners alive while the panel is open.
-  useEffect(() => {
-    const timer = setInterval(() => setTick((n) => n + 1), 1000)
-    return () => clearInterval(timer)
-  }, [])
 
   const now = Date.now()
   const allRows = buildSubagentRows(cards, background, now)
   const rows = tab === "background" ? allRows.filter((r) => r.source === "background") : allRows
   const runningCount = allRows.filter((r) => r.status === "running").length
+  // The tick is not read — subscribing to the shared clock IS what re-renders
+  // the elapsed column below. Gated on activity: the old private 1s interval
+  // repainted the panel every second with nothing running, and ran alongside
+  // every other widget's own timer instead of with them. `useTicker` because an
+  // elapsed column is a duration, not a decoration — motion `off` must not
+  // freeze it.
+  useTicker(1000, runningCount > 0)
   const safeIdx = Math.min(selected, Math.max(0, rows.length - 1))
 
   // Title budget: probed across 6 layout variants — a flexGrow title Box
@@ -186,11 +183,30 @@ export const SubagentPanel = ({
                   ) : (
                     <Text color={statusColor(theme, row.status)}>{STATUS_ICON[row.status]}</Text>
                   )}
-                  <Text bold={isSelected}> {shownTitle(row.title)}</Text>
+                  {/* A running row shimmers its own title: with six agents in
+                      flight the spinner column alone cannot tell you WHICH one
+                      just moved. All rows read one clock, so they sweep in
+                      phase instead of strobing out of step. */}
+                  {row.status === "running" ? (
+                    <Shimmer
+                      text={` ${shownTitle(row.title)}`}
+                      color={theme.text}
+                      glow={theme.warning}
+                      bold={isSelected}
+                    />
+                  ) : (
+                    <Text bold={isSelected}> {shownTitle(row.title)}</Text>
+                  )}
                   <Text color={theme.textMuted}> [{row.source}]</Text>
                   {row.subagentType && <Text color={theme.info}> {row.subagentType}</Text>}
                   {row.isolation === "worktree" && <Text color={theme.secondary}> ⎇ worktree</Text>}
-                  <Text dimColor> {formatElapsed(row.durationMs)}</Text>
+                  <Text dimColor>
+                    {" "}
+                    {/* Live rows count up in whole seconds; finished rows are a
+                        measurement — a 900ms subagent reading "0s" looks broken,
+                        "900ms" reads as fast. */}
+                    {row.status === "running" ? formatElapsed(row.durationMs) : formatDuration(row.durationMs)}
+                  </Text>
                   {row.toolCalls > 0 && (
                     <Text dimColor>
                       {" "}

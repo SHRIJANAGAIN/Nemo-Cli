@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
@@ -50,8 +54,8 @@ describe("sandbox file policy", () => {
     expect(isPathInside("/z", "/a")).toBe(false)
   })
   it("resolves junctions/symlinks before the root check (audit #36)", () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-jail-outside-"))
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-jail-root-"))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-jail-outside-"))
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-jail-root-"))
     try {
       fs.writeFileSync(path.join(outside, "evil.dll"), "x")
       const link = path.join(root, "junk")
@@ -90,7 +94,7 @@ describe("sandbox honesty", () => {
   })
 
   it("reports os-sandbox for capable backends with the flag enabled by default", () => {
-    for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted"] as const) {
+    for (const b of ["seatbelt", "bwrap", "windows-restricted"] as const) {
       expect(enforcementFor(b)).toBe("os-sandbox")
     }
     expect(enforcementFor("fallback")).toBe("policy-only")
@@ -104,7 +108,9 @@ describe("sandbox honesty", () => {
   it("claims os-sandbox only for isolator backends when the flag is on", () => {
     vi.stubEnv("FEATURE_SANDBOXSPAWN", "1")
     expect(enforcementFor("seatbelt")).toBe("os-sandbox")
-    expect(enforcementFor("landlock")).toBe("os-sandbox")
+    // Not os-sandbox: `landlock.ts` plans rulesets but the syscall that installs
+    // one does not exist, so nothing in this repository enforces with it.
+    expect(enforcementFor("landlock")).toBe("policy-only")
     expect(enforcementFor("bwrap")).toBe("os-sandbox")
     expect(enforcementFor("windows-restricted")).toBe("os-sandbox")
     // fallback has no OS isolator, so claiming one would be a lie.

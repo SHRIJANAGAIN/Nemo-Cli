@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -12,17 +12,17 @@ import { createMemoryTool, memoryFile, saveMemory, useMemoryFile } from "./memor
 
 // memoryFile() resolves os.homedir() at CALL time; point the whole home at a
 // fixed temp dir so this regression test never touches the developer's real
-// ~/.trayambak/memory/ tree — and so "fresh profile" is actually fresh.
+// ~/.nemo/memory/ tree — and so "fresh profile" is actually fresh.
 vi.mock("os", async (importOriginal) => {
   const actual = await importOriginal<typeof import("os")>()
   const { tmpdir } = await import("node:os")
   const { join } = await import("node:path")
-  const home = join(tmpdir(), "trayambak-memory-test-home")
+  const home = join(tmpdir(), "nemo-memory-test-home")
   return { ...actual, homedir: () => home }
 })
 
 const homeDir = os.homedir()
-const projectDir = path.join(os.tmpdir(), "trayambak-memory-test-proj")
+const projectDir = path.join(os.tmpdir(), "nemo-memory-test-proj")
 
 function textOf(result: { content: Array<{ type: string; text?: string }> }): string {
   return result.content.map((c) => (c.type === "text" ? (c.text ?? "") : "")).join("\n")
@@ -30,16 +30,16 @@ function textOf(result: { content: Array<{ type: string; text?: string }> }): st
 
 describe("saveMemory on a fresh profile", () => {
   beforeEach(() => {
-    // Neither tree exists: homedir/.trayambak/memory/ nor <project>/skt/4-mem/.
+    // Neither tree exists: homedir/.nemo/memory/ nor <project>/nemo/4-mem/.
     fs.rmSync(homeDir, { recursive: true, force: true })
     fs.rmSync(projectDir, { recursive: true, force: true })
     fs.mkdirSync(projectDir, { recursive: true })
     fs.writeFileSync(path.join(projectDir, "package.json"), JSON.stringify({ name: "memory-test" }))
-    process.env.TRAYAMBAK_HOME = projectDir
+    process.env.NEMO_HOME = projectDir
   })
 
   afterEach(() => {
-    delete process.env.TRAYAMBAK_HOME
+    delete process.env.NEMO_HOME
   })
 
   it("creates BOTH directory trees instead of throwing ENOENT on memory.json", () => {

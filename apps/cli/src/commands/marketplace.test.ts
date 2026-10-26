@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs"
@@ -37,7 +37,7 @@ afterEach(() => {
 })
 
 function makeShelf(): string {
-  shelf = mkdtempSync(join(tmpdir(), "trayambak-mkt-"))
+  shelf = mkdtempSync(join(tmpdir(), "nemo-mkt-"))
   mkdirSync(join(shelf, "skills", "reviewer"), { recursive: true })
   writeFileSync(join(shelf, "skills", "reviewer", "SKILL.md"), "---\nname: reviewer\ndescription: Reviews\n---\n\nB\n")
   return shelf
@@ -57,12 +57,12 @@ describe("marketplaceCommand", () => {
 
   it("installs and removes through the CLI", () => {
     const dir = makeShelf()
-    project = mkdtempSync(join(tmpdir(), "trayambak-mktproj-"))
+    project = mkdtempSync(join(tmpdir(), "nemo-mktproj-"))
 
     expect(
       marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "reviewer", source: dir, cwd: project }),
     ).toContain("Installed skill")
-    expect(existsSync(join(project, ".trayambak", "skills", "reviewer", "SKILL.md"))).toBe(true)
+    expect(existsSync(join(project, ".nemo", "skills", "reviewer", "SKILL.md"))).toBe(true)
     expect(marketplaceCommand({ action: "remove", kind: "skill", nameOrQuery: "reviewer", cwd: project })).toContain(
       "Removed",
     )
@@ -76,7 +76,7 @@ describe("marketplaceCommand", () => {
 
   it("exits 1 on a missing install and 0 on success", () => {
     const dir = makeShelf()
-    project = mkdtempSync(join(tmpdir(), "trayambak-mktproj-"))
+    project = mkdtempSync(join(tmpdir(), "nemo-mktproj-"))
 
     expect(
       marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "ghost", source: dir, cwd: project }),

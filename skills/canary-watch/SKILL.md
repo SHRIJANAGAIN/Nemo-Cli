@@ -82,7 +82,7 @@ When a critical threshold is crossed:
 
 - Desktop notification (macOS/Linux)
 - Optional: Slack/Discord webhook
-- Log to `~/.trayambak/canary-watch.log`
+- Log to `~/.nemo/canary-watch.log`
 
 ## Output
 

@@ -12,8 +12,8 @@ purposeful, polished, and appropriate to the product domain.
 
 Source: salvaged from stale community PR #1659 by `linus707`.
 
-Note: ECC intentionally does not rebundle the canonical SKT AI LABS
-`frontend-design` skill. Install that from `skt-ai-labss/skills` when you want the
+Note: ECC intentionally does not rebundle the canonical Shrijan
+`frontend-design` skill. Install that from `shrijans/skills` when you want the
 official upstream skill. This skill is the ECC-specific design-direction salvage
 of the useful local guidance from #1659.
 

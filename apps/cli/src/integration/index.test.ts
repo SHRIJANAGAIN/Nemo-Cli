@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -16,7 +16,7 @@ import type { WatcherEvent } from "./watcher.js"
  * index.ts is the integration barrel. It also pulls in ./plan transitively,
  * and plan.ts resolves its storage root from os.homedir() AT MODULE LOAD, so
  * the temp home is installed before the dynamic import in beforeAll and the
- * real ~/.trayambak is never touched. `import type` above is erased, so it
+ * real ~/.nemo is never touched. `import type` above is erased, so it
  * cannot pull the module in early.
  *
  * Namespace/class/singleton wiring is checked structurally ONCE per namespace
@@ -30,37 +30,37 @@ let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
 const NAMESPACES: readonly string[] = [
-  "TrayambakSandbox",
-  "TrayambakIndexing",
-  "TrayambakPresence",
-  "TrayambakBoard",
-  "TrayambakPlan",
-  "TrayambakNotebook",
-  "TrayambakWatcher",
-  "TrayambakGitRefs",
-  "TrayambakProjectId",
-  "TrayambakTaskResume",
-  "TrayambakTextStream",
-  "TrayambakParentWatchdog",
+  "NemoSandbox",
+  "NemoIndexing",
+  "NemoPresence",
+  "NemoBoard",
+  "NemoPlan",
+  "NemoNotebook",
+  "NemoWatcher",
+  "NemoGitRefs",
+  "NemoProjectId",
+  "NemoTaskResume",
+  "NemoTextStream",
+  "NemoParentWatchdog",
 ]
 
 const SERVICE_PAIRS: ReadonlyArray<{ readonly ns: string; readonly cls: string; readonly singleton: string }> = [
-  { ns: "TrayambakSandbox", cls: "SandboxService", singleton: "sandboxService" },
-  { ns: "TrayambakIndexing", cls: "IndexingService", singleton: "indexingService" },
-  { ns: "TrayambakPresence", cls: "PresenceService", singleton: "presenceService" },
-  { ns: "TrayambakBoard", cls: "BoardService", singleton: "boardService" },
-  { ns: "TrayambakPlan", cls: "PlanService", singleton: "planService" },
-  { ns: "TrayambakNotebook", cls: "NotebookService", singleton: "notebookService" },
-  { ns: "TrayambakWatcher", cls: "WatcherService", singleton: "watcherService" },
-  { ns: "TrayambakGitRefs", cls: "GitRefsService", singleton: "gitRefsService" },
-  { ns: "TrayambakProjectId", cls: "ProjectIdService", singleton: "projectIdService" },
-  { ns: "TrayambakTaskResume", cls: "TaskResumeService", singleton: "taskResumeService" },
-  { ns: "TrayambakTextStream", cls: "TextStreamService", singleton: "textStreamService" },
-  { ns: "TrayambakParentWatchdog", cls: "ParentWatchdogService", singleton: "parentWatchdogService" },
+  { ns: "NemoSandbox", cls: "SandboxService", singleton: "sandboxService" },
+  { ns: "NemoIndexing", cls: "IndexingService", singleton: "indexingService" },
+  { ns: "NemoPresence", cls: "PresenceService", singleton: "presenceService" },
+  { ns: "NemoBoard", cls: "BoardService", singleton: "boardService" },
+  { ns: "NemoPlan", cls: "PlanService", singleton: "planService" },
+  { ns: "NemoNotebook", cls: "NotebookService", singleton: "notebookService" },
+  { ns: "NemoWatcher", cls: "WatcherService", singleton: "watcherService" },
+  { ns: "NemoGitRefs", cls: "GitRefsService", singleton: "gitRefsService" },
+  { ns: "NemoProjectId", cls: "ProjectIdService", singleton: "projectIdService" },
+  { ns: "NemoTaskResume", cls: "TaskResumeService", singleton: "taskResumeService" },
+  { ns: "NemoTextStream", cls: "TextStreamService", singleton: "textStreamService" },
+  { ns: "NemoParentWatchdog", cls: "ParentWatchdogService", singleton: "parentWatchdogService" },
 ]
 
 beforeAll(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-integration-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-integration-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -71,7 +71,7 @@ beforeAll(async () => {
 afterAll(() => {
   // Restored only here: plan storage resolves its path per call (not at
   // import), so the stub must stay installed while the tests run or they would
-  // read/write the developer's real ~/.trayambak.
+  // read/write the developer's real ~/.nemo.
   process.env.USERPROFILE = savedUserprofile
   process.env.HOME = savedHome
   try {
@@ -101,14 +101,14 @@ describe("integration barrel wiring", () => {
   })
 
   it("re-exports itself, so the nested index namespace shares the same services", () => {
-    expect(mod.TrayambakIntegrationIndex.TrayambakSandbox.sandboxService).toBe(mod.TrayambakSandbox.sandboxService)
-    expect(mod.TrayambakIntegrationIndex.TrayambakPlan.getPlansFilePath()).toBe(mod.TrayambakPlan.getPlansFilePath())
+    expect(mod.NemoIntegrationIndex.NemoSandbox.sandboxService).toBe(mod.NemoSandbox.sandboxService)
+    expect(mod.NemoIntegrationIndex.NemoPlan.getPlansFilePath()).toBe(mod.NemoPlan.getPlansFilePath())
   })
 })
 
 describe("services behave through the barrel", () => {
   it("sandbox allows every operation until a capability is disabled, then blocks it", () => {
-    const sandbox = new mod.TrayambakSandbox.SandboxService()
+    const sandbox = new mod.NemoSandbox.SandboxService()
     expect(sandbox.getConfig().enabled).toBe(true)
     expect(sandbox.allow("network")).toBe(true)
     expect(() => sandbox.assert("network")).not.toThrow()
@@ -124,7 +124,7 @@ describe("services behave through the barrel", () => {
   })
 
   it("text-stream splits into 100-character chunks, buffers them, and honours the buffer bound", () => {
-    const stream = new mod.TrayambakTextStream.TextStreamService()
+    const stream = new mod.NemoTextStream.TextStreamService()
     const chunks: string[] = []
     let completed = ""
     stream.stream("x".repeat(250), {
@@ -147,7 +147,7 @@ describe("services behave through the barrel", () => {
   })
 
   it("git-refs deduplicates refs by name and reports branch status", () => {
-    const git = new mod.TrayambakGitRefs.GitRefsService()
+    const git = new mod.NemoGitRefs.GitRefsService()
     git.setRefs([
       { name: "main", type: "branch", commit: "aaa" },
       { name: "feature", type: "branch", commit: "bbb" },
@@ -166,7 +166,7 @@ describe("services behave through the barrel", () => {
   })
 
   it("board delivers messages to their recipient or to everyone, and tracks participants", () => {
-    const board = new mod.TrayambakBoard.BoardService()
+    const board = new mod.NemoBoard.BoardService()
     board.post({ author: "agent", content: "hello user", recipient: "user" })
     board.post({ author: "user", content: "hi agent", recipient: "agent" })
     board.post({ author: "agent", content: "broadcast" })
@@ -183,7 +183,7 @@ describe("services behave through the barrel", () => {
   })
 
   it("presence notifies subscribers until they unsubscribe", () => {
-    const presence = new mod.TrayambakPresence.PresenceService()
+    const presence = new mod.NemoPresence.PresenceService()
     const seen: string[] = []
     const unsubscribe = presence.subscribe((state) => seen.push(state.status))
 
@@ -198,7 +198,7 @@ describe("services behave through the barrel", () => {
   })
 
   it("watcher announces watch/unwatch without touching the filesystem", () => {
-    const watcher = new mod.TrayambakWatcher.WatcherService()
+    const watcher = new mod.NemoWatcher.WatcherService()
     const lifecycle: string[] = []
     const changes: WatcherEvent[] = []
     watcher.on("start", () => lifecycle.push("start"))
@@ -220,7 +220,7 @@ describe("services behave through the barrel", () => {
   })
 
   it("indexing runs to completion and records the run in its state", async () => {
-    const indexing = new mod.TrayambakIndexing.IndexingService()
+    const indexing = new mod.NemoIndexing.IndexingService()
     expect(indexing.getState().status).toBe("idle")
 
     await indexing.run()
@@ -233,12 +233,12 @@ describe("services behave through the barrel", () => {
   })
 
   it("plan storage resolves under the barrel's home directory", () => {
-    expect(mod.TrayambakPlan.getPlansFilePath()).toBe(path.join(home, ".trayambak", "plans.json"))
-    expect(new mod.TrayambakPlan.PlanService().list()).toEqual([])
+    expect(mod.NemoPlan.getPlansFilePath()).toBe(path.join(home, ".nemo", "plans.json"))
+    expect(new mod.NemoPlan.PlanService().list()).toEqual([])
   })
 
   it("parent watchdog starts, observes a live parent, and stops", () => {
-    const watchdog = new mod.TrayambakParentWatchdog.ParentWatchdogService()
+    const watchdog = new mod.NemoParentWatchdog.ParentWatchdogService()
     try {
       watchdog.start(process.pid)
       expect(watchdog.getState()?.parentPid).toBe(process.pid)

@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type { AssistantMessage, StopReason, ToolDefinition } from "../../protocol/src/index.js"
 
-/** A single chat message in SKT AI LABS-compatible wire format. */
+/** A single chat message in Shrijan-compatible wire format. */
 export interface WireMessage {
   role: "system" | "user" | "assistant" | "tool"
   content: string | null

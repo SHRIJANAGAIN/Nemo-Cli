@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import React, { type ReactNode, useState, useEffect, useRef } from "react"
@@ -10,7 +10,7 @@ import { appendFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { useThemeColors, rgbToHex } from "./themeColors.js"
-import { g } from "./glyphs.js"
+import { g, glyphSet } from "./glyphs.js"
 import { getTheme, selectedForeground } from "../ui/theme.js"
 import { stringWidth } from "./utils/stringWidth.js"
 import { SLASH_COMMANDS } from "./types.js"
@@ -18,8 +18,20 @@ import { isEnter } from "./keys.js"
 import { getKeymap } from "../keymap.js"
 import { fuzzyMatch, fuzzyMatchScore } from "./fuzzy.js"
 import { useAppInput } from "./useAppInput.js"
+import {
+  emptyPromptHistory,
+  leaveRecall,
+  pushPrompt,
+  recallNewer,
+  recallOlder,
+  recalledText,
+  type PromptHistory,
+} from "./prompt-history.js"
 import type { SlashCommand, ChooserOption, QuestionRequest } from "./types.js"
 import { Spinner } from "./Spinner.js"
+import { cycleIndex } from "./animations.js"
+import { useAnimationClock } from "./use-animation-clock.js"
+import { idleAnimEnabled, useIdleBreathe, idleSilver, idleGlyph } from "./use-idle-breathe.js"
 import {
   deriveMentionState,
   ensureMentionFiles,
@@ -31,14 +43,19 @@ import {
 
 const MAX_VISIBLE = 10
 
-/** Env-gated dispatch tracer (TRAYAMBAK_DEBUG_INPUT=1): "PI"-prefixed lines
- *  land in the same trayambak-input.log as App's "in="/"SUBMIT" lines, so
+/** Half-period of the mid-turn caret pulse. 530ms is what the composer has
+ *  always used; the value is slow enough that a `reduced` doubling still
+ *  reads as a pulse rather than as a strobe. */
+const CARET_PULSE_MS = 530
+
+/** Env-gated dispatch tracer (NEMO_DEBUG_INPUT=1): "PI"-prefixed lines
+ *  land in the same nemo-input.log as App's "in="/"SUBMIT" lines, so
  *  cross-handler questions ("which listener saw this keystroke, and when")
  *  are answerable from one file instead of by reasoning about emit order. */
 const piLog = (line: string): void => {
-  if (process.env.TRAYAMBAK_DEBUG_INPUT !== "1") return
+  if (process.env.NEMO_DEBUG_INPUT !== "1") return
   try {
-    appendFileSync(join(tmpdir(), "trayambak-input.log"), `${new Date().toISOString()} PI ${line}\n`)
+    appendFileSync(join(tmpdir(), "nemo-input.log"), `${new Date().toISOString()} PI ${line}\n`)
   } catch {
     /* debug only */
   }
@@ -62,6 +79,9 @@ export interface PromptInputProps {
    *  (shared with the wheel); absent, the keys are inert. */
   onHistoryScroll?: (dir: "up" | "down") => void
   placeholder?: string
+  /** Breathe the idle composer even without `NEMO_IDLE_ANIM` (home
+   *  screen: its frame already repaints; the transcript keeps byte-silence). */
+  idleBreathe?: boolean
   isLoading?: boolean
   disabled?: boolean
   questionHint?: QuestionRequest | null
@@ -241,7 +261,8 @@ export const PromptInput = ({
   onChoose,
   onEnhance,
   onHistoryScroll,
-  placeholder = "Ask Trayambak to do anything...",
+  placeholder = "Ask Nemo to do anything...",
+  idleBreathe = false,
   isLoading = false,
   disabled = false,
   questionHint = null,
@@ -303,6 +324,12 @@ export const PromptInput = ({
   const [mentionRev, setMentionRev] = useState(0)
   /** Last draft handed in via draftRequest — only a NEW nonce rewrites. */
   const lastDraftNonceRef = useRef(0)
+  /** Prompts already sent this session + where ↑/↓ stands (see
+   *  prompt-history.ts). A ref because the keypress handler reads it inside the
+   *  same coalesced stdin chunk that state has not re-rendered for; the note is
+   *  the render-visible slice of it ("which of N am I looking at"). */
+  const historyRef = useRef<PromptHistory>(emptyPromptHistory())
+  const [recallNote, setRecallNote] = useState("")
   /** Ref-backed composer text. setBuffer is async React state; an Enter
    *  coalesced with freshly-typed chars in the same stdin chunk would read the
    *  buffer before re-render (stale, often "") and silently drop the submit.
@@ -315,7 +342,7 @@ export const PromptInput = ({
    *  (see writeBuffer) so a long session can't hoard pastes. */
   const pastesRef = useRef(new Map<string, string>())
   /** Last `@path` inserted this session — lets deriveMentionState detect
-   *  "mention committed, now prose" (SKT AI LABS's sticky mention token). Cleared
+   *  "mention committed, now prose" (Shrijan's sticky mention token). Cleared
    *  whenever the buffer is emptied. */
   const insertedRef = useRef<{ atIndex: number; token: string } | null>(null)
   /** Esc draft protection: a first Esc only ARMS the clear (hint shown), a
@@ -339,7 +366,26 @@ export const PromptInput = ({
     setEnhanceStatus((prev) => (prev?.phase === "working" ? prev : null))
   }
 
-  /** SKT AI LABS's sparkle port: rewrite the draft in place. Failures stay inline so
+  /** Put a recalled prompt in the composer. A long one re-enters through the
+   *  same placeholder collapse usePaste applies, so recalling a 5k-char prompt
+   *  cannot paint a 5k-char line — and because the payload rides pastesRef,
+   *  submitting it still sends the whole text, not the label. */
+  const recallIntoComposer = (text: string): void => {
+    if (Array.from(text).length >= PASTE_COLLAPSE_CHARS) {
+      const placeholder = uniquePastePlaceholder(text, pastesRef.current)
+      pastesRef.current.set(placeholder, text)
+      writeBuffer(placeholder)
+      return
+    }
+    writeBuffer(text)
+  }
+
+  /** The "which of N" hint, derived from where recall stands right now. */
+  const noteRecall = (h: PromptHistory): void => {
+    setRecallNote(h.cursor < h.entries.length ? `history ${h.cursor + 1}/${h.entries.length}` : "")
+  }
+
+  /** Shrijan's sparkle port: rewrite the draft in place. Failures stay inline so
    *  the buffer keeps whatever the user typed — nothing can be lost. */
   const runEnhance = async (draft: string): Promise<void> => {
     if (!onEnhance || enhanceBusyRef.current) return
@@ -370,7 +416,7 @@ export const PromptInput = ({
 
   const slashState = deriveSlashState(buffer, commandList)
   const { isChooserMode, activeCommand, hasChooser, chooserOptions } = slashState
-  /** `@` file menu (SKT AI LABS mention port): an in-progress `@query` at the
+  /** `@` file menu (Shrijan mention port): an in-progress `@query` at the
    *  (append-only) cursor opens the file list; a buffer starting with "/"
    *  keeps the slash menu instead. Mention state re-derives inside the Enter
    *  handler from the ref-fresh buffer, exactly like the slash state. */
@@ -433,6 +479,10 @@ export const PromptInput = ({
     if (!draftRequest || draftRequest.nonce === lastDraftNonceRef.current) return
     lastDraftNonceRef.current = draftRequest.nonce
     writeBuffer(draftRequest.text)
+    // A whole new draft just landed, so any recall in progress is over; leaving
+    // its note up would label this text as an entry it is not.
+    historyRef.current = leaveRecall(historyRef.current)
+    noteRecall(historyRef.current)
     setSelectedIndex(0)
     setScrollTop(0)
     setShowMenu(/*showMenu*/ false)
@@ -451,14 +501,17 @@ export const PromptInput = ({
   // scrollbar se scroll nahi hota"). Now: idle writes ZERO (caret static,
   // no timer), so at rest the terminal owns the viewport natively —
   // wheel (in-app window), drag and the Windows bar all hold position.
-  // Mid-turn the busy `●` still pulses (repaints already flow then, and
-  // the parked window — not the viewport — owns reading).
-  const [caretOn, setCaretOn] = useState(/*initial*/ true)
-  useEffect(() => {
-    if (!isLoading) return
-    const timer = setInterval(() => setCaretOn((v) => !v), 530)
-    return () => clearInterval(timer)
-  }, [isLoading])
+  // Mid-turn the busy `●` still pulses (repaints already flow then, and the
+  // parked window — not the viewport — owns reading). The pulse comes off the
+  // shared frame clock rather than its own interval, so `off` pins it to the
+  // solid frame, `reduced` slows it, and nothing animating means no timer.
+  // Opt-in idle breathe (NEMO_IDLE_ANIM=1) re-enables a slow prompt glow
+  // + caret shimmer on the EMPTY composer only — typing or loading kills it,
+  // and flag-off stays byte-identical to the still version below.
+  const composerIdle = (idleBreathe || idleAnimEnabled()) && !isLoading && !disabled && buffer.length === 0
+  const breathe = useIdleBreathe(composerIdle)
+  const caretTick = useAnimationClock(CARET_PULSE_MS, isLoading)
+  const caretOn = cycleIndex(caretTick, 2) === 0
 
   useEffect(() => {
     if (!stdin.isRawModeSupported) return
@@ -532,7 +585,7 @@ export const PromptInput = ({
       }
 
       if (getKeymap().matchesInput("tui.global.enhance", input, key)) {
-        // SKT AI LABS's sparkle button: enhance the current draft in place, then
+        // Shrijan's sparkle button: enhance the current draft in place, then
         // review/edit and send normally (repeatable for iteration).
         void runEnhance(expandPastes(bufferRef.current, pastesRef.current))
         return
@@ -678,6 +731,11 @@ export const PromptInput = ({
                 setScrollTop(0)
               }
             } else {
+              // A prompt actually sent — file it for ↑/↓ recall. Question
+              // answers (the branch below) are deliberately not: recalling an
+              // answer into the main composer would send it as a new turn.
+              historyRef.current = pushPrompt(historyRef.current, text)
+              noteRecall(historyRef.current)
               onSubmit(text, display)
             }
           } else {
@@ -723,6 +781,32 @@ export const PromptInput = ({
         return
       }
 
+      // ↑/↓ walk the prompts already sent this session. The keymap has declared
+      // these chords as tui.input.historyPrevious/historyNext since the table
+      // was written and nothing read them, which made /keymap print keys that
+      // do nothing when pressed; going through getKeymap() also keeps a user
+      // rebind working. Menu navigation above claims the arrows while a menu is
+      // open, and `!showMenu` here stops a half-typed "/xyz" from being
+      // overwritten by a remembered prompt.
+      if (!askMode && !waitingCustom && !showMenu && getKeymap().matchesInput("tui.input.historyPrevious", input, key)) {
+        const after = recallOlder(historyRef.current, bufferRef.current)
+        if (after !== historyRef.current) {
+          historyRef.current = after
+          recallIntoComposer(recalledText(after))
+          noteRecall(after)
+        }
+        return
+      }
+      if (!askMode && !waitingCustom && !showMenu && getKeymap().matchesInput("tui.input.historyNext", input, key)) {
+        const after = recallNewer(historyRef.current)
+        if (after !== historyRef.current) {
+          historyRef.current = after
+          recallIntoComposer(recalledText(after))
+          noteRecall(after)
+        }
+        return
+      }
+
       if (key.pageUp && showMenu && visibleOptions.length > 0) {
         setSelectedIndex((prev) => {
           const next = Math.max(0, prev - Math.floor(MAX_VISIBLE / 2))
@@ -753,6 +837,19 @@ export const PromptInput = ({
       }
 
       if (key.escape) {
+        // Esc while recalling cancels the recall — it hands back the draft that
+        // was in the box before ↑, whatever has been typed on top of it since.
+        // The two-step arming below protects text the user typed; a remembered
+        // prompt is not that, and arming a clear for it would hide the key that
+        // actually means "put my draft back".
+        if (!askMode && historyRef.current.cursor < historyRef.current.entries.length) {
+          const after = leaveRecall(historyRef.current)
+          historyRef.current = after
+          noteRecall(after)
+          setShowMenu(/*showMenu*/ false)
+          recallIntoComposer(recalledText(after))
+          return
+        }
         // Two-step clear: a single stray Esc must never destroy a typed
         // draft ("nothing sends, my text vanished"). First press arms and
         // shows a hint; only a second Esc before any further typing clears.
@@ -818,11 +915,20 @@ export const PromptInput = ({
           </Text>
         </Box>
       )}
+      {/* Which remembered prompt is in the box, and the key that gets the draft
+          back — without it "↑ replaced my text" looks like a loss. */}
+      {recallNote !== "" && (
+        <Text color={theme.info}>{`${recallNote} · Esc back to your draft`}</Text>
+      )}
       {escArmed && <Text color={theme.warning}>{"press Esc again to clear the draft"}</Text>}
       <Box alignItems="flex-end">
         {/* Busy `●` (loading) PULSES primary↔warning on the caret tick —
-            color only, the glyph itself never swaps (oracles keep ●). */}
-        <Text color={isLoading ? (caretOn ? theme.primary : theme.warning) : theme.primary} bold>
+            color only, the glyph itself never swaps (oracles keep ●).
+            Idle breathe (opt-in): the prompt glows primary↔accent slow. */}
+        <Text
+          color={isLoading ? (caretOn ? theme.primary : theme.warning) : composerIdle && breathe % 2 === 1 ? theme.accent : theme.primary}
+          bold
+        >
           {promptGlyph}
         </Text>
         <Text> </Text>
@@ -831,10 +937,23 @@ export const PromptInput = ({
             repositions it — it floated wherever the last frame write ended
             ("wo blinker show ho raha"). STATIC (always solid ▌): a blinking
             caret repainted the frame ~2×/s even at idle and yanked a
-            native-scrolled viewport on every blink. */}
-        {buffer.length === 0 && inputActive && <Text color={theme.primary}>{g("caret")}</Text>}
+            native-scrolled viewport on every blink. Idle breathe (opt-in)
+            only shimmers its COLOR on the empty composer — the glyph never
+            swaps, so no layout shift. */}
+        {buffer.length === 0 && inputActive && (
+          <Text color={composerIdle && breathe % 2 === 1 ? theme.accent : theme.primary}>{g("caret")}</Text>
+        )}
         {buffer.length > 0 ? (
           <Text color={isLoading ? theme.info : theme.warning}>{buffer}</Text>
+        ) : composerIdle ? (
+          <Text>
+            <Text color={idleSilver(breathe)} bold>
+              {`${idleGlyph(breathe, glyphSet() === "ascii")} `}
+            </Text>
+            <Text dimColor>
+              {askMode ? (waitingCustom ? "Your custom answer..." : "Your answer (number or text)...") : placeholder}
+            </Text>
+          </Text>
         ) : (
           <Text dimColor>
             {askMode ? (waitingCustom ? "Your custom answer..." : "Your answer (number or text)...") : placeholder}

@@ -1,17 +1,17 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Company library — a whole external agent collection (divisions of `.md`
  * personas, e.g. `agency-agents-main`) mounted as ONE company inside
- * Trayambak: `/company` lists its divisions/agents and `run` launches any
- * of them as a subagent through the normal `trayambak__Agent` path.
+ * Nemo: `/company` lists its divisions/agents and `run` launches any
+ * of them as a subagent through the normal `nemo__Agent` path.
  *
  * Root resolution (first existing dir wins; never throws, null when absent):
- *   explicit arg > TRAYAMBAK_COMPANY_DIR > ~/agency-agents-main >
+ *   explicit arg > NEMO_COMPANY_DIR > ~/agency-agents-main >
  *   <cwd>/agency-agents-main
  *
  * Division set: `divisions.json` is the source of truth when present (same
@@ -25,9 +25,9 @@ import * as os from "os"
 import * as path from "path"
 
 export const COMPANY_HOME_DIRNAME = "agency-agents-main"
-export const COMPANY_DIR_ENV = "TRAYAMBAK_COMPANY_DIR"
-export const COMPANY_ENABLED_ENV = "TRAYAMBAK_COMPANY_ENABLED"
-export const COMPANY_DISABLED_ENV = "TRAYAMBAK_COMPANY_DISABLED"
+export const COMPANY_DIR_ENV = "NEMO_COMPANY_DIR"
+export const COMPANY_ENABLED_ENV = "NEMO_COMPANY_ENABLED"
+export const COMPANY_DISABLED_ENV = "NEMO_COMPANY_DISABLED"
 export const COMPANY_MAX_DEPTH = 3
 
 /** Top-level dirs that are NOT divisions (mirrors divisions.json's note). */
@@ -261,7 +261,7 @@ export function findCompanyAgent(
 }
 
 /** Maximum departments named in the prompt block (roster beyond that is
- *  one `trayambak__AgentCatalog` call away — context budget first). */
+ *  one `nemo__AgentCatalog` call away — context budget first). */
 export const COMPANY_PROMPT_MAX_DIVISIONS = 40
 
 /**
@@ -279,7 +279,7 @@ export function companyAgentDirs(root: string | null | undefined, disabled: read
 
 /**
  * System-prompt block so the MODEL knows the company and uses it itself:
- * departments with counts, how to spawn a persona via `trayambak__Agent`,
+ * departments with counts, how to spawn a persona via `nemo__Agent`,
  * and the user-only slash-command rule. "" when no library is present or
  * the master switch is OFF (the model must not invent employees).
  */
@@ -317,15 +317,15 @@ export function buildCompanyBlock(cwd: string, config?: CompanyConfig | null, ho
   return [
     `## COMPANY (${total} specialists across ${divisions.length} departments — yours to command, no asking needed)`,
     `- Departments: ${deptList}${more}. Pick by domain; a security audit goes to a security persona, UI work to design, and so on.`,
-    `- "tumhari company" / "your company" / "company" from the user ALWAYS means THIS library — answer from the roster here, never the web. (SKT AI LABS the business — website, pricing, docs — is a different thing and still uses the web.)`,
-    "- Run one YOURSELF with `trayambak__Agent`: subagent_type = the persona name (e.g. \"Code Reviewer\"), prompt = the task.",
+    `- "tumhari company" / "your company" / "company" from the user ALWAYS means THIS library — answer from the roster here, never the web. (Shrijan the business — website, pricing, docs — is a different thing and still uses the web.)`,
+    "- Run one YOURSELF with `nemo__Agent`: subagent_type = the persona name (e.g. \"Code Reviewer\"), prompt = the task.",
     "- Never tell the user to type /company — slash commands are user-only; you spawn the subagent directly.",
-    "- Full roster anytime: `trayambak__AgentCatalog`. Only enabled departments are listed — use exactly the names you see.",
+    "- Full roster anytime: `nemo__AgentCatalog`. Only enabled departments are listed — use exactly the names you see.",
     ...(modelLine ? [modelLine] : []),
   ].join("\n")
 }
 
-/** Comma-separated division ids from `TRAYAMBAK_COMPANY_DISABLED`. */
+/** Comma-separated division ids from `NEMO_COMPANY_DISABLED`. */
 export function companyDisabledFromEnv(env: NodeJS.ProcessEnv = process.env): string[] {
   const raw = env[COMPANY_DISABLED_ENV]
   if (!raw) return []
@@ -335,7 +335,7 @@ export function companyDisabledFromEnv(env: NodeJS.ProcessEnv = process.env): st
     .filter(Boolean)
 }
 
-/** Master switch from `TRAYAMBAK_COMPANY_ENABLED`: `0`/`false`/`off`/`no`
+/** Master switch from `NEMO_COMPANY_ENABLED`: `0`/`false`/`off`/`no`
  *  (any case) means OFF; unset means default-ON (undefined = no opinion). */
 export function companyEnabledFromEnv(env: NodeJS.ProcessEnv = process.env): boolean | undefined {
   const raw = env[COMPANY_ENABLED_ENV]
@@ -354,7 +354,7 @@ export interface CompanyState {
   readonly disabled: string[]
 }
 
-/** Config slice this module reads (the full TrayambakConfig satisfies it). */
+/** Config slice this module reads (the full NemoConfig satisfies it). */
 export interface CompanyConfig {
   readonly companyDir?: string
   readonly companyEnabled?: boolean

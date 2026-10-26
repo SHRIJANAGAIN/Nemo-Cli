@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -17,7 +17,7 @@
  *
  * ENFORCEMENT LIVES SERVER-SIDE (see packages/server/src/license-store.ts):
  * the CLI never grants access on this checksum alone. Every devmode unlock
- * and pentest execution asks the license server live; the server additionally
+ * asks the license server live; the server additionally
  * requires the key id to sit in ITS registry (written at mint/import) and
  * be activated on the requesting machine (1-machine binding). Extracting
  * the check key below therefore mints nothing the server honors — forged
@@ -30,7 +30,7 @@
  * unknown id. Server compromise or registry deletion is the remaining
  * attack surface (VPS hardening + backups), not key forgery. A modified
  * client binary can skip its own gates — no offline check can stop that;
- * the usage audit trail is the backstop, not the lock.
+ * server-side activation is the backstop, not the lock.
  * The eslint-disable below is deliberate and reviewed — not evasion.
  */
 
@@ -39,7 +39,7 @@ import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 
-// eslint-disable-next-line trayambak/no-hardcoded-secrets -- copy-deterrent checksum key, not an access credential: it authorizes nothing by itself, only lets THIS binary recognize SKT-minted codes. Documented threat model above; server activation is the upgrade path.
+// eslint-disable-next-line nemo/no-hardcoded-secrets -- copy-deterrent checksum key, not an access credential: it authorizes nothing by itself, only lets THIS binary recognize Shrijan-minted codes. Documented threat model above; server activation is the upgrade path.
 const ACTIVATION_CHECK_KEY = "7f3a9c2e5b1d4860a4f6e8c1d3b5a792"
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -52,7 +52,7 @@ export function activationEpochDays(): number {
   return EPOCH_DAYS_2026_01_01
 }
 
-const PLANS = ["basic", "pentest", "pro", "enterprise"] as const
+const PLANS = ["basic", "pro", "enterprise"] as const
 export type LicensePlan = (typeof PLANS)[number]
 
 export interface LicenseClaims {
@@ -120,7 +120,7 @@ function checksumBits(payloadBits: string, secret: string): string {
  *  Domain-separated from checksumBits (label prefix) so the two HMAC uses
  *  never produce related outputs. */
 function obfStreamBits(randBits: string, secret: string): string {
-  const mac = createHmac("sha256", secret).update(`trayambak-obf-v1:${randBits}`).digest()
+  const mac = createHmac("sha256", secret).update(`nemo-obf-v1:${randBits}`).digest()
   let bits = ""
   for (const byte of mac) bits += byte.toString(2).padStart(8, "0")
   return bits.slice(0, 27)
@@ -176,13 +176,13 @@ export function verifyLicenseKey(key: string | undefined | null, secretOverride?
       return { valid: true, claims: { plan, exp, id: BigInt(`0b${rand}`).toString(16).padStart(4, "0") } }
     }
     // Checksum miss on the new layout: could be a legacy code that happens
-    // to start with 1102 (old pentest codes did) — fall through to legacy.
+    // to start with 1102 (old codes did) — fall through to legacy.
   }
   const bits = charsToBits(compact)
   const payload = bits.slice(0, 60)
   const check = bits.slice(60)
   if (checksumBits(payload, secret) !== check) {
-    return { valid: false, reason: "bad checksum (not an SKT-minted code)" }
+    return { valid: false, reason: "bad checksum (not a Shrijan-minted code)" }
   }
   const ver = Number(bitsToBigInt(payload.slice(0, 5)))
   if (ver !== 1) return { valid: false, reason: `unsupported key version ${ver}` }
@@ -197,19 +197,13 @@ export function verifyLicenseKey(key: string | undefined | null, secretOverride?
   return { valid: true, claims: { plan, exp, id: BigInt(`0b${rand}`).toString(16).padStart(9, "0") } }
 }
 
-/** Pentest gate: valid license whose plan covers pentest and isn't expired. */
-export function canUsePentest(key: string | undefined | null, secretOverride?: string): boolean {
-  const v = verifyLicenseKey(key, secretOverride)
-  return v.valid === true && (v.claims.plan === "pentest" || v.claims.plan === "pro" || v.claims.plan === "enterprise")
-}
-
 /** Dev-mode unlock: devmode turns ON with a valid license key itself.
  *  Returns the verdict so callers can explain refusals honestly. */
 export function canUnlockDevmode(key: string | undefined | null, secretOverride?: string): LicenseVerdict {
   return verifyLicenseKey(key, secretOverride)
 }
 
-/** Check-key accessor for SKT-side minting (server admin route, mint script).
+/** Check-key accessor for NEMO-side minting (server admin route, mint script).
  *  The shipped copy of this key is INERT: nothing grants access on checksum
  *  alone anymore (server registry membership decides). It stays in the
  *  binary only because the server imports this module. */
@@ -242,7 +236,7 @@ export function mintLegacyActivationKey(
 }
 
 /**
- * Mint a 16-letter activation code (SKT-side tooling + tests).
+ * Mint a 16-letter activation code (NEMO-side tooling + tests).
  * expDays: days since 2026-01-01 (e.g. 365 ≈ one year).
  */
 export function mintActivationKey(
@@ -265,14 +259,14 @@ export function mintActivationKey(
 
 // ---------------------------------------------------------------------------
 // Server-side licensing (always-online): the CLI no longer trusts its own
-// checksum for access decisions. Every devmode unlock and pentest execution
+// checksum for access decisions. Every devmode unlock
 // asks the license server live; the server additionally requires the key id
 // to be a key IT minted (registry membership), so extracting the shipped
 // check key buys an attacker nothing — forged codes are unknown ids.
 // ---------------------------------------------------------------------------
 
-/** Default license server (SKT). Override per-machine via
- *  TRAYAMBAK_LICENSE_SERVER or config licenseServerUrl (self-host). */
+/** Default license server (Shrijan). Override per-machine via
+ *  NEMO_LICENSE_SERVER or config licenseServerUrl (self-host). */
 export const DEFAULT_LICENSE_SERVER = "https://skt.sktailabs.in"
 
 export interface ServerLicenseOptions {
@@ -288,14 +282,14 @@ export interface ServerLicenseVerdict {
   reason?: string
 }
 
-/** Stable per-machine identity: a UUID in ~/.trayambak/machine-id (0600),
+/** Stable per-machine identity: a UUID in ~/.nemo/machine-id (0600),
  *  created once and reused forever — reinstalls keep it (home survives),
  *  new hardware gets a new one (1-machine binding enforced server-side).
- *  TRAYAMBAK_MACHINE_ID_FILE overrides the path (tests point it at tmp). */
+ *  NEMO_MACHINE_ID_FILE overrides the path (tests point it at tmp). */
 export function machineFilePath(): string {
-  const override = process.env.TRAYAMBAK_MACHINE_ID_FILE
+  const override = process.env.NEMO_MACHINE_ID_FILE
   if (override && override.trim().length > 0) return override
-  return join(homedir(), ".trayambak", "machine-id")
+  return join(homedir(), ".nemo", "machine-id")
 }
 
 export function getMachineId(): string {
@@ -318,7 +312,7 @@ export function getMachineId(): string {
 }
 
 function licenseServerBase(serverUrl?: string): string {
-  const raw = (serverUrl ?? process.env.TRAYAMBAK_LICENSE_SERVER ?? DEFAULT_LICENSE_SERVER).trim()
+  const raw = (serverUrl ?? process.env.NEMO_LICENSE_SERVER ?? DEFAULT_LICENSE_SERVER).trim()
   return (raw || DEFAULT_LICENSE_SERVER).replace(/\/+$/, "")
 }
 
@@ -352,7 +346,7 @@ export async function serverVerifyLicenseKey(
   opts: ServerLicenseOptions = {},
 ): Promise<ServerLicenseVerdict> {
   const k = typeof key === "string" ? key.trim() : ""
-  if (!k) return { valid: false, reason: "no license configured (TRAYAMBAK_LICENSE_KEY or /devmode on <key>)" }
+  if (!k) return { valid: false, reason: "no license configured (NEMO_LICENSE_KEY or /devmode on <key>)" }
   if (!normalizeLicenseKey(k)) {
     return { valid: false, reason: "malformed key (want 16 letters, 1102-XXXX-XXXX-XXXX)" }
   }
@@ -386,24 +380,6 @@ export async function serverVerifyLicenseKey(
       reason: `license server unreachable (${detail}) — this license needs internet, connect and retry`,
     }
   }
-}
-
-/** Pentest flavor of the live check: valid + plan covers pentest. */
-export async function serverCanUsePentest(
-  key: string | undefined | null,
-  opts: ServerLicenseOptions = {},
-): Promise<ServerLicenseVerdict> {
-  const v = await serverVerifyLicenseKey(key, opts)
-  if (v.valid !== true) return v
-  if (v.plan !== "pentest" && v.plan !== "pro" && v.plan !== "enterprise") {
-    return {
-      valid: false,
-      plan: v.plan,
-      exp: v.exp,
-      reason: `plan '${v.plan ?? "unknown"}' does not cover pentest tools`,
-    }
-  }
-  return v
 }
 
 /** First-use activation: binds the key to THIS machine (1-machine limit).
@@ -445,7 +421,7 @@ export async function serverActivateLicenseKey(
   }
 }
 
-/** Self-service trial: mints a short pentest trial BORN BOUND to this
+/** Self-service trial: mints a short trial BORN BOUND to this
  *  machine (1 live trial per machine, rate-limited per network). The
  *  returned key works immediately — no separate activation needed. */
 export async function serverMintTrial(
@@ -478,29 +454,5 @@ export async function serverMintTrial(
   } catch (err) {
     const detail = err instanceof Error ? err.name : String(err)
     return { ok: false, reason: `license server unreachable (${detail}) — connect and retry` }
-  }
-}
-
-/** Pentest usage telemetry: best-effort, never throws, never blocks the
- *  scan — the gate already passed, this is the server-side audit trail.
- *  Returns true when the server recorded it. */
-export async function reportToolUsage(
-  key: string | undefined | null,
-  usage: { tool: string; target?: string; ok?: boolean },
-  opts: ServerLicenseOptions = {},
-): Promise<boolean> {
-  try {
-    const k = typeof key === "string" ? key.trim() : ""
-    if (!k || !normalizeLicenseKey(k)) return false
-    const machine = opts.machineId ?? getMachineId()
-    const { status } = await postLicense(
-      "/license/usage",
-      { key: k, machineId: machine, tool: usage.tool, target: usage.target ?? "", ok: usage.ok ?? true },
-      opts.serverUrl,
-      opts.timeoutMs ?? 5000,
-    )
-    return status === 200
-  } catch {
-    return false
   }
 }

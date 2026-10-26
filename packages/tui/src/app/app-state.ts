@@ -1,7 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 import { Tui, Rect, TerminalSize } from "../tui/terminal"
@@ -15,12 +18,12 @@ export interface AppStateOptions {
 }
 
 /**
- * AppState is the top-level orchestrator for the Trayambak TUI.
+ * AppState is the top-level orchestrator for the Nemo TUI.
  *
  * It owns the ChatWidget and Composer panes, routes AppEvents to the
  * appropriate component, and tracks the global lifecycle (token budget,
- * exit reason, etc.). Ported from TRAYAMBAK TUI `app.rs` logic and adapted
- * for the Trayambak Terminal abstraction.
+ * exit reason, etc.). Ported from Codex TUI `app.rs` logic and adapted
+ * for the Nemo Terminal abstraction.
  */
 export class AppState {
   private readonly tui: Tui
@@ -72,7 +75,7 @@ export class AppState {
       case "ThreadStartedEvent":
         this.chatWidget.addMessage({
           role: "assistant",
-          content: "Trayambak agent started...",
+          content: "Nemo agent started...",
         })
         this.render()
         break

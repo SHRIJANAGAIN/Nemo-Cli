@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execSync } from "child_process"
@@ -61,9 +61,9 @@ export function detectWorkspaceState(cwd: string = process.cwd()): AutonomousAct
       reason: `Found active diff in: ${modifiedFiles.slice(0, 5).join(", ")}${modifiedFiles.length > 5 ? "..." : ""}`,
       files: modifiedFiles,
       diff: gitDiff,
-      suggestedTools: ["trayambak__ParallelReview", "trayambak__Agent"],
+      suggestedTools: ["nemo__ParallelReview", "nemo__Agent"],
       prompt: `Autonomous Action: Inspect and verify modified files in this workspace using parallel specialist subagents.
-Run trayambak__ParallelReview on the diff, deduplicate findings across correctness, language-specific pitfalls, and security dimensions, and adversarially verify any critical or high issues before reporting.`,
+Run nemo__ParallelReview on the diff, deduplicate findings across correctness, language-specific pitfalls, and security dimensions, and adversarially verify any critical or high issues before reporting.`,
     }
   }
 
@@ -99,7 +99,7 @@ Run trayambak__ParallelReview on the diff, deduplicate findings across correctne
       headline: `Active codebase detected (${projectSummary})`,
       reason: `Project structure identified with ${sampleSrcFiles.length} key entry paths`,
       files: sampleSrcFiles,
-      suggestedTools: ["trayambak__AgentCatalog", "trayambak__ParallelExecute", "trayambak__RunTeam"],
+      suggestedTools: ["nemo__AgentCatalog", "nemo__ParallelExecute", "nemo__RunTeam"],
       prompt: `Autonomous Action: Perform an autonomous engineering health check and architectural review of this workspace.
 1. Check project structure, dependencies, and code patterns.
 2. Dispatch parallel specialist subagents (architect, code-reviewer, and security-reviewer) to examine the codebase.
@@ -112,7 +112,7 @@ Run trayambak__ParallelReview on the diff, deduplicate findings across correctne
     headline: "Workspace exploration and autonomous task formulation",
     reason: "Workspace opened without active git diffs or standard manifests",
     files: [],
-    suggestedTools: ["trayambak__AgentCatalog", "trayambak__Agent"],
+    suggestedTools: ["nemo__AgentCatalog", "nemo__Agent"],
     prompt: `Autonomous Action: Explore the current directory, summarize the files present, and identify potential software tasks or improvements using specialist subagents.`,
   }
 }

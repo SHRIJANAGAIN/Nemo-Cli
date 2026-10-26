@@ -1,29 +1,71 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type { TrayambakConfig } from "../../../runtime/src/index.js"
+import type { NemoConfig } from "../../../runtime/src/index.js"
 import { SlashCommandRegistry, type SlashCommandDef, type CommandCategory } from "./registry.js"
 
 export interface CommandDispatchResult {
   readonly matched: boolean
   readonly command?: string
   readonly output: string
+  /**
+   * Set when the command was refused rather than run, naming the `busyPolicy`
+   * that refused it.
+   *
+   * Present so a caller can distinguish "the command said no" from "the command
+   * ran and its output happened to be a complaint". Both render as text, and a
+   * refusal that reads like output is a refusal nobody retries correctly.
+   */
+  readonly refusedBy?: "busyPolicy"
+  /** True when the running turn was interrupted before dispatching. */
+  readonly interrupted?: boolean
+}
+
+/**
+ * What the dispatcher knows about the agent's run state.
+ *
+ * Injected rather than imported because the dispatcher has no business knowing
+ * how a turn is tracked — the CLI owns that, and a dispatcher reaching for a
+ * global would be untestable in exactly the way that let `busyPolicy` sit
+ * unenforced for so long.
+ */
+export interface BusyState {
+  /** True while a turn is running. */
+  isBusy(): boolean
+  /**
+   * Interrupt the running turn and wait for it to settle.
+   *
+   * Required only for `interrupt_then_dispatch`. Omitting it there is not a
+   * silent fallback to `reject`: the caller asked for a command to run, and
+   * running nothing while reporting success is the one outcome that must not
+   * happen.
+   */
+  interrupt?(): Promise<void>
+}
+
+/** Options for the dispatch decision, beyond the command text. */
+export interface DispatchOptions {
+  /**
+   * Omitted means "assume idle" — which preserves the previous behaviour exactly,
+   * and is the right default for a caller that dispatches between turns.
+   */
+  readonly busy?: BusyState
 }
 
 function makeDef(def: Omit<SlashCommandDef, "handler"> & { handler: SlashCommandDef["handler"] }): SlashCommandDef {
   return def as SlashCommandDef
 }
 
-export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
+export function buildNemoSlashRegistry(): SlashCommandRegistry {
   const registry = new SlashCommandRegistry()
 
   registry.register(
     makeDef({
       name: "agent",
-      description: "List, inspect, or launch trayambak agent profiles",
+      description: "List, inspect, or launch nemo agent profiles",
       category: "Agent",
       aliases: ["a"],
       argsHint: "[list|info|run] [type] [prompt]",
@@ -110,7 +152,7 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
   registry.register(
     makeDef({
       name: "task",
-      description: "List and manage trayambak tasks",
+      description: "List and manage nemo tasks",
       category: "Task",
       aliases: ["t"],
       argsHint: "[list|create|update|get|output|reset]",
@@ -202,7 +244,7 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
   registry.register(
     makeDef({
       name: "manager",
-      description: "Show trayambak manager status and summaries",
+      description: "Show nemo manager status and summaries",
       category: "Agent",
       aliases: ["m", "status"],
       argsHint: "[status|agents|tasks|plans|todos|summary]",
@@ -234,7 +276,7 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
   registry.register(
     makeDef({
       name: "mode",
-      description: "List or switch trayambak operating modes",
+      description: "List or switch nemo operating modes",
       category: "Configuration",
       aliases: ["md"],
       argsHint: "[list|current|set] [mode]",
@@ -271,13 +313,62 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
 
   registry.register(
     makeDef({
+      name: "harness",
+      description: "Show, evolve or apply the agent harness (system prompt, guardrails, skills)",
+      category: "Configuration",
+      aliases: ["hn", "impro"],
+      argsHint: "[show|init|run <task>|lessons|apply <task-id>] [--k N] [--mode parallel|sequential] [--domain D] [--source DIR]",
+      busyPolicy: "reject",
+      handler: async (args: string[]) => {
+        const { harnessCommand } = await import("./harness.js")
+        const action = (args[0] ?? "show") as
+          | "show"
+          | "init"
+          | "run"
+          | "lessons"
+          | "apply"
+          | "auto"
+        const rest = args.slice(1)
+        const flag = (name: string): string | undefined => {
+          const index = rest.indexOf(name)
+          if (index < 0) return undefined
+          return rest[index + 1]
+        }
+        const positionals = rest.filter((value, index) => {
+          if (value.startsWith("--")) return false
+          const previous = rest[index - 1]
+          return (
+            previous !== "--k" &&
+            previous !== "--mode" &&
+            previous !== "--domain" &&
+            previous !== "--source"
+          )
+        })
+        const kRaw = flag("--k")
+        const modeRaw = flag("--mode")
+        const mode = modeRaw === "sequential" ? "sequential" : "parallel"
+        const source = flag("--source")
+        return harnessCommand({
+          action,
+          task: positionals.join(" "),
+          k: kRaw ? Number.parseInt(kRaw, 10) : undefined,
+          mode,
+          ...(flag("--domain") ? { domain: flag("--domain") } : {}),
+          ...(source ? { sourceDir: source } : {}),
+        })
+      },
+    }),
+  )
+
+  registry.register(
+    makeDef({
       name: "client",
-      description: "Start or query the trayambak local HTTP client",
+      description: "Start or query the nemo local HTTP client",
       category: "Tools & Skills",
       argsHint: "<health|run <prompt>>",
       handler: async (args: string[]) => {
-        const { TrayambakClient } = await import("../../../../packages/client/src/index.js")
-        const client = new TrayambakClient()
+        const { NemoClient } = await import("../../../../packages/client/src/index.js")
+        const client = new NemoClient()
         if (args[0] === "health" || !args[0]) {
           const status = await client.health()
           return `Client connected: ${status.status} (model: ${status.model})`
@@ -297,12 +388,12 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
   registry.register(
     makeDef({
       name: "sdk",
-      description: "Start a thread via the trayambak TypeScript SDK",
+      description: "Start a thread via the nemo TypeScript SDK",
       category: "Tools & Skills",
       argsHint: "<prompt>",
       handler: async (args: string[]) => {
-        const { TrayambakClient } = await import("../../../../packages/sdk/src/index.js")
-        const client = new TrayambakClient()
+        const { NemoClient } = await import("../../../../packages/sdk/src/index.js")
+        const client = new NemoClient()
         const prompt = args.join(" ")
         if (!prompt) return "Usage: /sdk <prompt>"
         const thread = await client.startThread(prompt)
@@ -315,7 +406,7 @@ export function buildTrayambakSlashRegistry(): SlashCommandRegistry {
 }
 
 export function formatHelp(registry: SlashCommandRegistry): string {
-  const lines: string[] = ["trayambak slash commands:"]
+  const lines: string[] = ["nemo slash commands:"]
   for (const category of [
     "Session",
     "Configuration",
@@ -342,7 +433,8 @@ export function formatHelp(registry: SlashCommandRegistry): string {
 export async function dispatchSlashCommandAsync(
   registry: SlashCommandRegistry,
   input: string,
-  config: TrayambakConfig,
+  config: NemoConfig,
+  options: DispatchOptions = {},
 ): Promise<CommandDispatchResult> {
   const trimmed = input.trim()
   if (!trimmed.startsWith("/")) {
@@ -362,9 +454,46 @@ export async function dispatchSlashCommandAsync(
     return { matched: true, command: resolved.canonical, output: `Command '${resolved.canonical}' has no handler` }
   }
 
+  // `busyPolicy` is declared on every command definition and was read by nothing,
+  // so a command marked `reject` dispatched anyway while a turn was running. The
+  // default is `dispatch`: a command that says nothing about concurrency keeps
+  // working exactly as before, and only an explicit policy can refuse.
+  const busy = options.busy
+  const idle = busy === undefined || !busy.isBusy()
+  if (!idle) {
+    const policy = resolved.busyPolicy ?? "dispatch"
+    if (policy === "reject") {
+      return {
+        matched: true,
+        command: resolved.canonical,
+        refusedBy: "busyPolicy",
+        output: `Command '${resolved.canonical}' is not allowed while a turn is running`,
+      }
+    }
+    if (policy === "interrupt_then_dispatch") {
+      if (!busy.interrupt) {
+        // Not a fallback to `reject`. The caller asked for the command to run;
+        // reporting success without running it, or refusing after promising to
+        // interrupt, are both worse than saying plainly that it cannot be done.
+        return {
+          matched: true,
+          command: resolved.canonical,
+          refusedBy: "busyPolicy",
+          output: `Command '${resolved.canonical}' needs to interrupt the running turn, but no interrupter was provided`,
+        }
+      }
+      await busy.interrupt()
+    }
+  }
+
   try {
     const output = await resolved.handler(rest, config)
-    return { matched: true, command: resolved.canonical, output }
+    return {
+      matched: true,
+      command: resolved.canonical,
+      output,
+      ...(idle ? {} : { interrupted: true }),
+    }
   } catch (error) {
     return {
       matched: true,

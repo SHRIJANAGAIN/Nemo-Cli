@@ -11,7 +11,7 @@ Create a safe, reviewable ECC onboarding plan for the current project. This comm
 ```text
 /project-init
 /project-init --dry-run
-/project-init --target trayambak
+/project-init --target nemo
 /project-init --target cursor
 /project-init --skills continuous-learning-v2,security-review
 /project-init --config ecc-install.json
@@ -19,8 +19,8 @@ Create a safe, reviewable ECC onboarding plan for the current project. This comm
 
 ## Safety Rules
 
-1. Default to dry-run. Do not modify `TRAYAMBAK.md`, settings files, rules, skills, or install state until the user approves the concrete plan.
-2. Preserve existing project guidance. If `TRAYAMBAK.md`, `.trayambak/settings.local.json`, `.cursor/`, `.trayambak/`, `.gemini/`, `.trayambak/`, `.codebuddy/`, `.joycode/`, or `.qwen/` already exists, inspect it and propose a merge/append plan instead of overwriting.
+1. Default to dry-run. Do not modify `NEMO.md`, settings files, rules, skills, or install state until the user approves the concrete plan.
+2. Preserve existing project guidance. If `NEMO.md`, `.nemo/settings.local.json`, `.cursor/`, `.nemo/`, `.gemini/`, `.nemo/`, `.codebuddy/`, `.joycode/`, or `.qwen/` already exists, inspect it and propose a merge/append plan instead of overwriting.
 3. Use ECC's installer and manifest tooling. Do not hand-copy files or clone arbitrary remotes as an install shortcut.
 4. Keep permissions narrow. Any generated settings should match detected build/test/lint tools and avoid broad shell access.
 5. Report exactly what would change before applying anything.
@@ -39,7 +39,7 @@ When the ECC checkout is available, use `config/project-stack-mappings.json` as 
 
 ## Planning Flow
 
-1. Identify the target harness. Default to `trayambak` unless the user asks for `cursor`, `trayambak`, `gemini`, `trayambak`, `codebuddy`, `joycode`, or `qwen`.
+1. Identify the target harness. Default to `nemo` unless the user asks for `cursor`, `nemo`, `gemini`, `nemo`, `codebuddy`, `joycode`, or `qwen`.
 2. Detect stacks from project files and show the evidence for each match.
 3. Resolve the smallest useful ECC plan:
    - project has an `ecc-install.json`: `node scripts/install-plan.js --config ecc-install.json --json`
@@ -66,9 +66,9 @@ Return:
 5. files/directories that would be created or changed
 6. warnings about existing files, broad permissions, missing scripts, or unsupported targets
 
-## TRAYAMBAK.md Guidance
+## NEMO.md Guidance
 
-If the user wants a `TRAYAMBAK.md` starter, generate it separately from the installer plan and keep it minimal:
+If the user wants a `NEMO.md` starter, generate it separately from the installer plan and keep it minimal:
 
 - build command, if detected
 - test command, if detected
@@ -76,7 +76,7 @@ If the user wants a `TRAYAMBAK.md` starter, generate it separately from the inst
 - dev server command, if detected
 - repo-specific notes from existing package scripts or manifests
 
-Never replace an existing `TRAYAMBAK.md` without showing a diff and receiving approval.
+Never replace an existing `NEMO.md` without showing a diff and receiving approval.
 
 ## Related
 

@@ -1,20 +1,20 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Structured logging for the CLI.
  *
- * - Console: warn/error go to stderr (debug/info only when TRAYAMBAK_LOG
+ * - Console: warn/error go to stderr (debug/info only when NEMO_LOG
  *   raises the console threshold).
- * - File: append-only JSON lines to ~/.trayambak/logs/trayambak.log
- *   (override with TRAYAMBAK_LOG_FILE; disable with TRAYAMBAK_LOG_FILE=off),
+ * - File: append-only JSON lines to ~/.nemo/logs/nemo.log
+ *   (override with NEMO_LOG_FILE; disable with NEMO_LOG_FILE=off),
  *   rotated at 1 MB to .old. Every write is best-effort — logging must
  *   never crash the CLI.
  *
- * Levels: TRAYAMBAK_LOG = debug | info | warn | error | silent
+ * Levels: NEMO_LOG = debug | info | warn | error | silent
  * (default console threshold "warn"; the file receives every level).
  */
 
@@ -36,14 +36,14 @@ function parseLevel(raw: string | undefined, fallback: LogLevel): LogLevel {
 }
 
 function consoleThreshold(): LogLevel {
-  return parseLevel(process.env.TRAYAMBAK_LOG, "warn")
+  return parseLevel(process.env.NEMO_LOG, "warn")
 }
 
 function logFilePath(): string | null {
-  const raw = process.env.TRAYAMBAK_LOG_FILE
+  const raw = process.env.NEMO_LOG_FILE
   if (raw === "off" || raw === "0") return null
   if (raw) return raw
-  return path.join(os.homedir(), ".trayambak", "logs", "trayambak.log")
+  return path.join(os.homedir(), ".nemo", "logs", "nemo.log")
 }
 
 function rotate(file: string): void {

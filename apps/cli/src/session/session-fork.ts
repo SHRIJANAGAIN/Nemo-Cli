@@ -1,4 +1,4 @@
-export * as TrayambakSessionForkFeature from "./session-fork"
+export * as NemoSessionForkFeature from "./session-fork"
 
 import { sessionManager } from "./session-manager.js"
 

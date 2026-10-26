@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { createServer } from "node:http"
@@ -29,7 +29,7 @@ afterEach(() => {
 })
 
 function tmpMachine(): void {
-  vi.stubEnv("TRAYAMBAK_MACHINE_ID_FILE", join(mkdtempSync(join(tmpdir(), "gh-auth-")), "machine-id"))
+  vi.stubEnv("NEMO_MACHINE_ID_FILE", join(mkdtempSync(join(tmpdir(), "gh-auth-")), "machine-id"))
 }
 
 /** In-test auth server: canned OAuth + read endpoints on loopback. */
@@ -116,7 +116,7 @@ describe("github-auth client", () => {
   })
 
   it("openBrowser respects the headless opt-out", () => {
-    vi.stubEnv("TRAYAMBAK_NO_BROWSER", "1")
+    vi.stubEnv("NEMO_NO_BROWSER", "1")
     expect(openBrowser("https://example.com")).toBe(false)
   })
 
@@ -139,9 +139,9 @@ describe("github-auth client", () => {
       expect(repos.repos?.map((r) => r.fullName)).toEqual(["octocat/mytest1"])
       const w = await writeGithubFileViaServer("o/r", "README.md", "# hi", "docs", undefined, { serverUrl: s.url })
       expect(w).toMatchObject({ ok: true, commit: "aaa1111" })
-      const b = await createGithubBranchViaServer("o/r", "trayambak/x", undefined, { serverUrl: s.url })
+      const b = await createGithubBranchViaServer("o/r", "nemo/x", undefined, { serverUrl: s.url })
       expect(b).toMatchObject({ ok: true, base: "main" })
-      const p = await createGithubPrViaServer("o/r", "trayambak/x", undefined, "Fix", "", { serverUrl: s.url })
+      const p = await createGithubPrViaServer("o/r", "nemo/x", undefined, "Fix", "", { serverUrl: s.url })
       expect(p).toMatchObject({ ok: true, number: 7 })
       const c = await copyGithubFileViaServer("o/r", "a", "b", { serverUrl: s.url })
       expect(c).toMatchObject({ ok: true, commit: "bbb2222" })

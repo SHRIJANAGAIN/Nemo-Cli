@@ -1,10 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+#!/usr/bin/env node
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { Agent, loadConfig, type TrayambakConfig } from "../../runtime/src/index.js"
+import { Agent, loadConfig, type NemoConfig } from "../../runtime/src/index.js"
 import { VERSION } from "./version.js"
 import {
   findCommand,
@@ -31,8 +32,9 @@ import { managerCommand } from "./commands/manager.js"
 import { compactCommand } from "./commands/compact.js"
 import { modeCommand } from "./commands/mode.js"
 import { worktreeCommand } from "./commands/worktree.js"
+import { harnessCommand, type HarnessAction } from "./commands/harness.js"
 import { runMcpCli } from "./commands/mcp.js"
-import { upgradeCommand } from "./commands/upgrade.js"
+import { isUpgradeFailure, upgradeCommand } from "./commands/upgrade.js"
 import { loginCommand, logoutCommand } from "./commands/login.js"
 import { execCommand, reviewCommand } from "./commands/exec.js"
 import { statsCommand } from "./commands/stats.js"
@@ -51,9 +53,9 @@ import { runMcpServer } from "../../../packages/mcp-server/src/index.js"
 
 // VERSION is single-sourced from package.json via scripts/sync-version.mjs
 // (runs automatically as part of `npm run build`).
-// Invoked binary name for help text: bin/skt.cmd exports
-// TRAYAMBAK_BIN_NAME=skt, otherwise this is trayambak.
-const BIN_NAME = process.env.TRAYAMBAK_BIN_NAME === "skt" ? "skt" : "trayambak"
+// Invoked binary name for help text: bin/nemo-code.cmd exports
+// NEMO_BIN_NAME=nemo-code, otherwise this is nemo.
+const BIN_NAME = process.env.NEMO_BIN_NAME === "nemo-code" ? "nemo-code" : "nemo"
 
 // Root help is generated from the command registry so it can never drift from the dispatcher.
 const HELP = renderRootHelp(BIN_NAME)
@@ -107,7 +109,7 @@ function optionalPort(raw: string | undefined, fallback?: number): number | unde
 
 /**
  * Tri-state strict-parser boolean: "true" → true, "false" (via --no-*) →
- * false, absent → undefined so ambient env (TRAYAMBAK_ALT_SCREEN) still
+ * false, absent → undefined so ambient env (NEMO_ALT_SCREEN) still
  * applies downstream instead of being clobbered by a default.
  */
 function optionalBoolean(raw: string | undefined): boolean | undefined {
@@ -148,8 +150,8 @@ async function runForcedEvalrCheck(): Promise<void> {
     const report = (message: string): void => {
       if (!quiet) process.stderr.write(message + "\n")
     }
-    const evalModule = await import("../../../skt/5-eval/eval.js")
-    const mistakeModule = await import("../../../skt/1-errors/mistake.js")
+    const evalModule = await import("../../../nemo/5-eval/eval.js")
+    const mistakeModule = await import("../../../nemo/1-errors/mistake.js")
     const mistakes = mistakeModule.loadMistakes() as JournalEntry[]
     const unfixed = mistakes.filter((m) => !m.isFixed && m.status !== "fixed")
     if (unfixed.length > 0) {
@@ -196,7 +198,7 @@ async function main(): Promise<void> {
   await runForcedEvalrCheck()
 
   const [rawCommand, ...rest] = process.argv.slice(2)
-  // Treat "--flag" in the command position (e.g. `trayambak --ink "hi"`)
+  // Treat "--flag" in the command position (e.g. `nemo --ink "hi"`)
   // as no command so flags land in parseFlags instead of triggering
   // "Unknown command: --ink".
   const command = rawCommand !== undefined && rawCommand.startsWith("-") ? undefined : rawCommand
@@ -245,18 +247,18 @@ async function main(): Promise<void> {
     return
   }
 
-  const overrides: Partial<TrayambakConfig> = {}
+  const overrides: Partial<NemoConfig> = {}
   const applyFlags = (flags: Record<string, string>) => {
     if (flags["base-url"]) overrides.baseUrl = flags["base-url"]
     if (flags.model) overrides.model = flags.model
-    if (flags.provider) overrides.provider = flags.provider as TrayambakConfig["provider"]
+    if (flags.provider) overrides.provider = flags.provider as NemoConfig["provider"]
     if (flags.cwd) overrides.cwd = flags.cwd
     // `--budget <spec>`: session budget (token/turn cap); loadConfig
     // validates it and runAgentLoop applies it on entry.
     if (flags.budget) overrides.budget = flags.budget
-    // `--config <file>`: export as TRAYAMBAK_CONFIG so configPath() (and
+    // `--config <file>`: export as NEMO_CONFIG so configPath() (and
     // every command that resolves config independently) honours it.
-    if (flags.config) process.env.TRAYAMBAK_CONFIG = flags.config
+    if (flags.config) process.env.NEMO_CONFIG = flags.config
     if (flags["dev"] === "true" || flags["dev-mode"] === "true") {
       overrides.developerMode = { ...(overrides.developerMode ?? {}), enabled: true }
     }
@@ -314,7 +316,7 @@ async function main(): Promise<void> {
     case "plan": {
       const action = (rest[0] as "create" | "add-step" | "update-step" | "complete" | "list" | "show") ?? "list"
       // One positional shape for every action meant planId/stepId/status
-      // NEVER reached planCommand from the CLI — `trayambak plan show <id>`
+      // NEVER reached planCommand from the CLI — `nemo plan show <id>`
       // always answered "Missing plan id". Map each action explicitly.
       let out: string
       if (action === "create") {
@@ -360,6 +362,39 @@ async function main(): Promise<void> {
     case "worktree": {
       const action = (rest[0] as "list" | "create" | "remove" | "switch") ?? "list"
       process.stdout.write(worktreeCommand({ action, path: rest[1], branch: rest[2], name: rest[1] }) + "\n")
+      return
+    }
+    case "harness": {
+      const action = (rest[0] ?? "show") as HarnessAction
+      const tail = rest.slice(1)
+      const flag = (name: string): string | undefined => {
+        const index = tail.indexOf(name)
+        if (index < 0) return undefined
+        return tail[index + 1]
+      }
+      const positionals = tail.filter((value, index) => {
+        if (value.startsWith("--")) return false
+        const previous = tail[index - 1]
+        return (
+          previous !== "--k" &&
+          previous !== "--mode" &&
+          previous !== "--domain" &&
+          previous !== "--source"
+        )
+      })
+      const kRaw = flag("--k")
+      const source = flag("--source")
+      const domain = flag("--domain")
+      process.stdout.write(
+        (await harnessCommand({
+          action,
+          task: positionals.join(" "),
+          ...(kRaw ? { k: Number.parseInt(kRaw, 10) } : {}),
+          mode: flag("--mode") === "sequential" ? "sequential" : "parallel",
+          ...(domain ? { domain } : {}),
+          ...(source ? { sourceDir: source } : {}),
+        })) + "\n",
+      )
       return
     }
     case "mcp": {
@@ -456,7 +491,7 @@ async function main(): Promise<void> {
       const { flags, positional } = parseFor("resume", rest)
       const sessionId = positional[0]
       if (!sessionId) {
-        process.stderr.write("Usage: trayambak resume <session-id> [prompt]\n")
+        process.stderr.write("Usage: nemo resume <session-id> [prompt]\n")
         process.exitCode = 2
         return
       }
@@ -527,6 +562,7 @@ async function main(): Promise<void> {
     case "upgrade": {
       const output = await upgradeCommand({ target: rest[0] })
       process.stdout.write(output + "\n")
+      if (isUpgradeFailure(output)) process.exitCode = 1
       return
     }
     case "completion": {
@@ -581,13 +617,13 @@ main().catch(async (err) => {
     return
   }
   try {
-    const { logMistake } = await import("../../../skt/1-errors/mistake.js")
+    const { logMistake } = await import("../../../nemo/1-errors/mistake.js")
     logMistake(
       "cli_fatal_error",
       err instanceof Error ? err.message : String(err),
       err instanceof Error ? err.stack || err.message : String(err),
       JSON.stringify(process.argv.slice(2)),
-      `trayambak error: ${err instanceof Error ? err.stack : String(err)}`,
+      `nemo error: ${err instanceof Error ? err.stack : String(err)}`,
       0,
       "Fatal unhandled exception in CLI main",
       "Top-level catch in main()",

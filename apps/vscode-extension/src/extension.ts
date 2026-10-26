@@ -1,71 +1,62 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import * as vscode from "vscode"
 
 export function activate(context: vscode.ExtensionContext): void {
-  const provider = new TrayambakViewProvider(context.extensionUri)
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider("trayambak.sidebar", provider))
-  const sessions = new TrayambakSessionsProvider()
-  const models = new TrayambakModelsProvider()
+  const provider = new NemoViewProvider(context.extensionUri)
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider("nemo.sidebar", provider))
+  const sessions = new NemoSessionsProvider()
+  const models = new NemoModelsProvider()
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("trayambak.sessions", sessions),
-    vscode.window.registerTreeDataProvider("trayambak.models", models),
+    vscode.window.registerTreeDataProvider("nemo.sessions", sessions),
+    vscode.window.registerTreeDataProvider("nemo.models", models),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("trayambak")) models.refresh()
+      if (e.affectsConfiguration("nemo")) models.refresh()
     }),
   )
   context.subscriptions.push(
-    vscode.commands.registerCommand("trayambak.run", async () => {
-      const prompt = await vscode.window.showInputBox({ prompt: "Trayambak prompt" })
-      if (prompt) vscode.window.showInformationMessage(`Trayambak queued: ${prompt.slice(0, 80)}`)
+    vscode.commands.registerCommand("nemo.run", async () => {
+      const prompt = await vscode.window.showInputBox({ prompt: "Nemo prompt" })
+      if (prompt) vscode.window.showInformationMessage(`Nemo queued: ${prompt.slice(0, 80)}`)
     }),
-    vscode.commands.registerCommand("trayambak.openWeb", () => {
+    vscode.commands.registerCommand("nemo.openWeb", () => {
       vscode.env.openExternal(vscode.Uri.parse("http://127.0.0.1:8787/openapi.json"))
     }),
-    vscode.commands.registerCommand("trayambak.switchModel", async () => {
+    vscode.commands.registerCommand("nemo.switchModel", async () => {
       const model = await vscode.window.showInputBox({ prompt: "Model id (empty = provider default)" })
       if (model !== undefined) {
-        await vscode.workspace.getConfiguration("trayambak").update("model", model, /*global*/ true)
-        vscode.window.showInformationMessage(model ? `Trayambak model: ${model}` : "Trayambak model: default")
+        await vscode.workspace.getConfiguration("nemo").update("model", model, /*global*/ true)
+        vscode.window.showInformationMessage(model ? `Nemo model: ${model}` : "Nemo model: default")
       }
     }),
-    vscode.commands.registerCommand("trayambak.switchProvider", async () => {
+    vscode.commands.registerCommand("nemo.switchProvider", async () => {
       const picked = await vscode.window.showQuickPick(
-        [
-          "nvidia",
-          "openai",
-          "anthropic",
-          "google",
-          "xai",
-          "huggingface",
-          "ollama",
-          "groq",
-          "mistral",
-          "openrouter",
-          "custom",
-          "llamacpp",
-        ],
-        { placeHolder: "Trayambak provider" },
+        ["nvidia", "nvidia-nim", "ollama", "llamacpp", "custom"],
+        { placeHolder: "Nemo provider" },
       )
       if (picked) {
-        await vscode.workspace.getConfiguration("trayambak").update("provider", picked, /*global*/ true)
-        vscode.window.showInformationMessage(`Trayambak provider: ${picked}`)
+        await vscode.workspace.getConfiguration("nemo").update("provider", picked, /*global*/ true)
+        vscode.window.showInformationMessage(`Nemo provider: ${picked}`)
       }
     }),
-    vscode.commands.registerCommand("trayambak.compact", () => {
-      vscode.window.showInformationMessage("Trayambak: run /compact in the terminal session to free tokens.")
+    vscode.commands.registerCommand("nemo.compact", () => {
+      vscode.window.showInformationMessage("Nemo: run /compact in the terminal session to free tokens.")
     }),
-    vscode.commands.registerCommand("trayambak.review", () => {
+    vscode.commands.registerCommand("nemo.review", () => {
       const sel = vscode.window.activeTextEditor?.document.getText(vscode.window.activeTextEditor.selection)
       vscode.window.showInformationMessage(
         sel && sel.length > 0
-          ? `Trayambak review queued (${sel.length} chars).`
-          : "Select code, then Trayambak: Review.",
+          ? `Nemo review queued (${sel.length} chars).`
+          : "Select code, then Nemo: Review.",
       )
     }),
-    vscode.commands.registerCommand("trayambak.newSession", () => {
-      vscode.window.showInformationMessage("Trayambak: run /newchat in the terminal session.")
+    vscode.commands.registerCommand("nemo.newSession", () => {
+      vscode.window.showInformationMessage("Nemo: run /newchat in the terminal session.")
     }),
-    vscode.commands.registerCommand("trayambak.openSessions", () => {
+    vscode.commands.registerCommand("nemo.openSessions", () => {
       vscode.env.openExternal(vscode.Uri.parse("http://127.0.0.1:8787/api/sessions"))
     }),
   )
@@ -75,7 +66,7 @@ export function activate(context: vscode.ExtensionContext): void {
     { pattern: "**" },
     {
       provideInlineCompletionItems(doc, pos): vscode.InlineCompletionList {
-        if (vscode.workspace.getConfiguration("trayambak").get("inlineCompletion") === false) {
+        if (vscode.workspace.getConfiguration("nemo").get("inlineCompletion") === false) {
           return new vscode.InlineCompletionList([])
         }
         const line = doc.lineAt(pos.line).text.slice(0, pos.character)
@@ -99,26 +90,26 @@ export function activate(context: vscode.ExtensionContext): void {
   )
   context.subscriptions.push(inline)
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
-  status.text = "$(sparkle) Trayambak"
-  status.command = "trayambak.run"
-  status.tooltip = "Trayambak agent"
+  status.text = "$(sparkle) Nemo"
+  status.command = "nemo.run"
+  status.tooltip = "Nemo agent"
   status.show()
   context.subscriptions.push(status)
 }
 
-class TrayambakViewProvider implements vscode.WebviewViewProvider {
+class NemoViewProvider implements vscode.WebviewViewProvider {
   constructor(private readonly root: vscode.Uri) {}
   resolveWebviewView(view: vscode.WebviewView): void {
     view.webview.options = { enableScripts: true }
     view.webview.html = `<!doctype html><html><body>
-      <h3>Trayambak</h3>
-      <p>Terminal agent. Run <code>trayambak web</code> then <a href="http://127.0.0.1:8787/api/sessions">sessions</a>.</p>
+      <h3>Nemo</h3>
+      <p>Terminal agent. Run <code>nemo web</code> then <a href="http://127.0.0.1:8787/api/sessions">sessions</a>.</p>
       </body></html>`
   }
 }
 
 /** Sessions view: local-only links into the CLI session store. No network calls from the extension host. */
-class TrayambakSessionsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+class NemoSessionsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly change = new vscode.EventEmitter<void>()
   readonly onDidChangeTreeData = this.change.event
 
@@ -128,12 +119,12 @@ class TrayambakSessionsProvider implements vscode.TreeDataProvider<vscode.TreeIt
 
   getChildren(): vscode.TreeItem[] {
     const open = new vscode.TreeItem("Open sessions", vscode.TreeItemCollapsibleState.None)
-    open.command = { command: "trayambak.openSessions", title: "Open sessions" }
-    open.tooltip = "Browse transcripts via trayambak web."
+    open.command = { command: "nemo.openSessions", title: "Open sessions" }
+    open.tooltip = "Browse transcripts via nemo web."
     const fresh = new vscode.TreeItem("New session (/newchat)", vscode.TreeItemCollapsibleState.None)
-    fresh.command = { command: "trayambak.newSession", title: "New session" }
+    fresh.command = { command: "nemo.newSession", title: "New session" }
     const note = new vscode.TreeItem("Sessions live in the CLI store", vscode.TreeItemCollapsibleState.None)
-    note.tooltip = "The extension never copies transcripts; run trayambak web to browse them."
+    note.tooltip = "The extension never copies transcripts; run nemo web to browse them."
     return [open, fresh, note]
   }
 
@@ -143,7 +134,7 @@ class TrayambakSessionsProvider implements vscode.TreeDataProvider<vscode.TreeIt
 }
 
 /** Models view: shows the configured provider/model with switch actions. Reads workspace config only. */
-class TrayambakModelsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+class NemoModelsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly change = new vscode.EventEmitter<void>()
   readonly onDidChangeTreeData = this.change.event
 
@@ -152,15 +143,15 @@ class TrayambakModelsProvider implements vscode.TreeDataProvider<vscode.TreeItem
   }
 
   getChildren(): vscode.TreeItem[] {
-    const cfg = vscode.workspace.getConfiguration("trayambak")
+    const cfg = vscode.workspace.getConfiguration("nemo")
     const providerId = cfg.get<string>("provider") || "nvidia"
     const model = cfg.get<string>("model") || "(provider default)"
     const current = new vscode.TreeItem(`${providerId} / ${model}`, vscode.TreeItemCollapsibleState.None)
-    current.tooltip = "Active provider and model from the trayambak.* settings."
+    current.tooltip = "Active provider and model from the nemo.* settings."
     const switchProvider = new vscode.TreeItem("Switch provider", vscode.TreeItemCollapsibleState.None)
-    switchProvider.command = { command: "trayambak.switchProvider", title: "Switch provider" }
+    switchProvider.command = { command: "nemo.switchProvider", title: "Switch provider" }
     const switchModel = new vscode.TreeItem("Switch model", vscode.TreeItemCollapsibleState.None)
-    switchModel.command = { command: "trayambak.switchModel", title: "Switch model" }
+    switchModel.command = { command: "nemo.switchModel", title: "Switch model" }
     return [current, switchProvider, switchModel]
   }
 

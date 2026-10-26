@@ -7,7 +7,7 @@ description: This skill should be used when the user asks to create a hookify ru
 
 ## Overview
 
-Hookify rules are markdown files with YAML frontmatter that define patterns to watch for and messages to show when those patterns match. Rules are stored in `.trayambak/hookify.{rule-name}.local.md` files.
+Hookify rules are markdown files with YAML frontmatter that define patterns to watch for and messages to show when those patterns match. Rules are stored in `.nemo/hookify.{rule-name}.local.md` files.
 
 ## Rule File Format
 
@@ -21,7 +21,7 @@ event: bash|file|stop|prompt|all
 pattern: regex-pattern-here
 ---
 
-Message to show Trayambak when this rule triggers.
+Message to show Nemo when this rule triggers.
 Can include markdown formatting, warnings, suggestions, etc.
 ```
 
@@ -113,9 +113,9 @@ python3 -c "import re; print(re.search(r'your_pattern', 'test text'))"
 
 ## File Organization
 
-- **Location**: `.trayambak/` directory in project root
-- **Naming**: `.trayambak/hookify.{descriptive-name}.local.md`
-- **Gitignore**: Add `.trayambak/*.local.md` to `.gitignore`
+- **Location**: `.nemo/` directory in project root
+- **Naming**: `.nemo/hookify.{descriptive-name}.local.md`
+- **Gitignore**: Add `.nemo/*.local.md` to `.gitignore`
 
 ## Commands
 

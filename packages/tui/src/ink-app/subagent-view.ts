@@ -1,18 +1,18 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Pure view logic for subagent ("task") cards, the subagents panel, and the
  * agent picker. Kept free of React/ink so it can be unit-tested directly —
- * this is the port of SKT AI LABS's task-part rendering (formatSubagentTitle,
+ * this is the port of Shrijan's task-part rendering (formatSubagentTitle,
  * CompletedSubagentDetail, task list / inspector) into Ink's flat transcript.
  */
 
 import type { TaggedAgentEvent } from "../../../protocol/src/index.js"
-import type { TrayambakMessage, BackgroundSubagentState } from "./types.js"
+import type { NemoMessage, BackgroundSubagentState } from "./types.js"
 import { formatSubagentTitle } from "./types.js"
 
 export interface SubagentCardStart {
@@ -29,9 +29,9 @@ export function subagentCardId(subagentId: string, background: boolean): string 
 }
 
 /** Build the transcript card for a subagent lifecycle start. The title uses
- * SKT AI LABS's format ("<agent> Task[(background)] — <description>") with the
+ * Shrijan's format ("<agent> Task[(background)] — <description>") with the
  * description flattened and capped at 60 chars. */
-export function createSubagentCard(start: SubagentCardStart, now: number = Date.now()): TrayambakMessage {
+export function createSubagentCard(start: SubagentCardStart, now: number = Date.now()): NemoMessage {
   const flattened = start.prompt.replace(/\s+/g, " ").trim()
   const desc = flattened.length > 60 ? `${flattened.slice(0, 60)}…` : flattened || "(no prompt)"
   return {
@@ -57,10 +57,10 @@ export interface SubagentOutcome {
 
 /** Mark a card finished — status, result/error text, and wall duration. */
 export function finalizeSubagentCard(
-  message: TrayambakMessage,
+  message: NemoMessage,
   outcome: SubagentOutcome,
   now: number = Date.now(),
-): TrayambakMessage {
+): NemoMessage {
   return {
     ...message,
     subagentState: outcome.state,
@@ -121,7 +121,7 @@ const STATUS_RANK: Record<SubagentPanelRow["status"], number> = {
  * inside each band). Background cards are excluded — the job map is the live
  * source of truth for background tasks (it carries prompt + result). */
 export function buildSubagentRows(
-  cards: TrayambakMessage[],
+  cards: NemoMessage[],
   background: BackgroundSubagentState[],
   now: number = Date.now(),
 ): SubagentPanelRow[] {
@@ -172,7 +172,7 @@ export interface AgentOption {
   builtin: boolean
 }
 
-/** The subagent types the trayambak__Agent tool schema accepts (its enum). */
+/** The subagent types the nemo__Agent tool schema accepts (its enum). */
 export const BUILTIN_AGENT_OPTIONS: AgentOption[] = [
   {
     value: "general",

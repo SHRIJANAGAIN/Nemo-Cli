@@ -3,6 +3,21 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "node",
+    // ink@7 ships an `exports`-only package.json: no "main", no "types", and no
+    // root index.d.ts (`node_modules/ink/` is just build/ license/ package.json
+    // readme.md). Node10 ("node") resolution predates the exports map, so it
+    // cannot see ink's entry at all and `import type { Key } from "ink"` failed
+    // to resolve — Key collapsed to a stub without `home`/`end`/`pageUp`, and
+    // keymap.ts reported 6 bogus errors (TS2339/TS2353) that had nothing to do
+    // with the source. Mapping ink straight at its declared types entry keeps the
+    // CommonJS/Node10 emit for every OTHER package (the main tree's relative
+    // imports depend on it) while giving the one exports-only dependency a real
+    // resolution. Bumping the whole program to NodeNext would reformat every
+    // relative import in the main tree.
+    "paths": {
+      "ink": ["./node_modules/ink/build/index.d.ts"],
+      "ink/*": ["./node_modules/ink/build/*"]
+    },
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": ".",
@@ -31,7 +46,12 @@
     "packages/cli/**/*.tsx",
     "packages/acp/**/*.ts",
     "packages/sandbox/**/*.ts",
-    "packages/eslint-plugin-trayambak/**/*.ts",
+    "packages/eslint-plugin-nemo/**/*.ts",
+    // evals was previously listed nowhere, so `npm run typecheck` never saw it
+    // and its 2KB stub stayed unchecked while importing the dead
+    // packages/coding-agent wrapper. The harness is now product code (it drives
+    // the real loop), so it joins the program and the suite cannot rot silently.
+    "packages/evals/**/*.ts",
     "packages/mcp-server/**/*.ts",
     "packages/sdk/**/*.ts",
     "packages/modes/**/*.ts",
@@ -55,8 +75,6 @@
     "packages/server/**/*.tsx",
     "packages/session-backends/**/*.ts",
     "packages/session-backends/**/*.tsx",
-    "packages/telemetry/**/*.ts",
-    "packages/telemetry/**/*.tsx",
     "packages/tui/src/index.ts",
     "packages/tui/src/dialogs.ts",
     "packages/tui/src/*.ts",
@@ -79,8 +97,8 @@
     "packages/tui/src/tui/**/*.ts",
     "apps/**/*.ts",
     "apps/**/*.tsx",
-    "skt/**/*.ts",
-    "skt/**/*.tsx"
+    "nemo/**/*.ts",
+    "nemo/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
@@ -96,9 +114,7 @@
     // NOTE: app/ bottom_pane/ chatwidget/ tui/ used to be excluded here —
     // they are now INCLUDED above and barrel-exported from index.ts.
     "packages/tui.bak/**/*",
-    "packages/trayambak-ink/**/*",
     "apps/vscode-extension/src/extension.ts",
-    "apps/runtime/src/tools/pentest/_smoketest.ts",
     // NOTE: `**/*.test.ts` / `**/*.spec.ts` used to be excluded here.
     // Tests are now typechecked (and emitted) with everything else —
     // `npm run typecheck` must stay green over the test suite too.

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -11,7 +11,7 @@
  * scripts/make-publish.mjs) contains everything it MUST ship and NOTHING
  * it must not — private journals, compiled tests, type/source maps, or
  * leaked secrets. Run after `npm run publish:build` (CI does exactly
- * that with TRAYAMBAK_SKIP_OBFUSCATION=1 for speed). Exits non-zero on
+ * that with NEMO_SKIP_OBFUSCATION=1 for speed). Exits non-zero on
  * any violation, so CI/release can block on it.
  */
 
@@ -103,15 +103,15 @@ else {
 }
 
 const pubPkg = JSON.parse(fs.readFileSync(path.join(OUT, "package.json"), "utf8"))
-pubPkg.name === "@skt-ai-labs/trayambak-cli" ? ok("package name") : fail(`unexpected name ${pubPkg.name}`)
+pubPkg.name === "@shrijan/nemo-cli" ? ok("package name") : fail(`unexpected name ${pubPkg.name}`)
 pubPkg.version === rootPkg.version
   ? ok("publish version synced")
   : fail(`publish version ${pubPkg.version} != ${rootPkg.version}`)
-;(Array.isArray(pubPkg.bin?.trayambak) ? pubPkg.bin.trayambak : String(pubPkg.bin?.trayambak ?? "")).includes(
+;(Array.isArray(pubPkg.bin?.nemo) ? pubPkg.bin.nemo : String(pubPkg.bin?.nemo ?? "")).includes(
   "dist/apps/cli",
 )
   ? ok("bin wiring")
-  : fail("bin.trayambak does not point at dist/apps/cli/src/index.js")
+  : fail("bin.nemo does not point at dist/apps/cli/src/index.js")
 pubPkg.private ? fail("publish package.json must not be private:true") : ok("not private")
 
 // --- forbidden files -----------------------------------------------------
@@ -125,7 +125,7 @@ forbidMaps.length === 0
   ? ok("no .d.ts/.js.map/.tsbuildinfo in tarball")
   : fail(`${forbidMaps.length} map/type files in tarball (e.g. ${path.relative(OUT, forbidMaps[0])})`)
 
-const journals = walk(OUT_DIST, (p) => path.basename(p) === "mistakes.json" && p.includes(`${path.sep}skt${path.sep}`))
+const journals = walk(OUT_DIST, (p) => path.basename(p) === "mistakes.json" && p.includes(`${path.sep}nemo${path.sep}`))
 journals.length === 0
   ? ok("no mistake journal in tarball")
   : fail(`mistake journal leaked: ${path.relative(OUT, journals[0])}`)
@@ -178,7 +178,7 @@ function splitNames(list) {
 
 // Alias-correct variants: `import {Orig as Local}` needs Orig from the
 // target (Local exists only in the importer — demanding it from the target
-// is a false failure, e.g. App.js `setThemeByName as applyTrayambakTheme`
+// is a false failure, e.g. App.js `setThemeByName as applyNemoTheme`
 // vs theme.js). Conversely `export {A as B}` (no from) provides B, not A.
 function splitNeedNames(list) {
   const out = []

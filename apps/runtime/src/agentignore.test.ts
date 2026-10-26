@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /** `.agentignore` parsing, rule mapping, and ladder end-to-end denial. */
@@ -20,7 +20,7 @@ import {
 } from "./agentignore.js"
 
 function projectWithIgnore(body: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-ignore-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-ignore-"))
   fs.writeFileSync(path.join(dir, AGENTIGNORE_FILE), body)
   return dir
 }
@@ -43,7 +43,7 @@ describe("parseAgentignore", () => {
 describe("loadAgentignorePatterns", () => {
   it("reads the cwd file and returns [] when absent", () => {
     expect(loadAgentignorePatterns(projectWithIgnore("*.pem\n"))).toEqual(["*.pem"])
-    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-ignore-empty-"))
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-ignore-empty-"))
     expect(loadAgentignorePatterns(empty)).toEqual([])
     expect(loadAgentignorePatterns(path.join(empty, "no-such-dir"))).toEqual([])
   })

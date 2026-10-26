@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Which-key overlay — SKT AI LABS's leader-key help ported to Ink. Opened with the
+ * Which-key overlay — Shrijan's leader-key help ported to Ink. Opened with the
  * leader chord (Ctrl+K): lists every leader action plus the always-on global
  * hotkeys. Pressing an action's key runs it (and closes the window); esc/q
  * just closes. The action table lives in App (leaderActions) so the overlay

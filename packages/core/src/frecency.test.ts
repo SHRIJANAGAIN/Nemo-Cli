@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -35,7 +35,7 @@ let dir: string
 let storePath: string
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-frecency-"))
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-frecency-"))
   storePath = path.join(dir, "nested", "frecency.json")
 })
 
@@ -321,27 +321,27 @@ describe("touchAndRank", () => {
 })
 
 describe("default store path", () => {
-  const savedStateDir = process.env.TRAYAMBAK_STATE_DIR
+  const savedStateDir = process.env.NEMO_STATE_DIR
 
   afterEach(() => {
-    if (savedStateDir === undefined) delete process.env.TRAYAMBAK_STATE_DIR
-    else process.env.TRAYAMBAK_STATE_DIR = savedStateDir
+    if (savedStateDir === undefined) delete process.env.NEMO_STATE_DIR
+    else process.env.NEMO_STATE_DIR = savedStateDir
   })
 
-  it("honours TRAYAMBAK_STATE_DIR instead of writing into the user's home", () => {
-    process.env.TRAYAMBAK_STATE_DIR = dir
+  it("honours NEMO_STATE_DIR instead of writing into the user's home", () => {
+    process.env.NEMO_STATE_DIR = dir
     expect(frecencyStorePath()).toBe(path.join(dir, "frecency.json"))
   })
 
-  it("falls back to ~/.trayambak when the override is empty", () => {
+  it("falls back to ~/.nemo when the override is empty", () => {
     // An empty override is what an unset shell variable expands to; treating it
     // as a path would write the store to a relative "frecency.json" in the cwd.
-    process.env.TRAYAMBAK_STATE_DIR = ""
+    process.env.NEMO_STATE_DIR = ""
     expect(path.isAbsolute(frecencyStorePath())).toBe(true)
   })
 
   it("noteOpen writes to the resolved store, not the caller's directory", () => {
-    process.env.TRAYAMBAK_STATE_DIR = dir
+    process.env.NEMO_STATE_DIR = dir
     noteOpen("src/a.ts", NOW)
     expect(loadFrecency(path.join(dir, "frecency.json"))).toEqual([{ path: "src/a.ts", opens: 1, lastOpened: NOW }])
   })
@@ -349,12 +349,12 @@ describe("default store path", () => {
   it("noteOpen never throws, even with an unusable store path", () => {
     // A file where a directory is expected: mkdirSync fails inside saveFrecency.
     fs.writeFileSync(path.join(dir, "blocked"), "x", "utf8")
-    process.env.TRAYAMBAK_STATE_DIR = path.join(dir, "blocked")
+    process.env.NEMO_STATE_DIR = path.join(dir, "blocked")
     expect(() => noteOpen("a.ts", NOW)).not.toThrow()
   })
 
   it("rankedRecents returns the default store already ranked", () => {
-    process.env.TRAYAMBAK_STATE_DIR = dir
+    process.env.NEMO_STATE_DIR = dir
     noteOpen("cold.ts", NOW - 30 * DAY)
     noteOpen("cold.ts", NOW - 30 * DAY + OPENS_DEDUPE_MS + 1)
     noteOpen("warm.ts", NOW)

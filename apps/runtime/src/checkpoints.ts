@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Workspace checkpoints with undo/redo (ported from SKT AI LABS Code's snapshot
+ * Workspace checkpoints with undo/redo (ported from Shrijan Code's snapshot
  * system, adapted to work without requiring a git repository).
  *
- * Layout under `<cwd>/.trayambak/checkpoints/`:
+ * Layout under `<cwd>/.nemo/checkpoints/`:
  *   objects/<sha256>   content-addressed file blobs (shared across points)
  *   cp-0001/manifest.json   one manifest per checkpoint
  *   stacks.json              persisted undo/redo stacks (survives restarts)
@@ -30,7 +30,7 @@ const SKIP_DIRS = new Set([
   ".git",
   ".hg",
   ".svn",
-  ".trayambak",
+  ".nemo",
   "dist",
   "build",
   "out",
@@ -98,7 +98,7 @@ interface CheckpointManifest {
    *  cache: an unchanged size+mtime reuses the recorded hash WITHOUT
    *  re-reading the file, so repeat captures on a quiet workspace cost a
    *  walk + stats instead of a full re-hash (measured 4.8s → ~0.3s on the
-   *  trayambak repo). Absent on pre-cache manifests — those entries are
+   *  nemo repo). Absent on pre-cache manifests — those entries are
    *  simply re-hashed once, then recorded. Same mtime+size assumption as
    *  git's racy-clean logic; a missed sub-tick rewrite only affects which
    *  undo point a file restores to, never correctness of the restore. */
@@ -150,7 +150,7 @@ export class CheckpointStore {
 
   constructor(cwd: string, opts?: { maxCheckpoints?: number }) {
     this.cwd = path.resolve(cwd)
-    this.root = path.join(this.cwd, ".trayambak", "checkpoints")
+    this.root = path.join(this.cwd, ".nemo", "checkpoints")
     this.objectsDir = path.join(this.root, "objects")
     this.max = Math.max(2, opts?.maxCheckpoints ?? 20)
     this.disabled = isUnsafeWorkspaceDir(this.cwd)

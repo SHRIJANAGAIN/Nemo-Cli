@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Protected-metadata enforcement across the generic file tools (Codex
- * parity): `.git` and `.trayambak` are readable but can never be created,
+ * parity): `.git` and `.nemo` are readable but can never be created,
  * modified, or deleted through write_file / edit_file / notebook_edit — at
  * any depth and in any spelling — while segment look-alikes (`.github`,
  * `.gitkeep`, `.gitignore`) stay writable. Home credential stores are
@@ -19,11 +19,11 @@ import { describe, expect, it } from "vitest"
 import { createWriteFileTool } from "./file-edit/write-file.js"
 import { createEditFileTool } from "./file-edit/edit-file.js"
 import { createReadFileTool } from "./file-edit/read-file.js"
-import { createNotebookEditTool } from "./trayambak/notebook-edit.js"
+import { createNotebookEditTool } from "./nemo/notebook-edit.js"
 import type { ToolContext } from "./types.js"
 
 function tmpCtx(): { dir: string; ctx: ToolContext } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-meta-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-meta-"))
   return { dir, ctx: { cwd: dir } as unknown as ToolContext }
 }
 
@@ -51,18 +51,18 @@ describe("protected metadata write gate", () => {
     expect(fs.existsSync(path.join(dir, ".git"))).toBe(false)
   })
 
-  it("rejects write_file into .trayambak without creating the directory", async () => {
+  it("rejects write_file into .nemo without creating the directory", async () => {
     const { dir, ctx } = tmpCtx()
     const r = await writeFile.execute(
       "t",
-      { path: ".trayambak/commands/evil.md", content: "evil" },
+      { path: ".nemo/commands/evil.md", content: "evil" },
       undefined,
       undefined,
       ctx,
     )
     expect(r.isError).toBe(true)
     expect(resultText(r)).toContain("protected metadata")
-    expect(fs.existsSync(path.join(dir, ".trayambak"))).toBe(false)
+    expect(fs.existsSync(path.join(dir, ".nemo"))).toBe(false)
   })
 
   it("rejects writes to nested repositories, not just the top-level one", async () => {
@@ -107,13 +107,13 @@ describe("protected metadata write gate", () => {
 
   it("rejects notebook_edit on protected paths and leaves the notebook intact", async () => {
     const { dir, ctx } = tmpCtx()
-    const nb = path.join(dir, ".trayambak", "nb.ipynb")
+    const nb = path.join(dir, ".nemo", "nb.ipynb")
     fs.mkdirSync(path.dirname(nb), { recursive: true })
     const original = JSON.stringify({ cells: [{ cell_type: "code", id: "c1", source: [] }] })
     fs.writeFileSync(nb, original, "utf8")
     const r = await notebookEdit.execute(
       "t",
-      { notebook_path: ".trayambak/nb.ipynb", cell_id: "c1", new_source: "x" },
+      { notebook_path: ".nemo/nb.ipynb", cell_id: "c1", new_source: "x" },
       undefined,
       undefined,
       ctx,
@@ -138,18 +138,18 @@ describe("protected metadata write gate", () => {
 })
 
 describe("protected metadata read gate", () => {
-  it("reads .git and .trayambak files — only writes are denied", async () => {
+  it("reads .git and .nemo files — only writes are denied", async () => {
     const { dir, ctx } = tmpCtx()
     fs.mkdirSync(path.join(dir, ".git"), { recursive: true })
     fs.writeFileSync(path.join(dir, ".git", "config"), "[core]\n", "utf8")
-    fs.mkdirSync(path.join(dir, ".trayambak"), { recursive: true })
-    fs.writeFileSync(path.join(dir, ".trayambak", "config.json"), "{}", "utf8")
+    fs.mkdirSync(path.join(dir, ".nemo"), { recursive: true })
+    fs.writeFileSync(path.join(dir, ".nemo", "config.json"), "{}", "utf8")
 
     const git = await readFile.execute("t", { path: ".git/config" }, undefined, undefined, ctx)
     expect(git.isError).toBeFalsy()
     expect(resultText(git)).toContain("[core]")
 
-    const state = await readFile.execute("t", { path: ".trayambak/config.json" }, undefined, undefined, ctx)
+    const state = await readFile.execute("t", { path: ".nemo/config.json" }, undefined, undefined, ctx)
     expect(state.isError).toBeFalsy()
     expect(resultText(state)).toContain("{}")
   })

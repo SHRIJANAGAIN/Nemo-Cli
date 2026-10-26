@@ -1,6 +1,6 @@
 ---
 name: dmux-workflows
-description: Multi-agent orchestration using dmux (tmux pane manager for AI agents). Patterns for parallel agent workflows across Trayambak Code, Trayambak Code, Trayambak, and other harnesses. Use when running multiple agent sessions in parallel or coordinating multi-agent development workflows.
+description: Multi-agent orchestration using dmux (tmux pane manager for AI agents). Patterns for parallel agent workflows across Nemo Code, Nemo Code, Nemo, and other harnesses. Use when running multiple agent sessions in parallel or coordinating multi-agent development workflows.
 metadata:
   origin: ECC
 ---
@@ -12,7 +12,7 @@ Orchestrate parallel AI agent sessions using dmux, a tmux pane manager for agent
 ## When to Activate
 
 - Running multiple agent sessions in parallel
-- Coordinating work across Trayambak Code, Trayambak Code, and other harnesses
+- Coordinating work across Nemo Code, Nemo Code, and other harnesses
 - Complex tasks that benefit from divide-and-conquer parallelism
 - User says "run in parallel", "split this work", "use dmux", or "multi-agent"
 
@@ -22,7 +22,7 @@ dmux is a tmux-based orchestration tool that manages AI agent panes:
 
 - Press `n` to create a new pane with a prompt
 - Press `m` to merge pane output back to the main session
-- Supports: Trayambak Code, Trayambak Code, Trayambak, SKT AI LABS, Gemini, Qwen
+- Supports: Nemo Code, Nemo Code, Nemo, Shrijan, Gemini, Qwen
 
 **Install:** Install dmux from its repository after reviewing the package. See [github.com/standardagents/dmux](https://github.com/standardagents/dmux)
 
@@ -86,9 +86,9 @@ Pane 2 (Fixer): "Fix failing tests based on the error output from pane 1"
 Use different AI tools for different tasks:
 
 ```
-Pane 1 (Trayambak Code): "Review the security of the auth module"
-Pane 2 (Trayambak Code): "Refactor the utility functions for performance"
-Pane 3 (Trayambak Code): "Write E2E tests for the checkout flow"
+Pane 1 (Nemo Code): "Review the security of the auth module"
+Pane 2 (Nemo Code): "Refactor the utility functions for performance"
+Pane 3 (Nemo Code): "Write E2E tests for the checkout flow"
 ```
 
 ### Pattern 5: Code Review Pipeline
@@ -121,8 +121,8 @@ git worktree add -b feat/auth ../feature-auth HEAD
 git worktree add -b feat/billing ../feature-billing HEAD
 
 # Run agents in separate worktrees
-# Pane 1: cd ../feature-auth && trayambak
-# Pane 2: cd ../feature-billing && trayambak
+# Pane 1: cd ../feature-auth && nemo
+# Pane 2: cd ../feature-billing && nemo
 
 # Merge branches when done
 git merge feat/auth
@@ -135,8 +135,8 @@ git merge feat/billing
 | ------------------------------ | ------------------------------------ | ----------------------------------------- |
 | **dmux**                       | tmux pane management for agents      | Parallel agent sessions                   |
 | **Superset**                   | Terminal IDE for 10+ parallel agents | Large-scale orchestration                 |
-| **Trayambak Code Task tool**   | In-process subagent spawning         | Programmatic parallelism within a session |
-| **Trayambak Code multi-agent** | Built-in agent roles                 | Trayambak Code-specific parallel work     |
+| **Nemo Code Task tool**   | In-process subagent spawning         | Programmatic parallelism within a session |
+| **Nemo Code multi-agent** | Built-in agent roles                 | Nemo Code-specific parallel work     |
 
 ## ECC Helper
 
@@ -152,7 +152,7 @@ Example `plan.json`:
 {
   "sessionName": "skill-audit",
   "baseRef": "HEAD",
-  "launcherCommand": "trayambak exec --cwd {worktree_path} --task-file {task_file}",
+  "launcherCommand": "nemo exec --cwd {worktree_path} --task-file {task_file}",
   "workers": [
     { "name": "docs-a", "task": "Fix skills 1-4 and write handoff notes." },
     { "name": "docs-b", "task": "Fix skills 5-8 and write handoff notes." }
@@ -177,9 +177,9 @@ Use `seedPaths` when workers need access to dirty or untracked local files that 
   "seedPaths": [
     "scripts/orchestrate-worktrees.js",
     "scripts/lib/tmux-worktree-orchestrator.js",
-    ".trayambak/plan/workflow-e2e-test.json"
+    ".nemo/plan/workflow-e2e-test.json"
   ],
-  "launcherCommand": "bash {repo_root}/scripts/orchestrate-trayambak-worker.sh {task_file} {handoff_file} {status_file}",
+  "launcherCommand": "bash {repo_root}/scripts/orchestrate-nemo-worker.sh {task_file} {handoff_file} {status_file}",
   "workers": [{ "name": "seed-check", "task": "Verify seeded files are present before starting work." }]
 }
 ```

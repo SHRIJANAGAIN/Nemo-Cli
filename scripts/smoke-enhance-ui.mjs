@@ -1,4 +1,4 @@
-/* Headless E2E for the enhance composer flow (SKT AI LABS sparkle port):
+/* Headless E2E for the enhance composer flow (Shrijan sparkle port):
  * ctrl+e rewrites the buffer in place, /enhance <draft> intercepts Enter,
  * failures stay inline with the draft intact, empty buffer gives a hint.
  * Buffer contents are proven via Enter -> onSubmit (this Ink has no lastFrame). */

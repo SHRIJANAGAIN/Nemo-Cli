@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest"
@@ -20,7 +20,7 @@ import {
 
 let dir: string
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skills-"))
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-skills-"))
 })
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true })
@@ -117,7 +117,7 @@ describe("createSkillTool", () => {
   })
 
   it("withholds secret-bearing env from user-authored skill commands", async () => {
-    const secretName = "TRAYAMBAK_E2E_SKILL_SECRET"
+    const secretName = "NEMO_E2E_SKILL_SECRET"
     const secretValue = "e2e-skill-secret-abcdef"
     const saved = process.env[secretName]
     process.env[secretName] = secretValue
@@ -179,8 +179,8 @@ describe("skill tool names (round 11 attack: provider-safe ids)", () => {
 
   it("multi-root: first root wins a tool-name collision (user beats bundled)", () => {
     const descOnly = "---\ndescription: Dir-named skill.\n---\nBody."
-    const primary = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skills-primary-"))
-    const bundled = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skills-bundled-"))
+    const primary = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-skills-primary-"))
+    const bundled = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-skills-bundled-"))
     try {
       const mk = (root: string, rel: string): void => {
         const d = path.join(root, rel)

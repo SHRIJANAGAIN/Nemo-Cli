@@ -1,4 +1,4 @@
-export * as TrayambakSessionCompaction from "./session-compaction"
+export * as NemoSessionCompaction from "./session-compaction"
 
 export interface CompactionConfig {
   readonly maxTokens: number

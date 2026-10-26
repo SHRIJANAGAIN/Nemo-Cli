@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import path from "path"
@@ -304,10 +304,10 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
     category: "productivity",
   },
   {
-    id: "trayambak-git",
-    name: "Trayambak Git",
+    id: "nemo-git",
+    name: "Nemo Git",
     description: "Git repository operations: status, log, branches, commit, diff, analysis (Python MCP)",
-    keywords: ["git", "trayambak", "version control", "commit", "diff", "blame", "log", "status"],
+    keywords: ["git", "nemo", "version control", "commit", "diff", "blame", "log", "status"],
     spec: {
       command: ["python", path.join(__dirname, "..", "..", "..", "..", "servers", "git-server", "server.py")],
       cwd: path.join(__dirname, "..", "..", "..", "..", "servers", "git-server"),
@@ -316,10 +316,10 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
     category: "development",
   },
   {
-    id: "trayambak-filesystem",
-    name: "Trayambak Filesystem",
+    id: "nemo-filesystem",
+    name: "Nemo Filesystem",
     description: "Safe filesystem operations: read, write, list, delete, copy, file info with sandbox (Python MCP)",
-    keywords: ["filesystem", "files", "local", "read", "write", "search", "file system", "trayambak"],
+    keywords: ["filesystem", "files", "local", "read", "write", "search", "file system", "nemo"],
     spec: {
       command: ["python", path.join(__dirname, "..", "..", "..", "..", "servers", "file-system-server", "server.py")],
       cwd: path.join(__dirname, "..", "..", "..", "..", "servers", "file-system-server"),
@@ -328,10 +328,10 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
     category: "filesystem",
   },
   {
-    id: "trayambak-database",
-    name: "Trayambak Database",
+    id: "nemo-database",
+    name: "Nemo Database",
     description: "SQL database operations: execute queries, create tables, analyze, table info (Python MCP)",
-    keywords: ["database", "sql", "sqlite", "query", "trayambak"],
+    keywords: ["database", "sql", "sqlite", "query", "nemo"],
     spec: {
       command: ["python", path.join(__dirname, "..", "..", "..", "..", "servers", "database-server", "server.py")],
       cwd: path.join(__dirname, "..", "..", "..", "..", "servers", "database-server"),
@@ -340,10 +340,10 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
     category: "database",
   },
   {
-    id: "trayambak-web",
-    name: "Trayambak Web",
+    id: "nemo-web",
+    name: "Nemo Web",
     description: "Web scraping and data extraction: parse HTML, metadata, validate URLs, extract JSON (Python MCP)",
-    keywords: ["web", "scrape", "html", "metadata", "url", "json", "trayambak"],
+    keywords: ["web", "scrape", "html", "metadata", "url", "json", "nemo"],
     spec: {
       command: ["python", path.join(__dirname, "..", "..", "..", "..", "servers", "web-server", "server.py")],
       cwd: path.join(__dirname, "..", "..", "..", "..", "servers", "web-server"),
@@ -352,11 +352,11 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
     category: "web",
   },
   {
-    id: "trayambak-env",
-    name: "Trayambak Env",
+    id: "nemo-env",
+    name: "Nemo Env",
     description:
       "Environment variable management: get/set env, load .env, list variables, validate config (Python MCP)",
-    keywords: ["env", "environment", "config", "variables", "trayambak"],
+    keywords: ["env", "environment", "config", "variables", "nemo"],
     spec: {
       command: ["python", path.join(__dirname, "..", "..", "..", "..", "servers", "env-server", "server.py")],
       cwd: path.join(__dirname, "..", "..", "..", "..", "servers", "env-server"),
@@ -368,7 +368,7 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
 
 /**
  * The connector registry: a searchable catalog of discoverable MCP servers.
- * Supports user-installed connectors (from ~/.trayambak/connectors/) and
+ * Supports user-installed connectors (from ~/.nemo/connectors/) and
  * built-in connectors (curated list above).
  */
 export class ConnectorRegistry {
@@ -378,7 +378,7 @@ export class ConnectorRegistry {
   private userDir: string
 
   private constructor() {
-    this.userDir = path.join(os.homedir(), ".trayambak", "connectors")
+    this.userDir = path.join(os.homedir(), ".nemo", "connectors")
   }
 
   static getInstance(): ConnectorRegistry {

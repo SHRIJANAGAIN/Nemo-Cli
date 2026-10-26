@@ -1,10 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { addTask, getTask, listTasks, resetTasks, updateTask } from "../../../runtime/src/tools/trayambak/tasks.js"
+import { addTask, getTask, listTasks, resetTasks, updateTask } from "../../../runtime/src/tools/nemo/tasks.js"
 
 export interface TaskOptions {
   readonly action: "list" | "create" | "update" | "get" | "output" | "reset"
@@ -27,7 +27,7 @@ export function taskCommand(options: TaskOptions): string {
     case "create": {
       if (!options.content) return "Missing content"
       // Really persists into the SAME store `list`, `reset`, and the
-      // trayambak__Task* tools use — "[Task queued]" must never be an empty
+      // nemo__Task* tools use — "[Task queued]" must never be an empty
       // promise (it used to acknowledge without writing anything).
       addTask(options.content, { priority: options.priority, dependsOn: options.dependsOn })
       return `[Task queued] ${options.content.slice(0, 200)}`

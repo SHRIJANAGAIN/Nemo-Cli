@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -11,20 +11,14 @@
  * the wire, against a local stub — no network. A vision feature that is
  * correct in isolation but never serialized is invisible until a real endpoint
  * rejects the request, which is exactly the failure mode worth catching here.
- *
- * The negative half matters as much: the two providers with non-OpenAI wire
- * shapes (anthropic, google) must keep working, degrading to text-only rather
- * than emitting `[object Object]` into a string field.
  */
 import { describe, expect, it } from "vitest"
 import * as http from "node:http"
 import type { AddressInfo } from "node:net"
-import { createOpenAIProvider } from "./openai.js"
 import { createNvidiaProvider } from "./nvidia.js"
+import { createOllamaProvider } from "./ollama.js"
 import { createLlamaCppProvider } from "./llama-cpp.js"
-import { toAnthropicBody } from "./anthropic.js"
-import { toGeminiBody } from "./google.js"
-import type { ChatInput, WireMessage } from "./types.js"
+import type { ChatInput } from "./types.js"
 
 const PNG = "data:image/png;base64,iVBORw0KGgo="
 
@@ -71,7 +65,7 @@ const textOnly: ChatInput = {
 describe("OpenAI-compatible vision on the wire", () => {
   it("sends the image as an OpenAI image_url content part", async () => {
     const body = await captureBody(
-      (url) => createOpenAIProvider({ baseUrl: url, model: "gpt-4o", apiKey: "k" }),
+      (url) => createOllamaProvider({ baseUrl: url, model: "llama3.1" }),
       withImage,
     )
 
@@ -84,7 +78,7 @@ describe("OpenAI-compatible vision on the wire", () => {
 
   it("does not also send the sibling images field", async () => {
     const body = await captureBody(
-      (url) => createOpenAIProvider({ baseUrl: url, model: "gpt-4o", apiKey: "k" }),
+      (url) => createOllamaProvider({ baseUrl: url, model: "llama3.1" }),
       withImage,
     )
     // A backend that forwards unknown keys would otherwise send the raw data
@@ -94,7 +88,7 @@ describe("OpenAI-compatible vision on the wire", () => {
 
   it("keeps the system prompt as a plain string row", async () => {
     const body = await captureBody(
-      (url) => createOpenAIProvider({ baseUrl: url, model: "gpt-4o", apiKey: "k" }),
+      (url) => createOllamaProvider({ baseUrl: url, model: "llama3.1" }),
       withImage,
     )
     expect(bodyMessages(body)[0]).toEqual({ role: "system", content: "sys" })
@@ -102,7 +96,7 @@ describe("OpenAI-compatible vision on the wire", () => {
 
   it("leaves a text-only conversation completely unchanged", async () => {
     const body = await captureBody(
-      (url) => createOpenAIProvider({ baseUrl: url, model: "gpt-4o", apiKey: "k" }),
+      (url) => createOllamaProvider({ baseUrl: url, model: "llama3.1" }),
       textOnly,
     )
     // The regression that matters most: 100% of existing traffic must serialize
@@ -110,7 +104,7 @@ describe("OpenAI-compatible vision on the wire", () => {
     expect(bodyMessages(body)[1]).toEqual({ role: "user", content: "hi" })
   }, 15000)
 
-  it("works the same through the nvidia provider (openai, xai, ollama, custom, huggingface inherit it)", async () => {
+  it("works the same through the nvidia provider (ollama and custom inherit it)", async () => {
     const body = await captureBody((url) => createNvidiaProvider({ baseUrl: url, model: "m" }), withImage)
     const parts = bodyMessages(body)[1]!.content as Array<Record<string, unknown>>
     expect(parts.some((p) => p.type === "image_url")).toBe(true)
@@ -137,41 +131,8 @@ describe("OpenAI-compatible vision on the wire", () => {
         { role: "tool", content: "a.png", tool_call_id: "c1", images: [PNG] },
       ],
     }
-    const body = await captureBody((url) => createOpenAIProvider({ baseUrl: url, model: "m", apiKey: "k" }), input)
+    const body = await captureBody((url) => createOllamaProvider({ baseUrl: url, model: "m" }), input)
     const toolRow = bodyMessages(body).find((m) => m.role === "tool")!
     expect(toolRow.content).toBe("a.png")
   }, 15000)
-})
-
-describe("non-OpenAI providers degrade instead of breaking", () => {
-  it("anthropic keeps string content and does not choke on images", () => {
-    // Anthropic has its own blocks format. It does not accept OpenAI image_url
-    // parts, so the correct behaviour is to ignore them and send the text —
-    // NOT to send a malformed block that 400s the whole turn.
-    const messages: WireMessage[] = [{ role: "user", content: "describe this", images: [PNG] }]
-    const body = toAnthropicBody({ messages }, "claude-x") as Record<string, unknown>
-
-    const serialized = JSON.stringify(body)
-    expect(serialized).not.toContain("[object Object]")
-    expect(serialized).not.toContain("image_url")
-    expect(serialized).toContain("describe this")
-  })
-
-  it("google keeps string content and does not choke on images", () => {
-    const messages: WireMessage[] = [{ role: "user", content: "describe this", images: [PNG] }]
-    const body = toGeminiBody({ messages }, "gemini-x") as Record<string, unknown>
-
-    const serialized = JSON.stringify(body)
-    expect(serialized).not.toContain("[object Object]")
-    expect(serialized).not.toContain("image_url")
-    expect(serialized).toContain("describe this")
-  })
-
-  it("anthropic text-only output is byte-identical to before", () => {
-    const messages: WireMessage[] = [{ role: "user", content: "hi" }]
-    const body = toAnthropicBody({ messages }, "claude-x") as Record<string, unknown>
-    // Anthropic passes a bare user string straight through; it only builds
-    // blocks when tool results need them. Vision must not change that.
-    expect(JSON.stringify(body)).toContain('"content":"hi"')
-  })
 })

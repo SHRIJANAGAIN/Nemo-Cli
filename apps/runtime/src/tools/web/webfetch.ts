@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as https from "https"
@@ -313,7 +313,7 @@ function fetchWithRedirect(
       port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
       path: parsed.pathname + parsed.search,
       headers: {
-        "User-Agent": "trayambak/0.2 (+local)",
+        "User-Agent": "nemo/0.2 (+local)",
         Accept: "text/plain,text/html,application/json;q=0.9,*/*;q=0.5",
         ...(body ? { "Content-Length": Buffer.byteLength(body) } : {}),
         ...extraHeaders,
@@ -379,7 +379,7 @@ function fetchWithRedirect(
         return
       }
 
-      // SKT AI LABS feature: Cloudflare bypass - retry with "" User-Agent on 403 challenge
+      // Shrijan feature: Cloudflare bypass - retry with "" User-Agent on 403 challenge
       const cfMitigated = res.headers["cf-mitigated"]
       const cfChallenge =
         res.headers["content-type"]?.toLowerCase().includes("text/html") &&
@@ -414,7 +414,7 @@ function fetchWithRedirect(
         // Cloudflare bypass retry: a DIFFERENT User-Agent from the primary
         // request (the custom one got challenged; the retry varies the signal).
         if (cfChallenge && cfMitigated === "challenge" && redirectCount === 0) {
-          const retryHeaders = { ...extraHeaders, "User-Agent": "trayambak" }
+          const retryHeaders = { ...extraHeaders, "User-Agent": "nemo" }
           fetchWithRedirect(parsed, method, body, retryHeaders, 0, maxBytes, timeoutMs, signal, callback)
           return
         }

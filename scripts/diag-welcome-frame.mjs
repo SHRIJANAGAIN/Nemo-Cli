@@ -1,4 +1,4 @@
-/* Capture the REAL TrayambakApp welcome frame (past BootCine) as text.
+/* Capture the REAL NemoApp welcome frame (past BootCine) as text.
  *
  * diag-first-screen.mjs waits only 1500 ms, but BootCine plays for a
  * not-first-run boot (App.tsx: showBootCine = !isFirstRun && !bootCineDone
@@ -16,7 +16,7 @@ import path from "node:path"
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
-process.env.TRAYAMBAK_HOME = repo
+process.env.NEMO_HOME = repo
 
 const COLS = Number(process.argv[2] ?? 120)
 const ROWS = 40
@@ -40,11 +40,11 @@ stdout.on("data", (c) => screen.write(c.toString()))
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 const { loadConfig } = await import(pathToFileURL(path.join(repo, "dist", "apps", "runtime", "src", "config.js")).href)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
       ...loadConfig(),
       baseUrl: "http://127.0.0.1:9/api",
@@ -68,11 +68,11 @@ let seen = ""
 for (let i = 0; i < 30; i++) {
   await wait(500)
   snapshot = screen.snapshotFull().join("\n")
-  if (snapshot.includes("Welcome To Trayambak CLI")) {
+  if (snapshot.includes("Welcome To Nemo CLI")) {
     seen = "WELCOME"
     break
   }
-  if (snapshot.includes("Welcome to Trayambak CLI!")) {
+  if (snapshot.includes("Welcome to Nemo CLI!")) {
     seen = "SPLASH"
     break
   }

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -193,13 +193,13 @@ describe("recordUsage garbage hardening (#87)", () => {
     // Math.max(0, NaN) is NaN: one bad record used to NaN the accumulator,
     // after which every exhaustion/remainder check compared false — the
     // budget stopped enforcing itself without saying so (fail-open).
-    getRolloutBudget().recordUsage({ input_tokens: NaN, output_tokens: NaN, codex_rollout_budget_units: NaN })
+    getRolloutBudget().recordUsage({ input_tokens: NaN, output_tokens: NaN, nemo_rollout_budget_units: NaN })
     getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: Infinity })
     // Negative usage clamps to 0 (no rebate), never contributes.
     getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: -50 })
     expect(budgetStatus()).toEqual({ used: 0, remaining: 100, max: 100, exhausted: false })
     // Finite usage AFTER garbage must still drive the budget to its cap.
-    getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: 0, codex_rollout_budget_units: 100 })
+    getRolloutBudget().recordUsage({ input_tokens: 0, output_tokens: 0, nemo_rollout_budget_units: 100 })
     expect(budgetStatus().exhausted).toBe(true)
   })
 })

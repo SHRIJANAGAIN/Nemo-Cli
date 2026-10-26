@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -9,22 +9,22 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 
-import type { TrayambakConfig } from "../../../runtime/src/index.js"
-import { buildTrayambakSlashRegistry, dispatchSlashCommandAsync } from "./command-dispatch.js"
+import type { NemoConfig } from "../../../runtime/src/index.js"
+import { buildNemoSlashRegistry, dispatchSlashCommandAsync } from "./command-dispatch.js"
 
 /**
  * plan.ts binds PLAN_DIR from os.homedir() AT MODULE LOAD, and the /plan
  * handler imports it lazily on FIRST dispatch — so the temp home is
  * installed before the first dispatch and restored afterwards (the real
- * ~/.trayambak/plans is never touched). Same isolation as plan.test.ts.
+ * ~/.nemo/plans is never touched). Same isolation as plan.test.ts.
  */
 
 let home = ""
 let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
-const registry = buildTrayambakSlashRegistry()
-const config = {} as TrayambakConfig
+const registry = buildNemoSlashRegistry()
+const config = {} as NemoConfig
 
 const dispatch = (input: string): ReturnType<typeof dispatchSlashCommandAsync> =>
   dispatchSlashCommandAsync(registry, input, config)
@@ -42,7 +42,7 @@ const stepIdFrom = (out: string): string => {
 }
 
 beforeAll(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-dispatch-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-dispatch-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -104,7 +104,7 @@ describe("/plan slash argument mapping (round 11 attack)", () => {
     const shown = await dispatch("/plan show ../evil")
     expect(shown.matched).toBe(true)
     expect(shown.output).toBe("Invalid plan id: ../evil")
-    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+    expect(fs.existsSync(path.join(home, ".nemo", "evil.json"))).toBe(false)
   })
 })
 
@@ -184,7 +184,7 @@ describe("/mode, /worktree, /compact forward their arguments (round 12 attack)",
 
 describe("/company slash argument mapping (company library)", () => {
   it("bare /company shows divisions, list/info/run forward their arguments", async () => {
-    const lib = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-dispatch-company-"))
+    const lib = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-dispatch-company-"))
     try {
       const eng = path.join(lib, "engineering")
       fs.mkdirSync(eng, { recursive: true })
@@ -196,12 +196,12 @@ describe("/company slash argument mapping (company library)", () => {
         path.join(eng, "engineering-code-reviewer.md"),
         "---\nname: Code Reviewer\ndescription: Reviews code like a mentor.\n---\n\n# Code Reviewer\n",
       )
-      const savedCompanyDir = process.env.TRAYAMBAK_COMPANY_DIR
-      const savedConfig = process.env.TRAYAMBAK_CONFIG
-      process.env.TRAYAMBAK_COMPANY_DIR = lib
-      // saveConfig/loadConfig prefer <cwd>/.trayambak when one exists —
+      const savedCompanyDir = process.env.NEMO_COMPANY_DIR
+      const savedConfig = process.env.NEMO_CONFIG
+      process.env.NEMO_COMPANY_DIR = lib
+      // saveConfig/loadConfig prefer <cwd>/.nemo when one exists —
       // pin a temp file so switch tests never touch the real config.
-      process.env.TRAYAMBAK_CONFIG = path.join(lib, "test-config.json")
+      process.env.NEMO_CONFIG = path.join(lib, "test-config.json")
       try {
         // Bare = divisions (the default action, not list).
         expect((await dispatch("/company")).output).toContain("1 departments, 1 agents")
@@ -218,10 +218,10 @@ describe("/company slash argument mapping (company library)", () => {
           "[Company queued] 1 agents (engineering) will execute: audit code",
         )
       } finally {
-        if (savedCompanyDir === undefined) delete process.env.TRAYAMBAK_COMPANY_DIR
-        else process.env.TRAYAMBAK_COMPANY_DIR = savedCompanyDir
-        if (savedConfig === undefined) delete process.env.TRAYAMBAK_CONFIG
-        else process.env.TRAYAMBAK_CONFIG = savedConfig
+        if (savedCompanyDir === undefined) delete process.env.NEMO_COMPANY_DIR
+        else process.env.NEMO_COMPANY_DIR = savedCompanyDir
+        if (savedConfig === undefined) delete process.env.NEMO_CONFIG
+        else process.env.NEMO_CONFIG = savedConfig
       }
     } finally {
       fs.rmSync(lib, { recursive: true, force: true })
@@ -229,7 +229,7 @@ describe("/company slash argument mapping (company library)", () => {
   })
 
   it("on/off gates runs, enable/disable toggles a department, status reports", async () => {
-    const lib = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-dispatch-company-flags-"))
+    const lib = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-dispatch-company-flags-"))
     try {
       const eng = path.join(lib, "engineering")
       fs.mkdirSync(eng, { recursive: true })
@@ -237,10 +237,10 @@ describe("/company slash argument mapping (company library)", () => {
         path.join(eng, "engineering-code-reviewer.md"),
         "---\nname: Code Reviewer\ndescription: Reviews code like a mentor.\n---\n\n# Code Reviewer\n",
       )
-      const savedCompanyDir = process.env.TRAYAMBAK_COMPANY_DIR
-      const savedConfig = process.env.TRAYAMBAK_CONFIG
-      process.env.TRAYAMBAK_COMPANY_DIR = lib
-      process.env.TRAYAMBAK_CONFIG = path.join(lib, "test-config.json")
+      const savedCompanyDir = process.env.NEMO_COMPANY_DIR
+      const savedConfig = process.env.NEMO_CONFIG
+      process.env.NEMO_COMPANY_DIR = lib
+      process.env.NEMO_CONFIG = path.join(lib, "test-config.json")
       try {
         expect((await dispatch("/company off")).output).toContain("Company OFF")
         expect((await dispatch("/company run code reviewer hi")).output).toContain("Company is OFF")
@@ -253,10 +253,10 @@ describe("/company slash argument mapping (company library)", () => {
         expect((await dispatch("/company list engineering")).output).toContain("Code Reviewer")
         expect((await dispatch("/company disable nope")).output).toContain("Unknown division: nope")
       } finally {
-        if (savedCompanyDir === undefined) delete process.env.TRAYAMBAK_COMPANY_DIR
-        else process.env.TRAYAMBAK_COMPANY_DIR = savedCompanyDir
-        if (savedConfig === undefined) delete process.env.TRAYAMBAK_CONFIG
-        else process.env.TRAYAMBAK_CONFIG = savedConfig
+        if (savedCompanyDir === undefined) delete process.env.NEMO_COMPANY_DIR
+        else process.env.NEMO_COMPANY_DIR = savedCompanyDir
+        if (savedConfig === undefined) delete process.env.NEMO_CONFIG
+        else process.env.NEMO_CONFIG = savedConfig
       }
     } finally {
       fs.rmSync(lib, { recursive: true, force: true })

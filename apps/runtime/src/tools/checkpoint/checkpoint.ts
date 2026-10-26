@@ -1,13 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * trayambak__Checkpoint — copy explicit files into
- * `.trayambak/checkpoints/<id>/files/<mirrored-path>` with a sha256 manifest so
- * trayambak__Rewind can put them back byte-for-byte.
+ * nemo__Checkpoint — copy explicit files into
+ * `.nemo/checkpoints/<id>/files/<mirrored-path>` with a sha256 manifest so
+ * nemo__Rewind can put them back byte-for-byte.
  *
  * Coexists with the automatic CheckpointStore (../../checkpoints.ts): that store
  * owns `objects/`, `cp-NNNN/` and `stacks.json` under the same root, while this
@@ -61,9 +61,9 @@ export type TargetProbe = { ok: true; target: string; rel: string; exists: boole
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
-  name: "trayambak__Checkpoint",
+  name: "nemo__Checkpoint",
   description:
-    "Snapshot files into .trayambak/checkpoints/<id>/ (sha256 manifest) so trayambak__Rewind can restore them byte-for-byte.",
+    "Snapshot files into .nemo/checkpoints/<id>/ (sha256 manifest) so nemo__Rewind can restore them byte-for-byte.",
   parameters: {
     type: "object",
     required: ["paths"],
@@ -81,9 +81,9 @@ const definition: ToolDefinition = {
   },
 }
 
-/** Root shared with CheckpointStore: `<cwd>/.trayambak/checkpoints`. */
+/** Root shared with CheckpointStore: `<cwd>/.nemo/checkpoints`. */
 export function checkpointsRoot(cwd: string): string {
-  return path.join(cwd, ".trayambak", "checkpoints")
+  return path.join(cwd, ".nemo", "checkpoints")
 }
 
 /** True when `target` is `base` itself or a path below it. */

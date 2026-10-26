@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -105,7 +105,7 @@ async function main() {
     const top = rel.split(path.sep)[0]
     if (entry.isDirectory() && (top === "test" || top === "tests" || top === "__tests__")) return true
     // The mistake journal is private dev/user state — never publish it.
-    if (entry.isFile() && path.basename(full) === "mistakes.json" && rel.startsWith(`skt${path.sep}`)) return true
+    if (entry.isFile() && path.basename(full) === "mistakes.json" && rel.startsWith(`nemo${path.sep}`)) return true
     return false
   })
 
@@ -305,9 +305,9 @@ async function main() {
   if (files.length !== allJs.length) {
     console.log(`publish: ${allJs.length - files.length} bundled-asset .js file(s) ship as-is (no obfuscation).`)
   }
-  const skipObfuscation = process.env.TRAYAMBAK_SKIP_OBFUSCATION === "1" || process.argv.includes("--skip-obfuscation")
+  const skipObfuscation = process.env.NEMO_SKIP_OBFUSCATION === "1" || process.argv.includes("--skip-obfuscation")
   if (skipObfuscation) {
-    console.log("publish: obfuscation skipped (TRAYAMBAK_SKIP_OBFUSCATION=1 or --skip-obfuscation) — debuggable build.")
+    console.log("publish: obfuscation skipped (NEMO_SKIP_OBFUSCATION=1 or --skip-obfuscation) — debuggable build.")
   } else {
     console.log(`publish: obfuscating ${files.length} .js files …`)
     const ts = require("typescript")
@@ -397,7 +397,7 @@ async function main() {
           const result = JavaScriptObfuscator.obfuscate(code, options)
           const obfuscated = result.getObfuscatedCode()
           writeVerified(file, code, options, obfuscated)
-          if (file.endsWith("skt/9-session/session.js") || file.endsWith("skt\\9-session\\session.js")) {
+          if (file.endsWith("nemo/9-session/session.js") || file.endsWith("nemo\\9-session\\session.js")) {
             console.log(
               `publish: DEBUG session.js output keeps backfill=${obfuscated.includes("'backfillUntitledSessions'")}`,
             )
@@ -442,16 +442,16 @@ async function main() {
 
   const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
   const publishPkg = {
-    name: "@skt-ai-labs/trayambak-cli",
+    name: "@shrijan/nemo-cli",
     version: rootPkg.version,
-    description: "Trayambak — local-first terminal coding agent by SKT AI LABS PRIVATE LIMITED.",
+    description: "Nemo — local-first terminal coding agent by Shrijan.",
     license: rootPkg.license,
     author: rootPkg.author,
     type: rootPkg.type,
     engines: rootPkg.engines,
     bin: {
-      trayambak: "dist/apps/cli/src/index.js",
-      skt: "dist/apps/cli/src/index.js",
+      nemo: "dist/apps/cli/src/index.js",
+      nemo: "dist/apps/cli/src/index.js",
     },
     files: ["dist", "Img"],
     dependencies: rootPkg.dependencies,

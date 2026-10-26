@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -20,14 +20,14 @@ let dir = ""
 let priorDir: string | undefined
 
 beforeEach(() => {
-  priorDir = process.env.TRAYAMBAK_SESSIONS_DIR
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-resume-"))
-  process.env.TRAYAMBAK_SESSIONS_DIR = dir
+  priorDir = process.env.NEMO_SESSIONS_DIR
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-resume-"))
+  process.env.NEMO_SESSIONS_DIR = dir
 })
 
 afterEach(() => {
-  if (priorDir === undefined) delete process.env.TRAYAMBAK_SESSIONS_DIR
-  else process.env.TRAYAMBAK_SESSIONS_DIR = priorDir
+  if (priorDir === undefined) delete process.env.NEMO_SESSIONS_DIR
+  else process.env.NEMO_SESSIONS_DIR = priorDir
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
@@ -71,8 +71,8 @@ describe("transcriptPathFor", () => {
   })
 
   it("falls back to a home directory when the env var is absent", () => {
-    delete process.env.TRAYAMBAK_SESSIONS_DIR
-    expect(sessionsDir()).toBe(path.join(os.homedir(), ".trayambak", "sessions"))
+    delete process.env.NEMO_SESSIONS_DIR
+    expect(sessionsDir()).toBe(path.join(os.homedir(), ".nemo", "sessions"))
   })
 })
 

@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest"
 import { createHmac } from "node:crypto"
 import { mkdtempSync, writeFileSync } from "node:fs"
@@ -49,7 +53,7 @@ describe("agent HTTP server", () => {
       expect(token).toMatch(/^[0-9a-f]{64}$/)
       // ...so the agent endpoint, the session index, the model list and the
       // license-admin tooling all refuse unauthenticated callers.
-      for (const path of ["/v1/models", "/api/sessions", "/admin/licenses", "/admin/usage"]) {
+      for (const path of ["/v1/models", "/api/sessions", "/admin/licenses"]) {
         const bare = await fetch(`${base(port)}${path}`)
         expect(bare.status, path).toBe(401)
       }
@@ -177,9 +181,9 @@ describe("agent HTTP server", () => {
   })
 
   it("honors an explicit origin allowlist and only restores the wildcard on demand", async () => {
-    const listed = await boot({ token: "secret", corsOrigins: "https://console.skt.dev" })
+    const listed = await boot({ token: "secret", corsOrigins: "https://console.nemo.dev" })
     try {
-      const ok = await fetch(`${base(listed.port)}/health`, { headers: { Origin: "https://console.skt.dev" } })
+      const ok = await fetch(`${base(listed.port)}/health`, { headers: { Origin: "https://console.nemo.dev" } })
       expect(ok.status).toBe(200)
       const nope = await fetch(`${base(listed.port)}/health`, { headers: { Origin: "https://evil.example" } })
       expect(nope.status).toBe(403)
@@ -219,11 +223,11 @@ describe("agent HTTP server", () => {
 
   it("clamps the agent run timeout (server-side socket ceiling)", () => {
     expect(agentRunTimeoutMs({} as NodeJS.ProcessEnv)).toBe(120_000)
-    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "30000" } as NodeJS.ProcessEnv)).toBe(30_000)
+    expect(agentRunTimeoutMs({ NEMO_AGENT_TIMEOUT_MS: "30000" } as NodeJS.ProcessEnv)).toBe(30_000)
     // Absurd values clamp instead of disabling the ceiling.
-    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "0" } as NodeJS.ProcessEnv)).toBe(5_000)
-    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "99999999" } as NodeJS.ProcessEnv)).toBe(600_000)
-    expect(agentRunTimeoutMs({ TRAYAMBAK_AGENT_TIMEOUT_MS: "garbage" } as NodeJS.ProcessEnv)).toBe(120_000)
+    expect(agentRunTimeoutMs({ NEMO_AGENT_TIMEOUT_MS: "0" } as NodeJS.ProcessEnv)).toBe(5_000)
+    expect(agentRunTimeoutMs({ NEMO_AGENT_TIMEOUT_MS: "99999999" } as NodeJS.ProcessEnv)).toBe(600_000)
+    expect(agentRunTimeoutMs({ NEMO_AGENT_TIMEOUT_MS: "garbage" } as NodeJS.ProcessEnv)).toBe(120_000)
   })
 
   it("only allows session files inside the sessions directory", () => {
@@ -264,13 +268,13 @@ describe("agent HTTP server", () => {
       const anon = await fetch(`${base(port)}/admin/mint`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "pentest", days: 30 }),
+        body: JSON.stringify({ plan: "pro", days: 30 }),
       })
       expect(anon.status).toBe(401)
       for (const bad of [
         { plan: "gold", days: 30 },
-        { plan: "pentest", days: 0 },
-        { plan: "pentest", days: 99999 },
+        { plan: "pro", days: 0 },
+        { plan: "pro", days: 99999 },
         {},
       ]) {
         const r = await fetch(`${base(port)}/admin/mint`, {
@@ -303,7 +307,7 @@ describe("agent HTTP server", () => {
 })
 
 afterAll(() => {
-  delete process.env.TRAYAMBAK_WEB_TOKEN
+  delete process.env.NEMO_WEB_TOKEN
   vi.unstubAllEnvs()
 })
 
@@ -324,13 +328,12 @@ describe("server-side licensing", () => {
     const { port, close } = await boot({
       token: "secret",
       licenseStorePath: join(dir, "licenses.json"),
-      licenseUsagePath: join(dir, "usage.jsonl"),
       githubOAuthPath: join(dir, "oauth.json"),
     })
     return { port, auth: { Authorization: "Bearer secret" }, close }
   }
 
-  async function mint(port: number, auth: Record<string, string>, plan = "pentest", days = 90): Promise<string> {
+  async function mint(port: number, auth: Record<string, string>, plan = "pro", days = 90): Promise<string> {
     const r = await fetch(`${base(port)}/admin/mint`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...auth },
@@ -356,18 +359,17 @@ describe("server-side licensing", () => {
       expect(gated.status).toBe(401)
       const installer = await fetch(`${base(port)}/install.ps1`)
       expect(installer.status).toBe(200)
-      expect(await installer.text()).toContain("npm install -g @skt-ai-labs/trayambak-cli")
+      expect(await installer.text()).toContain("npm install -g @shrijan/nemo-cli")
       // macOS/Linux one-liner serves the animated bash installer too.
       const sh = await fetch(`${base(port)}/install.sh`)
       expect(sh.status).toBe(200)
-      expect(await sh.text()).toContain("npm install -g @skt-ai-labs/trayambak-cli")
+      expect(await sh.text()).toContain("npm install -g @shrijan/nemo-cli")
       // Docs pages serve as markdown; traversal and odd names 404.
       const docDir = mkdtempSync(join(tmpdir(), "lic-doc-"))
       writeFileSync(join(docDir, "getting-started.md"), "# Getting started\n")
       const { port: portDocs, close: closeDocs } = await boot({
         token: "secret",
         licenseStorePath: join(mkdtempSync(join(tmpdir(), "lic-doc1-")), "l.json"),
-        licenseUsagePath: join(mkdtempSync(join(tmpdir(), "lic-doc2-")), "u.jsonl"),
         githubOAuthPath: join(mkdtempSync(join(tmpdir(), "lic-doc3-")), "o.json"),
         imgDir: docDir,
         docsDir: docDir,
@@ -390,7 +392,6 @@ describe("server-side licensing", () => {
       const { port: port2, close: close2 } = await boot({
         token: "secret",
         licenseStorePath: join(mkdtempSync(join(tmpdir(), "lic-img2-")), "l.json"),
-        licenseUsagePath: join(mkdtempSync(join(tmpdir(), "lic-img3-")), "u.jsonl"),
         githubOAuthPath: join(mkdtempSync(join(tmpdir(), "lic-img4-")), "o.json"),
         imgDir,
       })
@@ -435,7 +436,7 @@ describe("server-side licensing", () => {
         plan?: string
       }
       expect(act.ok).toBe(true)
-      expect(act.plan).toBe("pentest")
+      expect(act.plan).toBe("pro")
       expect(
         ((await (await post("/license/activate", { key, machineId: "machine-1" })).json()) as { ok: boolean }).ok,
       ).toBe(true)
@@ -444,7 +445,7 @@ describe("server-side licensing", () => {
         valid: boolean
         plan?: string
       }
-      expect(ok).toMatchObject({ valid: true, plan: "pentest" })
+      expect(ok).toMatchObject({ valid: true, plan: "pro" })
       const other = (await (await post("/license/verify", { key, machineId: "machine-2" })).json()) as {
         valid: boolean
         reason?: string
@@ -453,27 +454,12 @@ describe("server-side licensing", () => {
       expect(other.reason ?? "").toContain("another machine")
       const clash = (await (await post("/license/activate", { key, machineId: "machine-2" })).json()) as { ok: boolean }
       expect(clash.ok).toBe(false)
-      // Usage audit: bound machine records, stranger gets 403.
-      const use = await post("/license/usage", {
-        key,
-        machineId: "machine-1",
-        tool: "trayambak__PentestRunTool",
-        target: "example.com",
-      })
-      expect(use.status).toBe(200)
-      const useNo = await post("/license/usage", { key, machineId: "machine-2", tool: "trayambak__PentestRunTool" })
-      expect(useNo.status).toBe(403)
-      // Admin sees the masked license + the usage line.
+      // Admin sees the masked license.
       const list = (await (await fetch(`${base(port)}/admin/licenses`, { headers: auth })).json()) as {
         licenses: Array<{ bound: boolean; plan: string }>
       }
       expect(list.licenses).toHaveLength(1)
-      expect(list.licenses[0]).toMatchObject({ bound: true, plan: "pentest" })
-      const usage = (await (await fetch(`${base(port)}/admin/usage?tail=10`, { headers: auth })).json()) as {
-        usage: Array<{ tool: string; target: string }>
-      }
-      expect(usage.usage).toHaveLength(1)
-      expect(usage.usage[0]).toMatchObject({ tool: "trayambak__PentestRunTool", target: "example.com" })
+      expect(list.licenses[0]).toMatchObject({ bound: true, plan: "pro" })
       // Unbind migrates the key; revoke kills it.
       expect(((await (await post("/admin/unbind", { id: key }, auth)).json()) as { ok: boolean }).ok).toBe(true)
       expect(
@@ -498,7 +484,7 @@ describe("server-side licensing", () => {
         await import("../../../apps/runtime/src/license.js")
       const today = Math.floor(Date.now() / 86400000)
       const forged = mintActivationKey(
-        { plan: "pentest", expDays: today - activationEpochDays() + 90 },
+        { plan: "pro", expDays: today - activationEpochDays() + 90 },
         activationCheckKey(),
       )
       const r = await fetch(`${base(port)}/license/verify`, {
@@ -525,7 +511,7 @@ describe("server-side licensing", () => {
         await import("../../../apps/runtime/src/license.js")
       const today = Math.floor(Date.now() / 86400000)
       const legacy = mintLegacyActivationKey(
-        { plan: "pentest", expDays: today - activationEpochDays() + 365 },
+        { plan: "pro", expDays: today - activationEpochDays() + 365 },
         activationCheckKey(),
       )
       const imp = await fetch(`${base(port)}/admin/import`, {
@@ -581,7 +567,7 @@ describe("server-side licensing", () => {
           body: JSON.stringify({ key, machineId }),
         })
       expect(((await (await verify(t.key, "trial-machine-1")).json()) as { valid: boolean; plan: string }).plan).toBe(
-        "pentest",
+        "pro",
       )
       expect(((await (await verify(t.key, "trial-machine-2")).json()) as { valid: boolean }).valid).toBe(false)
       // One live trial per machine.
@@ -589,18 +575,7 @@ describe("server-side licensing", () => {
       expect(again.status).toBe(409)
       // …but a fresh machine gets its own.
       expect((await trial("trial-machine-2")).status).toBe(200)
-      // Usage audit works on the trial, and the admin list flags it.
-      const use = await fetch(`${base(port)}/license/usage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          key: t.key,
-          machineId: "trial-machine-1",
-          tool: "trayambak__PentestRunTool",
-          target: "evil.example",
-        }),
-      })
-      expect(use.status).toBe(200)
+      // The admin list flags it as a trial.
       const list = (await (await fetch(`${base(port)}/admin/licenses`, { headers: auth })).json()) as {
         licenses: Array<{ id: string; trial: boolean; bound: boolean }>
       }
@@ -705,7 +680,6 @@ describe("VPS-routed GitHub writes", () => {
     return boot({
       token: "secret",
       licenseStorePath: join(dir, "l.json"),
-      licenseUsagePath: join(dir, "u.jsonl"),
       githubOAuthPath: join(dir, "oauth.json"),
     })
   }
@@ -724,7 +698,6 @@ describe("VPS-routed GitHub writes", () => {
     const { port, close } = await boot({
       token: "secret",
       licenseStorePath: join(mkdtempSync(join(tmpdir(), "gh-vps-out-")), "l.json"),
-      licenseUsagePath: join(mkdtempSync(join(tmpdir(), "gh-vps-out2-")), "u.jsonl"),
       githubOAuthPath: join(mkdtempSync(join(tmpdir(), "gh-vps-out3-")), "o.json"),
     })
     try {
@@ -782,7 +755,7 @@ describe("VPS-routed GitHub writes", () => {
           ? { status: 201, json: { commit: { sha: "bbb2222" } } }
           : { status: 404, json: { message: "Not Found" } }
       if (u.includes("/git/ref/heads/main")) return { status: 200, json: { object: { sha: "abc123" } } }
-      if (u.includes("/git/refs")) return { status: 201, json: { ref: "refs/heads/trayambak/x" } }
+      if (u.includes("/git/refs")) return { status: 201, json: { ref: "refs/heads/nemo/x" } }
       if (u.includes("/pulls")) return { status: 201, json: { number: 7, html_url: "https://github.com/o/r/pull/7" } }
       if (u.endsWith("/repos/o/r")) return { status: 200, json: { default_branch: "main" } }
       return { status: 404, json: { message: "Not Found" } }
@@ -815,14 +788,14 @@ describe("VPS-routed GitHub writes", () => {
       })
       expect(evil.status).toBe(400)
 
-      const br = await post(port, "/github/branch", { machineId: "machine-1", repo: "o/r", branch: "trayambak/x" })
+      const br = await post(port, "/github/branch", { machineId: "machine-1", repo: "o/r", branch: "nemo/x" })
       expect(br.status).toBe(200)
       expect(((await br.json()) as { ok: boolean; base: string }).base).toBe("main")
 
       const pr = await post(port, "/github/pr", {
         machineId: "machine-1",
         repo: "o/r",
-        head: "trayambak/x",
+        head: "nemo/x",
         title: "Fix",
       })
       expect(pr.status).toBe(200)

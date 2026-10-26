@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -83,7 +83,7 @@ describe("searchSymbols", () => {
   })
 
   function fixture(): string {
-    root = mkdtempSync(join(tmpdir(), "trayambak-symbols-"))
+    root = mkdtempSync(join(tmpdir(), "nemo-symbols-"))
     writeFileSync(join(root, "a.ts"), "export function startServer() {}\nstartServer();\n")
     writeFileSync(join(root, "b.py"), "def startServer():\n    pass\n")
     writeFileSync(join(root, "notes.md"), "startServer mentioned here\n")
@@ -121,7 +121,7 @@ describe("createSymbolSearchTool", () => {
   })
 
   it("reports definitions and empty results honestly", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "trayambak-symbols-"))
+    const dir = mkdtempSync(join(tmpdir(), "nemo-symbols-"))
     try {
       writeFileSync(join(dir, "s.ts"), "export class Engine {}\n")
       const tool = createSymbolSearchTool()

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -27,8 +27,8 @@ import {
 
 const roots: string[] = []
 
-/** Temp install root carrying trayambak's package.json marker. */
-function makeRoot(version = "0.3.0", name = "Trayambak"): string {
+/** Temp install root carrying nemo's package.json marker. */
+function makeRoot(version = "0.3.0", name = "Nemo"): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "auto-update-"))
   roots.push(dir)
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name, version }), "utf8")
@@ -55,7 +55,7 @@ describe("parseVersion", () => {
   })
 })
 
-describe("getReleaseType (SKT AI LABS port)", () => {
+describe("getReleaseType (Shrijan port)", () => {
   it("classifies major/minor/patch jumps", () => {
     expect(getReleaseType("0.3.0", "1.0.0")).toBe("major")
     expect(getReleaseType("0.3.0", "0.4.0")).toBe("minor")
@@ -72,13 +72,13 @@ describe("getReleaseType (SKT AI LABS port)", () => {
 
 describe("detectMethod", () => {
   it("prefers npm for node_modules installs, then git, then source", () => {
-    expect(detectMethod("C:\\somewhere", "C:\\node_modules\\Trayambak\\dist\\index.js")).toBe("npm")
-    expect(detectMethod("/somewhere", "/opt/node_modules/Trayambak/dist/index.js")).toBe("npm")
+    expect(detectMethod("C:\\somewhere", "C:\\node_modules\\Nemo\\dist\\index.js")).toBe("npm")
+    expect(detectMethod("/somewhere", "/opt/node_modules/Nemo/dist/index.js")).toBe("npm")
     const gitRoot = makeRoot()
     fs.mkdirSync(path.join(gitRoot, ".git"))
-    expect(detectMethod(gitRoot, "C:\\trayambak\\dist\\index.js")).toBe("git")
+    expect(detectMethod(gitRoot, "C:\\nemo\\dist\\index.js")).toBe("git")
     expect(detectMethod(gitRoot, "")).toBe("git")
-    expect(detectMethod(makeRoot(), "C:\\trayambak\\dist\\index.js")).toBe("source")
+    expect(detectMethod(makeRoot(), "C:\\nemo\\dist\\index.js")).toBe("source")
     expect(detectMethod("", "")).toBe("unknown")
   })
 })
@@ -112,8 +112,8 @@ describe("fetchLatestNpmVersion", () => {
       seen.push(url)
       return okBody("9.9.9")
     }
-    expect(await fetchLatestNpmVersion("Trayambak", impl)).toBe("9.9.9")
-    expect(seen[0]).toBe("https://registry.npmjs.org/trayambak/latest")
+    expect(await fetchLatestNpmVersion("Nemo", impl)).toBe("9.9.9")
+    expect(seen[0]).toBe("https://registry.npmjs.org/nemo/latest")
   })
 
   it("returns undefined on non-ok responses, throws, and malformed bodies", async () => {
@@ -142,7 +142,7 @@ describe("fetchLatestNpmVersion", () => {
 })
 
 describe("findInstallRoot / getInstalledVersion", () => {
-  it("finds the nearest trayambak-named package.json walking up", () => {
+  it("finds the nearest nemo-named package.json walking up", () => {
     const root = makeRoot("9.9.9")
     const nested = path.join(root, "a", "b")
     fs.mkdirSync(nested, { recursive: true })
@@ -158,38 +158,38 @@ describe("findInstallRoot / getInstalledVersion", () => {
     expect(getInstalledVersion({ startDir: dir, env: {} })).toBeUndefined()
   })
 
-  it("honors TRAYAMBAK_HOME when it points at a valid root", () => {
+  it("honors NEMO_HOME when it points at a valid root", () => {
     const root = makeRoot("7.7.7")
     const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "auto-update-else-"))
     roots.push(elsewhere)
-    expect(findInstallRoot({ startDir: elsewhere, env: { TRAYAMBAK_HOME: root } })).toBe(root)
-    expect(getInstalledVersion({ startDir: elsewhere, env: { TRAYAMBAK_HOME: root } })).toBe("7.7.7")
-    // A bogus TRAYAMBAK_HOME falls back to the walk-up.
-    expect(findInstallRoot({ startDir: root, env: { TRAYAMBAK_HOME: elsewhere } })).toBe(root)
+    expect(findInstallRoot({ startDir: elsewhere, env: { NEMO_HOME: root } })).toBe(root)
+    expect(getInstalledVersion({ startDir: elsewhere, env: { NEMO_HOME: root } })).toBe("7.7.7")
+    // A bogus NEMO_HOME falls back to the walk-up.
+    expect(findInstallRoot({ startDir: root, env: { NEMO_HOME: elsewhere } })).toBe(root)
   })
 
-  it("prefers the running module's root over a stale TRAYAMBAK_HOME (no hijack)", () => {
-    // Observed live: a persistent TRAYAMBAK_HOME pointing at a source
+  it("prefers the running module's root over a stale NEMO_HOME (no hijack)", () => {
+    // Observed live: a persistent NEMO_HOME pointing at a source
     // checkout made every global install compare/upgrade the WRONG tree
     // (source version, unscoped package name) — auto-update never fired.
-    const stale = makeRoot("1.1.1", "trayambak")
-    const live = makeRoot("0.6.7", "@skt-ai-labs/trayambak-cli")
+    const stale = makeRoot("1.1.1", "nemo")
+    const live = makeRoot("0.6.7", "@shrijan/nemo-cli")
     const nested = path.join(live, "dist", "apps", "runtime", "src", "update")
     fs.mkdirSync(nested, { recursive: true })
-    expect(findInstallRoot({ startDir: nested, env: { TRAYAMBAK_HOME: stale } })).toBe(live)
-    expect(getInstalledVersion({ startDir: nested, env: { TRAYAMBAK_HOME: stale } })).toBe("0.6.7")
+    expect(findInstallRoot({ startDir: nested, env: { NEMO_HOME: stale } })).toBe(live)
+    expect(getInstalledVersion({ startDir: nested, env: { NEMO_HOME: stale } })).toBe("0.6.7")
   })
 
   it("recognizes the published scoped package name (production installs)", () => {
-    expect(isInstallRootName("trayambak")).toBe(true)
-    expect(isInstallRootName("Trayambak")).toBe(true)
-    expect(isInstallRootName("@skt-ai-labs/trayambak-cli")).toBe(true)
-    expect(isInstallRootName("@SKT-AI-LABS/TRAYAMBAK-CLI")).toBe(true)
+    expect(isInstallRootName("nemo")).toBe(true)
+    expect(isInstallRootName("Nemo")).toBe(true)
+    expect(isInstallRootName("@shrijan/nemo-cli")).toBe(true)
+    expect(isInstallRootName("@SHRIJAN/NEMO-CLI")).toBe(true)
     expect(isInstallRootName("someone-else")).toBe(false)
     expect(isInstallRootName(undefined)).toBe(false)
     expect(isInstallRootName(42)).toBe(false)
     // The published layout (scoped name, no source-tree marker) locates.
-    const root = makeRoot("0.6.5", "@skt-ai-labs/trayambak-cli")
+    const root = makeRoot("0.6.5", "@shrijan/nemo-cli")
     const nested = path.join(root, "dist", "apps", "cli", "src")
     fs.mkdirSync(nested, { recursive: true })
     expect(findInstallRoot({ startDir: nested, env: {} })).toBe(root)
@@ -240,7 +240,7 @@ describe("runCapture (#79)", () => {
   })
 })
 
-describe("checkForUpdate policy (SKT AI LABS upgrade() port)", () => {
+describe("checkForUpdate policy (Shrijan upgrade() port)", () => {
   async function run(
     root: string,
     overrides: {
@@ -277,9 +277,9 @@ describe("checkForUpdate policy (SKT AI LABS upgrade() port)", () => {
     const root = makeRoot()
     const off = await run(root, { autoupdate: false, latest: "0.3.1" })
     expect(off.outcome).toEqual({ kind: "skipped", reason: "autoupdate disabled" })
-    const killed = await run(root, { env: { TRAYAMBAK_DISABLE_AUTOUPDATE: "1" }, latest: "0.3.1" })
+    const killed = await run(root, { env: { NEMO_DISABLE_AUTOUPDATE: "1" }, latest: "0.3.1" })
     expect(killed.outcome.kind).toBe("skipped")
-    const noopFlag = await run(root, { env: { TRAYAMBAK_DISABLE_AUTOUPDATE: "0" }, method: "npm", latest: "0.3.1" })
+    const noopFlag = await run(root, { env: { NEMO_DISABLE_AUTOUPDATE: "0" }, method: "npm", latest: "0.3.1" })
     expect(noopFlag.outcome.kind).toBe("updated") // "0"/"false" values don't disable
   })
 
@@ -330,14 +330,14 @@ describe("checkForUpdate policy (SKT AI LABS upgrade() port)", () => {
     expect(major.applied).toEqual([])
   })
 
-  it("auto-applies npm patches under autoupdate: true (SKT AI LABS parity)", async () => {
+  it("auto-applies npm patches under autoupdate: true (Shrijan parity)", async () => {
     const root = makeRoot()
     const { outcome, applied } = await run(root, { method: "npm", latest: "0.3.1" })
     expect(outcome).toEqual({ kind: "updated", previous: "0.3.0", latest: "0.3.1" })
     expect(applied).toEqual(["npm:0.3.1"])
   })
 
-  it("never auto-applies git patches — trayambak deviation, notify instead", async () => {
+  it("never auto-applies git patches — nemo deviation, notify instead", async () => {
     const root = makeRoot()
     const { outcome, applied } = await run(root, { method: "git", latest: "0.3.1" })
     expect(outcome).toMatchObject({ kind: "update-available", releaseType: "patch", auto: false })
@@ -370,7 +370,7 @@ describe("checkForUpdate policy (SKT AI LABS upgrade() port)", () => {
   it("flows end to end on the published layout (scoped name + npm method)", async () => {
     // Regression: the published tarball's scoped package.json used to miss
     // the root marker, so production installs skipped before any check ran.
-    const root = makeRoot("0.6.5", "@skt-ai-labs/trayambak-cli")
+    const root = makeRoot("0.6.5", "@shrijan/nemo-cli")
     const { outcome, applied } = await run(root, { method: "npm", latest: "0.6.6" })
     expect(outcome).toEqual({ kind: "updated", previous: "0.6.5", latest: "0.6.6" })
     expect(applied).toEqual(["npm:0.6.6"])

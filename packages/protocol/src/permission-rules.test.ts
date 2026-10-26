@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it, beforeEach } from "vitest"
@@ -38,7 +38,7 @@ describe("permissionSubject", () => {
     // These used to fall back to the JSON blob, letting a rule pattern
     // match against an unrelated field of the same args object.
     expect(permissionSubject({ action: "get_prompt", name: "summarize" })).toBe("summarize")
-    expect(permissionSubject({ toolName: "nmap", target: "10.0.0.5" })).toBe("10.0.0.5")
+    expect(permissionSubject({ toolName: "http_request", target: "10.0.0.5" })).toBe("10.0.0.5")
     // More specific keys still win over name/target.
     expect(permissionSubject({ name: "bot", path: "/etc/passwd" })).toBe("/etc/passwd")
     expect(permissionSubject({ command: "ls", target: "host" })).toBe("ls")
@@ -126,7 +126,7 @@ describe("read-only mode", () => {
   })
 })
 
-describe("plan mode (deny-list, SKT AI LABS-style)", () => {
+describe("plan mode (deny-list, Shrijan-style)", () => {
   it("denies mutating tools outright", () => {
     const config = cfg()
     expect(evaluatePermission("write_file", { path: "a" }, config, { uiMode: "plan" }).action).toBe("deny")
@@ -170,9 +170,9 @@ describe("a read-only tool that writes on some actions (#96)", () => {
   // `memory`, `todo`, and `artifact` are in READ_ONLY_TOOLS for their READ
   // actions, but each also creates, overwrites, or deletes files on disk. The
   // gate matched on tool NAME alone, so in read-only and plan mode:
-  //   memory.save    -> ~/.trayambak/memory/memory.json
-  //   todo.write     -> ~/.trayambak/todos/<sessionId>.json
-  //   artifact.create-> <cwd>/skt/10-upload/artifacts/{id,manifest}.json
+  //   memory.save    -> ~/.nemo/memory/memory.json
+  //   todo.write     -> ~/.nemo/todos/<sessionId>.json
+  //   artifact.create-> <cwd>/nemo/10-upload/artifacts/{id,manifest}.json
   // all returned `allow`, and did write. Same shape as the `web_fetch` POST
   // case above: the tool is only read-only for some of its actions.
   const writing: Array<[string, Record<string, unknown>, string]> = [

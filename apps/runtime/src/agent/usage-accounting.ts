@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { getRolloutBudget } from "../../../../packages/core/src/rollout_budget.js"
@@ -13,7 +13,7 @@ import { estimateTokens } from "../../../../packages/core/src/token_budget.js"
  * The provider protocol carries no usage/token fields (`Provider.chat` returns
  * a bare `AssistantMessage`), so both sides are ESTIMATES using the repo-wide
  * `ceil(chars / 4)` convention: `inputText` is what was actually sent,
- * `outputText` is what came back. `codex_rollout_budget_units` is the
+ * `outputText` is what came back. `nemo_rollout_budget_units` is the
  * sanctioned caller-side override (samplingTokenWeight = 1 ⇒ 1 estimated token
  * = 1 unit on BOTH sides); the protected `packages/core` accounting is not
  * touched.
@@ -34,7 +34,7 @@ export function recordModelUsage(inputText: string, outputText: string): void {
     getRolloutBudget().recordUsage({
       input_tokens: inputTokens,
       output_tokens: outputTokens,
-      codex_rollout_budget_units: inputTokens + outputTokens,
+      nemo_rollout_budget_units: inputTokens + outputTokens,
     })
   } catch {
     /* budget accounting is best-effort — never break a turn over it */

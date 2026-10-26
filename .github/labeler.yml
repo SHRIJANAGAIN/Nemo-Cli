@@ -22,7 +22,6 @@ area/runtime-tools:
 
 area/tui:
   - packages/tui/**
-  - packages/trayambak-ink/**
   - apps/cli/src/ui/**
 
 area/skills-rules:
@@ -44,6 +43,5 @@ area/providers:
   - packages/provider/**
   - packages/model*/**
 
-area/telemetry:
-  - packages/telemetry/**
+area/analytics:
   - packages/core/src/analytics.ts

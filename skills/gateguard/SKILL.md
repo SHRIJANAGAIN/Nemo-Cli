@@ -7,14 +7,14 @@ metadata:
 
 # GateGuard — Fact-Forcing Pre-Action Gate
 
-A PreToolUse hook that forces Trayambak to investigate before editing. Instead of self-evaluation ("are you sure?"), it demands concrete facts. The act of investigation creates awareness that self-evaluation never did.
+A PreToolUse hook that forces Nemo to investigate before editing. Instead of self-evaluation ("are you sure?"), it demands concrete facts. The act of investigation creates awareness that self-evaluation never did.
 
 ## When to Activate
 
 - Working on any codebase where file edits affect multiple modules
 - Projects with data files that have specific schemas or date formats
 - Teams where AI-generated code must match existing patterns
-- Any workflow where Trayambak tends to guess instead of investigating
+- Any workflow where Nemo tends to guess instead of investigating
 
 ## Core Concept
 
@@ -137,7 +137,7 @@ For hook-level control, keep using `ECC_DISABLED_HOOKS` with the GateGuard hook 
 
 Patterns are matched, unanchored, against the target path with backslashes
 normalized to `/` and the whole string lowercased — the path exactly as the
-hook receives it, which for Trayambak Code tool payloads is absolute. `*` matches
+hook receives it, which for Nemo Code tool payloads is absolute. `*` matches
 within a path segment, `**` across segments, `?` a single character. Matching
 is fail-open: a malformed pattern is dropped rather than raising.
 

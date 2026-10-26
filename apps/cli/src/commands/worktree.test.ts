@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execSync } from "node:child_process"
@@ -60,7 +60,7 @@ afterAll(() => {
 })
 
 beforeEach(() => {
-  tmp = freshDir("trayambak-worktree-")
+  tmp = freshDir("nemo-worktree-")
   process.chdir(tmp)
   process.exitCode = undefined
 })
@@ -96,7 +96,7 @@ describe("worktreeCommand validation", () => {
   })
 
   it("switch chdirs into an existing directory", () => {
-    const target = freshDir("trayambak-worktree-target-")
+    const target = freshDir("nemo-worktree-target-")
 
     expect(worktreeCommand({ action: "switch", path: target })).toBe(`Switched to worktree at ${target}`)
     expect(path.resolve(process.cwd())).toBe(path.resolve(target))
@@ -136,7 +136,7 @@ describe("worktreeCommand with a real repository", () => {
   it("creates, lists and removes a worktree", ({ skip }) => {
     if (!gitAvailable()) return skip()
 
-    const repo = freshDir("trayambak-worktree-repo-")
+    const repo = freshDir("nemo-worktree-repo-")
     execSync("git init -q", { cwd: repo, stdio: "ignore", timeout: 30_000 })
     execSync(
       "git -c commit.gpgsign=false -c user.email=test@example.com -c user.name=test commit -q --allow-empty -m init",
@@ -144,7 +144,7 @@ describe("worktreeCommand with a real repository", () => {
     )
     process.chdir(repo)
 
-    const wtPath = path.join(freshDir("trayambak-worktree-sibling-"), "wt-clone")
+    const wtPath = path.join(freshDir("nemo-worktree-sibling-"), "wt-clone")
     const created = worktreeCommand({ action: "create", path: wtPath, branch: "wt-feature" })
 
     expect(created).toBe(`Created worktree at ${wtPath} on branch wt-feature`)
@@ -166,7 +166,7 @@ describe("worktreeCommand with a real repository", () => {
   it("defaults the branch name when only a path is given", ({ skip }) => {
     if (!gitAvailable()) return skip()
 
-    const repo = freshDir("trayambak-worktree-repo2-")
+    const repo = freshDir("nemo-worktree-repo2-")
     execSync("git init -q", { cwd: repo, stdio: "ignore", timeout: 30_000 })
     execSync(
       "git -c commit.gpgsign=false -c user.email=test@example.com -c user.name=test commit -q --allow-empty -m init",
@@ -174,7 +174,7 @@ describe("worktreeCommand with a real repository", () => {
     )
     process.chdir(repo)
 
-    const wtPath = path.join(freshDir("trayambak-worktree-sibling2-"), "wt-default")
+    const wtPath = path.join(freshDir("nemo-worktree-sibling2-"), "wt-default")
     const created = worktreeCommand({ action: "create", path: wtPath })
 
     expect(created).toMatch(/^Created worktree at .+ on branch wt-[a-z0-9]+$/)

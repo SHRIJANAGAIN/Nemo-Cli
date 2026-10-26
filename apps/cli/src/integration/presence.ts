@@ -1,4 +1,4 @@
-export * as TrayambakPresence from "./presence"
+export * as NemoPresence from "./presence"
 
 export interface PresenceState {
   readonly userId: string

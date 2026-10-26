@@ -42,14 +42,14 @@ const stripAnsi = (text) =>
     .replace(/\x1b[=>]/g, "")
 
 const BLANK = "\x1b[2J\x1b[H"
-// Frame anchor: the composer placeholder row. The old "Welcome To Trayambak
+// Frame anchor: the composer placeholder row. The old "Welcome To Nemo
 // CLI" banner line was deliberately replaced by the live clock
 // (WelcomeScreen.tsx formatClock) — that literal no longer renders, and
 // anchoring on it failed this smoke's boot check and cascaded 5 fails
 // against a healthy build. The composer row appears exactly once per frame
 // and spans the frame width, which is what the stack/stale-width checks
 // below measure (same anchor diag-boot-frame-leak.mjs counts).
-const ANCHOR = "Ask Trayambak to do anything"
+const ANCHOR = "Ask Nemo to do anything"
 
 let failures = 0
 const check = (ok, label) => {
@@ -75,15 +75,15 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(dist("index.js"))
+const { NemoApp } = await import(dist("index.js"))
 const { createResizeRedrawGuard } = await import(dist("resize-guard.js"))
 
 // Same wiring as ink-repl.mjs: guard listener registered BEFORE render()
 // (so it precedes Ink's own 'resize' handler), instance attached after.
 const resizeGuard = createResizeRedrawGuard(stdout)
 const instance = render(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark", baseUrl: "http://localhost:1", apiKey: "x" },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark", baseUrl: "http://localhost:1", apiKey: "x" },
   }),
   { stdin, stdout, patchConsole: false },
 )
@@ -271,14 +271,14 @@ check(post.includes(BLANK), "height shrink → viewport blanked (frame-outlives-
 // ── 4. Subsequent renders still work (counters not left broken) ────────
 mark = sink.length
 instance.rerender(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark", baseUrl: "http://localhost:1", apiKey: "x" },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark", baseUrl: "http://localhost:1", apiKey: "x" },
   }),
 )
 await wait(300)
 post = stripAnsi(sink.slice(mark))
 check(
-  post.length === 0 || post.includes(ANCHOR) || post.includes("TRAYAMBAK"),
+  post.length === 0 || post.includes(ANCHOR) || post.includes("NEMO"),
   "post-resize re-render still emits a coherent frame",
 )
 

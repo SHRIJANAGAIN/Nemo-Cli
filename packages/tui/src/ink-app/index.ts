@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-export { TrayambakApp, type TrayambakAppProps, renderTrayambakApp } from "./App.js"
-export { TrayambakLogo, type TrayambakLogoProps } from "./TrayambakLogo.js"
+export { NemoApp, type NemoAppProps, renderNemoApp } from "./App.js"
+export { NemoLogo, type NemoLogoProps } from "./NemoLogo.js"
 export { MessageList, type MessageListProps } from "./MessageList.js"
 export { MessageRow, type MessageRowProps } from "./MessageRow.js"
 export { MessageResponse } from "./MessageResponse.js"
@@ -30,7 +30,7 @@ export { SubagentRow, type SubagentRowProps } from "./SubagentRow.js"
 
 export type {
   PermissionMode,
-  TrayambakMessage,
+  NemoMessage,
   MessagePart,
   ToolCallDisplay,
   ToolCallStatus,

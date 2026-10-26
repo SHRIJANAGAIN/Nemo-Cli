@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -80,17 +80,11 @@ export const SUPERVISOR_MIN_TIMEOUT_MS = 1_000
  * Per-id base URLs used when the config leaves `baseUrl` empty. Mirrors
  * the defaults in `Agent.createProviderForConfig` (providers themselves
  * mostly do NOT default — an empty baseUrl reaches `new URL("")` and
- * throws at chat time). OpenAI-compatible gateways bake their own
- * default into the factory, so they are not listed here.
+ * throws at chat time).
  */
 const BASE_URL_DEFAULTS: Record<string, string> = {
   nvidia: "https://integrate.api.nvidia.com",
   "nvidia-nim": "https://integrate.api.nvidia.com",
-  openai: "https://api.openai.com",
-  xai: "https://api.x.ai",
-  huggingface: "https://router.huggingface.co/v1",
-  anthropic: "https://api.anthropic.com",
-  google: "https://generativelanguage.googleapis.com/v1beta",
   ollama: "http://localhost:11434",
   custom: "http://localhost:8080",
   llamacpp: "http://localhost:8080",

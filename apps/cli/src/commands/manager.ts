@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { loadConfig } from "../../../runtime/src/index.js"
 import { listAgentProfiles } from "./agent.js"
-import { listTasks } from "../../../runtime/src/tools/trayambak/tasks.js"
+import { listTasks } from "../../../runtime/src/tools/nemo/tasks.js"
 import { listPlans } from "./plan.js"
 import { todoListForSession } from "./todo.js"
 
@@ -20,7 +20,7 @@ export function managerCommand(options: ManagerOptions): string {
     case "status": {
       const cfg = loadConfig()
       const lines = [
-        "trayambak Manager Status",
+        "nemo Manager Status",
         `cwd: ${cfg.cwd}`,
         `model: ${cfg.model}`,
         `provider: ${cfg.provider ?? "default"}`,
@@ -58,7 +58,7 @@ export function managerCommand(options: ManagerOptions): string {
       const plans = listPlans()
       const todos = todoListForSession(options.sessionId)
       const lines = [
-        "trayambak Manager Summary",
+        "nemo Manager Summary",
         `agents: ${profiles.length}`,
         `tasks: ${tasks.length}`,
         `plans: ${plans.length}`,

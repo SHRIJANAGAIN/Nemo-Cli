@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest"
@@ -13,7 +13,7 @@ import { CheckpointStore } from "./checkpoints.js"
 let dir: string
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-cp-"))
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-cp-"))
   fs.writeFileSync(path.join(dir, "a.txt"), "original A")
   fs.writeFileSync(path.join(dir, "b.txt"), "original B")
   fs.mkdirSync(path.join(dir, "src"))
@@ -96,7 +96,7 @@ describe("CheckpointStore", () => {
     expect(store.canRedo()).toBe(false)
   })
 
-  it("skips node_modules and .trayambak entirely", () => {
+  it("skips node_modules and .nemo entirely", () => {
     const store = new CheckpointStore(dir)
     fs.mkdirSync(path.join(dir, "node_modules"))
     fs.writeFileSync(path.join(dir, "node_modules", "junk.js"), "junk")
@@ -224,7 +224,7 @@ describe("CheckpointStore", () => {
     expect(second.stateHash).toBe(first.stateHash)
     expect(second.fileCount).toBe(first.fileCount)
     // …and the manifest records the stats that spared the re-read.
-    const manifestPath = path.join(dir, ".trayambak", "checkpoints", `cp-${second.id}`, "manifest.json")
+    const manifestPath = path.join(dir, ".nemo", "checkpoints", `cp-${second.id}`, "manifest.json")
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
       stats?: Record<string, { s: number; m: number }>
     }
@@ -245,7 +245,7 @@ describe("CheckpointStore", () => {
     type Manifest = { files: Record<string, string | null>; stats?: Record<string, { s: number; m: number }> }
     const readManifest = (id: string): Manifest =>
       JSON.parse(
-        fs.readFileSync(path.join(dir, ".trayambak", "checkpoints", `cp-${id}`, "manifest.json"), "utf8"),
+        fs.readFileSync(path.join(dir, ".nemo", "checkpoints", `cp-${id}`, "manifest.json"), "utf8"),
       ) as Manifest
     const store = new CheckpointStore(dir)
     const first = await store.captureAsync("turn 1")
@@ -265,7 +265,7 @@ describe("CheckpointStore", () => {
   it("manifests without stats (pre-cache) still capture and restore", async () => {
     const store = new CheckpointStore(dir)
     store.capture("turn 1")
-    const manifestPath = path.join(dir, ".trayambak", "checkpoints", "cp-0001", "manifest.json")
+    const manifestPath = path.join(dir, ".nemo", "checkpoints", "cp-0001", "manifest.json")
     const stripped = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, unknown>
     delete stripped.stats
     fs.writeFileSync(manifestPath, JSON.stringify(stripped))

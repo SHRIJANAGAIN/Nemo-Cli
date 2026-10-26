@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * The runtime `todo` / `todo_read` tools persist to
- * `~/.trayambak/todos/<sessionId>.json`. `sessionId` reaches them through
+ * `~/.nemo/todos/<sessionId>.json`. `sessionId` reaches them through
  * `ToolContext`, which an embedding host or MCP server sets — so it sits outside
  * the trust boundary even though the local CLI never supplies anything hostile.
  *
@@ -40,7 +40,7 @@ vi.mock("os", async (importOriginal) => {
 
 import { createTodoTool, loadTodoList } from "./todo.js"
 
-/** Two levels up out of `<home>/.trayambak/todos`, landing on the canary. */
+/** Two levels up out of `<home>/.nemo/todos`, landing on the canary. */
 const ESCAPE = "../../canary/secrets"
 const HOSTILE = [ESCAPE, "../canary/secrets", "..\\canary\\secrets", "a/b", "/absolute", ".", "", "  ", "x.json"]
 
@@ -49,7 +49,7 @@ let tmp: string
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "todo-guard-"))
   HOME.dir = tmp
-  fs.mkdirSync(path.join(tmp, ".trayambak", "todos"), { recursive: true })
+  fs.mkdirSync(path.join(tmp, ".nemo", "todos"), { recursive: true })
   fs.mkdirSync(path.join(tmp, "canary"), { recursive: true })
   fs.writeFileSync(path.join(tmp, "canary", "secrets.json"), '{"items":[{"content":"leaked"}]}', "utf8")
 })
@@ -69,7 +69,7 @@ function canaryIntact(): boolean {
 
 describe("todo sessionId cannot escape the todos directory", () => {
   it("the escape payload really does resolve onto the canary", () => {
-    const dir = path.join(tmp, ".trayambak", "todos")
+    const dir = path.join(tmp, ".nemo", "todos")
     // Proves the premise: this is the file the traversal would reach.
     expect(path.join(dir, `${ESCAPE}.json`)).toBe(path.join(tmp, "canary", "secrets.json"))
     expect(canaryIntact()).toBe(true)

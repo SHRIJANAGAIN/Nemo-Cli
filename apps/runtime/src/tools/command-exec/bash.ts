@@ -1,5 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - see LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -16,6 +18,8 @@
  * 7. IO drain timeout (prevents hanging)
  */
 
+import * as path from "path"
+
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { isCommandAllowed, isCommandDangerous } from "../../../../../packages/protocol/src/permissions.js"
 import { textResult, truncateOutput, type Tool, type ToolContext, type ToolResult } from "../types.js"
@@ -28,6 +32,11 @@ import {
   type SandboxType,
   type SpawnedProcess,
 } from "../../../../../packages/sandbox/src/index.js"
+import {
+  hostPolicyFromPermissions,
+  networkViolationForCommand,
+} from "../../../../../packages/sandbox/src/network-policy.js"
+import { recordNetworkViolation } from "../../../../../packages/sandbox/src/violation.js"
 import { evaluatePolicy } from "../../../../../packages/execpolicy/src/policy.js"
 import { ProcessManager } from "../../../../../packages/core/src/process.js"
 import { getSafeEnv, validateEnv } from "../../../../../packages/core/src/env_filter.js"
@@ -182,7 +191,29 @@ export function resetShellProbeForTests(): void {
 }
 
 /**
+ * True for modes that promise no mutation (plan / read-only).
+ *
+ * Derived from the live UI mode rather than the legacy `mode` alias, because
+ * the UI mode is what the TUI sets at runtime and what the permission engine
+ * already consults for the deny-list. `full-access` is deliberately NOT here:
+ * it means "stop asking me", not "allow writes" — and giving the workspace
+ * back its write grant under a mode named full-access would re-introduce the
+ * exact surprise this replaces.
+ */
+export function isReadOnlyMode(perms: Record<string, unknown>): boolean {
+  return perms.uiMode === "read-only" || perms.uiMode === "plan"
+}
+
+/**
  * Session probe: can this shell chain actually run under the OS sandbox?
+ *
+ * The probe spawns WRITABLE on purpose, even inside a plan/read-only session.
+ * It answers "does the isolator accept this shell chain", and a policy refusal
+ * (a read-only bind the launcher dislikes) would be indistinguishable from an
+ * isolator refusal — and would park the whole session on the policy path,
+ * silently REMOVING OS containment for every later command in that session.
+ * Testing only the isolator keeps a policy-driven failure from weakening the
+ * sandbox; the read-only grant is applied per real spawn below.
  *
  * Static detection (ac-workload.ts) catches shells that link MSYS/Cygwin
  * directly — but the shell `detectDefaultShell()` prefers on Windows is
@@ -258,6 +289,8 @@ async function startBackgroundJob(opts: {
   timeoutSec: number
   sandboxType: SandboxType
   networkDisabled: boolean
+  /** Mode-derived: emits an empty `writableRoots` (deny-all). */
+  readOnly?: boolean
   spawnFn?: typeof spawnProcess
   osProbe?: ShellOsProbe
 }): Promise<ToolResult> {
@@ -298,6 +331,7 @@ async function startBackgroundJob(opts: {
           sandboxType: opts.sandboxType,
           networkDisabled: opts.networkDisabled,
           timeoutMs: opts.timeoutMs,
+          readOnly: opts.readOnly,
         }),
       )
     } catch (e) {
@@ -429,7 +463,20 @@ export interface BashToolDeps {
   spawnFn?: typeof spawnProcess
 }
 
-/** Build the spawnProcess request every OS-sandboxed bash run uses. */
+/**
+ * Build the spawnProcess request every OS-sandboxed bash run uses.
+ *
+ * `readOnlySubpaths` was hardcoded to `[]` while `filesystemPolicy` was not
+ * consulted by the OS backends at all, so the empty list was harmless. Now that
+ * `packages/sandbox/src/fs-policy.ts` actually applies the policy, a caller that
+ * declares a read-only carve-out would silently lose it: `rm -rf .git` would
+ * succeed inside a session whose policy promised `.git` was protected.
+ *
+ * The paths are resolved against `cwd` here rather than left relative, because
+ * the OS layer compares absolute paths. `fs-policy.ts` compares path SEGMENTS, so
+ * a relative carve-out like `.git` would never match the absolute path the mount
+ * layer sees — resolving is what makes the two agree.
+ */
 export function osSpawnRequest(opts: {
   shell: string
   shellArgs: string[]
@@ -439,8 +486,30 @@ export function osSpawnRequest(opts: {
   sandboxType: SandboxType
   networkDisabled: boolean
   timeoutMs: number
+  /** Extra roots the policy allows writes to, in addition to `cwd`. */
+  extraWritableRoots?: readonly string[]
+  /** Paths inside the roots that stay read-only. Relative paths resolve to cwd. */
+  readOnlySubpaths?: readonly string[]
+  /**
+   * True for modes that promise no mutation (plan / read-only). Emits an
+   * EMPTY `writableRoots`, which `fs-policy.ts` defines as deny-all rather
+   * than allow-all — the fail-closed direction, and the only reading under
+   * which "read-only" means anything at the OS layer.
+   */
+  readOnly?: boolean
   signal?: AbortSignal
 }): Parameters<typeof spawnProcess>[0] {
+  // An already-absolute path is passed through UNCHANGED. `path.normalize` looks
+// harmless but rewrites the separator style: on Windows it turns `/work` into
+// `\work`, which means "root of the current drive" rather than the path the
+// policy named. Corrupting a policy path is strictly worse than leaving it
+// un-normalized, and de-duplication still works because equal strings compare
+// equal.
+const resolve = (p: string): string => (path.isAbsolute(p) ? p : path.resolve(opts.cwd, p))
+  const writableRoots =
+    opts.readOnly === true
+      ? []
+      : [opts.cwd, ...(opts.extraWritableRoots ?? []).map(resolve)]
   return {
     command: [opts.shell, ...opts.shellArgs, opts.command],
     cwd: opts.cwd,
@@ -448,8 +517,10 @@ export function osSpawnRequest(opts: {
     env: opts.env,
     networkPolicy: { disableNetwork: opts.networkDisabled, allowedDomains: [], blockedDomains: [] },
     filesystemPolicy: {
-      writableRoots: [opts.cwd],
-      readOnlySubpaths: [],
+      // De-duplicated so a caller passing cwd as an extra root does not emit a
+      // duplicate bubblewrap bind, which is a redundant mount, not a harmless one.
+      writableRoots: [...new Set(writableRoots)],
+      readOnlySubpaths: (opts.readOnlySubpaths ?? []).map(resolve),
       denyReadPaths: [],
       denyWritePaths: [],
     },
@@ -477,6 +548,8 @@ export function runForegroundOsSandboxed(opts: {
   timeoutMs: number
   timeoutSec: number
   signal: AbortSignal | undefined
+  /** Mode-derived: emits an empty `writableRoots` (deny-all). */
+  readOnly?: boolean
   spawnFn?: typeof spawnProcess
 }): Promise<ToolResult> {
   const spawnFn = opts.spawnFn ?? spawnProcess
@@ -518,6 +591,7 @@ export function runForegroundOsSandboxed(opts: {
         networkDisabled: opts.networkDisabled,
         timeoutMs: opts.timeoutMs,
         signal: opts.signal,
+        readOnly: opts.readOnly,
       }),
     )
       .then(async (p) => {
@@ -548,7 +622,7 @@ export function runForegroundOsSandboxed(opts: {
  * unrecognised name is dropped by default - the right default for a shell.
  * Compose them: `filterEnv` first (allowlist + its 24 deny patterns),
  * then `getSafeEnv` for its extra deny patterns and for the authoritative
- * sandbox-metadata stamps it owns (the CODEX sandbox marker and its
+ * sandbox-metadata stamps it owns (the NEMO sandbox marker and its
  * network-disabled sibling - named here without the literal so the
  * marker tripwire in .github/workflows/check-forbidden-strings.yml still
  * means something). PATH, HOME, TEMP and USERPROFILE are all on the
@@ -644,10 +718,34 @@ export function createBashTool(deps?: BashToolDeps): Tool {
         // ─── 4. Determine Sandbox Type ───
         const perms = ctx.permissions as unknown as Record<string, unknown>
         const sandboxType = detectSandboxType(perms)
-        const networkDisabled =
-          perms.__networkPolicy && typeof perms.__networkPolicy === "object"
-            ? (((perms.__networkPolicy as Record<string, unknown>).disableNetwork as boolean) ?? false)
-            : false
+        // Mode now selects the FILESYSTEM policy, not the isolator. plan /
+        // read-only emit an empty `writableRoots`, which fs-policy defines as
+        // deny-all - the direction that makes "read-only" mean something at the
+        // OS layer instead of only in the in-process screen.
+        const readOnly = isReadOnlyMode(perms)
+        const hostPolicy = hostPolicyFromPermissions(perms)
+        const networkDisabled = hostPolicy.disableNetwork
+
+        // ─── 4b. Host policy (only meaningful when the network is reachable) ───
+        // `allowedDomains`/`blockedDomains` were threaded into every spawn
+        // request and consulted by nothing, so a block-list changed no
+        // behaviour. This is the check that makes the field mean something.
+        //
+        // Skipped when the network is already disabled: the kernel has removed
+        // the route, so there is nothing left to police and scanning would only
+        // risk refusing a command for naming a host it cannot reach.
+        if (!networkDisabled && (hostPolicy.allowedDomains.length > 0 || hostPolicy.blockedDomains.length > 0)) {
+          const refused = networkViolationForCommand(command, hostPolicy)
+          if (refused !== undefined) {
+            // Recorded before refusing, so a repeated attempt is visible in the
+            // audit trail rather than only in the transcript.
+            recordNetworkViolation(refused, "bash", process.pid ?? 0)
+            return textResult(
+              `Permission denied: ${refused}. Command: ${command}`,
+              /*isError*/ true,
+            )
+          }
+        }
 
         // ─── 5. Filter Environment Variables ───
         let safeEnv = buildBashEnv(process.env, sandboxType, networkDisabled)
@@ -688,6 +786,7 @@ export function createBashTool(deps?: BashToolDeps): Tool {
             timeoutSec,
             sandboxType,
             networkDisabled,
+            readOnly,
             spawnFn: deps?.spawnFn,
             osProbe,
           })
@@ -709,6 +808,7 @@ export function createBashTool(deps?: BashToolDeps): Tool {
             timeoutMs,
             timeoutSec,
             signal,
+            readOnly,
             spawnFn: deps?.spawnFn,
           })
         }

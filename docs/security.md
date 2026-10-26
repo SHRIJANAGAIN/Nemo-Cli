@@ -6,8 +6,8 @@ window) first — do not open a public issue.
 
 ## Local-first data handling
 
-- Telemetry defaults to `NullTelemetry` (`packages/telemetry`:
-  `createTelemetry(false)`), i.e. **nothing is recorded** unless you opt in.
+- **No telemetry.** The telemetry package is gone: there is no sink, no
+  analytics upload and no opt-in switch, so **nothing is recorded or sent**.
 - Prompts and code leave the machine only when you configure a **remote
   provider** (`baseUrl` + `apiKey`) or a **remote MCP server**. A local
   llama.cpp/Ollama setup keeps everything on-disk.
@@ -18,28 +18,28 @@ Things to review before running an untrusted prompt:
 
 | Surface                 | Variable / setting                                                  |
 | ----------------------- | ------------------------------------------------------------------- |
-| Local model binary      | `TRAYAMBAK_LLAMACPP_BIN` + GGUF source (`TRAYAMBAK_MODEL_PATH`)     |
-| Working directory       | `TRAYAMBAK_CWD` / `--cwd`                                           |
-| MCP servers             | `TRAYAMBAK_MCP_SERVERS` / `mcpServers` config                       |
+| Local model binary      | `NEMO_LLAMACPP_BIN` + GGUF source (`NEMO_MODEL_PATH`)     |
+| Working directory       | `NEMO_CWD` / `--cwd`                                           |
+| MCP servers             | `NEMO_MCP_SERVERS` / `mcpServers` config                       |
 | Tool hooks              | `hooks.preToolUse` / `hooks.postToolUse` (arbitrary shell commands) |
-| Skills & agent profiles | `TRAYAMBAK_SKILLS_DIR`, `TRAYAMBAK_AGENT_PROFILE_DIRS`              |
+| Skills & agent profiles | `NEMO_SKILLS_DIR`, `NEMO_AGENT_PROFILE_DIRS`              |
 
 ## Secret storage
 
 | Secret                                      | Location                                                       | Protection                                      |
 | ------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- |
-| API key (`trayambak login`)                 | `~/.trayambak/credentials.json` (`TRAYAMBAK_CREDENTIALS_FILE`) | `0600`, atomic tmp + rename                     |
-| Config incl. `apiKey`, `providers[].apiKey` | `./.trayambak/config.json` or `~/.trayambak/config.json`       | `0600`, atomic; previous file rotates to `.bak` |
-| Session transcripts & index                 | `~/.trayambak/sessions*`, `sessions.json`                      | `0600`                                          |
-| MCP OAuth tokens                            | `~/.trayambak/mcp-auth.json` (`TRAYAMBAK_MCP_AUTH_FILE`)       | `0600`                                          |
+| API key (`nemo login`)                 | `~/.nemo/credentials.json` (`NEMO_CREDENTIALS_FILE`) | `0600`, atomic tmp + rename                     |
+| Config incl. `apiKey`, `providers[].apiKey` | `./.nemo/config.json` or `~/.nemo/config.json`       | `0600`, atomic; previous file rotates to `.bak` |
+| Session transcripts & index                 | `~/.nemo/sessions*`, `sessions.json`                      | `0600`                                          |
+| MCP OAuth tokens                            | `~/.nemo/mcp-auth.json` (`NEMO_MCP_AUTH_FILE`)       | `0600`                                          |
 
-- Prefer **`TRAYAMBAK_API_KEY`** (per-process env var) over a key in
+- Prefer **`NEMO_API_KEY`** (per-process env var) over a key in
   `config.json` on shared hosts; there is **no OS keychain integration yet**.
 - Keys pasted with prefixes (`NVAPI_KEY …`, `Bearer …`, `KEY=…`) are stripped
   at load but stored clean — **rotate** any key that was ever committed or
   screenshared (see [Providers](providers.md#key-hygiene--cleanapikey)).
-- Keep `~/.trayambak/` itself `0700`. Never commit `mcp-auth.json`; revoke
-  with `trayambak mcp logout <name>`.
+- Keep `~/.nemo/` itself `0700`. Never commit `mcp-auth.json`; revoke
+  with `nemo mcp logout <name>`.
 
 ## Permission model
 
@@ -126,10 +126,10 @@ approver (headless never auto-approves).
 Try it from the shell:
 
 ```sh
-trayambak sandbox check ./src/index.ts   # "allow (backend, policy-only)" or "deny (...): reason"
-trayambak sandbox                        # prints backend + enforcement mode
-trayambak execpolicy check "rm -rf /"    # "deny (rm -rf /*)"
-trayambak execpolicy check "npm test"    # "allow" (no rule matched)
+nemo sandbox check ./src/index.ts   # "allow (backend, policy-only)" or "deny (...): reason"
+nemo sandbox                        # prints backend + enforcement mode
+nemo execpolicy check "rm -rf /"    # "deny (rm -rf /*)"
+nemo execpolicy check "npm test"    # "allow" (no rule matched)
 ```
 
 `sandbox check` evaluates a `workspace-write` policy rooted at the current
@@ -147,13 +147,13 @@ mkfs /dev/sda` is judged by its `mkfs` segment, not its `echo` wrapper.
 
 ### User `.rules` files (discovery + merge precedence)
 
-`trayambak execpolicy check` evaluates the display list above, but the
+`nemo execpolicy check` evaluates the display list above, but the
 gate every `bash` call passes is `PolicyManager.evaluate` in
 `packages/execpolicy`, and on **first** construction that manager
 discovers a user `.rules` file in this order:
 
-1. `<cwd>/.trayambak/policy.rules` (the project copy wins)
-2. `~/.trayambak/policy.rules` (the user's home copy)
+1. `<cwd>/.nemo/policy.rules` (the project copy wins)
+2. `~/.nemo/policy.rules` (the user's home copy)
 
 The file is loaded **merged over the defaults, never instead of them**:
 `rules = [...getDefaultPolicy().rules, ...fileRules]`, with
@@ -192,10 +192,10 @@ Treat any `hooks` entry you did not write as code execution — it is.
   `sbom.cyclonedx.json`.
 - The tarball is built by `scripts/make-publish.mjs` with a `files` allowlist
   (`["dist", "Img"]`) so source can never ship by accident.
-- `TRAYAMBAK_SKIP_OBFUSCATION=1` (or `--skip-obfuscation`) produces a debuggable publish build. The
+- `NEMO_SKIP_OBFUSCATION=1` (or `--skip-obfuscation`) produces a debuggable publish build. The
   default obfuscation is **size/hygiene only — never a security boundary**.
-- Auto-update policy: `TRAYAMBAK_AUTOUPDATE` (`true`/`1`, `false`/`0`,
-  `notify`) and the `TRAYAMBAK_DISABLE_AUTOUPDATE` kill switch (anything but
+- Auto-update policy: `NEMO_AUTOUPDATE` (`true`/`1`, `false`/`0`,
+  `notify`) and the `NEMO_DISABLE_AUTOUPDATE` kill switch (anything but
   `0`/`false` skips the check).
 - The llama.cpp binaries bundled for local serving live in `bin/` alongside
   their upstream licence files.
@@ -205,10 +205,10 @@ Treat any `hooks` entry you did not write as code execution — it is.
 | Feature                | Default exposure                                                                                                      |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | CLI / REPL             | none (outbound provider calls only)                                                                                   |
-| `trayambak web`        | `127.0.0.1:8787`; no auth on loopback; **non-loopback binds auto-generate a token (fail closed)** — see [Web](web.md) |
-| `trayambak acp`        | stdio only                                                                                                            |
-| `trayambak mcp-server` | stdio only (and `tools/call` is a stub today)                                                                         |
-| `trayambak serve`      | llama.cpp server — loopback port by default                                                                           |
+| `nemo web`        | `127.0.0.1:8787`; no auth on loopback; **non-loopback binds auto-generate a token (fail closed)** — see [Web](web.md) |
+| `nemo acp`        | stdio only                                                                                                            |
+| `nemo mcp-server` | stdio only (and `tools/call` is a stub today)                                                                         |
+| `nemo serve`      | llama.cpp server — loopback port by default                                                                           |
 
 ## Related
 

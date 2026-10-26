@@ -1,7 +1,7 @@
-export * as TrayambakSessionExportCommand from "./session-export"
+export * as NemoSessionExportCommand from "./session-export"
 
 import { assertSessionId } from "../../../../packages/core/src/validate.js"
-import { loadConversation } from "../../../../skt/9-session/session.js"
+import { loadConversation } from "../../../../nemo/9-session/session.js"
 import { failOutput, usageOutput } from "../command-registry.js"
 
 export interface SessionExportOptions {
@@ -20,7 +20,7 @@ interface ExportRow {
 }
 
 /**
- * A session id names a PERSISTED conversation (`skt/8-conversations/<id>/log.jsonl`)
+ * A session id names a PERSISTED conversation (`nemo/8-conversations/<id>/log.jsonl`)
  * — the same store resume/restore reads. It is user input, so it crosses the
  * shared `assertSessionId` choke point BEFORE any path join (`../` escapes are
  * usage errors, exit 2, never a silent "not found"). Returns an error string
@@ -46,7 +46,7 @@ export function sessionExportCommand(options: SessionExportOptions): string {
   if (options.sessionId) {
     // With an id, export that session's PERSISTED log. The old behavior
     // filtered this process's in-memory transcript by MESSAGE id, which
-    // matched nothing in a fresh CLI process — `trayambak export <id>` could
+    // matched nothing in a fresh CLI process — `nemo export <id>` could
     // never succeed.
     const loaded = persistedRows(options.sessionId, includeSystem)
     if (typeof loaded === "string") return loaded

@@ -1,3 +1,3 @@
-export * as TrayambakTuiIndex from "./index"
+export * as NemoTuiIndex from "./index"
 
-export * as TrayambakTuiFeatures from "./tui-features"
+export * as NemoTuiFeatures from "./tui-features"

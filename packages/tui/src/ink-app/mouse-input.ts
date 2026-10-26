@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -41,9 +41,9 @@ export const emitMouseScroll = (dir: MouseScrollDir): void => {
   // Diagnostic: a MOUSE-RAW line here proves wheel bytes ARRIVED (they
   // never should while reporting is off — its presence means a stray/
   // stale mode is reporting; check nothing wrote ESC[?1000h).
-  if (process.env.TRAYAMBAK_DEBUG_INPUT === "1") {
+  if (process.env.NEMO_DEBUG_INPUT === "1") {
     try {
-      appendFileSync(path.join(tmpdir(), "trayambak-input.log"), `${new Date().toISOString()} MOUSE-RAW ${dir}\n`)
+      appendFileSync(path.join(tmpdir(), "nemo-input.log"), `${new Date().toISOString()} MOUSE-RAW ${dir}\n`)
     } catch {
       /* logging must never block the stdin pipeline */
     }

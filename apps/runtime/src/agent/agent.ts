@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -10,24 +10,19 @@ import type { AgentEventSink, AgentMessage, AssistantMessage } from "../../../..
 import {
   createLlamaCppProvider,
   createNvidiaProvider,
-  createOpenAIProvider,
-  createXAIProvider,
-  createHuggingFaceProvider,
   createCustomProvider,
-  createAnthropicProvider,
-  createGoogleProvider,
   createOllamaProvider,
   clampTemperature,
   type Provider,
   type ProviderOptions,
   type WireMessage,
 } from "../../../../packages/provider/src/index.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import { buildSystemPrompt, buildOperatorBlock } from "../prompt/power-prompt.js"
 import { getMachineId } from "../license.js"
 import { Session } from "../session/session.js"
 import { createDefaultTools, buildOptionalTools, toolDefinitions, getContextBlock, type Tool } from "../tools/index.js"
-import { getSktContextBlock } from "../../../../skt/context.js"
+import { getNemoContextBlock } from "../../../../nemo/context.js"
 import { getRulesContextBlock } from "../prompt/rules.js"
 import { DeveloperModeEngine, DEFAULT_DEVELOPER_MODE_CONFIG, isLocalProvider } from "../developer-mode/index.js"
 import { SotaDevMode } from "../developer-mode/sota-mode.js"
@@ -36,6 +31,7 @@ import { guardPrompt } from "./prompt-guard.js"
 import type { GoalStore } from "../goals.js"
 import type { SelfImprovementStore } from "../self-improvement.js"
 import { HarnessRuntime, type HarnessPlugin } from "../../../../packages/harness/src/index.js"
+import { composeHarnessBlock } from "./improved-harness.js"
 import { discoverAgentProfiles, getAgentProfile, type AgentProfile } from "./specialist-agents.js"
 import { companyAgentDirs, buildCompanyBlock, companyModelForProfile, resolveCompanyState } from "./company-library.js"
 import { DEFAULT_PERMISSIONS } from "../../../../packages/protocol/src/permissions.js"
@@ -61,18 +57,18 @@ import { recordModelUsage } from "./usage-accounting.js"
  * unbounded through nested Agent/Team calls.
  */
 const SUBAGENT_FANOUT_TOOLS = new Set([
-  "trayambak__Agent",
-  "trayambak__RunTeam",
-  "skt__Swarm",
-  "trayambak__ParallelReview",
-  "trayambak__ParallelExecute",
+  "nemo__Agent",
+  "nemo__RunTeam",
+  "nemo__Swarm",
+  "nemo__ParallelReview",
+  "nemo__ParallelExecute",
 ])
 
 /**
  * Wrap an event sink so every event emitted by a child (subagent) loop is
  * tagged with the subagent that produced it. UIs use the tag to route nested
  * tool/streaming activity to the subagent's card instead of the parent
- * transcript (SKT AI LABS renders nested parts under the task card; Ink flattens).
+ * transcript (Shrijan renders nested parts under the task card; Ink flattens).
  * Object.assign keeps the result assignable to AgentEventSink without casts.
  */
 function tagSubagentEmit(emit: AgentEventSink, subagentId: string, subagentName: string): AgentEventSink {
@@ -145,7 +141,7 @@ export interface BackgroundSubagentInfo {
 }
 
 export interface AgentOptions {
-  config: TrayambakConfig
+  config: NemoConfig
   /** Provider to reuse as-is. Subagent children share the parent's instance
    *  (fresh Session, same provider/config/emit) unless a model override
    *  requests a different one. Tests inject mock providers here. */
@@ -159,6 +155,14 @@ export interface AgentOptions {
   mode?: string
   specialistPrompt?: string
   plugins?: HarnessPlugin[]
+  /**
+   * The harness block: the system prompt, guardrails, tool guidance,
+   * memory, skills index, subagents index and scripts listing that shape
+   * this agent's behaviour. Rendered into the system prompt ahead of the
+   * optional blocks, so the harness frames the task instead of competing
+   * with it. Set by the recursive harness when it probes a candidate.
+   */
+  harnessBlock?: string
   subagentDepth?: number
   subagentRunner?: SubagentRunner
   onAskUserQuestion?: (
@@ -187,7 +191,7 @@ function auditSink(): { recordAudit(action: string, actor: string, target: strin
 }
 
 export class Agent {
-  readonly config: TrayambakConfig
+  readonly config: NemoConfig
   provider: Provider
   /**
    * Options the config-built provider was created from, kept so a
@@ -264,7 +268,7 @@ export class Agent {
     // Provider-aware: mistake penalties tune local samplers only (ollama /
     // llama.cpp) — hosted backends get the clean control-mode base. Same
     // default as provider selection below (unknown → google).
-    const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "google" })
+    const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "nvidia" })
     // Clamped like config sanitize ([0, 2]): an unbounded dev override used
     // to reach the wire verbatim (observed live: 2.7 → NVIDIA HTTP 400).
     // Per-backend ceilings bind later, at each provider's body builder.
@@ -306,8 +310,9 @@ export class Agent {
         companyBlock: buildCompanyBlock(this.config.cwd, this.config) || undefined,
         developerModeSuffix: this.developerMode.getSystemPromptSuffix(),
         modeSuffix: specialistBlock + modeSystemPromptSuffix(this.mode),
-        sktBlock: getSktContextBlock(),
+        nemoBlock: getNemoContextBlock(),
         rulesBlock: getRulesContextBlock(this.config.cwd),
+        harnessBlock: options.harnessBlock,
       }),
     )
     if (this.config.scratchpadDir) {
@@ -319,54 +324,48 @@ export class Agent {
     }
   }
 
+  /**
+   * Build the provider for the configured id.
+   *
+   * Nemo talks to exactly one cloud backend — NVIDIA (and its NIM alias) —
+   * plus the two local runtimes and a user-supplied OpenAI-shaped endpoint.
+   * An unknown id refuses loudly rather than falling back to another
+   * provider's endpoint: a silent fallback sends the request somewhere the
+   * user did not ask for, which reads as "that provider is down".
+   */
   private createProviderForConfig(options: ProviderOptions): Provider {
-    const provider = this.config.provider ?? "google"
+    const provider = this.config.provider ?? "nvidia"
+    const useOption = (value: string | undefined, fallback: string): string =>
+      value !== undefined && value.length > 0 ? value : fallback
+
     if (provider === "nvidia" || provider === "nvidia-nim") {
-      const baseUrl =
-        options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "https://integrate.api.nvidia.com"
-      const model = options.model && options.model.length > 0 ? options.model : "nvidia/nemotron-3-super-120b-a12b"
-      return createNvidiaProvider({ ...options, baseUrl, model })
-    }
-    if (provider === "openai") {
-      const baseUrl = options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "https://api.openai.com"
-      const model = options.model && options.model.length > 0 ? options.model : "gpt-4o"
-      return createOpenAIProvider({ ...options, baseUrl, model })
-    }
-    if (provider === "xai") {
-      const baseUrl = options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "https://api.x.ai"
-      const model = options.model && options.model.length > 0 ? options.model : "grok-4"
-      return createXAIProvider({ ...options, baseUrl, model })
-    }
-    if (provider === "huggingface") {
-      const baseUrl =
-        options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "https://router.huggingface.co/v1"
-      const model = options.model && options.model.length > 0 ? options.model : "meta-llama/Llama-3.3-70B-Instruct"
-      return createHuggingFaceProvider({ ...options, baseUrl, model })
-    }
-    if (provider === "anthropic") {
-      const baseUrl = options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "https://api.anthropic.com"
-      const model = options.model && options.model.length > 0 ? options.model : "claude-3-5-sonnet-latest"
-      return createAnthropicProvider({ ...options, baseUrl, model })
-    }
-    if (provider === "google") {
-      const baseUrl =
-        options.baseUrl && options.baseUrl.length > 0
-          ? options.baseUrl
-          : "https://generativelanguage.googleapis.com/v1beta"
-      const model = options.model && options.model.length > 0 ? options.model : "gemini-2.5-flash"
-      return createGoogleProvider({ ...options, baseUrl, model })
+      return createNvidiaProvider({
+        ...options,
+        baseUrl: useOption(options.baseUrl, "https://integrate.api.nvidia.com"),
+        model: useOption(options.model, "nvidia/nemotron-3-super-120b-a12b"),
+      })
     }
     if (provider === "ollama") {
-      const baseUrl = options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "http://localhost:11434"
-      const model = options.model && options.model.length > 0 ? options.model : "llama3.1"
-      return createOllamaProvider({ ...options, baseUrl, model })
+      return createOllamaProvider({
+        ...options,
+        baseUrl: useOption(options.baseUrl, "http://localhost:11434"),
+        model: useOption(options.model, "llama3.1"),
+      })
     }
     if (provider === "custom") {
-      const baseUrl = options.baseUrl && options.baseUrl.length > 0 ? options.baseUrl : "http://localhost:8080"
-      const model = options.model ?? ""
-      return createCustomProvider({ ...options, baseUrl, model })
+      return createCustomProvider({
+        ...options,
+        baseUrl: useOption(options.baseUrl, "http://localhost:8080"),
+        model: options.model ?? "",
+      })
     }
-    return createLlamaCppProvider(options)
+    if (provider === "llamacpp") {
+      return createLlamaCppProvider(options)
+    }
+
+    throw new Error(
+      `Unknown provider "${provider}". Pick one of: llamacpp, nvidia, nvidia-nim, ollama, custom.`,
+    )
   }
 
   setMode(mode: string): void {
@@ -473,7 +472,7 @@ export class Agent {
         developerModeSuffix: this.developerMode.getSystemPromptSuffix(),
         modeSuffix: specialistBlock + modeSystemPromptSuffix(this.mode) + (this.goalStore?.context() ?? ""),
         selfImprovementBlock: this.selfImprovement?.context(),
-        harnessBlock: this.harness.context(),
+        harnessBlock: composeHarnessBlock(this.harness.context()),
         rulesBlock: getRulesContextBlock(this.config.cwd),
         skillsBlock: skillsBlock || undefined,
       }),
@@ -560,7 +559,7 @@ export class Agent {
     // turn runs. Gated to local providers only (hosted APIs never pay this
     // call), and fail-open inside — unconfigured / no new mistakes / any
     // error keeps the heuristic penalties.
-    const activeProviderId = this.config.provider ?? "google"
+    const activeProviderId = this.config.provider ?? "nvidia"
     if (this.developerMode.isEnabled() && isLocalProvider(activeProviderId)) {
       const decision = await this.developerMode.runSupervisorDecision({ signal })
       const baseOptions = this.providerOptions
@@ -578,7 +577,7 @@ export class Agent {
       const runTools = this.arsenal ? this.arsenal.resolveTools(this.tools) : this.tools
       // Same provider-aware penalties as construction above (maxToolCalls
       // caps from foreign-backend mistake logs must not leak in either).
-      const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "google" })
+      const devOverrides = this.developerMode.getConfigOverrides({ provider: this.config.provider ?? "nvidia" })
       messages = await runAgentLoop(prompt, {
         onRequestPermission: this.onRequestPermission,
         provider: this.provider,
@@ -722,11 +721,11 @@ export class Agent {
     // per-task models always win over the company default.
     const companyModel = companyModelForProfile(profile?.source, this.config, this.config.model)
     const modelOverride = explicitModel ?? companyModel ?? configuredModel
-    const baseChildConfig: TrayambakConfig = {
+    const baseChildConfig: NemoConfig = {
       ...this.config,
       permissions: { ...(this.config.permissions ?? DEFAULT_PERMISSIONS), askByDefault: false },
     }
-    let childConfig: TrayambakConfig = modelOverride ? { ...baseChildConfig, model: modelOverride } : baseChildConfig
+    let childConfig: NemoConfig = modelOverride ? { ...baseChildConfig, model: modelOverride } : baseChildConfig
     let worktreeCleanup: (() => void) | undefined
     let child: Agent | undefined
     try {
@@ -817,7 +816,10 @@ export class Agent {
     return status ? backgroundStatusToInfo(status) : undefined
   }
 
-  promoteBackgroundJob(id: string): boolean {
+  /** Whether the background job is still running. (Previously misnamed
+   *  `promoteBackgroundJob`, which promised a foreground promotion it never
+   *  performed — the name now says what it does: a status check.) */
+  isBackgroundJobRunning(id: string): boolean {
     return this.subagentEngine.getStatus(id)?.status === "running"
   }
 
@@ -889,7 +891,7 @@ export function modeSystemPromptSuffix(mode: string): string {
     planner:
       "Current mode: planner. Favor planning, research, and step-by-step breakdowns before editing. Ask clarifying questions when requirements are ambiguous.",
     sota: "Current mode: sota (SOTA inference-time reasoning). Use tree-based search across multiple approaches, execute candidates in the sandbox, verify independently, and backtrack/re-solve on failures. Use sota_solve for code tasks. Only the best verified branch is delivered.",
-    cot: "Current mode: cot (chain-of-thought). Run the CoT-4 parallel pipeline: generate 4 candidate solutions, sandbox-execute each, grade with tests, apply reward/penalty, and pick the best. Record outcomes to skt/5-eval/COT-REPORT.md.",
+    cot: "Current mode: cot (chain-of-thought). Run the CoT-4 parallel pipeline: generate 4 candidate solutions, sandbox-execute each, grade with tests, apply reward/penalty, and pick the best. Record outcomes to nemo/5-eval/COT-REPORT.md.",
   }
   const text = suffixes[mode] ?? ""
   return text ? `\n${text}` : ""
@@ -907,7 +909,7 @@ export async function createWorktreeIsolation(repoRoot: string): Promise<{ cwd: 
   } catch {
     return fallback
   }
-  const wtRoot = path.join(repoRoot, ".trayambak", "worktrees")
+  const wtRoot = path.join(repoRoot, ".nemo", "worktrees")
   fs.mkdirSync(wtRoot, { recursive: true })
   const name = `subagent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   const wtPath = path.join(wtRoot, name)

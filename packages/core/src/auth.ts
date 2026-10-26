@@ -1,78 +1,100 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /** AuthManager: login/logout/status with ApiKey + env fallback (Codex login parity, minimal). */
 
-import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+
+import { envString } from "./env_read.js"
+import {
+  bestCredentialStore,
+  fileStore,
+  keychainStore,
+  keychainAvailable,
+  redactSecret,
+  type CredentialStore,
+} from "./credential_store.js"
 
 export type AuthKind = "api-key" | "env" | "none"
 
 export function credentialsPath(): string {
-  if (process.env.TRAYAMBAK_CREDENTIALS_FILE) return process.env.TRAYAMBAK_CREDENTIALS_FILE
-  return path.join(os.homedir(), ".trayambak", "credentials.json")
+  // Routed through the sanctioned env gateway rather than read inline: the repo's
+  // own `no-direct-process-env` rule exists so every env read can be audited in
+  // one place, and auth.ts was bypassing it.
+  const override = envString("NEMO_CREDENTIALS_FILE")
+  if (override !== undefined && override.trim().length > 0) return override
+  return path.join(os.homedir(), ".nemo", "credentials.json")
 }
 
-export function loginWithApiKey(key: string): void {
+/**
+ * Build the store for the live environment.
+ *
+ * `NEMO_CREDENTIAL_PREFER_FILE=1` forces the hardened file store on every
+ * platform, including macOS and Linux. That escape hatch exists because the
+ * macOS keychain write passes the secret in argv (see `credential_store.ts`),
+ * and a caller who cannot accept that wants the file.
+ *
+ * Rebuilt per call rather than cached at module load: a test that changes the
+ * environment would otherwise be served a store built from the previous one, so
+ * the suite would depend on test ordering.
+ *
+ * Named `resolveStore` rather than `store` because a parameter named `store`
+ * shadows it, and the default-argument form then silently stops being callable.
+ */
+function resolveStore(): CredentialStore {
+  const preferFile = envString("NEMO_CREDENTIAL_PREFER_FILE") === "1"
   const file = credentialsPath()
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  const tmp = `${file}.tmp-${process.pid}`
-  fs.writeFileSync(tmp, JSON.stringify({ apiKey: key.trim(), updatedAt: Date.now() }, null, 2), {
-    encoding: "utf8",
-    mode: 0o600,
-  })
-  try {
-    fs.chmodSync(tmp, 0o600)
-  } catch {
-    /* non-POSIX */
-  }
-  fs.renameSync(tmp, file)
-  try {
-    fs.chmodSync(file, 0o600)
-  } catch {
-    /* best effort */
-  }
+  return bestCredentialStore({ file, service: "nemo", account: "credentials", preferFile })
 }
 
-export function logout(): boolean {
+/** Prefer the keychain when one exists; fall back to the hardened file store. */
+export function defaultCredentialStore(): CredentialStore {
+  const file = credentialsPath()
+  if (!keychainAvailable()) return fileStore({ file })
+  return keychainStore({ service: "nemo", account: "credentials" })
+}
+
+/**
+ * The store the auth helpers use.
+ *
+ * Takes an override so a test can substitute a store without touching process
+ * environment, which is the ambient dependency the repo's config-test rule
+ * forbids.
+ */
+export function credentialStore(override?: CredentialStore): CredentialStore {
+  return override ?? resolveStore()
+}
+
+export function loginWithApiKey(key: string, override?: CredentialStore): void {
+  credentialStore(override).write(key.trim())
+}
+
+export function logout(override?: CredentialStore): boolean {
   // Clear WITHOUT deleting: removing the file creates a path-existence
   // oracle (logged-in vs never-logged-in distinguishable by stat).
-  const file = credentialsPath()
-  if (!fs.existsSync(file)) return false
+  return credentialStore(override).clear()
+}
+
+function storedApiKey(override?: CredentialStore): string {
   try {
-    const tmp = `${file}.tmp-${process.pid}`
-    fs.writeFileSync(tmp, JSON.stringify({ apiKey: "", updatedAt: Date.now() }, null, 2), {
-      encoding: "utf8",
-      mode: 0o600,
-    })
-    try {
-      fs.chmodSync(tmp, 0o600)
-    } catch {
-      /* non-POSIX */
-    }
-    fs.renameSync(tmp, file)
-    try {
-      fs.chmodSync(file, 0o600)
-    } catch {
-      /* best effort */
-    }
-    return true
-  } catch {
-    return false
+    return credentialStore(override).read() ?? ""
+  } catch (error) {
+    // A store failure must not surface the payload it was carrying.
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(redactSecret(message))
   }
 }
 
-function storedApiKey(): string {
-  try {
-    const raw = JSON.parse(fs.readFileSync(credentialsPath(), "utf8")) as { apiKey?: unknown }
-    return typeof raw.apiKey === "string" ? raw.apiKey : ""
-  } catch {
-    return ""
-  }
-}
-
-export function loginStatus(): { kind: AuthKind; hasFile: boolean; hasEnv: boolean } {
-  const hasFile = storedApiKey().length > 0
-  const hasEnv = Boolean(process.env.TRAYAMBAK_API_KEY)
+export function loginStatus(override?: CredentialStore): {
+  kind: AuthKind
+  hasFile: boolean
+  hasEnv: boolean
+} {
+  const hasFile = storedApiKey(override).length > 0
+  const hasEnv = Boolean(envString("NEMO_API_KEY"))
   return { kind: hasFile ? "api-key" : hasEnv ? "env" : "none", hasFile, hasEnv }
 }

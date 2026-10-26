@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -21,7 +21,7 @@ const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "write_file",
   description:
-    "Create or overwrite a file with the given content. Creates parent directories as needed. Use for new files or full rewrites. .git and .trayambak directories are read-only metadata: writes to them are rejected.",
+    "Create or overwrite a file with the given content. Creates parent directories as needed. Use for new files or full rewrites. .git and .nemo directories are read-only metadata: writes to them are rejected.",
   parameters: {
     type: "object",
     required: ["path", "content"],
@@ -58,7 +58,7 @@ export function createWriteFileTool(): Tool {
         if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
         if (ctx.requestPermission) {
-          const ok = await ctx.requestPermission("write_file", rawPath, "Trayambak approval required for write_file")
+          const ok = await ctx.requestPermission("write_file", rawPath, "Nemo approval required for write_file")
           if (!ok) return textResult("Permission denied for write_file: " + rawPath, /*isError*/ true)
         }
 

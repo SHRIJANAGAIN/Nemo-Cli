@@ -1,11 +1,18 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
-import { BOOT_CINE_TICK_MS, bootCineEye, cineCodenameRow, cineTitleColor, cineTitleHot } from "./BootCine.js"
+import {
+  BOOT_CINE_TICK_MS,
+  bootCineEye,
+  cineCodenameRow,
+  cineSettledFrame,
+  cineTitleColor,
+  cineTitleHot,
+} from "./BootCine.js"
 import { bootCodename } from "./thinking-ribbon.js"
 import { VERSION } from "../../../../apps/cli/src/version.js"
 import type { CinePalette } from "./themeColors.js"
@@ -81,7 +88,9 @@ describe("boot codename row", () => {
     // One char per TWO ticks, monotonically — no frame ever reveals nothing
     // new or reveals two at once.
     for (let frame = 1; frame < 40; frame++) {
-      const before = cineCodenameRow(frame - 1, NAME).join("").trimEnd().length
+      const before = cineCodenameRow(frame - 1, NAME)
+        .join("")
+        .trimEnd().length
       const after = cineCodenameRow(frame, NAME).join("").trimEnd().length
       expect(after - before, `frame ${frame}`).toBeLessThanOrEqual(1)
     }
@@ -106,7 +115,49 @@ describe("boot codename row", () => {
   })
 
   it("resolves the codename from the real stamped version", () => {
-    expect(bootCodename(VERSION)).toBe("S1-TITANIUM")
+    // Derived from VERSION, not a pinned literal: the codename IS the stamped
+    // prerelease tag, so hardcoding it made this test fail on every version bump
+    // (`1.0.0-S1-TITANIUM` -> `1.0.0-S1.1-TITANIUM`) with no code change. The
+    // assertions that matter are structural: an `x.y.z-tag` prerelease yields the
+    // tag, and a plain version keeps its `v` prefix.
     expect(bootCodename(VERSION)).not.toContain("1.0.0")
+    const tag = /^\d+\.\d+\.\d+-(.+)$/.exec(VERSION)?.[1]
+    if (tag !== undefined) {
+      expect(bootCodename(VERSION)).toBe(tag)
+    } else {
+      expect(bootCodename(VERSION)).toBe(VERSION.startsWith("v") ? VERSION : `v${VERSION}`)
+    }
+  })
+
+  it("keeps a dotted prerelease tag intact rather than truncating it", () => {
+    // `S1.1-TITANIUM` must not collapse to `S1-TITANIUM`: the dot is part of the
+    // tag, and the whole tag is what ships on the boot row.
+    expect(bootCodename("1.0.0-S1.1-TITANIUM")).toBe("S1.1-TITANIUM")
+    expect(bootCodename("1.0.0-S1-TITANIUM")).toBe("S1-TITANIUM")
+  })
+})
+
+describe("cineSettledFrame", () => {
+  it("is a frame at which the whole cinematic is already done", () => {
+    // This is the frame `NEMO_MOTION=off|reduced` renders, so it must not
+    // be mid-reveal: a reduced-motion boot that shows half a codename or an eye
+    // that never opened reads as a broken start, not as a settled preference.
+    const name = "S1-TITANIUM"
+    const settled = cineSettledFrame(name)
+    expect(cineCodenameRow(settled, name).join("")).toBe(name)
+    expect(bootCineEye(settled, PALETTE)).toMatchObject({ eye: "( ◉ )", showTagline: true })
+    // …and it stays done, because every reveal clamps instead of looping back.
+    expect(cineCodenameRow(settled + 60, name).join("")).toBe(name)
+    expect(bootCineEye(settled + 60, PALETTE)).toEqual(bootCineEye(settled, PALETTE))
+  })
+
+  it("is the longer of the eye and the codename, and survives an empty name", () => {
+    // A short codename finishes long before the eye does, so the eye decides;
+    // `2*len-2` keeps the codename strictly inside the eye's window while a real
+    // 11-char tag still passes it, so the row and the eye land together.
+    expect(cineSettledFrame("AB")).toBe(cineSettledFrame(""))
+    expect(cineSettledFrame("AVERYLONGCODENAME")).toBeGreaterThan(cineSettledFrame("AB"))
+    expect(cineSettledFrame("S1-TITANIUM")).toBe(2 * "S1-TITANIUM".length - 2)
+    expect(cineSettledFrame("")).toBeGreaterThan(0)
   })
 })

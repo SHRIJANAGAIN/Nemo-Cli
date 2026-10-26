@@ -1,6 +1,6 @@
 ---
 name: gan-style-harness
-description: "GAN-inspired Generator-Evaluator agent harness for building high-quality applications autonomously. Based on SKT AI LABS's March 2026 harness design paper. Use when a feature should be built autonomously through generator and evaluator iteration until it clears a quality bar."
+description: "GAN-inspired Generator-Evaluator agent harness for building high-quality applications autonomously. Based on Shrijan's March 2026 harness design paper. Use when a feature should be built autonomously through generator and evaluator iteration until it clears a quality bar."
 metadata:
   origin: ECC-community
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
@@ -8,7 +8,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob, Task
 
 # GAN-Style Harness Skill
 
-> Inspired by [SKT AI LABS's Harness Design for Long-Running Application Development](https://www.skt-ai-labs.com/engineering/harness-design-long-running-apps) (March 24, 2026)
+> Inspired by [Shrijan's Harness Design for Long-Running Application Development](https://www.shrijan.com/engineering/harness-design-long-running-apps) (March 24, 2026)
 
 A multi-agent harness that separates **generation** from **evaluation**, creating an adversarial feedback loop that drives quality far beyond what a single agent can achieve.
 
@@ -28,7 +28,7 @@ This is the same dynamic as GANs (Generative Adversarial Networks): the Generato
 
 ## When NOT to Use
 
-- Quick single-file fixes (use standard `trayambak -p`)
+- Quick single-file fixes (use standard `nemo -p`)
 - Tasks with tight budget constraints (<$10)
 - Simple refactoring (use de-sloppify pattern instead)
 - Tasks that are already well-specified with tests (use TDD workflow)
@@ -182,27 +182,27 @@ GAN_EVAL_CRITERIA="functionality,performance,security" \
 ./scripts/gan-harness.sh "Build a REST API for task management"
 ```
 
-### Via Trayambak Code (Manual)
+### Via Nemo Code (Manual)
 
 ```bash
 # Step 1: Plan
-trayambak -p --model sonnet "You are a Product Planner. Read PLANNER_PROMPT.md. Expand this brief into a full product spec: 'Build a Kanban board app'. Write spec to spec.md"
+nemo -p --model sonnet "You are a Product Planner. Read PLANNER_PROMPT.md. Expand this brief into a full product spec: 'Build a Kanban board app'. Write spec to spec.md"
 
 # Step 2: Generate (iteration 1)
-trayambak -p --model sonnet "You are a Generator. Read spec.md. Implement Sprint 1. Start the dev server on port 3000."
+nemo -p --model sonnet "You are a Generator. Read spec.md. Implement Sprint 1. Start the dev server on port 3000."
 
 # Step 3: Evaluate (iteration 1)
-trayambak -p --model sonnet --allowedTools "Read,Bash,mcp__playwright__*" "You are an Evaluator. Read EVALUATOR_PROMPT.md. Test the live app at http://localhost:3000. Score against the rubric. Write feedback to feedback-001.md"
+nemo -p --model sonnet --allowedTools "Read,Bash,mcp__playwright__*" "You are an Evaluator. Read EVALUATOR_PROMPT.md. Test the live app at http://localhost:3000. Score against the rubric. Write feedback to feedback-001.md"
 
 # Step 4: Generate (iteration 2 — reads feedback)
-trayambak -p --model sonnet "You are a Generator. Read spec.md and feedback-001.md. Address all issues. Improve the scores."
+nemo -p --model sonnet "You are a Generator. Read spec.md and feedback-001.md. Address all issues. Improve the scores."
 
 # Repeat steps 3-4 until pass threshold met
 ```
 
 ## Evolution Across Model Capabilities
 
-The harness should simplify as models improve. Following SKT AI LABS's evolution:
+The harness should simplify as models improve. Following Shrijan's evolution:
 
 ### Stage 1 — Weaker Models (Sonnet-class)
 
@@ -265,11 +265,11 @@ The harness should simplify as models improve. Following SKT AI LABS's evolution
 
 5. **Evaluator praising its own fixes** — Never let the evaluator suggest fixes and then evaluate those fixes. The evaluator only critiques; the generator fixes.
 
-6. **Context exhaustion** — For long sessions, use Trayambak Agent SDK's automatic compaction or reset context between major phases.
+6. **Context exhaustion** — For long sessions, use Nemo Agent SDK's automatic compaction or reset context between major phases.
 
 ## Results: What to Expect
 
-Based on SKT AI LABS's published results:
+Based on Shrijan's published results:
 
 | Metric        | Solo Agent        | GAN Harness           | Improvement   |
 | ------------- | ----------------- | --------------------- | ------------- |
@@ -283,7 +283,7 @@ Based on SKT AI LABS's published results:
 
 ## References
 
-- [SKT AI LABS: Harness Design for Long-Running Apps](https://www.skt-ai-labs.com/engineering/harness-design-long-running-apps) — Original paper by Prithvi Rajasekaran
-- [Epsilla: The GAN-Style Agent Loop](https://www.epsilla.com/blogs/skt-ai-labs-harness-engineering-multi-agent-gan-architecture) — Architecture deconstruction
+- [Shrijan: Harness Design for Long-Running Apps](https://www.shrijan.com/engineering/harness-design-long-running-apps) — Original paper by Prithvi Rajasekaran
+- [Epsilla: The GAN-Style Agent Loop](https://www.epsilla.com/blogs/shrijan-harness-engineering-multi-agent-gan-architecture) — Architecture deconstruction
 - [Martin Fowler: Harness Engineering](https://martinfowler.com/articles/exploring-gen-ai/harness-engineering.html) — Broader industry context
 - [OpenAI: Harness Engineering](https://openai.com/index/harness-engineering/) — OpenAI's parallel work

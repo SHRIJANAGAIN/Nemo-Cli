@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -10,7 +10,7 @@ import React from "react"
 import { PassThrough } from "node:stream"
 import { render, type Instance } from "ink"
 import { MessageList } from "./MessageList.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * Conversation-box contract: the budget-fitting TAIL renders in the frame
@@ -79,12 +79,12 @@ const openStdio = (columns = 80): { stdin: NodeJS.ReadStream; stdout: NodeJS.Wri
 // Glyphs under test render through glyphs.ts, which auto-selects ASCII on
 // plain Windows consoles (this CI/dev box) — assertions below pin Unicode
 // shapes, so force unicode mode here. resetGlyphCache covers shared workers.
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 resetGlyphCache()
 describe("MessageList history (bordered prefix → scrollback, tail → frame)", () => {
   it("renders the newest rows in-frame and the evicted prefix Bordered above", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
       role: "user",
@@ -119,7 +119,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
 
   it("a running tool call stays in the dynamic frame (never Static-frozen)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       {
         id: "tool-x1",
         timestamp: 1,
@@ -153,7 +153,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
 
   it("shows the Thinking spinner on the tail row only (old answers stay still)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       {
         id: "a-old",
         timestamp: 1,
@@ -212,7 +212,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
     // accumulates every animation frame, so whole-sink substring counts grow
     // with time instead of measuring concurrent instances.
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       {
         id: "a-live",
         timestamp: 1,
@@ -246,7 +246,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
     // shows nothing, so the bottom line must still carry the spinner —
     // otherwise the turn starts with zero activity indication.
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "u1", timestamp: 1, role: "user", content: "hi" },
       { id: "a-soon", timestamp: 2, role: "assistant", content: "" },
     ]
@@ -271,7 +271,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
 
   it("a completed tool call carries the status mark (✓ / ✗ per ported palette)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       {
         id: "tool-ok",
         timestamp: 1,
@@ -321,7 +321,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
     const { stdin, stdout, sink } = openStdio(80)
     const lines = Array.from({ length: 80 }, (_, i) => `line-${i}`)
     lines[79] = "END-MARKER-LAST"
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "u1", timestamp: 1, role: "user", content: "list" },
       { id: "big-answer", timestamp: 2, role: "assistant", content: lines.join("\n") },
     ]
@@ -359,7 +359,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
 
   it("reports its scrollback prefix to App (which hides the frame divider)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = Array.from({ length: 40 }, (_, i) => ({
+    const messages: NemoMessage[] = Array.from({ length: 40 }, (_, i) => ({
       id: `m${i}`,
       timestamp: i,
       role: "user",
@@ -391,7 +391,7 @@ describe("MessageList history (bordered prefix → scrollback, tail → frame)",
 
   it("reports NO prefix for a fresh short conversation (┌ cap stays)", async () => {
     const { stdin, stdout, sink } = openStdio()
-    const messages: TrayambakMessage[] = [
+    const messages: NemoMessage[] = [
       { id: "u1", timestamp: 1, role: "user", content: "hi" },
       { id: "a1", timestamp: 2, role: "assistant", content: "hello" },
     ]
@@ -428,7 +428,7 @@ describe("MessageList tool boxes stretch to the window width", () => {
   // in each path, so a hug can't hide in either.
   it("spans ~full width in the frame (100 cols)", async () => {
     const { stdin, stdout, sink } = openStdio(100)
-    const messages: TrayambakMessage[] = []
+    const messages: NemoMessage[] = []
     // Enough history that the row budget caps the window: the oldest
     // completed tools print Bordered above (prefix); the newest completed
     // + the running one stay in-frame.

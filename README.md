@@ -1,8 +1,8 @@
-**Trayambak CLI** is a coding agent from SKT AI LABS that runs locally on your computer
+**Nemo CLI** is a coding agent from Shrijan that runs locally on your computer
 
-## **What is Trayambak CLI ?**
+## **What is Nemo CLI ?**
 
-**Trayambak CLI** is an AI agent that runs in the terminal, helping you carry out software development tasks and day-to-day terminal operations — reading and modifying code, running shell commands, searching files, fetching web pages, and autonomously planning and adjusting its next steps based on feedback as it works.
+**Nemo CLI** is an AI agent that runs in the terminal, helping you carry out software development tasks and day-to-day terminal operations — reading and modifying code, running shell commands, searching files, fetching web pages, and autonomously planning and adjusting its next steps based on feedback as it works.
 
 _It fits scenarios such as:_
 
@@ -12,15 +12,15 @@ _It fits scenarios such as:_
 
 - Automating tasks: batch-processing files, running builds and tests, chaining multiple scripts together
 
-- Trayambak hunts bugs like it wants them dead
+- Nemo hunts bugs like it wants them dead
 
 - The CLI is written in TypeScript, distributed via npm, and runs on Node.js
 
 ## **What's New & Different From The Rest ?**
 
-We Used **Philosophical Methods** To Hunt Every Kinds Of **Vulnerabilities** In Lower Cost Of **Thinking Language Models**
+We Run Bug-Hunting On An **Inversion** Discipline Rather Than A Bigger Model
 
-_While others reach for **bigger models** and **larger languages** to patch **critical bugs** and **predict failures**, We take the opposite path: we ask how the agent could cause damage — then shut every one of those doors first._
+_The method is in the code, not just the copy: `buildInversionDirective()` in [apps/runtime/src/prompt/power-prompt.ts](apps/runtime/src/prompt/power-prompt.ts) is injected into the system prompt every turn — name the failure mode before touching files, ship the test that could disprove the claim, run the adversarial case first. What that buys you is a much better *bug-hunter*, not a guarantee that every class of vulnerability gets found: coverage still depends on the model you point it at and the surface you let it touch._
 
 ---
 
@@ -32,7 +32,7 @@ _While others reach for **bigger models** and **larger languages** to patch **cr
 >
 > Most agents try to tell you things will work. We'd rather find out where they don't.
 >
-> So instead of asking "will this run?", Trayambak asks "how does this break?" — and then sits down and proves it can't.
+> So instead of asking "will this run?", Nemo asks "how does this break?" — and then sits down and proves it can't.
 >
 > It sounds simple, but it changes everything about how the agent works:
 >
@@ -45,7 +45,7 @@ _While others reach for **bigger models** and **larger languages** to patch **cr
 
 ## Get Started
 
-1. **Install Trayambak CLI**
+1. **Install Nemo CLI**
 
 Windows (PowerShell):
 
@@ -62,15 +62,15 @@ curl -fsSL https://skt.sktailabs.in/install.sh | bash
 Or directly with npm (all platforms):
 
 ```
-npm install -g @skt-ai-labs/trayambak-cli
+npm install -g @shrijan/nemo-cli
 ```
 
 2. How To **Launch** The **CLI**
 
-Type `skt` or `trayambak` in your terminal:
+Type `nemo` or `nemo` in your terminal:
 
 ```
-trayambak
+nemo
 ```
 
 3. **Connect** With Any **Provider**
@@ -89,7 +89,7 @@ Type `/models` and pick one from the list:
 /models
 ```
 
-_Use **Trayambak** to hunt **vulnerabilities** — or to **build**._
+_Use **Nemo** to hunt **vulnerabilities** — or to **build**._
 
 ---
 
@@ -134,14 +134,14 @@ _For a **first-time user**, the following is all you need to know:_
 
 ## Command line reference
 
-Run `trayambak help` for the authoritative list:
+Run `nemo help` for the authoritative list:
 
 | Command                                           | Description                                                                                       |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `trayambak`                                       | Start an interactive session (alias: `skt`)                                                       |
+| `nemo`                                       | Start an interactive session (alias: `nemo`)                                                       |
 | `run "prompt"`                                    | Interactive session that runs that prompt immediately (headless JSON events when stdout is piped) |
 | `exec "prompt"`                                   | Headless run — newline-delimited JSON events on stdout                                            |
-| `git diff \| trayambak exec "review"`             | Piped stdin becomes model context (capped, instruction first)                                     |
+| `git diff \| nemo exec "review"`             | Piped stdin becomes model context (capped, instruction first)                                     |
 | `review [target]`                                 | Review code/changes for bugs, security issues, style                                              |
 | `commit [--staged\|--all]`                        | Draft a conventional-commit message for the diff                                                  |
 | `stats`                                           | Show usage stats (sessions, events, violations)                                                   |
@@ -152,7 +152,7 @@ Run `trayambak help` for the authoritative list:
 | `doctor`                                          | Diagnose the local environment                                                                    |
 | `info`                                            | Runtime & config summary                                                                          |
 | `agent [list\|info\|run]`                         | Manage agent profiles                                                                             |
-| `task [list\|create]`                             | Manage trayambak tasks                                                                            |
+| `task [list\|create]`                             | Manage nemo tasks                                                                            |
 | `todo [list\|add\|update]`                        | Manage session todos                                                                              |
 | `plan [create\|list\|show]`                       | Manage multi-step plans                                                                           |
 | `manager [status\|summary]`                       | Show manager status                                                                               |
@@ -161,7 +161,7 @@ Run `trayambak help` for the authoritative list:
 | `worktree [list\|create\|remove\|switch]`         | List/switch git worktrees                                                                         |
 | `mcp [list\|auth\|logout\|status]`                | Manage MCP servers & OAuth                                                                        |
 | `marketplace <list\|search\|install\|remove>`     | Browse/install shareable skills & agents                                                          |
-| `upgrade [version]`                               | Update trayambak (git/npm) and rebuild                                                            |
+| `upgrade [version]`                               | Update nemo (git/npm) and rebuild                                                            |
 | `serve [--port 8080]`                             | Start a local llama.cpp server                                                                    |
 | `download <org/model>`                            | Download a GGUF model                                                                             |
 | `acp`                                             | Run as an ACP agent server (stdio JSON-RPC)                                                       |
@@ -176,9 +176,8 @@ Run `trayambak help` for the authoritative list:
 | `completion <bash\|zsh\|fish\|powershell>`        | Print a shell completion script to source from your profile                                       |
 
 **Global flags:** `--base-url <url>`, `--model <name>`, `--provider <name>`
-(`llamacpp`, `nvidia`, `nvidia-nim`, `openai`, `xai`, `huggingface`,
-`anthropic`, `google`, `ollama`, `custom`), `--cwd <dir>`, `--session <file>`,
-`--port <n>`, `--host <addr>`, `--dev`,
+(`nvidia`, `nvidia-nim`, `ollama`, `llamacpp`, `custom`), `--cwd <dir>`,
+`--session <file>`, `--port <n>`, `--host <addr>`, `--dev`,
 `--version`/`-v`, `--help`/`-h`. Shorthands: `-p` prompt, `-m` model,
 `-c` cwd; `--no-<flag>` sets a flag to `false`.
 
@@ -186,23 +185,26 @@ Run `trayambak help` for the authoritative list:
 
 ## Models
 
-Currently Our **SKT Console** in Maninatance so We Will Start Our Models free Usages later.
+Bring your own NVIDIA NIM key (`nvapi-…` from build.nvidia.com) for the hosted
+backend, or run fully locally with `ollama` / `llamacpp` for a session with no
+provider network traffic at all. `custom` points Nemo at any other
+OpenAI-compatible endpoint you run yourself.
 
 ## Configuration reference
 
-Config file: `./.trayambak/config.json` when a `.trayambak/` directory exists
-in the current directory, otherwise `~/.trayambak/config.json` — written
+Config file: `./.nemo/config.json` when a `.nemo/` directory exists
+in the current directory, otherwise `~/.nemo/config.json` — written
 atomically with `0600` permissions and a `.bak` rotation. Schema:
 [`config.schema.json`](config.schema.json).
 
 **Precedence (lowest → highest):** built-in defaults < config file <
-`TRAYAMBAK_*` environment variables < CLI flags.
+`NEMO_*` environment variables < CLI flags.
 
 ```sh
-trayambak config get              # dump every effective value
-trayambak config get model        # one value
-trayambak config set model gpt-6 # persist (numbers/booleans coerced)
-trayambak config set provider openai
+nemo config get              # dump every effective value
+nemo config get model        # one value
+nemo config set model nvidia/nemotron-3-super-120b-a12b # persist (numbers/booleans coerced)
+nemo config set provider nvidia
 ```
 
 **Key environment variables** (full list in
@@ -210,19 +212,37 @@ trayambak config set provider openai
 
 | Variable                       | Sets                                                  |
 | ------------------------------ | ----------------------------------------------------- |
-| `TRAYAMBAK_BASE_URL`           | Provider base URL                                     |
-| `TRAYAMBAK_MODEL`              | Model id                                              |
-| `TRAYAMBAK_SMALL_MODEL`        | Cheap model for background chores (auto-titles)       |
-| `TRAYAMBAK_SUBAGENT_MODEL`     | Default model for subagent children                   |
-| `TRAYAMBAK_API_KEY`            | API key (beats the config file)                       |
-| `TRAYAMBAK_PROVIDER`           | Provider id                                           |
-| `TRAYAMBAK_CWD`                | Working directory for tools                           |
-| `TRAYAMBAK_CONTEXT_WINDOW`     | Context window driving compaction                     |
-| `TRAYAMBAK_MCP_SERVERS`        | MCP servers as JSON                                   |
-| `TRAYAMBAK_WEB_TOKEN`          | Bearer token for `trayambak web`                      |
-| `TRAYAMBAK_WEB_ORIGINS`        | Extra browser origins for `trayambak web` (`*` = any) |
-| `TRAYAMBAK_AUTOUPDATE`         | `true` / `false` / `notify`                           |
-| `TRAYAMBAK_DISABLE_AUTOUPDATE` | Auto-update kill switch                               |
+| `NEMO_BASE_URL`           | Provider base URL                                     |
+| `NEMO_MODEL`              | Model id                                              |
+| `NEMO_SMALL_MODEL`        | Cheap model for background chores (auto-titles)       |
+| `NEMO_SUBAGENT_MODEL`     | Default model for subagent children                   |
+| `NEMO_API_KEY`            | API key (beats the config file)                       |
+| `NEMO_PROVIDER`           | Provider id                                           |
+| `NEMO_CWD`                | Working directory for tools                           |
+| `NEMO_CONTEXT_WINDOW`     | Context window driving compaction                     |
+| `NEMO_MCP_SERVERS`        | MCP servers as JSON                                   |
+| `NEMO_WEB_TOKEN`          | Bearer token for `nemo web`                      |
+| `NEMO_WEB_ORIGINS`        | Extra browser origins for `nemo web` (`*` = any) |
+| `NEMO_AUTOUPDATE`         | `true` / `false` / `notify`                           |
+| `NEMO_DISABLE_AUTOUPDATE` | Auto-update kill switch                               |
+| `NEMO_MOTION`             | Animation level for this run: `off`/`reduced`/`full`  |
+| `NEMO_REDUCED_MOTION`     | `1` for reduced motion when `NEMO_MOTION` unset  |
+| `NEMO_GLYPHS`             | `ascii` / `unicode` marks and box drawing             |
+| `NEMO_SPINNER`            | Spinner style (`braille`, `line`, `arc`, `meter`, …)  |
+| `NEMO_IDLE_ANIM`          | `1` to breathe the footer/composer while idle (the welcome screen does) |
+| `NEMO_BOOT_CINE`          | `1` to replay the boot cinematic in this shell        |
+
+`off` installs no animation timer at all and paints each widget's finished
+frame; `reduced` draws the line at position rather than speed — anything that
+travels across the screen stops, anything that only changes brightness keeps
+breathing. Readouts that show a real quantity — elapsed seconds, token counts —
+are never frozen by either level. Switch it live with `/motion`, which saves the
+level to config so the next start comes up the same way; the environment
+overrides above win for the run that sets them, and are never written back.
+
+`/spinner` picks the frame set the spinners cycle through and saves it the same
+way. It lists every style with its frames painted, because the style you need is
+the one your font cannot draw, and you cannot see that from a name.
 
 ---
 
@@ -246,16 +266,15 @@ errors, config problems) exit `1` (`apps/cli/src/commands/mcp.ts`).
 
 ## Architecture overview
 
-Trayambak is a TypeScript monorepo that compiles to `dist/` and ships on npm
-as `@skt-ai-labs/trayambak-cli` (bins `trayambak` and `skt`):
+Nemo is a TypeScript monorepo that compiles to `dist/` and ships on npm
+as `@shrijan/nemo-cli` (bins `nemo` and `nemo`):
 
 - **`apps/cli`** — the CLI entry: subcommands, flags, session commands.
 - **`apps/runtime`** — the agent: config loader, agent loop, tools, prompts,
   auto-update.
 - **`packages/*`** — protocol types, provider adapters (22 backends), the Ink
-  TUI, MCP client/server, ACP, HTTP server, SDK, sandbox, session backends,
-  telemetry.
-- **`skt/`** — internal numbered subsystems: mistake memory, eval loop,
+  TUI, MCP client/server, ACP, HTTP server, SDK, sandbox, session backends.
+- **`nemo/`** — internal numbered subsystems: mistake memory, eval loop,
   memory, control, healing, hooks.
 
 The build runs `tsc` (main), `tsc -p tsconfig.ink.json` (the Ink UI as ESM),
@@ -269,8 +288,8 @@ then an asset-copy + `fix-esm-imports.js` flatten step. Full walkthrough:
 Something not working? Start with the built-in doctor:
 
 ```sh
-trayambak doctor   # Node, config, model, llama.cpp binary, endpoint reachability
-trayambak info     # version, node, platform, cwd, baseUrl, model, shell
+nemo doctor   # Node, config, model, llama.cpp binary, endpoint reachability
+nemo info     # version, node, platform, cwd, baseUrl, model, shell
 ```
 
 Then see **[docs/troubleshooting.md](https://skt.sktailabs.in/docs/troubleshooting.md)** for the usual
@@ -291,9 +310,9 @@ Found a bug? Reports that follow this flow get fixed fastest:
    3 business days, fix timeline within 14 days for confirmed
    High/Critical, 90-day coordinated-disclosure window).
 2. **Regular bug? Open a public issue** at
-   <https://github.com/SKT-AI-LABS/Trayambak-cli/issues> with:
+   <https://github.com/shrijan/nemo-cli/issues> with:
    - Title + severity (`CRITICAL` / `HIGH` / `MEDIUM` / `LOW`)
-   - Version and platform (`trayambak info`: version, node, platform)
+   - Version and platform (`nemo info`: version, node, platform)
    - Minimal reproduction steps and minimal repro input
    - Expected vs actual behaviour, with evidence (output, logs)
    - Secrets redacted from everything you paste — never paste tokens,
@@ -324,25 +343,42 @@ reproduction beats a description-only report.
 
 ## Security
 
-Found a vulnerability? **open a public issue** — the reporting process,
-supported versions, scope, and disclosure window are in
-[SECURITY.md](SECURITY.md). Highlights: secrets are stored `0600` and
-atomic, telemetry is off by default, and destructive shell commands are
+Found a vulnerability? **report it privately — do not open a public issue.**
+[SECURITY.md](SECURITY.md) has the reporting process, supported versions, scope,
+and disclosure window; send it to support@sktailabs.in. Highlights: secrets are
+stored `0600` and
+atomic, there is no telemetry at all, and destructive shell commands are
 denied by default with writes asking for approval
 ([docs/security.md](https://skt.sktailabs.in/docs/security.md)).
 
-**License For Devmodes are Opnened It's free no charge for **individual developer** But its only for security and testing of your infrastucture to safe your infrastucture We Will Only Track Pentest Tools Usages to Create a safer community. Companies required To Contact Us and get it they require a plan
+**Licensing for devmode is open** — free of charge for an **individual
+developer**, for security testing and hardening of infrastructure you own or are
+authorised to test. Companies must contact us; that needs a plan.
 
-**Trayamabak** Suppports Local Models Its Best For Privacy Bydefault it is off you can enable it also
+One thing to know before you rely on that: the licence is **verified online, by
+design**. Enabling developer mode POSTs your licence key plus a persistent
+machine id to `https://skt.sktailabs.in` (`apps/runtime/src/license.ts`, override
+with `NEMO_LICENSE_SERVER` or `licenseServerUrl` in config). If the server
+is unreachable the unlock **refuses** rather than fails open. Developer mode is
+the switch for all of it: with `/devmode` off, nothing is unlocked and none of
+this traffic happens at all. Details in [PRIVACY.md](PRIVACY.md).
+
+**Nemo** supports local models (`ollama`, `llamacpp`), which is the
+strongest privacy option — prompts go only to your own machine. There is no
+product telemetry: no usage, crash or performance data is collected. The
+licence traffic above is the only thing that leaves the machine on this path.
 
 ---
 
 ## License
 
-Trayambak CLI is **proprietary software** developed and maintained by
-**SKT AI LABS PRIVATE LIMITED**, licensed under the
-**Trayambak CLI Proprietary License** — see [LICENSE](LICENSE) for the full
-terms. You get a limited, non-exclusive, non-transferable licence to use the
-software for your own lawful purposes; copying, modification, redistribution,
-and reverse engineering (beyond where prohibited by law) require prior
-written permission. Not open source, and not Apache-licensed.
+Nemo Code is **open source** software developed and maintained by
+**Shrijan**, licensed under the **Apache License 2.0** — see
+[LICENSE](LICENSE) for the full terms. You may use, copy, modify, merge,
+publish, distribute, sublicense and sell copies of it, including for
+commercial purposes, under the terms of that licence.
+
+Parts of Nemo Code are derived from OpenAI Codex CLI under the Apache
+License 2.0, and those parts stay under Apache-2.0.
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists them file by file,
+alongside the licence terms of every other externally-derived component.

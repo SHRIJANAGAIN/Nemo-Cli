@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type { Tool, ToolContext } from "../tools/index.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { Provider } from "../../../../packages/provider/src/index.js"
 import type { Session } from "../session/session.js"
 import type { DeveloperModeEngine } from "../developer-mode/index.js"
@@ -91,7 +91,7 @@ export class Executor {
       // This controller has no provider config in scope; tools only read
       // optional fields off it (maxOutputLines/maxOutputBytes), so an empty
       // object is the deliberate "no overrides" value here.
-      config: {} as TrayambakConfig,
+      config: {} as NemoConfig,
       permissions: DEFAULT_PERMISSIONS,
     }
 

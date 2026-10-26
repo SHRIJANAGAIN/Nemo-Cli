@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 import React, { type ReactNode, useState, useEffect } from "react"
 import { Box, Text, useStdout } from "ink"
-import { TrayambakLogo } from "./TrayambakLogo.js"
+import { NemoLogo } from "./NemoLogo.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
 import { useBorderPulse } from "./use-border-pulse.js"
@@ -50,7 +50,7 @@ function CodePreview({ accent }: { accent: string }): ReactNode {
 /**
  * Startup theme chooser. Shown only once, on first run.
  */
-/** Hard cap on list rows (53 themes: 17 bundled + 36 from the SKT AI LABS
+/** Hard cap on list rows (53 themes: 17 bundled + 36 from the Shrijan
  *  Code port). The LIVE count comes from fitLayout(). */
 const MAX_VISIBLE = 12
 
@@ -155,11 +155,11 @@ export function ThemePicker({ themes, defaultTheme, onSelect, onExit }: ThemePic
   return (
     <Box flexDirection="column" height="100%" paddingX={1} paddingY={1}>
       <Box flexDirection="column" alignItems="center" marginBottom={1} flexShrink={0}>
-        <TrayambakLogo compact={logoCompact} />
+        <NemoLogo compact={logoCompact} />
       </Box>
       <Box flexDirection="column" alignItems="center" marginBottom={1} flexShrink={0}>
         <Text bold color="green">
-          Trayambak — Choose a Theme
+          Nemo — Choose a Theme
         </Text>
         <Text dimColor>Pick the text style that looks best with your terminal (one-time setup)</Text>
       </Box>

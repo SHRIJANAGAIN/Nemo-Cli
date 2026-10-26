@@ -82,10 +82,10 @@ Goal: [launch, waitlist, signups, awareness — and timeline]
 
 ## Output Location
 
-When saving campaign assets, the convention is `.trayambak/campaigns/{campaign-name}/`:
+When saving campaign assets, the convention is `.nemo/campaigns/{campaign-name}/`:
 
 ```
-.trayambak/campaigns/product-launch/
+.nemo/campaigns/product-launch/
 ├── positioning.md
 ├── landing-page.md
 ├── email-sequence.md
@@ -108,7 +108,7 @@ Confirm the save location before writing files.
 ```
 
 ```
-/marketing-campaign review .trayambak/campaigns/the-key/landing-page.md
+/marketing-campaign review .nemo/campaigns/the-key/landing-page.md
 ```
 
 ## Agent Delegation
@@ -129,4 +129,4 @@ This command invokes:
 
 ---
 
-_Part of [Everything Trayambak Code](https://github.com/affaan-m/trayambak)_
+_Part of [Everything Nemo Code](https://github.com/affaan-m/nemo)_

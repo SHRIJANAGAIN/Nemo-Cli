@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -16,10 +16,13 @@ import {
   setWindowsAcProbeForTests,
 } from "../../../../../packages/sandbox/src/index.js"
 import { DEFAULT_PERMISSIONS } from "../../../../../packages/protocol/src/permissions.js"
-import type { TrayambakConfig } from "../../config.js"
+import { landlockArgs } from "../../../../../packages/sandbox/src/spawn.js"
+import { canWrite } from "../../../../../packages/sandbox/src/fs-policy.js"
+import type { NemoConfig } from "../../config.js"
 import type { ToolContext, ToolResult } from "../types.js"
 import {
   createBashTool,
+  isReadOnlyMode,
   osSpawnRequest,
   resetBackgroundJobsForTests,
   resetShellProbeForTests,
@@ -46,7 +49,7 @@ const ctxFor = (dir: string): ToolContext =>
       shellCommand: SHELL,
       maxOutputLines: 500,
       maxOutputBytes: 64 * 1024,
-    } as unknown as TrayambakConfig,
+    } as unknown as NemoConfig,
     permissions: { ...DEFAULT_PERMISSIONS, askByDefault: false },
   }) as ToolContext
 
@@ -86,11 +89,243 @@ describe("osSpawnRequest", () => {
     expect(request.outputCap).toBeGreaterThan(0)
     expect(request.timeoutMs).toBe(5000)
   })
+
+  /**
+   * The mode now selects the FILESYSTEM policy, not the isolator. plan /
+   * read-only emit an EMPTY `writableRoots`, which `fs-policy.ts` defines as
+   * deny-all - the only reading under which "read-only" means anything at the
+   * OS layer. Before this, both modes reported `SandboxType.None`, so the OS
+   * layer was never consulted and the restriction existed only in the
+   * in-process screen.
+   */
+  it("readOnly emits an empty writableRoots - deny-all, not allow-all", () => {
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.WindowsRestrictedToken,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      readOnly: true,
+      signal: undefined,
+    })
+
+    expect(request.filesystemPolicy?.writableRoots).toEqual([])
+    // Extra roots must not resurrect a grant the mode withheld.
+    const withExtras = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.WindowsRestrictedToken,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      extraWritableRoots: ["/other"],
+      readOnly: true,
+      signal: undefined,
+    })
+    expect(withExtras.filesystemPolicy?.writableRoots).toEqual([])
+  })
+
+  /** The default must stay permissive: only an explicit readOnly opts in. */
+  it("omitting readOnly keeps cwd writable (unchanged default)", () => {
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.LinuxSeccomp,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      signal: undefined,
+    })
+
+    expect(request.filesystemPolicy?.writableRoots).toEqual(["/work"])
+  })
+
+  /** isReadOnlyMode drives the flag above; it must not over-reach. */
+  it("isReadOnlyMode is true only for plan and read-only uiModes", () => {
+    expect(isReadOnlyMode({ uiMode: "plan" })).toBe(true)
+    expect(isReadOnlyMode({ uiMode: "read-only" })).toBe(true)
+    expect(isReadOnlyMode({ uiMode: "ask" })).toBe(false)
+    expect(isReadOnlyMode({ uiMode: "auto-approve" })).toBe(false)
+    // full-access means "stop asking", not "allow writes": the workspace must
+    // NOT silently get its write grant back under a mode named full-access.
+    expect(isReadOnlyMode({ uiMode: "full-access" })).toBe(false)
+    expect(isReadOnlyMode({ mode: "yolo" })).toBe(false)
+    expect(isReadOnlyMode({})).toBe(false)
+  })
+
+  /**
+   * The policy has to survive the trip from the tool to the OS layer, or the
+   * sandbox is decorative. `osSpawnRequest` used to hardcode
+   * `readOnlySubpaths: []`, which was harmless only while the backends ignored
+   * the field; now that `fs-policy.ts` applies it, a declared carve-out that is
+   * dropped here becomes a writable path the policy promised to protect.
+   */
+  it("threads a read-only carve-out through to the spawn request", () => {
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "rm -rf .git",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.LinuxSeccomp,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      readOnlySubpaths: [".git"],
+    })
+    expect(request.filesystemPolicy.readOnlySubpaths).toEqual([path.resolve("/work", ".git")])
+  })
+
+  it("resolves a RELATIVE carve-out, because the OS layer compares absolute paths", () => {
+    // Left relative, `.git` would never match the absolute path a bubblewrap
+    // mount or an SBPL subpath refers to, and the carve-out would silently do
+    // nothing — the exact failure mode it exists to prevent.
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "rm -rf .git",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.MacosSeatbelt,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      readOnlySubpaths: [".git", "node_modules"],
+    })
+    for (const p of request.filesystemPolicy.readOnlySubpaths) {
+      expect(path.isAbsolute(p), p).toBe(true)
+    }
+  })
+
+  it("leaves an absolute carve-out untouched", () => {
+    const abs = path.resolve("/elsewhere", "locked")
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.LinuxSeccomp,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      readOnlySubpaths: [abs],
+    })
+    expect(request.filesystemPolicy.readOnlySubpaths).toEqual([abs])
+  })
+
+  it("keeps cwd writable even when a carve-out covers all of it", () => {
+    // Carving out the workspace entirely must not remove it from writableRoots:
+    // the mount still has to exist for `--chdir` to succeed. The read-only-ness
+    // is expressed by the carve-out, not by dropping the root.
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.LinuxSeccomp,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      readOnlySubpaths: ["/work"],
+    })
+    expect(request.filesystemPolicy.writableRoots).toContain("/work")
+    expect(request.filesystemPolicy.readOnlySubpaths).toContain("/work")
+  })
+
+  it("adds extra writable roots and de-duplicates cwd", () => {
+    // A duplicate root is a redundant bubblewrap mount, not a harmless repeat.
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.LinuxSeccomp,
+      networkDisabled: false,
+      timeoutMs: 5000,
+      extraWritableRoots: ["/work", "/shared", "sub"],
+    })
+    expect(request.filesystemPolicy.writableRoots).toEqual(["/work", "/shared", path.resolve("/work", "sub")])
+    expect(new Set(request.filesystemPolicy.writableRoots).size).toBe(
+      request.filesystemPolicy.writableRoots.length,
+    )
+  })
+
+  it("defaults to cwd-only with no carve-outs when the caller says nothing", () => {
+    const request = osSpawnRequest({
+      shell: "sh",
+      shellArgs: ["-c"],
+      command: "echo hi",
+      cwd: "/work",
+      env: { PATH: "/bin" },
+      sandboxType: SandboxType.LinuxSeccomp,
+      networkDisabled: false,
+      timeoutMs: 5000,
+    })
+    expect(request.filesystemPolicy.writableRoots).toEqual(["/work"])
+    expect(request.filesystemPolicy.readOnlySubpaths).toEqual([])
+  })
+})
+
+describe("the tool and the OS layer agree about a carve-out", () => {
+  /**
+   * The end-to-end property: whatever `osSpawnRequest` produces, the real
+   * argument builders must honour. If these disagree the policy screen says one
+   * thing and the kernel enforces another — which is the failure the
+   * `filesystemPolicy` bug was, in a different costume.
+   */
+  // Deliberately NOT `as const`: that makes `shellArgs` a readonly tuple, which
+  // is not assignable to the `string[]` the builder declares. A spread of a
+  // readonly array into a mutable signature is a compile error, and a test that
+  // needs a cast to call the code under test is testing something else.
+  const base = {
+    shell: "sh",
+    shellArgs: ["-c"] as string[],
+    command: "rm -rf .git",
+    cwd: path.resolve("/work"),
+    env: { PATH: "/bin" } as Record<string, string>,
+    networkDisabled: false,
+    timeoutMs: 5000,
+  }
+
+  it("a declared carve-out produces NO writable bind for that path", () => {
+    const request = osSpawnRequest({
+      ...base,
+      sandboxType: SandboxType.LinuxSeccomp,
+      readOnlySubpaths: ["src"],
+    })
+    const carved = path.resolve(base.cwd, "src")
+    const args = landlockArgs(
+      request.command,
+      request.cwd,
+      request.networkPolicy,
+      request.filesystemPolicy,
+    )
+    // The carve-out is nested inside cwd, so cwd stays mounted; what must NOT
+    // appear is a separate writable bind for the carved path.
+    expect(args.filter((a) => a === "--bind" && args[args.indexOf(a) + 2] === carved)).toHaveLength(0)
+    expect(canWrite(request.filesystemPolicy, carved)).toBe(false)
+  })
+
+  it("an undeclared path inside cwd IS writable", () => {
+    const request = osSpawnRequest({ ...base, sandboxType: SandboxType.LinuxSeccomp })
+    expect(canWrite(request.filesystemPolicy, path.resolve(base.cwd, "src", "a.ts"))).toBe(true)
+  })
+
+  it("a path outside cwd is never writable", () => {
+    const request = osSpawnRequest({ ...base, sandboxType: SandboxType.LinuxSeccomp })
+    expect(canWrite(request.filesystemPolicy, "/etc/passwd")).toBe(false)
+  })
 })
 
 describe("runForegroundOsSandboxed", () => {
   it("maps output, exit code, and the truthful sandbox marker", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     try {
       const seen: unknown[] = []
       const result = await runForegroundOsSandboxed({
@@ -127,7 +362,7 @@ describe("runForegroundOsSandboxed", () => {
   })
 
   it("marks failing runs failed with exit suffix and marker", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     try {
       const result = await runForegroundOsSandboxed({
         shell: "sh",
@@ -152,7 +387,7 @@ describe("runForegroundOsSandboxed", () => {
   })
 
   it("reports spawn failures and timeouts with the tool's own messages", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     try {
       const failed = await runForegroundOsSandboxed({
         shell: "sh",
@@ -190,7 +425,7 @@ describe("runForegroundOsSandboxed", () => {
   })
 
   it("aborts through the handle kill and says so", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     try {
       const controller = new AbortController()
       const kills: string[] = []
@@ -228,7 +463,7 @@ describe("bash OS path engagement", () => {
 
   it("stays on the policy path (no marker) where no isolator exists, flag or not", async () => {
     process.env[FLAG] = "1"
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     try {
       const spawnFn = vi.fn(async () => stubProc())
       const tool = createBashTool({ spawnFn: spawnFn as never })
@@ -249,7 +484,7 @@ describe("bash OS path engagement", () => {
 
   it("engages the OS path when detection reports the AppContainer isolator", async () => {
     process.env[FLAG] = "1"
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     const original = Object.getOwnPropertyDescriptor(process, "platform")
     setWindowsAcProbeForTests(() => true)
     Object.defineProperty(process, "platform", { value: "win32", configurable: true })
@@ -275,7 +510,7 @@ describe("bash OS path engagement", () => {
 
   it("a failed shell probe parks the session on the policy path with an honest note", async () => {
     process.env[FLAG] = "1"
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     const original = Object.getOwnPropertyDescriptor(process, "platform")
     setWindowsAcProbeForTests(() => true)
     Object.defineProperty(process, "platform", { value: "win32", configurable: true })
@@ -307,7 +542,7 @@ describe("bash OS path engagement", () => {
 
   it("a passing probe is cached and the real run keeps its OS marker", async () => {
     process.env[FLAG] = "1"
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     const original = Object.getOwnPropertyDescriptor(process, "platform")
     setWindowsAcProbeForTests(() => true)
     Object.defineProperty(process, "platform", { value: "win32", configurable: true })
@@ -338,7 +573,7 @@ describe("bash OS path engagement", () => {
 
   it("background OS jobs capture output end-to-end (readAll attached before waitForExit)", async () => {
     process.env[FLAG] = "1"
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
     const original = Object.getOwnPropertyDescriptor(process, "platform")
     setWindowsAcProbeForTests(() => true)
     Object.defineProperty(process, "platform", { value: "win32", configurable: true })
@@ -404,7 +639,7 @@ describe.runIf(process.platform === "win32" && fs.existsSync("C:\\Program Files\
     it("runs the default Windows shell policy-only instead of dying in DllMain", async () => {
       process.env[FLAG] = "1"
       setWindowsAcProbeForTests(() => true) // infra probe passes, as on the user's machine
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bashos-"))
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
       try {
         const base = ctxFor(dir)
         const ctx = {

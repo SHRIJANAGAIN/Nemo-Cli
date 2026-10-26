@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -56,7 +56,7 @@ const LONG_ARGS_TOOL: ToolCallDisplay = {
   id: "t1",
   name: "bash",
   args: {
-    value: 'We need to list the trayambak directory. The user said "list trayambak directory". We sa',
+    value: 'We need to list the nemo directory. The user said "list nemo directory". We sa',
   },
   status: "completed",
   result: "total 146844",
@@ -65,7 +65,7 @@ const LONG_ARGS_TOOL: ToolCallDisplay = {
 // Glyphs under test render through glyphs.ts, which auto-selects ASCII on
 // plain Windows consoles (this CI/dev box) — assertions below pin Unicode
 // shapes, so force unicode mode here. resetGlyphCache covers shared workers.
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 resetGlyphCache()
 describe("ToolCallItem header (single truncating line)", () => {
   it("keeps labels + args + ✓ on ONE line at 119 cols (reported width)", async () => {
@@ -89,7 +89,7 @@ describe("ToolCallItem header (single truncating line)", () => {
     const lines = await headerLineAt(119, {
       id: "t3",
       name: "navigate",
-      args: { url: "https://trayambak.sktailabs.dev/docs/getting-started/install" },
+      args: { url: "https://nemo.sktailabs.dev/docs/getting-started/install" },
       toolType: "mcp",
       server: "puppeteer",
       status: "completed",

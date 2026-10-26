@@ -1,6 +1,6 @@
 ---
 name: unified-memory
-description: Share durable, inspectable context and handoffs between Trayambak, Trayambak Code, Hermes, Cursor, Trayambak, and other agents through the local ECC Memory Vault. Use when an agent must save work state, transfer context, resume another agent's task, or search shared project knowledge.
+description: Share durable, inspectable context and handoffs between Nemo, Nemo Code, Hermes, Cursor, Nemo, and other agents through the local ECC Memory Vault. Use when an agent must save work state, transfer context, resume another agent's task, or search shared project knowledge.
 metadata:
   origin: ECC
 ---
@@ -14,7 +14,7 @@ harness-specific transcripts or inboxes.
 ## Runtime Prerequisite
 
 This skill is guidance, not the Memory Vault executable. Skill-only, minimal,
-manual, and Trayambak plugin installs do not create the required commands on
+manual, and Nemo plugin installs do not create the required commands on
 `PATH`. Install the `ecc-universal` npm runtime separately before using the CLI
 or MCP examples:
 
@@ -31,7 +31,7 @@ A repository checkout may instead run the CLI as
 ## When To Use
 
 - Save durable context that another agent or later session will need.
-- Hand work from Trayambak to Trayambak Code, Hermes to Trayambak, or any other harness pair.
+- Hand work from Nemo to Nemo Code, Hermes to Nemo, or any other harness pair.
 - Resume a task and search for prior decisions, facts, lessons, or handoffs.
 - Diagnose malformed memories, broken links, duplicate IDs, or skipped
   symbolic links.
@@ -62,7 +62,7 @@ exists with unexpected content.
 Search for an existing memory before creating another copy:
 
 ```bash
-ecc memory search "authentication migration" --target-harness trayambak
+ecc memory search "authentication migration" --target-harness nemo
 ecc memory read <memory-id>
 ```
 
@@ -83,7 +83,7 @@ printf '%s\n' 'The migration tests pass; rollout is still pending.' |
   ecc memory save \
     --title "Authentication migration status" \
     --kind context \
-    --source-harness trayambak \
+    --source-harness nemo \
     --target all \
     --tag auth \
     --stdin
@@ -100,8 +100,8 @@ Write a handoff when another harness should continue the task:
 
 ```bash
 ecc memory handoff \
-  --from trayambak \
-  --target trayambak \
+  --from nemo \
+  --target nemo \
   --title "Finish authentication rollout" \
   --body-file handoff.md
 ```
@@ -150,7 +150,7 @@ Replace its placeholder with a lowercase server identity. The server command
 is:
 
 ```text
-ECC_MEMORY_HARNESS=trayambak ecc-memory-mcp
+ECC_MEMORY_HARNESS=nemo ecc-memory-mcp
 ```
 
 The MCP process binds writes and target filtering to

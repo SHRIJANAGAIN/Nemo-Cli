@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { spawn } from "child_process"
@@ -10,7 +10,7 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext } from "../types.js"
 import { getConnectorRegistry, type ConnectorEntry } from "./registry.js"
-import { saveConfig, type TrayambakConfig } from "../../../src/config.js"
+import { saveConfig, type NemoConfig } from "../../../src/config.js"
 import { canSpawnDirectly, resolveExecutable, resolveNpmCliJs } from "../../../../../packages/mcp/src/spawn-resolve.js"
 import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 
@@ -21,7 +21,7 @@ export { canSpawnDirectly, resolveExecutable, resolveNpmCliJs } from "../../../.
 /** Install root resolved per call (the old module-level constant froze
  *  process.cwd() at import, scattering installs across daemon/TUI cwds). */
 function installDirFor(serverId: string, cwd?: string): string {
-  return path.join(cwd ?? process.cwd(), ".trayambak", "mcp-installs", serverId)
+  return path.join(cwd ?? process.cwd(), ".nemo", "mcp-installs", serverId)
 }
 
 export interface InstallResult {
@@ -41,7 +41,7 @@ export function searchMcpServers(query: string): ConnectorEntry[] {
 export async function installMcpServer(
   serverId: string,
   cwd?: string,
-  config?: TrayambakConfig,
+  config?: NemoConfig,
 ): Promise<InstallResult> {
   const registry = getConnectorRegistry()
   const entry = registry.get(serverId)
@@ -66,8 +66,8 @@ export async function installMcpServer(
       // not the raw registry template — the old code saved the template, so
       // the installed payload was never referenced at runtime.
       current[serverId] = runnableSpec ?? spec
-      saveConfig({ mcpServers: current } as Partial<TrayambakConfig>)
-      return { ...result, message: `${result.message}\nMCP server '${serverId}' saved to trayambak config.` }
+      saveConfig({ mcpServers: current } as Partial<NemoConfig>)
+      return { ...result, message: `${result.message}\nMCP server '${serverId}' saved to nemo config.` }
     } catch {
       return result
     }
@@ -162,7 +162,7 @@ export async function installMcpServer(
   return {
     server: serverId,
     status: "skipped",
-    message: `Unknown server type for '${serverId}'. Configure manually in trayambak config.`,
+    message: `Unknown server type for '${serverId}'. Configure manually in nemo config.`,
   }
 }
 

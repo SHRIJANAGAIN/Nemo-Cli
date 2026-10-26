@@ -1,13 +1,13 @@
 # MCP — Model Context Protocol
 
-Trayambak is an MCP **client** (it runs other people's servers and exposes
+Nemo is an MCP **client** (it runs other people's servers and exposes
 their tools to the agent) and can also act as a minimal MCP **server** (it
 exposes a few tools to other clients over stdio).
 
 ## Configuring servers
 
 Servers live under `mcpServers` in `config.json` (or as a JSON blob in
-`TRAYAMBAK_MCP_SERVERS`). Each entry has **exactly one** transport — a stdio
+`NEMO_MCP_SERVERS`). Each entry has **exactly one** transport — a stdio
 `command` **or** an HTTP `url`:
 
 ```jsonc
@@ -60,11 +60,11 @@ Runtime knobs (config key → env var, from `loadConfig()`):
 
 | Key                        | Env var                                  | Default           | Meaning                               |
 | -------------------------- | ---------------------------------------- | ----------------- | ------------------------------------- |
-| `mcpToolCacheEnabled`      | `TRAYAMBAK_MCP_TOOL_CACHE_ENABLED`       | `true`            | Cache `listTools` results             |
-| `mcpToolCacheTtlMs`        | `TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS`        | `300000` (5 min)  | Cache TTL                             |
-| `mcpReconnectOnFailure`    | `TRAYAMBAK_MCP_RECONNECT_ON_FAILURE`     | `true`            | Reconnect after transport failure     |
-| `mcpHealthCheckEnabled`    | `TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED`     | `false`           | Periodic connection health monitoring |
-| `mcpHealthCheckIntervalMs` | `TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS` | `30000` (min 5 s) | Health-check interval                 |
+| `mcpToolCacheEnabled`      | `NEMO_MCP_TOOL_CACHE_ENABLED`       | `true`            | Cache `listTools` results             |
+| `mcpToolCacheTtlMs`        | `NEMO_MCP_TOOL_CACHE_TTL_MS`        | `300000` (5 min)  | Cache TTL                             |
+| `mcpReconnectOnFailure`    | `NEMO_MCP_RECONNECT_ON_FAILURE`     | `true`            | Reconnect after transport failure     |
+| `mcpHealthCheckEnabled`    | `NEMO_MCP_HEALTH_CHECK_ENABLED`     | `false`           | Periodic connection health monitoring |
+| `mcpHealthCheckIntervalMs` | `NEMO_MCP_HEALTH_CHECK_INTERVAL_MS` | `30000` (min 5 s) | Health-check interval                 |
 
 Client implementation: `packages/mcp/src/index.ts` (stdio spawn + HTTP/SSE,
 60s default timeout, liveness-checked reconnects).
@@ -72,10 +72,10 @@ Client implementation: `packages/mcp/src/index.ts` (stdio spawn + HTTP/SSE,
 ## Managing servers from the shell
 
 ```sh
-trayambak mcp list                 # every configured server: transport + auth status
-trayambak mcp auth <name>          # run the OAuth 2.0 + PKCE flow for a remote server
-trayambak mcp status <name>        # auth status for one server
-trayambak mcp logout <name>        # delete stored tokens for that server
+nemo mcp list                 # every configured server: transport + auth status
+nemo mcp auth <name>          # run the OAuth 2.0 + PKCE flow for a remote server
+nemo mcp status <name>        # auth status for one server
+nemo mcp logout <name>        # delete stored tokens for that server
 ```
 
 `list` prints one line per server, e.g.
@@ -87,12 +87,12 @@ acme-http  [http]  auth: authenticated
 
 Auth status is one of `authenticated`, `expired`, `not_authenticated`
 (`getMcpAuthStatus`). A remote server that is `not_authenticated` gets a hint:
-`Run: trayambak mcp auth <name>`.
+`Run: nemo mcp auth <name>`.
 
 If nothing is configured you get:
 
 ```
-No MCP servers configured (config `mcpServers` or TRAYAMBAK_MCP_SERVERS).
+No MCP servers configured (config `mcpServers` or NEMO_MCP_SERVERS).
 ```
 
 Usage errors (missing name, unknown action) print the usage line and exit `1`.
@@ -101,9 +101,9 @@ Usage errors (missing name, unknown action) print the usage line and exit `1`.
 
 - Flow: OAuth 2.0 + PKCE with a localhost callback
   (`packages/mcp/src/oauth.ts`, callback times out after 5 minutes).
-- Storage: `~/.trayambak/mcp-auth.json`, mode `0600`; override the path with
-  `TRAYAMBAK_MCP_AUTH_FILE`.
-- `trayambak mcp logout <name>` revokes the local entry. Never commit or paste
+- Storage: `~/.nemo/mcp-auth.json`, mode `0600`; override the path with
+  `NEMO_MCP_AUTH_FILE`.
+- `nemo mcp logout <name>` revokes the local entry. Never commit or paste
   this file — see [Security](security.md).
 
 ## Discovering servers (connector registry)
@@ -118,13 +118,13 @@ that `mcp__install` (`apps/runtime/src/tools/mcp/mcp-install.ts`) can install
 for you. Tool search filters by prefix (`mcp-` / `mcp__`).
 
 In the REPL, `/mcp` currently reports where servers are configured
-(`.trayambak/config.json`); day-to-day management is the `trayambak mcp …`
+(`.nemo/config.json`); day-to-day management is the `nemo mcp …`
 CLI above.
 
-## Trayambak as an MCP server
+## Nemo as an MCP server
 
 ```sh
-trayambak mcp-server
+nemo mcp-server
 ```
 
 Speaks JSON-RPC 2.0 over stdio (protocol `2024-11-05`) and answers

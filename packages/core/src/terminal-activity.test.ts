@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -14,10 +14,10 @@ import {
   startActivityHeartbeat,
 } from "./terminal-activity.js"
 
-const saved = process.env.TRAYAMBAK_TERMINAL_ACTIVITY
+const saved = process.env.NEMO_TERMINAL_ACTIVITY
 afterEach(() => {
-  if (saved === undefined) delete process.env.TRAYAMBAK_TERMINAL_ACTIVITY
-  else process.env.TRAYAMBAK_TERMINAL_ACTIVITY = saved
+  if (saved === undefined) delete process.env.NEMO_TERMINAL_ACTIVITY
+  else process.env.NEMO_TERMINAL_ACTIVITY = saved
 })
 
 /** Capture whatever is written to stdout during `fn`. */
@@ -60,38 +60,38 @@ describe("activitySequence", () => {
 
 describe("activityEnabled", () => {
   it("is opt-in only", () => {
-    delete process.env.TRAYAMBAK_TERMINAL_ACTIVITY
+    delete process.env.NEMO_TERMINAL_ACTIVITY
     expect(activityEnabled()).toBe(false)
-    process.env.TRAYAMBAK_TERMINAL_ACTIVITY = "1"
+    process.env.NEMO_TERMINAL_ACTIVITY = "1"
     expect(activityEnabled()).toBe(true)
   })
 
   it("treats any other value as off — a typo must not leak sequences", () => {
-    process.env.TRAYAMBAK_TERMINAL_ACTIVITY = "true"
+    process.env.NEMO_TERMINAL_ACTIVITY = "true"
     expect(activityEnabled()).toBe(false)
   })
 })
 
 describe("publishActivity", () => {
   it("writes nothing when disabled, so pipes stay clean", () => {
-    delete process.env.TRAYAMBAK_TERMINAL_ACTIVITY
+    delete process.env.NEMO_TERMINAL_ACTIVITY
     expect(capture(() => publishActivity("busy"))).toBe("")
   })
 
   it("writes the sequence when enabled", () => {
-    process.env.TRAYAMBAK_TERMINAL_ACTIVITY = "1"
+    process.env.NEMO_TERMINAL_ACTIVITY = "1"
     expect(capture(() => publishActivity("busy", 5))).toBe("\x1b]777;kilo;activity;1;busy;5\x1b\\")
   })
 
   it("returns to idle on clear", () => {
-    process.env.TRAYAMBAK_TERMINAL_ACTIVITY = "1"
+    process.env.NEMO_TERMINAL_ACTIVITY = "1"
     expect(capture(() => clearActivity(7))).toContain(";idle;7")
   })
 })
 
 describe("startActivityHeartbeat", () => {
   it("emits once immediately and can be stopped", () => {
-    process.env.TRAYAMBAK_TERMINAL_ACTIVITY = "1"
+    process.env.NEMO_TERMINAL_ACTIVITY = "1"
     let stop: () => void = () => {}
     const out = capture(() => {
       stop = startActivityHeartbeat(60_000, "retry")
@@ -101,14 +101,14 @@ describe("startActivityHeartbeat", () => {
   })
 
   it("does nothing at all when disabled", () => {
-    delete process.env.TRAYAMBAK_TERMINAL_ACTIVITY
+    delete process.env.NEMO_TERMINAL_ACTIVITY
     let stop = (): void => {}
     expect(capture(() => (stop = startActivityHeartbeat()))).toBe("")
     stop()
   })
 
   it("never holds the process open on its own", async () => {
-    process.env.TRAYAMBAK_TERMINAL_ACTIVITY = "1"
+    process.env.NEMO_TERMINAL_ACTIVITY = "1"
     const stop = startActivityHeartbeat(1_000)
     // unref'd timers do not keep the event loop alive; asserting the timer
     // exposes it is the observable part we can check without hanging the suite.

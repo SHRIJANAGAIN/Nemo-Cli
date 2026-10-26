@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest"
@@ -28,7 +28,7 @@ describe("grep ReDoS guard", () => {
 
   beforeEach(() => {
     setRipgrepOverride(null)
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-grep-"))
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-grep-"))
     fs.writeFileSync(path.join(dir, "normal.ts"), "hello world\nfoo bar\n")
     // Minified-style single mega-line ending in a NEAR-MISS: catastrophic
     // input for (a+)+$ (all-"a" would match fast; the trailing "b" forces
@@ -108,7 +108,7 @@ describe.skipIf(REAL_RG === null)("grep via ripgrep backend", () => {
   const ctx = (): ToolContext => ({ cwd: dir }) as ToolContext
 
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-grep-rg-"))
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-grep-rg-"))
     fs.writeFileSync(path.join(dir, "normal.ts"), "hello world\nfoo bar\n")
     fs.writeFileSync(path.join(dir, "bundle.js"), "a".repeat(100_000) + "b")
     fs.mkdirSync(path.join(dir, "node_modules", "junk"), { recursive: true })

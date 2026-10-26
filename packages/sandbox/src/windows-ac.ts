@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Windows AppContainer OS sandbox — the real isolator behind
@@ -74,9 +78,10 @@ import { spawn, ChildProcess } from "child_process"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import { envFirst, envPathList, envString } from "../../core/src/env_read.js"
 
 /** AppContainer profile name — one per machine, created on first use. */
-export const WINDOWS_AC_PROFILE_NAME = "TrayambakSandbox"
+export const WINDOWS_AC_PROFILE_NAME = "NemoSandbox"
 
 /** Cached helper identity — bump when the C# source changes. */
 // Cache key for the compiled helper — bump on ANY C# change so machines
@@ -88,13 +93,13 @@ const STATUS_TIMEOUT_MS = 60_000
 const STATUS_POLL_MS = 50
 
 function powershellPath(): string {
-  const root = process.env.SystemRoot ?? process.env.WINDIR ?? "C:\\Windows"
+  const root = envFirst(["SystemRoot", "WINDIR"])?.value ?? "C:\\Windows"
   return path.join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
 }
 
 function helperCacheDir(): string {
-  const base = process.env.LOCALAPPDATA ?? process.env.TEMP ?? os.tmpdir()
-  return path.join(base, "Trayambak", "sandbox")
+  const base = envFirst(["LOCALAPPDATA", "TEMP"])?.value ?? os.tmpdir()
+  return path.join(base, "Nemo", "sandbox")
 }
 
 // ─── Pure builders (unit-tested) ───
@@ -168,11 +173,11 @@ export function windowsAcCapable(): boolean {
 
 function computeCapability(): boolean {
   if (process.platform !== "win32") return false
-  if (process.env.NODE_ENV === "test") return false
+  if (envString("NODE_ENV") === "test") return false
   try {
     if (!fs.existsSync(powershellPath())) return false
     if (fs.existsSync(path.join(helperCacheDir(), HELPER_DLL_NAME))) return true
-    const root = process.env.WINDIR ?? "C:\\Windows"
+    const root = envString("WINDIR") ?? "C:\\Windows"
     // Add-Type -OutputAssembly compiles through this csc.exe (C#5 — the
     // embedded helper deliberately sticks to C#5 syntax).
     return fs.existsSync(path.join(root, "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe"))
@@ -229,8 +234,11 @@ function collectPaths(req: WindowsAcShimRequest): { writePaths: string[]; readPa
  */
 function shimEnvFor(req: WindowsAcShimRequest): Record<string, string> {
   const env = { ...req.env }
-  if (!env.SystemRoot) env.SystemRoot = process.env.SystemRoot ?? process.env.WINDIR ?? "C:\\Windows"
-  if (!env.PATH && !env.Path) env.PATH = process.env.PATH ?? ""
+  if (!env.SystemRoot) env.SystemRoot = envFirst(["SystemRoot", "WINDIR"])?.value ?? "C:\\Windows"
+  // envPathList normalises the platform separator and drops blanks, so a PATH
+  // containing an empty entry no longer yields a literal "" segment in the
+  // child's environment — which Windows resolves against the CURRENT directory.
+  if (!env.PATH && !env.Path) env.PATH = envPathList("PATH").join(path.delimiter)
   return env
 }
 
@@ -251,7 +259,7 @@ export async function spawnWindowsAcShim(req: WindowsAcShimRequest): Promise<Win
   const ps = powershellPath()
   if (!fs.existsSync(ps)) throw new Error("powershell.exe not found")
 
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sbx-"))
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-sbx-"))
   const statusPath = path.join(outDir, "status.json")
   const { writePaths, readPaths } = collectPaths(req)
 
@@ -385,7 +393,11 @@ function readStderrTail(child: ChildProcess): string {
  */
 export async function taskkillTree(pid: number): Promise<void> {
   if (pid <= 0) return
-  const taskkill = path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe")
+  const taskkill = path.join(
+    envFirst(["SystemRoot", "WINDIR"])?.value ?? "C:\\Windows",
+    "System32",
+    "taskkill.exe",
+  )
   await new Promise<void>((resolve) => {
     const killer = spawn(taskkill, ["/PID", String(pid), "/T", "/F"], {
       stdio: "ignore",
@@ -429,7 +441,7 @@ using System.Collections;
 using System.Runtime.InteropServices;
 using System.Text;
 
-public static class TrayambakAc
+public static class NemoAc
 {
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     struct STARTUPINFOW
@@ -485,7 +497,7 @@ public static class TrayambakAc
     public static int EnsureProfile(string name)
     {
         IntPtr created;
-        int hr = CreateAppContainerProfile(name, name, "Trayambak sandbox", IntPtr.Zero, 0, out created);
+        int hr = CreateAppContainerProfile(name, name, "Nemo sandbox", IntPtr.Zero, 0, out created);
         if (created != IntPtr.Zero) FreeSid(created);
         if (hr == 0 || hr == unchecked((int)0x800700B7)) return 0;
         return hr;
@@ -662,7 +674,7 @@ function Write-Status([bool]$ok, [string]$errMsg, [int]$childPid) {
 }
 $acPid = 0
 try {
-  $cache = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Trayambak\sandbox' } else { Join-Path $env:TEMP 'trayambak-sbx-helper' }
+  $cache = if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA 'Nemo\sandbox' } else { Join-Path $env:TEMP 'nemo-sbx-helper' }
   New-Item -ItemType Directory -Force -Path $cache | Out-Null
   $dll = Join-Path $cache 'win-ac-v2.dll'
   if (-not (Test-Path -LiteralPath $dll)) {
@@ -677,8 +689,8 @@ try {
   }
   Add-Type -Path $dll -ErrorAction Stop
 
-  $null = [TrayambakAc]::EnsureProfile($cfg.profileName)
-  $sid = [TrayambakAc]::DeriveSid($cfg.profileName)
+  $null = [NemoAc]::EnsureProfile($cfg.profileName)
+  $sid = [NemoAc]::DeriveSid($cfg.profileName)
   if (-not $sid) { throw 'cannot derive AppContainer SID' }
 
   # NTFS grants: deny beats allow, so deny ACEs are applied first, then
@@ -837,19 +849,19 @@ try {
     }
   }
 
-  $acPid = [TrayambakAc]::Spawn($sid, $cfg.cmdline, $cfg.cwd, $cfg.capabilitySids)
+  $acPid = [NemoAc]::Spawn($sid, $cfg.cmdline, $cfg.cwd, $cfg.capabilitySids)
   if ($acPid -le 0) { throw 'AppContainer spawn returned no pid' }
   Write-Status $true '' $acPid
 
   # The child streams straight into the shim's inherited pipe handles; all
   # we do is wait and mirror its exit code.
-  while ([TrayambakAc]::IsAlive($acPid)) { Start-Sleep -Milliseconds 100 }
-  $code = [TrayambakAc]::ExitCode($acPid)
+  while ([NemoAc]::IsAlive($acPid)) { Start-Sleep -Milliseconds 100 }
+  $code = [NemoAc]::ExitCode($acPid)
   exit $code
 } catch {
   if (-not $script:statusWritten) { Write-Status $false ('sandbox helper failed: ' + $_) $acPid }
   [Console]::Error.Write('sandbox helper failed: ' + $_)
-  if ($acPid -gt 0) { try { [TrayambakAc]::Kill($acPid) } catch { } }
+  if ($acPid -gt 0) { try { [NemoAc]::Kill($acPid) } catch { } }
   exit 255
 }
 `

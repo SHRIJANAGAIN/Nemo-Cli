@@ -220,7 +220,7 @@ describe("redactEmbeddedSecrets", () => {
     expect(redactEmbeddedSecrets("npm_abcdefghijklmnopqrstuvwxyz012345")).toContain("[REDACTED]")
     expect(redactEmbeddedSecrets("npm_abcdefghijklmnopqrstuvwxyz012345")).not.toContain("abcdefghijklmnopqrstuvwxyz")
     // PEM block — the base64 body is the key, so the WHOLE block goes.
-    // eslint-disable-next-line trayambak/no-hardcoded-secrets -- redaction TEST FIXTURE: this literal exists to prove the scanner REMOVES it (no key material, body is "MIIEpA…" placeholder dots)
+    // eslint-disable-next-line nemo/no-hardcoded-secrets -- redaction TEST FIXTURE: this literal exists to prove the scanner REMOVES it (no key material, body is "MIIEpA…" placeholder dots)
     const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAy...\n-----END RSA PRIVATE KEY-----"
     const redactedPem = redactEmbeddedSecrets(pem)
     expect(redactedPem).not.toContain("MIIEpAIBAAKCAQEAy")
@@ -379,7 +379,7 @@ describe("snake_case *_key names (#63)", () => {
 
 describe("secureDir", () => {
   it("creates the dir and returns it", () => {
-    const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sec-")), "sub")
+    const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nemo-sec-")), "sub")
     expect(secureDir(dir)).toBe(dir)
     expect(fs.existsSync(dir)).toBe(true)
   })
@@ -387,13 +387,13 @@ describe("secureDir", () => {
 
 describe("withFileLock", () => {
   it("runs the fn and releases the lock", async () => {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-lock-")), "s.json")
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nemo-lock-")), "s.json")
     const out = await withFileLock(file, () => 42)
     expect(out).toBe(42)
     expect(fs.existsSync(`${file}.lock`)).toBe(false)
   })
   it("releases the lock even when fn throws", async () => {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-lock-")), "s.json")
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nemo-lock-")), "s.json")
     await expect(withFileLock(file, () => Promise.reject(new Error("boom")))).rejects.toThrow("boom")
     expect(fs.existsSync(`${file}.lock`)).toBe(false)
   })

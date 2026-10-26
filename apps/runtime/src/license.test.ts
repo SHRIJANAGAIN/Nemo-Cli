@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it, afterEach, vi } from "vitest"
@@ -12,14 +12,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import {
   canUnlockDevmode,
-  canUsePentest,
   getMachineId,
   mintActivationKey,
   mintLegacyActivationKey,
   normalizeLicenseKey,
-  reportToolUsage,
   serverActivateLicenseKey,
-  serverCanUsePentest,
   serverMintTrial,
   serverVerifyLicenseKey,
   verifyLicenseKey,
@@ -37,7 +34,7 @@ const expDays = (): number => {
 
 describe("normalizeLicenseKey", () => {
   it("accepts dashed/lowercase/spaced input, rejects the rest", () => {
-    const key = mintActivationKey({ plan: "pentest", expDays: expDays() }, TEST_SECRET)
+    const key = mintActivationKey({ plan: "pro", expDays: expDays() }, TEST_SECRET)
     expect(key).toMatch(/^1102-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/)
     expect(normalizeLicenseKey(key.toLowerCase().replace(/-/g, " "))).toBe(key.replace(/-/g, ""))
     expect(normalizeLicenseKey("short")).toBeNull()
@@ -51,11 +48,11 @@ describe("normalizeLicenseKey", () => {
 
 describe("verifyLicenseKey", () => {
   it("accepts a well-formed minted key with intact claims", () => {
-    const key = mintActivationKey({ plan: "pentest", expDays: expDays() }, TEST_SECRET)
+    const key = mintActivationKey({ plan: "pro", expDays: expDays() }, TEST_SECRET)
     const v = verifyLicenseKey(key, TEST_SECRET)
     expect(v.valid).toBe(true)
     if (v.valid) {
-      expect(v.claims.plan).toBe("pentest")
+      expect(v.claims.plan).toBe("pro")
       expect(v.claims.id).toMatch(/^[0-9a-f]+$/)
       expect(v.claims.exp * 1000).toBeGreaterThan(Date.now())
     }
@@ -70,7 +67,7 @@ describe("verifyLicenseKey", () => {
   })
 
   it("rejects single-char tampering anywhere in the code", () => {
-    const key = mintActivationKey({ plan: "pentest", expDays: expDays() }, TEST_SECRET).replace(/-/g, "")
+    const key = mintActivationKey({ plan: "pro", expDays: expDays() }, TEST_SECRET).replace(/-/g, "")
     for (const pos of [0, 5, 10, 15]) {
       const tampered = key.slice(0, pos) + (key[pos] === "A" ? "B" : "A") + key.slice(pos + 1)
       expect(verifyLicenseKey(tampered, TEST_SECRET).valid, `pos ${pos}`).toBe(false)
@@ -78,12 +75,12 @@ describe("verifyLicenseKey", () => {
   })
 
   it("rejects keys minted under a different secret", () => {
-    const key = mintActivationKey({ plan: "pentest", expDays: expDays() }, "some-other-secret-0000000000000")
+    const key = mintActivationKey({ plan: "pro", expDays: expDays() }, "some-other-secret-0000000000000")
     expect(verifyLicenseKey(key, TEST_SECRET).valid).toBe(false)
   })
 
   it("rejects expired keys", () => {
-    const key = mintActivationKey({ plan: "pentest", expDays: 1 }, TEST_SECRET)
+    const key = mintActivationKey({ plan: "pro", expDays: 1 }, TEST_SECRET)
     const v = verifyLicenseKey(key, TEST_SECRET)
     expect(v.valid).toBe(false)
     if (!v.valid) expect(v.reason).toContain("expired")
@@ -98,7 +95,7 @@ describe("verifyLicenseKey", () => {
   })
 
   it("every minted key starts with the 1102 brand prefix", () => {
-    for (const plan of ["basic", "pentest", "pro", "enterprise"] as const) {
+    for (const plan of ["basic", "pro", "enterprise"] as const) {
       const key = mintActivationKey({ plan, expDays: expDays() }, TEST_SECRET)
       expect(key.startsWith("1102-")).toBe(true)
       expect(verifyLicenseKey(key, TEST_SECRET).valid).toBe(true)
@@ -113,21 +110,9 @@ describe("verifyLicenseKey", () => {
     // size assertion), but no longer dies on an unlucky coin flip.
     const keys = new Set<string>()
     for (let i = 0; i < 200 && keys.size < 10; i += 1) {
-      keys.add(mintActivationKey({ plan: "pentest", expDays: expDays() }, TEST_SECRET))
+      keys.add(mintActivationKey({ plan: "pro", expDays: expDays() }, TEST_SECRET))
     }
     expect(keys.size).toBe(10)
-  })
-})
-
-describe("canUsePentest", () => {
-  it("allows pentest/pro/enterprise plans, blocks basic + invalid", () => {
-    for (const plan of ["pentest", "pro", "enterprise"] as const) {
-      expect(canUsePentest(mintActivationKey({ plan, expDays: expDays() }, TEST_SECRET), TEST_SECRET)).toBe(true)
-    }
-    expect(canUsePentest(mintActivationKey({ plan: "basic", expDays: expDays() }, TEST_SECRET), TEST_SECRET)).toBe(
-      false,
-    )
-    expect(canUsePentest(undefined)).toBe(false)
   })
 })
 
@@ -147,7 +132,7 @@ describe("machine identity", () => {
 
   it("mints a stable UUID in the override file, never touching the real home", () => {
     const file = join(mkdtempSync(join(tmpdir(), "lic-mid-")), "machine-id")
-    vi.stubEnv("TRAYAMBAK_MACHINE_ID_FILE", file)
+    vi.stubEnv("NEMO_MACHINE_ID_FILE", file)
     const first = getMachineId()
     expect(first).toMatch(/^[0-9a-f-]{36}$/)
     expect(getMachineId()).toBe(first)
@@ -189,34 +174,18 @@ describe("server licensing client", () => {
     }
   }
 
-  it("verifies, activates, and reports usage against a live server", async () => {
+  it("verifies and activates against a live server", async () => {
     const s = await stub({
-      "/license/verify": () => ({ status: 200, json: { valid: true, plan: "pentest", exp: 1893456000 } }),
-      "/license/activate": () => ({ status: 200, json: { ok: true, plan: "pentest", exp: 1893456000 } }),
-      "/license/usage": () => ({ status: 200, json: { ok: true } }),
+      "/license/verify": () => ({ status: 200, json: { valid: true, plan: "pro", exp: 1893456000 } }),
+      "/license/activate": () => ({ status: 200, json: { ok: true, plan: "pro", exp: 1893456000 } }),
     })
     try {
       const key = "1102-AAAA-BBBB-CCCC"
       const v = await serverVerifyLicenseKey(key, { serverUrl: s.url, machineId: "m1" })
-      expect(v).toMatchObject({ valid: true, plan: "pentest" })
-      const p = await serverCanUsePentest(key, { serverUrl: s.url, machineId: "m1" })
-      expect(p.valid).toBe(true)
+      expect(v).toMatchObject({ valid: true, plan: "pro" })
       const a = await serverActivateLicenseKey(key, { serverUrl: s.url, machineId: "m1" })
       expect(a.ok).toBe(true)
-      expect(
-        await reportToolUsage(
-          key,
-          { tool: "trayambak__PentestRunTool", target: "example.com" },
-          { serverUrl: s.url, machineId: "m1" },
-        ),
-      ).toBe(true)
-      expect(s.seen.map((r) => r.url)).toEqual([
-        "/license/verify",
-        "/license/verify",
-        "/license/activate",
-        "/license/usage",
-      ])
-      expect(s.seen[3]?.body).toMatchObject({ tool: "trayambak__PentestRunTool", target: "example.com" })
+      expect(s.seen.map((r) => r.url)).toEqual(["/license/verify", "/license/activate"])
     } finally {
       await s.close()
     }
@@ -226,26 +195,14 @@ describe("server licensing client", () => {
     const s = await stub({
       "/license/verify": () => ({ status: 200, json: { valid: false, reason: "bound to another machine" } }),
       "/license/activate": () => ({ status: 200, json: { ok: false, reason: "bound to another machine" } }),
-      "/license/usage": () => ({ status: 403, json: { error: "license invalid" } }),
     })
     try {
       const key = "1102-AAAA-BBBB-CCCC"
       const v = await serverVerifyLicenseKey(key, { serverUrl: s.url, machineId: "m1" })
       expect(v.valid).toBe(false)
       expect(v.reason).toContain("another machine")
-      const basic = await stub({
-        "/license/verify": () => ({ status: 200, json: { valid: true, plan: "basic", exp: 1893456000 } }),
-      })
-      try {
-        const p = await serverCanUsePentest(key, { serverUrl: basic.url, machineId: "m1" })
-        expect(p.valid).toBe(false)
-        expect(p.reason).toContain("does not cover pentest")
-      } finally {
-        await basic.close()
-      }
       const a = await serverActivateLicenseKey(key, { serverUrl: s.url, machineId: "m1" })
       expect(a.ok).toBe(false)
-      expect(await reportToolUsage(key, { tool: "x" }, { serverUrl: s.url, machineId: "m1" })).toBe(false)
       // No server at all: unreachable, never valid, never throws.
       const dead = await serverVerifyLicenseKey(key, {
         serverUrl: "http://127.0.0.1:1",
@@ -260,13 +217,6 @@ describe("server licensing client", () => {
         timeoutMs: 2000,
       })
       expect(deadAct.ok).toBe(false)
-      expect(
-        await reportToolUsage(
-          key,
-          { tool: "x" },
-          { serverUrl: "http://127.0.0.1:1", machineId: "m1", timeoutMs: 2000 },
-        ),
-      ).toBe(false)
     } finally {
       await s.close()
     }

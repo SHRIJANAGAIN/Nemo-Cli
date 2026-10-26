@@ -1,29 +1,29 @@
 # CODEOWNERS — GitHub-level review enforcement for the ownership that
 # AGENTS.md describes in prose. Last matching entry wins.
 # Order: global defaults, then per-area owners.
-# NOTE: @TrayambakMaintainers is a placeholder — swap in the real GitHub
+# NOTE: @NemoMaintainers is a placeholder — swap in the real GitHub
 # handle/team before pushing (GitHub ignores owners it cannot resolve).
 
 # Default: any change needs a maintainer review.
-* @TrayambakMaintainers
+* @NemoMaintainers
 
 # ─── Security-sensitive paths (protected areas from AGENTS.md) ───
-/packages/execpolicy/            @TrayambakMaintainers
-/packages/sandbox/               @TrayambakMaintainers
-/packages/server/src/            @TrayambakMaintainers
-/.github/                        @TrayambakMaintainers
-/.gitleaks.toml                  @TrayambakMaintainers
-/Dockerfile                      @TrayambakMaintainers
+/packages/execpolicy/            @NemoMaintainers
+/packages/sandbox/               @NemoMaintainers
+/packages/server/src/            @NemoMaintainers
+/.github/                        @NemoMaintainers
+/.gitleaks.toml                  @NemoMaintainers
+/Dockerfile                      @NemoMaintainers
 
 # ─── Agent loop / approval / audit (changes require harness tests) ───
-/apps/runtime/src/agent/         @TrayambakMaintainers
-/packages/core/src/approval.ts   @TrayambakMaintainers
-/packages/core/src/audit_log.ts  @TrayambakMaintainers
-/packages/core/src/state_db.ts   @TrayambakMaintainers
-/packages/protocol/src/permission-rules.ts @TrayambakMaintainers
+/apps/runtime/src/agent/         @NemoMaintainers
+/packages/core/src/approval.ts   @NemoMaintainers
+/packages/core/src/audit_log.ts  @NemoMaintainers
+/packages/core/src/state_db.ts   @NemoMaintainers
+/packages/protocol/src/permission-rules.ts @NemoMaintainers
 
 # ─── Build / release gates ───
-/package.json                    @TrayambakMaintainers
-/package-lock.json               @TrayambakMaintainers
-/scripts/                        @TrayambakMaintainers
-/CHANGELOG.md                    @TrayambakMaintainers
+/package.json                    @NemoMaintainers
+/package-lock.json               @NemoMaintainers
+/scripts/                        @NemoMaintainers
+/CHANGELOG.md                    @NemoMaintainers

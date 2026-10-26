@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 function makeShelf(): string {
-  shelf = mkdtempSync(join(tmpdir(), "trayambak-shelf-"))
+  shelf = mkdtempSync(join(tmpdir(), "nemo-shelf-"))
   mkdirSync(join(shelf, "skills", "reviewer"), { recursive: true })
   writeFileSync(
     join(shelf, "skills", "reviewer", "SKILL.md"),
@@ -54,7 +54,7 @@ describe("scanMarketplace", () => {
   })
 
   it("treats a missing shelf as empty, not an error", () => {
-    shelf = mkdtempSync(join(tmpdir(), "trayambak-shelf-"))
+    shelf = mkdtempSync(join(tmpdir(), "nemo-shelf-"))
 
     expect(scanMarketplace(shelf)).toEqual([])
   })
@@ -74,23 +74,23 @@ describe("searchMarketplace", () => {
 describe("installMarketplaceEntry / removeMarketplaceEntry", () => {
   it("installs a skill bundle and an agent card into the project", () => {
     const dir = makeShelf()
-    project = mkdtempSync(join(tmpdir(), "trayambak-proj-"))
+    project = mkdtempSync(join(tmpdir(), "nemo-proj-"))
 
     expect(installMarketplaceEntry(dir, "skill", "reviewer", project).ok).toBe(true)
     expect(installMarketplaceEntry(dir, "agent", "architect", project).ok).toBe(true)
-    expect(readFileSync(join(project, ".trayambak", "skills", "reviewer", "SKILL.md"), "utf8")).toContain(
+    expect(readFileSync(join(project, ".nemo", "skills", "reviewer", "SKILL.md"), "utf8")).toContain(
       "Reviews code",
     )
-    expect(readFileSync(join(project, ".trayambak", "agents", "architect.md"), "utf8")).toContain("Persona.")
+    expect(readFileSync(join(project, ".nemo", "agents", "architect.md"), "utf8")).toContain("Persona.")
 
     expect(removeMarketplaceEntry("skill", "reviewer", project).ok).toBe(true)
-    expect(existsSync(join(project, ".trayambak", "skills", "reviewer"))).toBe(false)
+    expect(existsSync(join(project, ".nemo", "skills", "reviewer"))).toBe(false)
     expect(removeMarketplaceEntry("agent", "architect", project).ok).toBe(true)
   })
 
   it("refuses overwrites, missing entries, bad names, and missing installs", () => {
     const dir = makeShelf()
-    project = mkdtempSync(join(tmpdir(), "trayambak-proj-"))
+    project = mkdtempSync(join(tmpdir(), "nemo-proj-"))
 
     expect(installMarketplaceEntry(dir, "skill", "ghost", project)).toMatchObject({ ok: false })
     expect(installMarketplaceEntry(dir, "agent", "ghost", project)).toMatchObject({ ok: false })
@@ -110,7 +110,7 @@ describe("createMarketplaceTool", () => {
 
   it("lists, searches, installs, and removes through tool calls", async () => {
     const dir = makeShelf()
-    project = mkdtempSync(join(tmpdir(), "trayambak-proj-"))
+    project = mkdtempSync(join(tmpdir(), "nemo-proj-"))
     const tool = createMarketplaceTool(dir)
     const ctx = { cwd: project } as never
     const body = (r: { content: Array<{ text?: string }> }): string => r.content.map((c) => c.text ?? "").join()
@@ -130,7 +130,7 @@ describe("createMarketplaceTool", () => {
       ctx,
     )
     expect(installed.isError).toBe(false)
-    expect(existsSync(join(project, ".trayambak", "skills", "reviewer", "SKILL.md"))).toBe(true)
+    expect(existsSync(join(project, ".nemo", "skills", "reviewer", "SKILL.md"))).toBe(true)
 
     const removed = await tool.execute(
       "t1",

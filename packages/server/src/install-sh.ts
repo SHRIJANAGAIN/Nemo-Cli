@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -27,7 +27,7 @@
  */
 
 export const INSTALL_SH = `#!/usr/bin/env bash
-# Trayambak one-line installer (macOS / Linux).
+# Nemo one-line installer (macOS / Linux).
 # Run: curl -fsSL https://skt.sktailabs.in/install.sh | bash
 set -u
 
@@ -110,11 +110,11 @@ else
   ANIM=0
 fi
 
-# Full-page clear, then the banner shimmers through violet-to-cyan while the
-# third eye opens in stages: shut, stirring, half-open, blazing.
+# Full-page clear, then the banner shimmers through steel to silver-white
+# while the third eye opens in stages: shut, stirring, half-open, blazing.
 if [ "$ANIM" -eq 1 ]; then
   clear 2>/dev/null || printf '\\033c'
-  for sweep in 45 51 87 123 159 195; do
+  for sweep in 238 242 246 250 252 255; do
     printf '%s %s[38;5;%smT R A Y A M B A K%s[0m   ' "$CR" "$ESC" "$sweep" "$ESC"
     sleep 0.13
   done
@@ -140,7 +140,7 @@ if [ "$ANIM" -eq 1 ]; then
 fi
 
 if ! command -v node >/dev/null 2>&1; then
-  printf 'node not found — installing Node.js LTS first, then trayambak...\\n'
+  printf 'node not found — installing Node.js LTS first, then nemo...\\n'
   install_node_lts
   command -v node >/dev/null 2>&1 || fail "Node.js install finished but 'node' is still not on PATH — restart the terminal and re-run this command."
   hash -r
@@ -156,7 +156,7 @@ fi
 # the foreground paints a glowing comet (head + fading trail) over a dim
 # track, plus the eye spinner and elapsed time.
 log=$(mktemp)
-npm install -g @skt-ai-labs/trayambak-cli >"$log" 2>&1 &
+npm install -g @shrijan/nemo-cli >"$log" 2>&1 &
 NPMPID=$!
 start=$SECONDS
 width=24
@@ -190,7 +190,7 @@ while kill -0 "$NPMPID" 2>/dev/null; do
       2) eye='◯' ;;
       *) eye='◎' ;;
     esac
-    printf '%s%s [%s%s[0m] downloading trayambak... %s s elapsed   ' "$CR" "$eye" "$bar" "$ESC" "$elapsed"
+    printf '%s%s [%s%s[0m] downloading nemo... %s s elapsed   ' "$CR" "$eye" "$bar" "$ESC" "$elapsed"
     sleep 0.15
   else
     sleep 2
@@ -211,7 +211,7 @@ rm -f "$log"
 printf 'download + install complete.\\n'
 printf '\\n'
 
-ver=$(trayambak --version 2>/dev/null) || fail "install finished but 'trayambak' is not on PATH — restart the terminal and try again."
+ver=$(nemo --version 2>/dev/null) || fail "install finished but 'nemo' is not on PATH — restart the terminal and try again."
 if [ "$ANIM" -eq 1 ]; then
   printf ' %s[38;5;46m( ◉ )%s[0m  %s installed.\\n' "$ESC" "$ESC" "$ver"
 else
@@ -221,7 +221,7 @@ printf '\\n'
 printf '%s[3mthree eyes of Shiva is coming%s[23m — to your terminal.\\n' "$ESC" "$ESC"
 printf '\\n'
 printf 'Next steps:\\n'
-printf '  1. trayambak            # open the TUI\\n'
+printf '  1. nemo            # open the TUI\\n'
 printf '  2. /provider add        # connect your model backend + API key\\n'
 printf '  3. /github login        # authorize GitHub (browser opens)\\n'
 printf '  4. /devmode trial       # or paste a license: /devmode on 1102-XXXX-XXXX-XXXX\\n'

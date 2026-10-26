@@ -15,42 +15,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      # The TRAYAMBAK_SANDBOX_* marker that used to gate nested-sandbox tests no
-      # longer appears anywhere in source: the lint rule and the runtime both use
-      # CODEX_SANDBOX now, and the old exclusions (packages/core/src/sandbox.ts
-      # and its test) were ghost paths that never existed on disk. The tripwire
-      # stays: it fails the moment anyone reintroduces the retired marker.
-      - name: "TRAYAMBAK_SANDBOX_* is retired (allowed files: none)"
+      # The CODEX_SANDBOX_* marker that used to gate nested-sandbox tests no
+      # longer appears anywhere in source: the lint rule and the runtime both
+      # use NEMO_SANDBOX now, and the old exclusions
+      # (packages/core/src/sandbox.ts and its test) were ghost paths that never
+      # existed on disk. The tripwire stays: it fails the moment anyone
+      # reintroduces the retired marker.
+      - name: "CODEX_SANDBOX_* is retired (allowed files: none)"
         run: |
-          VIOLATIONS=$(grep -rn "TRAYAMBAK_SANDBOX_" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --exclude-dir=node_modules --exclude-dir=dist apps packages skt 2>/dev/null || true)
+          VIOLATIONS=$(grep -rn "CODEX_SANDBOX" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --exclude-dir=node_modules --exclude-dir=dist apps packages nemo 2>/dev/null || true)
           if [ -n "$VIOLATIONS" ]; then
-            echo "::error::retired TRAYAMBAK_SANDBOX_* marker reintroduced - allowed files: NONE (the live marker is CODEX_SANDBOX, owned by packages/sandbox/ and packages/core/src/env_filter.ts):"
+            echo "::error::retired CODEX_SANDBOX_* marker reintroduced - allowed files: NONE (the live marker is NEMO_SANDBOX, owned by packages/sandbox/ and packages/core/src/env_filter.ts):"
             echo "$VIOLATIONS"
             exit 1
           fi
-          echo "retired TRAYAMBAK_SANDBOX_ markers ok (none present)"
-      # CODEX_SANDBOX allowlist = exactly the files that read or write the
+          echo "retired CODEX_SANDBOX_ markers ok (none present)"
+      # NEMO_SANDBOX allowlist = exactly the files that read or write the
       # marker, derived by grepping the tree today (plus *.test.ts / *.spec.ts
       # files, which assert on it):
       #   packages/core/src/env_filter.ts            - stamps it on child envs
       #   packages/sandbox/src/types.ts              - filterEnv stamps it
       #   packages/sandbox/src/spawn.ts              - reads it (are we sandboxed?)
-      #   packages/eslint-plugin-trayambak/src/index.mjs - the no-sandbox-env-touch
+      #   packages/eslint-plugin-nemo/src/index.mjs - the no-sandbox-env-touch
       #     rule enforces the marker (it splits the literal on purpose so this
       #     grep cannot trip on the enforcement file itself, but it still owns it)
-      - name: CODEX_SANDBOX markers only in their owners (and tests)
+      - name: NEMO_SANDBOX markers only in their owners (and tests)
         run: |
-          ALLOWED="packages/core/src/env_filter\.ts:|packages/sandbox/src/types\.ts:|packages/sandbox/src/spawn\.ts:|packages/eslint-plugin-trayambak/src/index\.mjs:"
-          VIOLATIONS=$(grep -rn "CODEX_SANDBOX" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --exclude-dir=node_modules --exclude-dir=dist apps packages skt 2>/dev/null | grep -vE "\.(test|spec)\.tsx?:|$ALLOWED" || true)
+          ALLOWED="packages/core/src/env_filter\.ts:|packages/sandbox/src/types\.ts:|packages/sandbox/src/spawn\.ts:|packages/eslint-plugin-nemo/src/index\.mjs:"
+          VIOLATIONS=$(grep -rn "NEMO_SANDBOX" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --exclude-dir=node_modules --exclude-dir=dist apps packages nemo 2>/dev/null | grep -vE "\.(test|spec)\.tsx?:|$ALLOWED" || true)
           if [ -n "$VIOLATIONS" ]; then
-            echo "::error::CODEX_SANDBOX referenced outside its allowlist (packages/core/src/env_filter.ts, packages/sandbox/src/{types,spawn}.ts, the lint rule; test files excluded):"
+            echo "::error::NEMO_SANDBOX referenced outside its allowlist (packages/core/src/env_filter.ts, packages/sandbox/src/{types,spawn}.ts, the lint rule; test files excluded):"
             echo "$VIOLATIONS"
             exit 1
           fi
-          echo "CODEX_SANDBOX markers ok (owners and tests only)"
+          echo "NEMO_SANDBOX markers ok (owners and tests only)"
       # The system prompt is the agent's core secret: the literal
       # `dump-system-prompt` may appear ONLY in the refusal (index.ts), the
       # registry that must never contain the flag (command-registry.ts), the
@@ -60,7 +61,7 @@ jobs:
       - name: dump-system-prompt literal only in the refusal, trail, and pins
         run: |
           ALLOWED="apps/cli/src/index\.ts:|apps/cli/src/command-registry\.ts:|apps/cli/src/command-registry\.test\.ts:|apps/cli/src/system-prompt-lock\.test\.ts:|apps/runtime/src/security-log\.ts:|apps/runtime/src/security-log\.test\.ts:"
-          VIOLATIONS=$(grep -rn "dump-system-prompt\|dumpSystemPrompt\|dump_system_prompt" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --include="*.md" --exclude-dir=node_modules --exclude-dir=dist apps packages skt docs 2>/dev/null | grep -vE "$ALLOWED" || true)
+          VIOLATIONS=$(grep -rn "dump-system-prompt\|dumpSystemPrompt\|dump_system_prompt" --include="*.ts" --include="*.tsx" --include="*.mjs" --include="*.js" --include="*.md" --exclude-dir=node_modules --exclude-dir=dist apps packages nemo docs 2>/dev/null | grep -vE "$ALLOWED" || true)
           if [ -n "$VIOLATIONS" ]; then
             echo "::error::dump-system-prompt port outside the refusal allowlist (apps/cli/src/index.ts, command-registry.ts, security-log.ts + pin tests):"
             echo "$VIOLATIONS"
@@ -78,17 +79,17 @@ jobs:
           echo "no-console-in-core ok"
       - name: No hardcoded secrets
         run: |
-          VIOLATIONS=$(grep -rniE "(sk-ant-|sk-proj-|xai-|AIza[0-9A-Za-z_-]{20,}|ghp_[0-9A-Za-z]{20,}|AKIA[0-9A-Z]{16})" --include="*.ts" --include="*.tsx" apps packages skt 2>/dev/null | grep -v "\.test\.ts" || true)
+          VIOLATIONS=$(grep -rniE "(sk-ant-|sk-proj-|xai-|AIza[0-9A-Za-z_-]{20,}|ghp_[0-9A-Za-z]{20,}|AKIA[0-9A-Z]{16})" --include="*.ts" --include="*.tsx" apps packages nemo 2>/dev/null | grep -v "\.test\.ts" || true)
           if [ -n "$VIOLATIONS" ]; then
             echo "::error::possible hardcoded secret:"
             echo "$VIOLATIONS"
             exit 1
           fi
           echo "secrets ok"
-      # The real enforcement is the AST rule `trayambak/approval-mode-exhaustive`
+      # The real enforcement is the AST rule `nemo/approval-mode-exhaustive`
       # (registered as "error" in eslint.config.mjs): it walks every switch whose
       # discriminant is approval state and demands a `default` arm, and its
-      # behavior is pinned by packages/eslint-plugin-trayambak/src/index.test.ts
+      # behavior is pinned by packages/eslint-plugin-nemo/src/index.test.ts
       # in the main CI test job. The previous version of this step grepped for
       # the literal "default" within 2 lines of any "switch" — any unrelated
       # `default:` could satisfy it, so it proved nothing. This step now guards
@@ -97,7 +98,7 @@ jobs:
       # decision point that rule protects.
       - name: Approval exhaustiveness guard must stay armed (AST rule @ error)
         run: |
-          grep -q '"approval-mode-exhaustive": approvalModeExhaustive' packages/eslint-plugin-trayambak/src/index.mjs \
+          grep -q '"approval-mode-exhaustive": approvalModeExhaustive' packages/eslint-plugin-nemo/src/index.mjs \
             || { echo "::error::approval-mode-exhaustive rule missing from the plugin"; exit 1; }
           RULE_LINES=$(grep -n "approval-mode-exhaustive" eslint.config.mjs || true)
           if [ -z "$RULE_LINES" ]; then
@@ -109,17 +110,17 @@ jobs:
             echo "$RULE_LINES"
             exit 1
           fi
-          grep -q 'describe("approval-mode-exhaustive"' packages/eslint-plugin-trayambak/src/index.test.ts \
+          grep -q 'describe("approval-mode-exhaustive"' packages/eslint-plugin-nemo/src/index.test.ts \
             || { echo "::error::behavioral tests for approval-mode-exhaustive were removed"; exit 1; }
           grep -q "export function approvalFor" packages/core/src/approval.ts \
             || { echo "::error::approvalFor() single decision point missing from packages/core/src/approval.ts"; exit 1; }
           echo "approval exhaustiveness guard armed (AST rule @ error, behavior tested, approvalFor present)"
       # The system prompt (tools + memory + rules + mode blocks) is the agent's
-      # core secret. It used to be printable via `trayambak --dump-system-prompt`
+      # core secret. It used to be printable via `nemo --dump-system-prompt`
       # and was persisted verbatim into every session file. Both are gone; this
       # tripwire keeps them gone.
       # The system prompt (tools + memory + rules + mode blocks) is the agent's
-      # core secret. It used to be printable via `trayambak --dump-system-prompt`
+      # core secret. It used to be printable via `nemo --dump-system-prompt`
       # and was persisted verbatim into every session file. Both are gone; this
       # keeps them gone. Comments and doc text MAY still name the retired flag
       # (they must, to explain why it is gone) — what must never return is

@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD007 -->
 
-You are analyzing a skill/rule file for a coding agent (Trayambak Code).
+You are analyzing a skill/rule file for a coding agent (Nemo Code).
 Your task: extract the **observable behavioral sequence** that an agent should follow when this skill is active.
 
 Each step should be described in natural language. Do NOT use regex patterns.

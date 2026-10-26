@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
@@ -18,16 +18,16 @@ afterEach(() => {
 })
 
 function tempHome(): string {
-  home = mkdtempSync(join(tmpdir(), "trayambak-uninstall-"))
+  home = mkdtempSync(join(tmpdir(), "nemo-uninstall-"))
   return home
 }
 
 describe("uninstallCommand (windows layout)", () => {
-  it("removes both shims and clears TRAYAMBAK_HOME", () => {
+  it("removes both shims and clears NEMO_HOME", () => {
     const dir = tempHome()
     const bin = join(dir, "bin")
-    const t = join(bin, "trayambak.cmd")
-    const s = join(bin, "skt.cmd")
+    const t = join(bin, "nemo.cmd")
+    const s = join(bin, "nemo-code.cmd")
     mkdirSync(bin, { recursive: true })
     writeFileSync(t, "shim")
     writeFileSync(s, "shim")
@@ -44,9 +44,9 @@ describe("uninstallCommand (windows layout)", () => {
 
     expect(existsSync(t)).toBe(false)
     expect(existsSync(s)).toBe(false)
-    expect(setxArgs).toEqual([["TRAYAMBAK_HOME", ""]])
+    expect(setxArgs).toEqual([["NEMO_HOME", ""]])
     expect(out).toContain("removed shim")
-    expect(out).toContain("cleared TRAYAMBAK_HOME")
+    expect(out).toContain("cleared NEMO_HOME")
     expect(out).toContain("kept: config, sessions, and state")
   })
 
@@ -56,7 +56,7 @@ describe("uninstallCommand (windows layout)", () => {
     const out = uninstallCommand({ homeDir: dir, platform: "win32", setx: () => 1 })
 
     expect(out).toContain("shim not found (skipped)")
-    expect(out).toContain("could not clear TRAYAMBAK_HOME")
+    expect(out).toContain("could not clear NEMO_HOME")
   })
 })
 
@@ -64,7 +64,7 @@ describe("uninstallCommand (posix layout)", () => {
   it("removes ~/.local/bin launchers without touching setx", () => {
     const dir = tempHome()
     mkdirSync(join(dir, ".local", "bin"), { recursive: true })
-    writeFileSync(join(dir, ".local", "bin", "trayambak"), "shim")
+    writeFileSync(join(dir, ".local", "bin", "nemo"), "shim")
     let setxCalled = false
 
     const out = uninstallCommand({
@@ -76,7 +76,7 @@ describe("uninstallCommand (posix layout)", () => {
       },
     })
 
-    expect(existsSync(join(dir, ".local", "bin", "trayambak"))).toBe(false)
+    expect(existsSync(join(dir, ".local", "bin", "nemo"))).toBe(false)
     expect(setxCalled).toBe(false)
     expect(out).toContain("shim not found (skipped)")
     expect(out).toContain("npm rm -g")

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -63,7 +63,7 @@ describe("loadCommandsFromDir", () => {
   let dir = ""
 
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-cmds-"))
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-cmds-"))
   })
 
   afterEach(() => {
@@ -94,7 +94,7 @@ describe("loadRulesFromDir", () => {
   let dir = ""
 
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-rules-"))
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-rules-"))
   })
 
   afterEach(() => {
@@ -123,7 +123,7 @@ describe("rulesBlock", () => {
   })
 
   it("prefixes the block with the rules header", () => {
-    expect(rulesBlock(["### a\nA", "### b\nB"])).toBe("Rules (from .trayambak/rules):\n### a\nA\n### b\nB")
+    expect(rulesBlock(["### a\nA", "### b\nB"])).toBe("Rules (from .nemo/rules):\n### a\nA\n### b\nB")
   })
 })
 
@@ -133,7 +133,7 @@ describe("default directories", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd()
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-cwd-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-cwd-"))
     process.chdir(tmp)
   })
 
@@ -146,7 +146,7 @@ describe("default directories", () => {
     expect(defaultCommandsDir()).toBe(path.join(tmp, "commands"))
   })
 
-  it("resolves the rules dir as <cwd>/.trayambak/rules", () => {
-    expect(defaultRulesDir()).toBe(path.join(tmp, ".trayambak", "rules"))
+  it("resolves the rules dir as <cwd>/.nemo/rules", () => {
+    expect(defaultRulesDir()).toBe(path.join(tmp, ".nemo", "rules"))
   })
 })

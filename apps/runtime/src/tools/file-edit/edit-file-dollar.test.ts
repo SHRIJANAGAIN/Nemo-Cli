@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "node:fs"
@@ -12,7 +12,7 @@ import { createEditFileTool } from "./edit-file.js"
 import type { ToolContext } from "../types.js"
 
 function tmpCtx(): { dir: string; ctx: ToolContext } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-edit-dollar-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-edit-dollar-"))
   return { dir, ctx: { cwd: dir } as unknown as ToolContext }
 }
 

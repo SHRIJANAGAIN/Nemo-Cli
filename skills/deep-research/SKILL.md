@@ -28,7 +28,7 @@ At least one of:
 - **firecrawl** — `firecrawl_search`, `firecrawl_scrape`, `firecrawl_crawl`
 - **exa** — `web_search_exa`, `web_search_advanced_exa`, `crawling_exa`
 
-Both together give the best coverage. Configure in `~/.trayambak.json` or `~/.trayambak/config.toml`.
+Both together give the best coverage. Configure in `~/.nemo.json` or `~/.nemo/config.toml`.
 
 ## Untrusted Sources
 
@@ -156,7 +156,7 @@ Sub-questions investigated: [list]
 
 ## Parallel Research with Subagents
 
-For broad topics, use Trayambak Code's Task tool to parallelize:
+For broad topics, use Nemo Code's Task tool to parallelize:
 
 ```
 Launch 3 research agents in parallel:

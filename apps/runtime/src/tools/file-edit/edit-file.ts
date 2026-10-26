@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -22,7 +22,7 @@ const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "edit_file",
   description:
-    "Edit a file by replacing text. Provide old_string (unique in the file) and new_string. Set replace_all to change every occurrence. Exact matches win; when nothing matches exactly, a whitespace/unicode-tolerant unique match is accepted (indentation drift, trailing spaces, CRLF/LF, smart quotes). Fails if old_string is not found or is not unique (unless replace_all). .git and .trayambak directories are read-only metadata: edits to them are rejected.",
+    "Edit a file by replacing text. Provide old_string (unique in the file) and new_string. Set replace_all to change every occurrence. Exact matches win; when nothing matches exactly, a whitespace/unicode-tolerant unique match is accepted (indentation drift, trailing spaces, CRLF/LF, smart quotes). Fails if old_string is not found or is not unique (unless replace_all). .git and .nemo directories are read-only metadata: edits to them are rejected.",
   parameters: {
     type: "object",
     required: ["path", "old_string", "new_string"],
@@ -67,7 +67,7 @@ export function createEditFileTool(): Tool {
         if (signal?.aborted) return textResult("aborted", /*isError*/ true)
 
         if (ctx.requestPermission) {
-          const ok = await ctx.requestPermission("edit_file", rawPath, "Trayambak approval required for edit_file")
+          const ok = await ctx.requestPermission("edit_file", rawPath, "Nemo approval required for edit_file")
           if (!ok) return textResult("Permission denied for edit_file: " + rawPath, /*isError*/ true)
         }
 

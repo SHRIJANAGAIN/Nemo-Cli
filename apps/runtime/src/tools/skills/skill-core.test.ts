@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -14,7 +14,7 @@ import { SKILL_MAX_FILES, bundledSkillsDir, walkSkillFiles } from "./skill-core.
 let root: string
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skill-core-"))
+  root = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-skill-core-"))
 })
 
 afterEach(() => {
@@ -63,7 +63,7 @@ describe("walkSkillFiles (round 11 attack: bounded walk)", () => {
   })
 
   it("skips symlinked directories rather than following them out of the root", () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-skill-outside-"))
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-skill-outside-"))
     try {
       fs.writeFileSync(path.join(outside, "secret.md"), "x", "utf8")
       const kept = write("SKILL.md")
@@ -85,7 +85,7 @@ describe("bundledSkillsDir (shipped fleet: never cwd-dependent)", () => {
   it("resolves from a module dir via the startDir seam", () => {
     // Fake a source checkout: <root>/skills + a module 5 deep, so the
     // seam resolves back to the fake root.
-    const fakeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bundled-skills-"))
+    const fakeRoot = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bundled-skills-"))
     try {
       fs.mkdirSync(path.join(fakeRoot, "skills"), { recursive: true })
       const fakeModuleDir = path.join(fakeRoot, "apps", "runtime", "src", "tools", "skills")
@@ -97,7 +97,7 @@ describe("bundledSkillsDir (shipped fleet: never cwd-dependent)", () => {
   })
 
   it("returns null when no candidate exists (and never throws)", () => {
-    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-bundled-empty-"))
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bundled-empty-"))
     try {
       expect(bundledSkillsDir(path.join(empty, "a", "b", "c", "d", "e"))).toBeNull()
     } finally {

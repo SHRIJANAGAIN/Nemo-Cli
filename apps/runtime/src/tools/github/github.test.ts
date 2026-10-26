@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -201,7 +201,7 @@ beforeEach(() => {
     return { status: 401, json: async () => ({ error: "GitHub login required — run /github login first" }) }
   })
   // Machine identity must not touch the real home dir.
-  vi.stubEnv("TRAYAMBAK_MACHINE_ID_FILE", join(mkdtempSync(join(tmpdir(), "gh-tool-")), "machine-id"))
+  vi.stubEnv("NEMO_MACHINE_ID_FILE", join(mkdtempSync(join(tmpdir(), "gh-tool-")), "machine-id"))
 })
 
 afterEach(() => {
@@ -434,19 +434,19 @@ describe("create_branch and create_pr", () => {
   it("creates a branch off the default and opens a PR", async () => {
     // Specific needles first: every URL also contains "/repos/o/r".
     net.routes.set("/git/ref/heads/main", { status: 200, body: JSON.stringify({ object: { sha: "abc123" } }) })
-    net.routes.set("/git/refs", { status: 201, body: JSON.stringify({ ref: "refs/heads/trayambak/issue-1" }) })
+    net.routes.set("/git/refs", { status: 201, body: JSON.stringify({ ref: "refs/heads/nemo/issue-1" }) })
     net.routes.set("/pulls", {
       status: 201,
       body: JSON.stringify({ number: 7, html_url: "https://github.com/o/r/pull/7" }),
     })
     net.routes.set("/repos/o/r", { status: 200, body: JSON.stringify({ default_branch: "main" }) })
     const tool = createGithubTool("tok")
-    const br = await call(tool, { repo: "o/r", action: "create_branch", branch: "trayambak/issue-1" })
-    expect(firstText(br)).toContain("github: created branch trayambak/issue-1 off main")
+    const br = await call(tool, { repo: "o/r", action: "create_branch", branch: "nemo/issue-1" })
+    expect(firstText(br)).toContain("github: created branch nemo/issue-1 off main")
     const pr = await call(tool, {
       repo: "o/r",
       action: "create_pr",
-      branch: "trayambak/issue-1",
+      branch: "nemo/issue-1",
       title: "Fix #1",
       body: "auto",
     })
@@ -554,7 +554,7 @@ describe("copy_files", () => {
     expect(net.headers[2]["Content-Type"]).toBe("application/json")
     expect(net.writes).toHaveLength(1)
     const putBody = JSON.parse(net.writes[0]) as { message?: string; content?: string; sha?: string }
-    expect(putBody.message).toBe("trayambak: copy src/hello.txt -> dir/out.txt")
+    expect(putBody.message).toBe("nemo: copy src/hello.txt -> dir/out.txt")
     expect(putBody.content).toBe(Buffer.from("hello world").toString("base64"))
     expect(putBody.sha).toBeUndefined()
     expect(net.requests[2]).toBe("https://api.github.com/repos/o/r/contents/dir/out.txt")

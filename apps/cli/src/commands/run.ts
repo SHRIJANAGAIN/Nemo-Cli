@@ -1,20 +1,21 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 // The Ink REPL (packages/tui/src/ink-app) is the one and only interactive UI
-// for Trayambak. The legacy TerminalUI has been removed from this path.
+// for Nemo. The legacy TerminalUI has been removed from this path.
 
 import * as http from "http"
 import { spawn } from "node:child_process"
 import path from "node:path"
-import { loadConfig, type TrayambakConfig } from "../../../runtime/src/index.js"
+import { loadConfig, type NemoConfig } from "../../../runtime/src/index.js"
+import { createStderrCapture } from "./repl-stderr.js"
 import { slashCommandService } from "./slash-command.js"
 
 export interface RunOptions {
-  config: TrayambakConfig
+  config: NemoConfig
   prompt?: string
   sessionFile?: string
   sessionId?: string
@@ -24,7 +25,7 @@ export interface RunOptions {
   /**
    * Alternate-screen TUI (codex-style, no scrollback clones). Tri-state:
    * true forces it on, false forces it off, undefined inherits ambient
-   * TRAYAMBAK_ALT_SCREEN (resolver then defaults ON) so an env-only user
+   * NEMO_ALT_SCREEN (resolver then defaults ON) so an env-only user
    * is never clobbered by the flag.
    */
   altScreen?: boolean
@@ -57,27 +58,17 @@ export function listModelNames(baseUrl: string, apiKey: string, provider?: strin
     const prov = (provider ?? "").toLowerCase()
     let reqPath = "/v1/models"
     const headers: Record<string, string> = {}
-    if (prov === "anthropic") {
-      if (apiKey) headers["x-api-key"] = apiKey
-      headers["anthropic-version"] = "2023-06-01"
-    } else if (prov === "ollama") {
+    if (prov === "ollama") {
       // Ollama-native list (VS Code ollamaProvider: GET {url}/api/tags).
       reqPath = "/api/tags"
-    } else if (prov === "google") {
-      // Key rides the x-goog-api-key header, never the URL (#70): query
-      // strings land in proxy/server logs and error echoes.
-      reqPath = "/models"
-      if (apiKey) headers["x-goog-api-key"] = apiKey
     } else if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`
     }
-    // Google baseUrl already contains /v1beta — keep it; others strip trailing /.
-    const prefix = prov === "google" ? parsed.pathname.replace(/\/$/, "") : ""
     const req = lib.request(
       {
         hostname: parsed.hostname,
         port: parsed.port || (isHttps ? 443 : 80),
-        path: `${prefix}${reqPath}`,
+        path: reqPath,
         method: "GET",
         timeout: 10_000,
         headers,
@@ -90,13 +81,6 @@ export function listModelNames(baseUrl: string, apiKey: string, provider?: strin
             const json = JSON.parse(buf) as {
               data?: Array<{ id?: string }>
               models?: Array<{ name?: string }>
-            }
-            if (prov === "google") {
-              const ids = (json.models ?? [])
-                .map((m) => (m.name ?? "").replace(/^models\//, ""))
-                .filter((v) => v.length > 0)
-              resolve(ids.length > 0 ? ids : NVIDIA_STATIC_MODELS)
-              return
             }
             if (prov === "ollama") {
               const tags = (json as { models?: Array<{ name?: string; model?: string }> }).models ?? []
@@ -129,7 +113,7 @@ export function shouldRunHeadless(
   return stdoutIsTTY !== true || stdinIsTTY !== true
 }
 
-/** Launch the Ink REPL — the single main UI for Trayambak. */
+/** Launch the Ink REPL — the single main UI for Nemo. */
 export async function runCommand(options: RunOptions): Promise<void> {
   // Piped output (or explicit opt-out) cannot host the Ink REPL — spawning
   // it headless used to exit 0 having printed nothing (a 5-byte BOM). Fall
@@ -145,7 +129,7 @@ export async function runCommand(options: RunOptions): Promise<void> {
   // Config resolution: explicit options win, then fall back to the persisted
   // config file, then to environment variables. Never hand the TUI an
   // undefined config — it would crash on `config.baseUrl`.
-  const resolved: TrayambakConfig = {
+  const resolved: NemoConfig = {
     ...loadConfig(),
     ...options.config,
   }
@@ -161,35 +145,46 @@ export async function runCommand(options: RunOptions): Promise<void> {
     const child = spawn(process.execPath, nodeArgs, {
       env: {
         ...process.env,
-        TRAYAMBAK_CONFIG_JSON: JSON.stringify(resolved),
-        TRAYAMBAK_MODEL: resolved.model ?? "",
-        TRAYAMBAK_BASE_URL: resolved.baseUrl ?? "",
-        TRAYAMBAK_API_KEY: resolved.apiKey ?? "",
-        TRAYAMBAK_PROMPT: options.prompt ?? "",
-        TRAYAMBAK_SESSION: options.sessionFile ?? "",
-        TRAYAMBAK_SESSION_ID: options.sessionId ?? "",
-        TRAYAMBAK_MODEL_PATH: options.modelPath ?? "",
-        TRAYAMBAK_PORT: options.port != null ? String(options.port) : "",
+        NEMO_CONFIG_JSON: JSON.stringify(resolved),
+        NEMO_MODEL: resolved.model ?? "",
+        NEMO_BASE_URL: resolved.baseUrl ?? "",
+        NEMO_API_KEY: resolved.apiKey ?? "",
+        NEMO_PROMPT: options.prompt ?? "",
+        NEMO_SESSION: options.sessionFile ?? "",
+        NEMO_SESSION_ID: options.sessionId ?? "",
+        NEMO_MODEL_PATH: options.modelPath ?? "",
+        NEMO_PORT: options.port != null ? String(options.port) : "",
         // Tri-state on purpose (see RunOptions.altScreen): only an explicit
-        // flag touches the variable, so ambient TRAYAMBAK_ALT_SCREEN survives
+        // flag touches the variable, so ambient NEMO_ALT_SCREEN survives
         // when the flag is absent — and --no-alt-screen actively disables it.
         ...(options.altScreen === true
-          ? { TRAYAMBAK_ALT_SCREEN: "1" }
+          ? { NEMO_ALT_SCREEN: "1" }
           : options.altScreen === false
-            ? { TRAYAMBAK_ALT_SCREEN: "0" }
+            ? { NEMO_ALT_SCREEN: "0" }
             : {}),
       },
-      stdio: "inherit",
+      stdio: ["inherit", "inherit", "pipe"],
     })
+    // Child stderr is piped, not inherited: every chunk is tee'd to this
+    // process's stderr (the same console the child inherited, so live
+    // rendering is unchanged) while a bounded redacted tail lands in
+    // repl-stderr.log on exit. Inheriting raw meant a V8 `FATAL ERROR`
+    // behind an exit-134 abort tore through the TUI frame and was never
+    // written anywhere — five such crashes went undiagnosed for exactly
+    // that reason (see repl-stderr.ts).
+    const stderrCapture = createStderrCapture()
+    child.stderr?.on("data", (chunk: Buffer) => stderrCapture.write(chunk))
     child.once("error", reject)
     child.once("exit", (code, signal) => {
+      const stderrTail = stderrCapture.finish({ code, signal })
       if (signal) {
         // Ctrl+C / SIGTERM from inside the TUI — treat as a clean exit.
         resolve()
         return
       }
       if (code !== 0) {
-        reject(new Error(`Ink REPL exited with code ${code ?? "unknown"}`))
+        const where = stderrTail ? ` (stderr tail: ${stderrTail})` : ""
+        reject(new Error(`Ink REPL exited with code ${code ?? "unknown"}${where}`))
         return
       }
       resolve()

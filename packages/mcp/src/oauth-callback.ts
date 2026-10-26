@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Localhost OAuth 2.0 redirect-callback server for remote MCP servers.
- * Ported from SKT AI LABS Code's `mcp/oauth-callback.ts` design: a loopback HTTP
+ * Ported from Shrijan Code's `mcp/oauth-callback.ts` design: a loopback HTTP
  * server on 127.0.0.1 that receives the authorization-server redirect,
  * validates the `state` parameter (CSRF), resolves the pending flow with the
  * authorization code, renders a success/error page, and stops itself once no
@@ -20,7 +20,7 @@ import * as net from "net"
 export const OAUTH_CALLBACK_PORT = 19876
 /** Default callback path (must be pre-registered with the authorization server). */
 export const OAUTH_CALLBACK_PATH = "/mcp/oauth/callback"
-/** How long we wait for the user to approve in the browser (SKT AI LABS parity: 5 min). */
+/** How long we wait for the user to approve in the browser (Shrijan parity: 5 min). */
 export const OAUTH_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000
 /** How many consecutive default ports to try before giving up. */
 const DEFAULT_PORT_FALLBACKS = 5
@@ -52,7 +52,7 @@ function escapeHtml(value: string): string {
 const HTML_SUCCESS = `<!DOCTYPE html>
 <html>
 <head>
-  <title>Trayambak - Authorization Successful</title>
+  <title>Nemo - Authorization Successful</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e; color: #eee; }
     .container { text-align: center; padding: 2rem; }
@@ -63,7 +63,7 @@ const HTML_SUCCESS = `<!DOCTYPE html>
 <body>
   <div class="container">
     <h1>Authorization Successful</h1>
-    <p>You can close this window and return to Trayambak.</p>
+    <p>You can close this window and return to Nemo.</p>
   </div>
   <script>setTimeout(() => window.close(), 2000);</script>
 </body>
@@ -72,7 +72,7 @@ const HTML_SUCCESS = `<!DOCTYPE html>
 const HTML_ERROR = (error: string): string => `<!DOCTYPE html>
 <html>
 <head>
-  <title>Trayambak - Authorization Failed</title>
+  <title>Nemo - Authorization Failed</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e; color: #eee; }
     .container { text-align: center; padding: 2rem; }

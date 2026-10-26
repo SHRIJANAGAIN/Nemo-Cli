@@ -1,4 +1,4 @@
-export * as TrayambakBoard from "./board"
+export * as NemoBoard from "./board"
 
 export interface BoardMessage {
   readonly id: string

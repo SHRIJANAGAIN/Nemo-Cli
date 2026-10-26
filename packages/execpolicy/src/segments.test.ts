@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -9,7 +9,7 @@
  * security audit: a destructive payload hidden behind a wrapper must be
  * visible to policy evaluation, both in the enforcement path
  * (`PolicyManager.evaluate`) and in the display surface
- * (`checkExecPolicyAll`, behind `trayambak execpolicy check`).
+ * (`checkExecPolicyAll`, behind `nemo execpolicy check`).
  */
 import { describe, expect, it } from "vitest"
 import { segmentCommand } from "./segments.js"

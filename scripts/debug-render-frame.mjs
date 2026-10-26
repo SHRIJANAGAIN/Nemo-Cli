@@ -10,10 +10,10 @@
  *      (handled on win32), but worth measuring;
  *   3. resize reflows old frames differently than ink remembers them.
  *
- * This harness renders the REAL TrayambakApp at a fake TTY, forces several
+ * This harness renders the REAL NemoApp at a fake TTY, forces several
  * re-renders (resize events), then reports:
  *   - max visible row width vs columns (any offender printed verbatim)
- *   - how many "Welcome To Trayambak CLI" lines survive in the sink
+ *   - how many "Welcome To Nemo CLI" lines survive in the sink
  *     (must be 1 per live frame region — >1 proves pile-up)
  *   - frame height vs rows.
  *
@@ -45,7 +45,7 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(
+const { NemoApp } = await import(
   pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "src", "ink-app-esm", "index.js")).href
 )
 
@@ -59,8 +59,8 @@ const stripAnsi = (text) =>
 // themeName set → skip the first-run ThemePicker and render the actual
 // WelcomeScreen (the frame the bug report screenshot shows).
 const instance = render(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark", baseUrl: "http://localhost:1", apiKey: "x" },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark", baseUrl: "http://localhost:1", apiKey: "x" },
   }),
   {
     stdin,
@@ -95,11 +95,11 @@ for (const line of lines) {
 // eraseLines() bookkeeping: count frame writes (welcome marker occurrences)
 // vs the number of full clear sequences ([2J or [3J) that would reset ink's
 // line counter.
-const welcomeCount = (all.match(/Welcome To Trayambak CLI/g) ?? []).length
+const welcomeCount = (all.match(/Welcome To Nemo CLI/g) ?? []).length
 const clearCount = (sink.match(/\x1b\[2J|\x1b\[3J/g) ?? []).length
 const eraseUpSequences = (sink.match(/\x1b\[2K\x1b\[1A/g) ?? []).length
 
-const resizeFrameWelcomes = frames.map((f) => (stripAnsi(f).match(/Welcome To Trayambak CLI/g) ?? []).length)
+const resizeFrameWelcomes = frames.map((f) => (stripAnsi(f).match(/Welcome To Nemo CLI/g) ?? []).length)
 
 console.log(`columns=${columns} rows=${rows}`)
 console.log(`maxVisibleRowWidth=${maxW} ${maxW > columns ? "EXCEEDS_COLUMNS ✗" : "ok ✓"}`)

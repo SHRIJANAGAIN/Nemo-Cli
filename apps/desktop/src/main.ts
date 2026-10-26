@@ -1,7 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
- * Trayambak desktop app (Electron): a chat window over the same Agent the
+ * Nemo desktop app (Electron): a chat window over the same Agent the
  * CLI/TUI/ACP server run — no protocol subprocess, the runtime is hosted
  * in the main process. Security posture: contextIsolation, no node
  * integration, renderer loaded from local files only, window.open denied.
@@ -46,7 +50,7 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     backgroundColor: "#0f1115",
-    title: "Trayambak",
+    title: "Nemo",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

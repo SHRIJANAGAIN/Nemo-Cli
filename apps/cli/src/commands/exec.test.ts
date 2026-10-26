@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /** Piped-stdin plumbing for `exec` — pure, no real stdin (injected). */
@@ -87,8 +87,8 @@ describe("execCommand wiring", () => {
   beforeEach(() => {
     agentCtl.reset()
     originalCwd = process.cwd()
-    home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-exec-home-"))
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-exec-cwd-"))
+    home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-exec-home-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-exec-cwd-"))
     savedHome = process.env.HOME
     savedUserprofile = process.env.USERPROFILE
     process.env.HOME = home

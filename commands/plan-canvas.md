@@ -15,7 +15,7 @@ skill for the full workflow and rules.
 ## What This Command Does
 
 1. Resolve the artifact: the given path, else the most recently modified
-   `.trayambak/plans/*.plan.md`, else ask what to review.
+   `.nemo/plans/*.plan.md`, else ask what to review.
 2. `ecc-plan-canvas open <artifact>` — opens the user's browser.
 3. `ecc-plan-canvas await <artifact>` — block until feedback,
    verdict, or session end; leave it running.
@@ -29,7 +29,7 @@ stop polling, `end` the session, and begin implementation.
 ## Example
 
 ```
-User: /plan-canvas .trayambak/plans/notifications.plan.md
+User: /plan-canvas .nemo/plans/notifications.plan.md
 
 Assistant: (runs open + await, browser opens)
 ...user clicks "Request changes" with two annotations...

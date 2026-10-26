@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it, afterEach } from "vitest"
@@ -10,8 +10,8 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { runAgentLoop } from "./agent-loop.js"
 import { Session } from "../session/session.js"
-import { sendToInbox } from "../tools/trayambak/send-message.js"
-import type { TrayambakConfig } from "../config.js"
+import { sendToInbox } from "../tools/nemo/send-message.js"
+import type { NemoConfig } from "../config.js"
 import type { AgentMessage } from "../../../../packages/protocol/src/index.js"
 
 /**
@@ -32,7 +32,7 @@ describe("runAgentLoop inbox delivery", () => {
     maxToolCalls: 5,
     cwd: os.tmpdir(),
     permissions: { mode: "default", rules: [], askByDefault: true },
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
   const fakeProvider = {
     chat: async () => ({
       role: "assistant",
@@ -43,7 +43,7 @@ describe("runAgentLoop inbox delivery", () => {
 
   afterEach(() => {
     try {
-      fs.rmSync(path.join(os.homedir(), ".trayambak", "inbox", `${inboxId}.jsonl`), { force: true })
+      fs.rmSync(path.join(os.homedir(), ".nemo", "inbox", `${inboxId}.jsonl`), { force: true })
     } catch {
       /* best-effort cleanup */
     }
@@ -84,7 +84,7 @@ describe("runAgentLoop inbox delivery", () => {
     // Only the prompt itself — no inbox polling, no stray rows.
     expect(users).toHaveLength(1)
     try {
-      fs.rmSync(path.join(os.homedir(), ".trayambak", "inbox", `t-quiet-${tag}.jsonl`), { force: true })
+      fs.rmSync(path.join(os.homedir(), ".nemo", "inbox", `t-quiet-${tag}.jsonl`), { force: true })
     } catch {
       /* best-effort cleanup */
     }
@@ -104,7 +104,7 @@ describe("runAgentLoop length continuation", () => {
     maxToolCalls: 5,
     cwd: os.tmpdir(),
     permissions: { mode: "default", rules: [], askByDefault: true },
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 
   function sequencingProvider(stops: Array<"length" | "end_turn">) {
     let i = 0

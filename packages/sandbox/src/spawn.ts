@@ -1,4 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
+ */
 
 /**
  * OS-level sandbox spawner — bridges Node.js child_process to OS-level isolation.
@@ -14,6 +21,10 @@
  */
 
 import { ChildProcess, spawn } from "child_process"
+import { randomBytes } from "crypto"
+import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
 
 import {
   DEFAULT_EXEC_COMMAND_TIMEOUT_MS,
@@ -22,8 +33,25 @@ import {
   MAX_EXEC_OUTPUT_DELTAS_PER_CALL,
 } from "../../core/src/process.js"
 
-import { SandboxType, NetworkSandboxPolicy, SpawnRequest, SpawnedProcess } from "./types.js"
+import {
+  SandboxType,
+  NetworkSandboxPolicy,
+  FileSystemSandboxPolicy,
+  SpawnRequest,
+  SpawnedProcess,
+} from "./types.js"
+import {
+  isInside,
+  linuxSandboxArgs,
+  seatbeltPolicyText,
+  writableRootsAfterCarveOut,
+  LINUX_SYSTEM_ROOTS,
+  MACOS_SYSTEM_ROOTS,
+} from "./fs-policy.js"
 import { acWorkloadIncompatible } from "./ac-workload.js"
+import { applyProxyEnv, isLoopbackHost, parseProxyUrl, type ParsedProxy } from "./proxy-env.js"
+import { proxyEndpoint } from "./proxy-routing.js"
+import { buildFilter, encodeFilter, maskFlags, masksForHome } from "./seccomp.js"
 import { spawnWindowsAcShim, taskkillTree } from "./windows-ac.js"
 
 /**
@@ -52,10 +80,16 @@ export async function spawnProcess(request: SpawnRequest): Promise<SpawnedProces
   let proc: SpawnedProcess
   switch (sandboxType) {
     case SandboxType.MacosSeatbelt:
-      proc = await spawnUnderSeatbelt(command, cwd, env, networkPolicy, outputCap, signal)
+      proc = await spawnUnderSeatbelt(command, cwd, env, request, outputCap, signal)
       break
     case SandboxType.LinuxSeccomp:
-      proc = await spawnUnderLandlock(command, cwd, env, networkPolicy, outputCap, signal)
+    case SandboxType.LinuxNamespace:
+      // The two cases are the same code path, and the distinction is made INSIDE,
+      // from whether the filter actually staged. Routing them together here is
+      // what stops `LinuxNamespace` falling through to `default` and spawning
+      // with NO isolation at all — a fail-open that would only be reachable by
+      // asking for the weaker sandbox, which is the wrong direction to fail.
+      proc = await spawnUnderLandlock(command, cwd, env, request, outputCap, signal)
       break
     case SandboxType.WindowsRestrictedToken:
       proc = await spawnUnderWindowsAppContainer(request)
@@ -127,17 +161,24 @@ function hostSpawnOptions(cwd: string, env: Record<string, string>, signal?: Abo
  *
  * The profile travels inline via `-p`, exactly as Codex invokes it
  * (codex-rs/sandboxing/src/seatbelt.rs passes `["-p", full_policy]`).
+ *
+ * The whole `SpawnRequest` is taken rather than a `networkPolicy` argument
+ * because the filesystem policy has to reach the profile. This signature used to
+ * accept only the network policy, and `seatbeltProfile` consequently had no way
+ * to know whether the session was allowed to write — it emitted `(allow
+ * default)` and the process was told `isSandboxed: true`.
  */
 async function spawnUnderSeatbelt(
   command: string[],
   cwd: string,
   env: Record<string, string>,
-  networkPolicy: NetworkSandboxPolicy,
+  request: SpawnRequest,
   outputCap: number,
   signal?: AbortSignal,
 ): Promise<SpawnedProcess> {
   const sandboxExec = "/usr/bin/sandbox-exec"
-  const args = ["-p", seatbeltProfile(networkPolicy), ...command]
+  const profile = seatbeltProfile(request.networkPolicy, request.filesystemPolicy)
+  const args = ["-p", profile, ...command]
 
   const child = spawn(sandboxExec, args, hostSpawnOptions(cwd, env, signal))
   const pgid = getPgid(child.pid ?? 0)
@@ -146,18 +187,29 @@ async function spawnUnderSeatbelt(
 }
 
 /**
- * SBPL profile text for sandbox-exec. Later rules win in SBPL, so the
- * network deny follows `(allow default)`.
+ * SBPL profile text for sandbox-exec.
  *
- * The previous implementation wrote a JSON document to
- * ~/.trayambak/seatbelt.sbpl and handed it to `-f`: sandbox-exec expects
- * SBPL text, so every seatbelt spawn failed on a parse error — and the
- * fixed path raced concurrent spawns over each other's policies.
+ * Deny-by-default, granting only what the filesystem policy allows. The previous
+ * implementation wrote a JSON document to ~/.nemo/seatbelt.sbpl and handed
+ * it to `-f`: sandbox-exec expects SBPL text, so every seatbelt spawn failed on
+ * a parse error — and the fixed path raced concurrent spawns over each other's
+ * policies.
+ *
+ * When it did parse, it emitted `(allow default)`, which permits every file
+ * operation on the host: a `read-only` session could write anywhere. The profile
+ * is now generated by `seatbeltPolicyText`, which orders the rules so that later
+ * rules never re-grant what an earlier deny removed.
  */
-export function seatbeltProfile(networkPolicy: NetworkSandboxPolicy): string {
-  return networkPolicy?.disableNetwork
-    ? "(version 1)\n(allow default)\n(deny network*)\n"
-    : "(version 1)\n(allow default)\n"
+export function seatbeltProfile(
+  networkPolicy: NetworkSandboxPolicy | undefined,
+  filesystemPolicy?: FileSystemSandboxPolicy,
+): string {
+  return seatbeltPolicyText(
+    writableRootsAfterCarveOut(filesystemPolicy),
+    MACOS_SYSTEM_ROOTS,
+    networkPolicy?.disableNetwork === true,
+    filesystemPolicy?.denyReadPaths ?? [],
+  )
 }
 
 /**
@@ -167,49 +219,293 @@ async function spawnUnderLandlock(
   command: string[],
   cwd: string,
   env: Record<string, string>,
-  networkPolicy: NetworkSandboxPolicy,
+  request: SpawnRequest,
   outputCap: number,
   signal?: AbortSignal,
 ): Promise<SpawnedProcess> {
   const bwrap = "/usr/bin/bwrap"
-  const args = landlockArgs(command, cwd, networkPolicy)
+  const hardening = prepareLinuxHardening({
+    // A filter is the point of the layer, so it is on unless the caller turned
+    // it off. Deliberately not keyed off an env var here: the env gateway in
+    // core is the only sanctioned way to read one, and a sandbox module reading
+    // `process.env` directly is a rule this repo enforces with lint.
+    seccomp: request.seccomp !== false,
+    home: env.HOME ?? env.USERPROFILE,
+  })
 
-  const child = spawn(bwrap, args, hostSpawnOptions(cwd, env, signal))
+  const networkDisabled = request.networkPolicy?.disableNetwork === true
+
+  // The host's proxy environment is the one egress control the route table does
+  // not govern. `HTTPS_PROXY` pointing at a corporate egress proxy means the
+  // SANDBOXED process connects there, that proxy resolves the name and opens the
+  // socket, and `decideRoute` — which lives in this process and reads command
+  // text — never sees the connection. One inherited variable bypasses the
+  // allow-list completely.
+  //
+  // There is no bridge yet: that is a loopback listener inside the namespace plus
+  // a Unix-socket descriptor handoff from the parent, which is Rust plumbing and
+  // not something to fake in TypeScript. So the honest outcomes are the two this
+  // function can reach on its own — strip the variables when there is no route
+  // out, and otherwise say on the handle that policy is NOT enforced at the
+  // socket. Claiming enforcement here would be the same defect as stamping
+  // `LinuxSeccomp` before a filter existed.
+  const proxy = applyProxyEnv(env, {
+    bridge: bridgeEndpointFor(request),
+    networkDisabled,
+    policyConfigured: (request.networkPolicy?.allowedDomains?.length ?? 0) > 0,
+  })
+
+  let args: string[]
+  let child: ChildProcess
+  try {
+    args = landlockArgs(command, cwd, request.networkPolicy, request.filesystemPolicy, hardening)
+    child = spawn(bwrap, args, hostSpawnOptions(cwd, proxy.env, signal))
+  } catch (error) {
+    // The spawn never happened, so nothing holds the descriptor. This is the
+    // path that leaks one per call if cleanup is not here.
+    hardening.cleanup()
+    throw error
+  }
+  // `spawn` has already duplicated the descriptor into the child, so the
+  // parent's copy is dead the moment it returns. Holding it until the process
+  // exits would leak a descriptor for the full lifetime of every command.
+  hardening.cleanup()
+
   const pgid = getPgid(child.pid ?? 0)
+  const applied = hardening.seccompApplied
+  const handle = createSpawnedProcess(
+    child,
+    /*isSandboxed*/ true,
+    applied ? SandboxType.LinuxSeccomp : SandboxType.LinuxNamespace,
+    pgid,
+    outputCap,
+  )
+  if (proxy.unenforced) {
+    // Reported before the seccomp note: an unenforced allow-list is the larger
+    // claim being wrong, and a handle carries one reason string, so the one that
+    // matters most has to be the one that survives.
+    handle.fallbackReason = proxy.detail
+  } else if (!applied) {
+    handle.fallbackReason =
+      "seccomp filter could not be staged; namespaces only. Namespaces are a boundary, not a wall."
+  } else if (!hardening.masksApplied) {
+    handle.fallbackReason = "credential-store masks could not be built; filesystem policy still applies."
+  }
+  return handle
+}
 
-  return createSpawnedProcess(child, /*isSandboxed*/ true, SandboxType.LinuxSeccomp, pgid, outputCap)
+/**
+ * The in-sandbox proxy bridge, when the request names one.
+ *
+ * Currently always undefined, and that is the honest default. A bridge needs a
+ * loopback listener inside the namespace and a Unix-socket descriptor handoff
+ * from the parent; neither exists. What CAN be decided without that plumbing is
+ * whether the configured endpoint is usable at all — https with a CA bundle,
+ * reachable as loopback — so that is what this checks, and it returns undefined
+ * for every other case.
+ *
+ * The alternative, inventing a loopback port and pointing the sandbox at it,
+ * produces a child that cannot reach anything AND a handle that claims a bridge
+ * exists. Both halves of that are worse than saying nothing.
+ */
+function bridgeEndpointFor(request: SpawnRequest): ParsedProxy | undefined {
+  const configured = request.networkPolicy?.proxy
+  const endpoint = proxyEndpoint(configured, DEFAULT_BRIDGE_PORT)
+  if (endpoint.problem !== undefined) return undefined
+  const parsed = parseProxyUrl(endpoint.upstream ?? configured?.url ?? "")
+  if (!parsed || !isLoopbackHost(parsed.host)) return undefined
+  return { ...parsed, port: endpoint.port }
+}
+
+/** The loopback port the bridge would listen on. Fixed so the env is stable. */
+const DEFAULT_BRIDGE_PORT = 3128
+
+/**
+ * Linux hardening handed to bubblewrap for one spawn.
+ *
+ * The descriptor and its cleanup travel together on purpose. Splitting them is
+ * how a descriptor leaks: the caller builds the args, something throws before
+ * the spawn, and nothing closes the fd. A sandbox that leaks a descriptor per
+ * spawn exhausts the process's table long before memory, and the failure
+ * surfaces as "too many open files" somewhere unrelated.
+ */
+export interface LinuxHardening {
+  /** Open descriptor carrying the encoded seccomp filter, when one was staged. */
+  seccompFd?: number
+  /** Extra mount flags, e.g. the `--tmpfs` pairs that hide credential stores. */
+  extraFlags?: string[]
+  /** False when a seccomp filter was requested but could not be staged. */
+  seccompApplied: boolean
+  /** False when the mask list could not be built. */
+  masksApplied: boolean
+  /** Idempotent. Safe on every exit path, including a spawn that never ran. */
+  cleanup: () => void
+}
+
+/**
+ * Prepare Linux hardening for one spawn.
+ *
+ * Everything here is best-effort and REPORTS what it did, because the caller
+ * cannot treat a failure as one thing:
+ *
+ *  - The filter could not be staged (no writable temp dir, descriptor table full,
+ *    bwrap absent). That is an infrastructure failure. The spawn should still go
+ *    ahead inside the namespace, one layer thinner — and must say so, because
+ *    `SandboxType.LinuxSeccomp` names seccomp and a spawn that reports that type
+ *    without a filter installed is the same declared-but-unenforced defect as the
+ *    filesystem policy that was threaded but never read.
+ *  - The filter is switched off deliberately by config. Same reporting duty.
+ *
+ * The rule this function exists to keep: never claim a layer that was not
+ * applied. `seccompApplied` exists so the caller can propagate the truth.
+ */
+export function prepareLinuxHardening(
+  options: {
+    /** False to skip the seccomp filter entirely. */
+    seccomp?: boolean
+    /** Home directory the credential masks are rewritten against. */
+    home?: string
+    /** Where the filter is staged. Defaults to the OS temp dir. */
+    tmpDir?: string
+    /** Injectable for tests; defaults to a temp file plus `openSync`. */
+    stage?: (bytes: Buffer, tmpDir: string) => { path: string; fd: number }
+  } = {},
+): LinuxHardening {
+  const stagedPaths: string[] = []
+  const stage = options.stage ?? stageSeccompFilter
+  // Held in a closure variable rather than read back off `hardening`, because
+  // cleanup has to clear the field to make itself idempotent — and reading it
+  // back after clearing it would close `undefined`, throw EBADF, be swallowed by
+  // the catch, and leak the descriptor. That is precisely the failure the
+  // idempotence guard exists to prevent, caused by the guard itself.
+  let seccompFd: number | undefined
+
+  const hardening: LinuxHardening = {
+    seccompApplied: false,
+    masksApplied: false,
+    cleanup: () => {
+      // Idempotent: every exit path calls this, and a double close raises EBADF,
+      // which would replace the real error with a confusing one.
+      if (seccompFd === undefined) return
+      const fd = seccompFd
+      seccompFd = undefined
+      hardening.seccompFd = undefined
+      try {
+        fs.closeSync(fd)
+      } catch {
+        /* already gone */
+      }
+    },
+  }
+
+  if (options.seccomp !== false) {
+    try {
+      const bytes = encodeFilter(buildFilter({ arch: currentArch() }))
+      const staged = stage(bytes, options.tmpDir ?? os.tmpdir())
+      stagedPaths.push(staged.path)
+      seccompFd = staged.fd
+      hardening.seccompFd = staged.fd
+      hardening.seccompApplied = true
+    } catch {
+      // No filter. The namespace still applies; this layer does not.
+    }
+  }
+
+  try {
+    hardening.extraFlags = maskFlags(masksForHome(options.home ?? os.homedir()))
+    hardening.masksApplied = true
+  } catch {
+    hardening.extraFlags = []
+  }
+
+  // The staged filter file is unlinked as soon as the descriptor exists: the
+  // bytes are reachable through the fd, and an open fd keeps the inode alive, so
+  // the name in the temp dir is both unnecessary and a second thing to leak.
+  for (const p of stagedPaths) {
+    try {
+      fs.unlinkSync(p)
+    } catch {
+      /* already gone */
+    }
+  }
+
+  return hardening
+}
+
+/**
+ * Stage the encoded filter in a private temp file and hand back its descriptor.
+ *
+ * 0600 is set at `O_CREAT` rather than by a follow-up `chmod`: the window
+ * between create and chmod is a window in which a shared temp dir exposes a
+ * file another user can write, and a swapped filter is a filter nobody
+ * reviewed. `O_EXCL` closes the other half — a predictable name a symlink can
+ * pre-plant.
+ */
+function stageSeccompFilter(bytes: Buffer, tmpDir: string): { path: string; fd: number } {
+  const p = path.join(tmpDir, `nemo-seccomp-${process.pid}-${randomBytes(6).toString("hex")}`)
+  const fd = fs.openSync(p, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR, 0o600)
+  try {
+    fs.writeSync(fd, bytes)
+  } catch (error) {
+    try {
+      fs.closeSync(fd)
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.unlinkSync(p)
+    } catch {
+      /* ignore */
+    }
+    throw error
+  }
+  return { path: p, fd }
+}
+
+function currentArch(): "x86_64" | "aarch64" {
+  return process.arch === "arm64" ? "aarch64" : "x86_64"
 }
 
 /**
  * bubblewrap argument list, split out so flag construction is testable on
  * hosts without bwrap (Codex parity: codex-rs/linux-sandbox/src/bwrap.rs).
  *
- * Replaces three broken shapes:
- * - `--unshare-all` dropped the network namespace unconditionally,
- *   ignoring a policy that allows network; the Codex flags unshare user
- *   and pid always and network only when the policy asks for it.
- * - `--net /dev/null` was never a bubblewrap option — every network-
- *   disabled spawn died with "unknown option" instead of sandboxing.
- * - `--ro-bind cwd cwd` was immediately re-mounted by the following
- *   `--bind cwd cwd`: a dead mount pair that cancelled itself out.
+ * The read/write mode of the workspace bind used to be hardcoded `--bind cwd cwd`
+ * — always read-write — because the filesystem policy never reached this
+ * function. A `read-only` session therefore had a writable workspace while being
+ * told `isSandboxed: true`.
+ *
+ * Kept as a thin wrapper over `linuxSandboxArgs` so the exported name and
+ * signature existing tests use stay intact.
  */
-export function landlockArgs(command: string[], cwd: string, networkPolicy: NetworkSandboxPolicy): string[] {
-  return [
-    "--die-with-parent",
-    "--unshare-user",
-    "--unshare-pid",
-    ...(networkPolicy?.disableNetwork ? ["--unshare-net"] : []),
-    "--bind",
+export function landlockArgs(
+  command: string[],
+  cwd: string,
+  networkPolicy?: NetworkSandboxPolicy,
+  filesystemPolicy?: FileSystemSandboxPolicy,
+  hardening?: LinuxHardening,
+): string[] {
+  const writable = writableRootsAfterCarveOut(filesystemPolicy)
+  // The working directory has to be visible even when the policy grants no write
+  // access to it, otherwise `--chdir cwd` fails and the command cannot start. It
+  // is read-only in that case, which is the whole point.
+  const readOnly = writable.some((root) => isInside(cwd, root))
+    ? LINUX_SYSTEM_ROOTS
+    : [...LINUX_SYSTEM_ROOTS, cwd]
+  return linuxSandboxArgs(
+    command,
     cwd,
-    cwd,
-    "--chdir",
-    cwd,
-    "--dev",
-    "/dev",
-    "--proc",
-    "/proc",
-    ...command,
-  ]
+    writable,
+    readOnly,
+    networkPolicy?.disableNetwork === true,
+    // Gated on `seccompApplied`, not merely on a descriptor being present. The two
+    // are set together today, but gating on the FLAG is what makes the invariant
+    // hold if a future path ever produces a descriptor without a filter behind it
+    // — a `--seccomp` pointing at an empty or short file installs no rules while
+    // the spawn reports full hardening.
+    hardening?.seccompApplied ? hardening.seccompFd : undefined,
+    hardening?.extraFlags ?? [],
+  )
 }
 
 /**
@@ -239,13 +535,13 @@ const HANDSHAKE_FALLBACK_REASON = "windows appcontainer handshake failed"
  * child's sandbox-metadata stamps are rewritten so it cannot claim
  * isolation that was not applied (bash builds its env for the OS path
  * before the spawn), and the handle carries `fallbackReason` so tool output
- * can say why. spawn.ts is an allowlisted owner of the CODEX_* stamps —
+ * can say why. spawn.ts is an allowlisted owner of the NEMO_* stamps —
  * see .github/workflows/check-forbidden-strings.yml.
  */
 async function fallbackUnsandboxed(request: SpawnRequest, fallbackReason: string): Promise<SpawnedProcess> {
   const env = { ...request.env }
-  env["CODEX_SANDBOX"] = "policy-only"
-  delete env["CODEX_SANDBOX_NETWORK_DISABLED"]
+  env["NEMO_SANDBOX"] = "policy-only"
+  delete env["NEMO_SANDBOX_NETWORK_DISABLED"]
   const proc = await spawnUnsandboxed(request.command, request.cwd, env, request.outputCap, request.signal)
   proc.fallbackReason = fallbackReason
   return proc
@@ -473,5 +769,5 @@ function getPgid(pid: number): number {
  * Check if a process is running inside an OS-level sandbox.
  */
 export function isProcessSandboxed(): boolean {
-  return process.env.CODEX_SANDBOX !== undefined || process.env.CODEX_SANDBOX_NETWORK_DISABLED !== undefined
+  return process.env.NEMO_SANDBOX !== undefined || process.env.NEMO_SANDBOX_NETWORK_DISABLED !== undefined
 }

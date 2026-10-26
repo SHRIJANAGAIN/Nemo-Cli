@@ -7,15 +7,15 @@ import { logger } from "./logger.js"
 let dir: string
 let logFile: string
 const savedEnv = {
-  TRAYAMBAK_LOG: process.env.TRAYAMBAK_LOG,
-  TRAYAMBAK_LOG_FILE: process.env.TRAYAMBAK_LOG_FILE,
+  NEMO_LOG: process.env.NEMO_LOG,
+  NEMO_LOG_FILE: process.env.NEMO_LOG_FILE,
 }
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-logger-"))
-  logFile = path.join(dir, "logs", "trayambak.log")
-  process.env.TRAYAMBAK_LOG = "silent"
-  process.env.TRAYAMBAK_LOG_FILE = logFile
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-logger-"))
+  logFile = path.join(dir, "logs", "nemo.log")
+  process.env.NEMO_LOG = "silent"
+  process.env.NEMO_LOG_FILE = logFile
 })
 
 afterEach(() => {
@@ -53,9 +53,9 @@ describe("logger file sink", () => {
     expect(lines.map((l) => l.level)).toEqual(["debug", "error"])
   })
   it("never throws on unwritable paths", () => {
-    process.env.TRAYAMBAK_LOG_FILE = path.join(dir, "x", String(Date.now() % 3))
+    process.env.NEMO_LOG_FILE = path.join(dir, "x", String(Date.now() % 3))
     // a path under a FILE would fail mkdir; use an invalid character path instead
-    process.env.TRAYAMBAK_LOG_FILE = "\u0000invalid"
+    process.env.NEMO_LOG_FILE = "\u0000invalid"
     expect(() => logger.error("still fine")).not.toThrow()
   })
   it("rotates the file at 1MB", () => {
@@ -65,8 +65,8 @@ describe("logger file sink", () => {
     expect(fs.existsSync(logFile + ".old")).toBe(true)
     expect(readLines().some((l) => l.msg === "after rotation")).toBe(true)
   })
-  it("disables file logging with TRAYAMBAK_LOG_FILE=off", () => {
-    process.env.TRAYAMBAK_LOG_FILE = "off"
+  it("disables file logging with NEMO_LOG_FILE=off", () => {
+    process.env.NEMO_LOG_FILE = "off"
     expect(() => logger.error("nope")).not.toThrow()
     expect(fs.existsSync(logFile)).toBe(false)
   })

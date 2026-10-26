@@ -2,7 +2,7 @@
 
 ## Available Agents
 
-Located in `~/.trayambak/agents/`:
+Located in `~/.nemo/agents/`:
 
 | Agent                  | Purpose                   | When to Use                   |
 | ---------------------- | ------------------------- | ----------------------------- |

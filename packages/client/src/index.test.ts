@@ -1,13 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, it, expect } from "vitest"
 import * as http from "http"
 import type { AddressInfo } from "net"
-import { TrayambakClient } from "./index.js"
+import { NemoClient } from "./index.js"
 
 /**
  * Round 11 attack: the client used to have NO timeout, NO response-byte cap,
@@ -33,14 +33,14 @@ afterEach(async () => {
   }
 })
 
-const clientFor = (port: number, timeoutMs?: number): TrayambakClient =>
-  new TrayambakClient({ baseUrl: `http://127.0.0.1:${port}`, timeoutMs })
+const clientFor = (port: number, timeoutMs?: number): NemoClient =>
+  new NemoClient({ baseUrl: `http://127.0.0.1:${port}`, timeoutMs })
 
-describe("TrayambakClient (HTTP)", () => {
+describe("NemoClient (HTTP)", () => {
   it("constructs with a default base URL", () => {
-    // The constructor reads TRAYAMBAK_SERVER_PORT at construction time.
+    // The constructor reads NEMO_SERVER_PORT at construction time.
     // When unset it defaults to 8787 — we only assert construction succeeds.
-    expect(() => new TrayambakClient()).not.toThrow()
+    expect(() => new NemoClient()).not.toThrow()
   })
 
   it("health() parses a valid response", async () => {
@@ -110,7 +110,7 @@ describe("TrayambakClient (HTTP)", () => {
   }, 10_000)
 
   it("run() surfaces connection errors (server not listening)", async () => {
-    const client = new TrayambakClient({ baseUrl: "http://127.0.0.1:1", timeoutMs: 5_000 })
+    const client = new NemoClient({ baseUrl: "http://127.0.0.1:1", timeoutMs: 5_000 })
     await expect(client.run("hi", () => undefined)).rejects.toThrow()
   })
 })

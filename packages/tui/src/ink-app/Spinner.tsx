@@ -1,14 +1,17 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import React, { type ReactNode, useState, useEffect } from "react"
+import React, { type ReactNode } from "react"
 import { Box, Text } from "ink"
 import { useThemeColors } from "./themeColors.js"
 import { glyphSet, spinnerFrames } from "./glyphs.js"
 import { waveLevels } from "../ui/spinner.js"
+import { cycleIndex } from "./animations.js"
+import { useAnimationClock } from "./use-animation-clock.js"
+import { graphemes } from "./utils/stringWidth.js"
 
 export const SPINNER_FRAMES: string[] = spinnerFrames()
 
@@ -43,29 +46,21 @@ export const Spinner = ({
   speed = 1,
 }: SpinnerProps): ReactNode => {
   const theme = useThemeColors()
-  const [frame, setFrame] = useState(0)
-  const [colorIdx, setColorIdx] = useState(0)
+  // One shared clock, this widget's cadence: an inline `frames` literal used to
+  // restart the 80ms interval every render (a new array identity), stuttering
+  // the spinner back to frame 0. A derived tick has no interval to restart.
+  const tick = useAnimationClock(speed > 0 ? SPINNER_INTERVAL_MS / speed : SPINNER_INTERVAL_MS, isActive)
+  const frame = cycleIndex(tick, frames.length)
+  const colorIdx = cycleIndex(tick, SPINNER_COLORS.length)
   const spinnerColor = cycleColors ? SPINNER_COLORS[colorIdx] : (color ?? theme.textMuted)
-  const intervalMs = speed > 0 ? SPINNER_INTERVAL_MS / speed : SPINNER_INTERVAL_MS
-
-  useEffect(() => {
-    if (!isActive) return
-    const interval = setInterval(() => {
-      setFrame((f) => (f + 1) % frames.length)
-      if (cycleColors) {
-        setColorIdx((c) => (c + 1) % SPINNER_COLORS.length)
-      }
-    }, intervalMs)
-    return () => clearInterval(interval)
-    // frames.length (not the array): callers passing an inline literal got
-    // a new identity every render, restarting the 80ms interval and
-    // stuttering the spinner back to frame 0.
-  }, [isActive, frames.length, cycleColors, intervalMs])
 
   const renderChildren = (): ReactNode => {
     if (!children) return null
     if (wave && typeof children === "string") {
-      const chars = [...children]
+      // graphemes(), not [...string]: a combining mark or emojiZWJ sequence
+      // spread into code points gets coloured per fragment and reassembles into
+      // something the terminal never asked for.
+      const chars = graphemes(children)
       const levels = waveLevels(chars.length, frame)
       return (
         <Text color={spinnerColor} bold>

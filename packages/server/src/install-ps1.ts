@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -19,7 +19,7 @@
  * pin its contents: a silent change here would rewire every install.
  */
 
-export const INSTALL_PS1 = `# Trayambak one-line installer.
+export const INSTALL_PS1 = `# Nemo one-line installer.
 # Run: irm https://skt.sktailabs.in/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 $esc = [char]27
@@ -61,11 +61,12 @@ function Install-NodeLTS {
   $env:PATH = $regPath
 }
 
-# Full-page clear, then the banner shimmers in: a colour wave sweeps across
-# the name (256-colour cells; plain consoles still show the text uncoloured).
+# Full-page clear, then the banner shimmers in: a silver-white wave sweeps
+# across the name (steel shadows, bright silver crest — the S1-TITANIUM metal;
+# plain consoles still show the text uncoloured).
 Clear-Host
 $banner = "T R A Y A M B A K"
-$wave = @(99, 105, 111, 117, 123, 159, 195, 159, 123, 117, 111, 105)
+$wave = @(238, 242, 246, 249, 252, 255, 252, 249, 246, 242, 238, 234)
 for ($s = 0; $s -lt 6; $s++) {
   $line = ""
   for ($k = 0; $k -lt $banner.Length; $k++) {
@@ -93,7 +94,7 @@ Start-Sleep -Milliseconds 500
 $nodeV = $null
 try { $nodeV = node --version } catch { $nodeV = $null }
 if (-not $nodeV) {
-  Write-Output "node not found — installing Node.js LTS first, then trayambak…"
+  Write-Output "node not found — installing Node.js LTS first, then nemo…"
   Install-NodeLTS
   try { $nodeV = node --version } catch { $nodeV = $null }
   if (-not $nodeV) { Fail "Node.js install finished but 'node' is still not on PATH — restart the terminal and re-run this command." }
@@ -110,7 +111,7 @@ $spin = @('◉', '◎', '◯', '◎')
 $width = 24
 $installDone = $false
 try {
-  $job = Start-Job -ScriptBlock { npm install -g @skt-ai-labs/trayambak-cli }
+  $job = Start-Job -ScriptBlock { npm install -g @shrijan/nemo-cli }
   $t0 = Get-Date
   $i = 0
   while ($job.State -eq 'Running') {
@@ -126,7 +127,7 @@ try {
       else { $bar += "$esc[38;5;238m─" }
     }
     $eye = $spin[$i % 4]
-    Write-Host ("$cr" + $eye + " [" + $bar + "$esc[0m] downloading trayambak… $elapsed s elapsed   ") -NoNewline
+    Write-Host ("$cr" + $eye + " [" + $bar + "$esc[0m] downloading nemo… $elapsed s elapsed   ") -NoNewline
     Start-Sleep -Milliseconds 150
     $i++
   }
@@ -139,18 +140,18 @@ try {
   Write-Output "background install unavailable, installing directly…"
 }
 if (-not $installDone) {
-  try { npm install -g @skt-ai-labs/trayambak-cli } catch { Fail "npm install failed: $($_.Exception.Message)" }
+  try { npm install -g @shrijan/nemo-cli } catch { Fail "npm install failed: $($_.Exception.Message)" }
 }
 Write-Output "download + install complete."
 Write-Output ""
 
-try { $ver = trayambak --version } catch { Fail "install finished but 'trayambak' is not on PATH — restart the terminal and try again." }
-Write-Host (" $esc[38;5;46m( ◉ )$esc[0m  trayambak $ver installed.")
+try { $ver = nemo --version } catch { Fail "install finished but 'nemo' is not on PATH — restart the terminal and try again." }
+Write-Host (" $esc[38;5;46m( ◉ )$esc[0m  nemo $ver installed.")
 Write-Output ""
 Write-Output ("$esc[3mthree eyes of Shiva is coming$esc[23m — to your terminal.")
 Write-Output ""
 Write-Output "Next steps:"
-Write-Output "  1. trayambak            # open the TUI"
+Write-Output "  1. nemo            # open the TUI"
 Write-Output "  2. /provider add        # connect your model backend + API key"
 Write-Output "  3. /github login        # authorize GitHub (browser opens)"
 Write-Output "  4. /devmode trial       # or paste a license: /devmode on 1102-XXXX-XXXX-XXXX"

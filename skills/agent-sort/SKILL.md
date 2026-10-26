@@ -142,7 +142,7 @@ Demote to `LIBRARY` when:
 
 Translate the classification into action:
 
-- DAILY skills -> install or keep in `.trayambak/skills/`
+- DAILY skills -> install or keep in `.nemo/skills/`
 - DAILY commands -> keep as explicit shims only if still useful
 - DAILY rules -> install only matching language sets
 - DAILY hooks/scripts -> keep only compatible ones
@@ -154,7 +154,7 @@ If the repo already uses selective installs, update that plan instead of creatin
 
 If the project wants a searchable library surface, create:
 
-- `.trayambak/skills/skill-library/SKILL.md`
+- `.nemo/skills/skill-library/SKILL.md`
 
 That router should contain:
 

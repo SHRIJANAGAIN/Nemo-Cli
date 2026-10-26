@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -28,7 +28,7 @@ function findProjectRoot(start: string): string {
 const BIN_DIR = path.join(findProjectRoot(__dirname), "bin")
 const CACHE_BIN = path.join(BIN_DIR, "llama-server.exe")
 /** GPU (CUDA) build gets its own cache dir so both builds can coexist. */
-const GPU_BIN_DIR = path.join(os.homedir(), ".trayambak", "bin-gpu")
+const GPU_BIN_DIR = path.join(os.homedir(), ".nemo", "bin-gpu")
 const GPU_CACHE_BIN = path.join(GPU_BIN_DIR, "llama-server.exe")
 
 const KNOWN_CANDIDATES = [
@@ -37,7 +37,7 @@ const KNOWN_CANDIDATES = [
   "C:\\llama.cpp\\build\\bin\\server.exe",
   "C:\\llama.cpp\\llama-server.exe",
   path.join(os.homedir(), "llama.cpp", "llama-server.exe"),
-  path.join(os.homedir(), ".trayambak", "bin", "llama-server.exe"),
+  path.join(os.homedir(), ".nemo", "bin", "llama-server.exe"),
   path.join(
     os.homedir(),
     ".lmstudio",
@@ -86,7 +86,7 @@ export function hasNvidiaGpu(): boolean {
 
 /** Synchronously locate an already-available llama.cpp server binary. */
 export function locateLlamaCppBin(): string | null {
-  // 1) persisted config (set via: trayambak config set llamaCppBin <path>)
+  // 1) persisted config (set via: nemo config set llamaCppBin <path>)
   try {
     const cfg = loadConfig()
     if (cfg.llamaCppBin && fs.existsSync(cfg.llamaCppBin)) return cfg.llamaCppBin
@@ -94,7 +94,7 @@ export function locateLlamaCppBin(): string | null {
     /* ignore */
   }
   // 2) env var
-  const fromEnv = process.env.TRAYAMBAK_LLAMACPP_BIN
+  const fromEnv = process.env.NEMO_LLAMACPP_BIN
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv
   // 3) cached GPU build preferred when an NVIDIA GPU is present
   if (hasNvidiaGpu() && usableServerBin(GPU_CACHE_BIN)) return GPU_CACHE_BIN
@@ -117,7 +117,7 @@ export async function ensureLlamaCppBin(): Promise<string | null> {
   const located = locateLlamaCppBin()
   if (located) return located
 
-  const version = process.env.TRAYAMBAK_LLAMACPP_VERSION || DEFAULT_VERSION
+  const version = process.env.NEMO_LLAMACPP_VERSION || DEFAULT_VERSION
   const gpu = hasNvidiaGpu()
 
   // Preferred variant first (CUDA when an NVIDIA GPU is present, CPU otherwise),

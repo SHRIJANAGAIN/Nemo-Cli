@@ -1,6 +1,6 @@
 # ACP — Agent Client Protocol
 
-`trayambak acp` runs Trayambak as an **Agent Client Protocol server over
+`nemo acp` runs Nemo as an **Agent Client Protocol server over
 stdio**: line-delimited JSON-RPC 2.0, one request/response per line. Editors
 and other ACP clients spawn the process, send requests on stdin, and read
 replies plus `session/update` notifications on stdout.
@@ -10,7 +10,7 @@ Source: `packages/acp/src/index.ts`.
 ## Running it
 
 ```sh
-trayambak acp
+nemo acp
 ```
 
 The process stays up until stdin closes. It logs nothing on stdout except
@@ -20,7 +20,7 @@ JSON-RPC frames, so it is safe to pipe.
 
 - **Transport:** one JSON object per line (JSON-RPC 2.0), `crlfDelay: Infinity`.
 - **Protocol version:** `1`.
-- **Agent identity:** `agentInfo: { name: "trayambak", version }` — see
+- **Agent identity:** `agentInfo: { name: "nemo", version }` — see
   `packages/acp/src/index.ts`.
 - **Malformed lines** are ignored; unknown methods return
   `-32601 unknown method: …`.
@@ -38,12 +38,12 @@ the same server:
 | `session/load`, `session/resume` / `load_session`, `resume_session`    | `sessionId`                               | `{ sessionId, state }`, or error `-32001 session not found: <id>`        |
 | `session/prompt` / `prompt`                                            | `sessionId?`, `prompt`, `model?`          | `{ sessionId, stopReason: "end_turn" \| "cancelled" }`                   |
 | `session/cancel` / `cancel`                                            | `sessionId`                               | `{ ok: true }` only when sent with an `id`; a bare notification replies with nothing |
-| `list_sessions`, `set_model`                                           | —                                         | Trayambak extensions — no spec equivalent, and not advertised            |
+| `list_sessions`, `set_model`                                           | —                                         | Nemo extensions — no spec equivalent, and not advertised            |
 
 `prompt` is a `ContentBlock[]` per spec; a bare string is also accepted, and a
 block list with no `text` block in it errors with `-32602 missing 'prompt'`.
 `session/list` is deliberately not aliased: the spec's response shape differs
-from Trayambak's array, and the capability is never advertised.
+from Nemo's array, and the capability is never advertised.
 
 While a `prompt` runs, the server emits notifications. `update` is an ACP
 `SessionUpdate` union member — internal agent events that have no ACP variant
@@ -70,7 +70,7 @@ Request → response pairs, one JSON object per line:
 // →
 {"jsonrpc":"2.0","id":1,"method":"initialize"}
 // ←
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false,"audio":false,"embeddedContext":false},"mcpCapabilities":{"http":false,"sse":false,"acp":false},"sessionCapabilities":{},"auth":{}},"agentInfo":{"name":"trayambak","version":"<package version>"}}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false,"audio":false,"embeddedContext":false},"mcpCapabilities":{"http":false,"sse":false,"acp":false},"sessionCapabilities":{},"auth":{}},"agentInfo":{"name":"nemo","version":"<package version>"}}}
 
 // →  (short name `new_session` + `workDir` also works)
 {"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"C:\\proj","mcpServers":[]}}
@@ -98,11 +98,11 @@ Notes verified in code:
 
 | Surface                | Use it for                                               |
 | ---------------------- | -------------------------------------------------------- |
-| `trayambak` (Ink REPL) | Humans in a terminal                                     |
-| `trayambak acp`        | ACP-capable editors/clients driving sessions over stdio  |
-| `trayambak web`        | HTTP/SSE integrations ([Web](web.md))                    |
-| `trayambak mcp-server` | Exposing a small tool set to MCP clients ([MCP](mcp.md)) |
-| `trayambak exec`       | Scripts: one prompt, JSONL events on stdout              |
+| `nemo` (Ink REPL) | Humans in a terminal                                     |
+| `nemo acp`        | ACP-capable editors/clients driving sessions over stdio  |
+| `nemo web`        | HTTP/SSE integrations ([Web](web.md))                    |
+| `nemo mcp-server` | Exposing a small tool set to MCP clients ([MCP](mcp.md)) |
+| `nemo exec`       | Scripts: one prompt, JSONL events on stdout              |
 
 ## Related
 

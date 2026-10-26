@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -67,7 +67,7 @@ describe("security.txt", () => {
 
   it("contact is overridable without a rebuild", () => {
     expect(securityContact({})).toBe(DEFAULT_SECURITY_CONTACT)
-    expect(securityContact({ TRAYAMBAK_SECURITY_CONTACT: "mailto:ops@example.com" })).toBe("mailto:ops@example.com")
-    expect(securityContact({ TRAYAMBAK_SECURITY_CONTACT: "   " })).toBe(DEFAULT_SECURITY_CONTACT)
+    expect(securityContact({ NEMO_SECURITY_CONTACT: "mailto:ops@example.com" })).toBe("mailto:ops@example.com")
+    expect(securityContact({ NEMO_SECURITY_CONTACT: "   " })).toBe(DEFAULT_SECURITY_CONTACT)
   })
 })

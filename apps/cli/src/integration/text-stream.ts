@@ -1,4 +1,4 @@
-export * as TrayambakTextStream from "./text-stream"
+export * as NemoTextStream from "./text-stream"
 
 export interface StreamOptions {
   readonly onChunk?: (chunk: string) => void

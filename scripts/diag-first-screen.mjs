@@ -1,11 +1,11 @@
-/* First-screen verification: boot the REAL TrayambakApp with the REAL
- * environment (no sandbox — TRAYAMBAK_HOME = repo, config resolved exactly
+/* First-screen verification: boot the REAL NemoApp with the REAL
+ * environment (no sandbox — NEMO_HOME = repo, config resolved exactly
  * like ink-repl: prop = loadConfig() from disk) and prove boot never
  * hijacks into the session picker:
  *   - post factory reset (no config file, empty store) → first-run
- *     SplashScreen ("Welcome to Trayambak CLI!"),
+ *     SplashScreen ("Welcome to Nemo CLI!"),
  *   - steady state (config saved, sessions in store) → WelcomeScreen
- *     ("Welcome To Trayambak CLI") — the picker must NOT auto-open.
+ *     ("Welcome To Nemo CLI") — the picker must NOT auto-open.
  *
  * Run: node scripts/diag-first-screen.mjs     (exit 0 = first screen confirmed)
  */
@@ -18,7 +18,7 @@ const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
 
 // Real store + real config resolution (cwd of this script = repo).
-process.env.TRAYAMBAK_HOME = repo
+process.env.NEMO_HOME = repo
 
 const { createScreen } = await import("./vt-screen.mjs")
 const stdin = new PassThrough()
@@ -40,15 +40,15 @@ stdout.on("data", (chunk) => screen.write(chunk.toString()))
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 // Same config resolution the real CLI uses: parent reads the file, passes it
-// through TRAYAMBAK_CONFIG_JSON, ink-repl hands it to TrayambakApp as the
+// through NEMO_CONFIG_JSON, ink-repl hands it to NemoApp as the
 // prop. Mirroring that keeps this diag honest in BOTH states: fresh reset
 // (no file → splash) and after onboarding (file theme → welcome, no picker).
 const { loadConfig } = await import(pathToFileURL(path.join(repo, "dist", "apps", "runtime", "src", "config.js")).href)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
       ...loadConfig(),
       baseUrl: "http://127.0.0.1:9/api", // unroutable — never hit
@@ -73,8 +73,8 @@ const text = rows.join("\n")
 // Two legitimate first screens: first-run splash (no saved theme yet) or
 // the WelcomeScreen with the logo (config saved). Anything else at boot —
 // above all the session picker — is the bug this guards.
-const splash = text.includes("Welcome to Trayambak CLI!") // SplashScreen (fresh reset)
-const welcome = text.includes("Welcome To Trayambak CLI") // WelcomeScreen (steady state)
+const splash = text.includes("Welcome to Nemo CLI!") // SplashScreen (fresh reset)
+const welcome = text.includes("Welcome To Nemo CLI") // WelcomeScreen (steady state)
 const firstScreen = splash || welcome
 const pickerVisible = /sess_[a-z0-9]{6,}|Select a session|Resumed session|\+ New Chat/.test(text)
 

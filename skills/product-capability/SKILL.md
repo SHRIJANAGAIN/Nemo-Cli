@@ -139,4 +139,4 @@ HANDOFF
 
 - Product intent is now concrete enough to implement without rediscovering hidden constraints mid-PR.
 - Engineering review has a durable artifact instead of relying on memory or Slack context.
-- The resulting plan is reusable across Trayambak Code, Trayambak Code, Cursor, Trayambak, and ECC 2.0 planning surfaces.
+- The resulting plan is reusable across Nemo Code, Nemo Code, Cursor, Nemo, and ECC 2.0 planning surfaces.

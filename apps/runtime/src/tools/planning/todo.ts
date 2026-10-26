@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -14,10 +14,10 @@ import { textResult, type Tool } from "../types.js"
  * Resolved per call rather than captured at module load: `os.homedir()` is
  * ambient, and a frozen constant both bakes in whatever HOME happened to be at
  * import time and makes the traversal below impossible to test in isolation.
- * Matches `sessionsDir()` in `skt/9-session/session.ts`.
+ * Matches `sessionsDir()` in `nemo/9-session/session.ts`.
  */
 function todoDir(): string {
-  return path.join(os.homedir(), ".trayambak", "todos")
+  return path.join(os.homedir(), ".nemo", "todos")
 }
 
 /**
@@ -86,7 +86,7 @@ function nextId(list: TodoList): number {
   return list.items.length === 0 ? 1 : Math.max(...list.items.map((i) => i.id)) + 1
 }
 
-/** Render a TodoList, showing only changes since the last snapshot (SKT AI LABS TodoView diff). */
+/** Render a TodoList, showing only changes since the last snapshot (Shrijan TodoView diff). */
 function renderTodoDiff(list: TodoList): string {
   const before = list.before ?? []
   const after = list.items

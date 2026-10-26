@@ -40,7 +40,7 @@ Same triggers as **When to Use** above — this heading is what ECC uses for ski
 
 Copy the `codescene` entry from `mcp-configs/mcp-servers.json` into your harness MCP config.
 
-**Trayambak Code** (`~/.trayambak.json` → `mcpServers`):
+**Nemo Code** (`~/.nemo.json` → `mcpServers`):
 
 ```json
 "codescene": {
@@ -111,7 +111,7 @@ Result: Code Health **4.82 → 9.1** (free standalone token only).
 
 ### Example: AGENTS.md enforcement block
 
-Paste into the project `AGENTS.md` or `TRAYAMBAK.md`:
+Paste into the project `AGENTS.md` or `NEMO.md`:
 
 ```md
 ## Code Health (CodeScene MCP)

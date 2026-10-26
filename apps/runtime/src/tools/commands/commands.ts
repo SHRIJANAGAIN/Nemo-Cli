@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -60,7 +60,7 @@ export function parseCommandFile(raw: string, file: string): CommandSpec | null 
 }
 
 export function defaultRulesDir(): string {
-  return path.join(process.cwd(), ".trayambak", "rules")
+  return path.join(process.cwd(), ".nemo", "rules")
 }
 
 export function loadRulesFromDir(dir: string): string[] {
@@ -83,5 +83,5 @@ export function loadRulesFromDir(dir: string): string[] {
 
 export function rulesBlock(rules: string[]): string {
   if (!rules || rules.length === 0) return ""
-  return ["Rules (from .trayambak/rules):", ...rules].join("\n")
+  return ["Rules (from .nemo/rules):", ...rules].join("\n")
 }

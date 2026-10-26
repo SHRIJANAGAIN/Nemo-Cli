@@ -1,13 +1,13 @@
 ---
 name: skill-stocktake
-description: "Use when auditing Trayambak skills and commands for quality. Supports Quick Scan (changed skills only) and Full Stocktake modes with sequential subagent batch evaluation."
+description: "Use when auditing Nemo skills and commands for quality. Supports Quick Scan (changed skills only) and Full Stocktake modes with sequential subagent batch evaluation."
 metadata:
   origin: ECC
 ---
 
 # skill-stocktake
 
-Slash command (`/skill-stocktake`) that audits all Trayambak skills and commands using a quality checklist + AI holistic judgment. Supports two modes: Quick Scan for recently changed skills, and Full Stocktake for a complete review.
+Slash command (`/skill-stocktake`) that audits all Nemo skills and commands using a quality checklist + AI holistic judgment. Supports two modes: Quick Scan for recently changed skills, and Full Stocktake for a complete review.
 
 ## Scope
 
@@ -15,8 +15,8 @@ The command targets the following paths **relative to the directory where it is 
 
 | Path                       | Description                                    |
 | -------------------------- | ---------------------------------------------- |
-| `~/.trayambak/skills/`     | Global skills (all projects)                   |
-| `{cwd}/.trayambak/skills/` | Project-level skills (if the directory exists) |
+| `~/.nemo/skills/`     | Global skills (all projects)                   |
+| `{cwd}/.nemo/skills/` | Project-level skills (if the directory exists) |
 
 **At the start of Phase 1, the command explicitly lists which paths were found and scanned.**
 
@@ -29,7 +29,7 @@ cd ~/path/to/my-project
 /skill-stocktake
 ```
 
-If the project has no `.trayambak/skills/` directory, only global skills and commands are evaluated.
+If the project has no `.nemo/skills/` directory, only global skills and commands are evaluated.
 
 ## Modes
 
@@ -38,37 +38,37 @@ If the project has no `.trayambak/skills/` directory, only global skills and com
 | Quick Scan     | `results.json` exists (default)                   | 5–10 min  |
 | Full Stocktake | `results.json` absent, or `/skill-stocktake full` | 20–30 min |
 
-**Results cache:** `~/.trayambak/skills/skill-stocktake/results.json`
+**Results cache:** `~/.nemo/skills/skill-stocktake/results.json`
 
 ## Quick Scan Flow
 
 Re-evaluate only skills that have changed since the last run (5–10 min).
 
-1. Read `~/.trayambak/skills/skill-stocktake/results.json`
-2. Run: `bash ~/.trayambak/skills/skill-stocktake/scripts/quick-diff.sh \
-      ~/.trayambak/skills/skill-stocktake/results.json`
-   (Project dir is auto-detected from `$PWD/.trayambak/skills`; pass it explicitly only if needed)
+1. Read `~/.nemo/skills/skill-stocktake/results.json`
+2. Run: `bash ~/.nemo/skills/skill-stocktake/scripts/quick-diff.sh \
+      ~/.nemo/skills/skill-stocktake/results.json`
+   (Project dir is auto-detected from `$PWD/.nemo/skills`; pass it explicitly only if needed)
 3. If output is `[]`: report "No changes since last run." and stop
 4. Re-evaluate only those changed files using the same Phase 2 criteria
 5. Carry forward unchanged skills from previous results
 6. Output only the diff
-7. Run: `bash ~/.trayambak/skills/skill-stocktake/scripts/save-results.sh \
-      ~/.trayambak/skills/skill-stocktake/results.json <<< "$EVAL_RESULTS"`
+7. Run: `bash ~/.nemo/skills/skill-stocktake/scripts/save-results.sh \
+      ~/.nemo/skills/skill-stocktake/results.json <<< "$EVAL_RESULTS"`
 
 ## Full Stocktake Flow
 
 ### Phase 1 — Inventory
 
-Run: `bash ~/.trayambak/skills/skill-stocktake/scripts/scan.sh`
+Run: `bash ~/.nemo/skills/skill-stocktake/scripts/scan.sh`
 
 The script enumerates skill files, extracts frontmatter, and collects UTC mtimes.
-Project dir is auto-detected from `$PWD/.trayambak/skills`; pass it explicitly only if needed.
+Project dir is auto-detected from `$PWD/.nemo/skills`; pass it explicitly only if needed.
 Present the scan summary and inventory table from the script output:
 
 ```
 Scanning:
-  ✓ ~/.trayambak/skills/         (17 files)
-  ✗ {cwd}/.trayambak/skills/    (not found — global skills only)
+  ✓ ~/.nemo/skills/         (17 files)
+  ✗ {cwd}/.nemo/skills/    (not found — global skills only)
 ```
 
 | Skill | 7d use | 30d use | Description |
@@ -108,7 +108,7 @@ Each skill is evaluated against this checklist:
 
 ```
 - [ ] Content overlap with other skills checked
-- [ ] Overlap with MEMORY.md / TRAYAMBAK.md checked
+- [ ] Overlap with MEMORY.md / NEMO.md checked
 - [ ] Freshness of technical references verified (use WebSearch if tool names / CLI flags / APIs are present)
 - [ ] Usage frequency considered
 ```
@@ -127,7 +127,7 @@ Evaluation is **holistic AI judgment** — not a numeric rubric. Guiding dimensi
 
 - **Actionability**: code examples, commands, or steps that let you act immediately
 - **Scope fit**: name, trigger, and content are aligned; not too broad or narrow
-- **Uniqueness**: value not replaceable by MEMORY.md / TRAYAMBAK.md / another skill
+- **Uniqueness**: value not replaceable by MEMORY.md / NEMO.md / another skill
 - **Currency**: technical references work in the current environment
 
 **Reason quality requirements** — the `reason` field must be self-contained and decision-enabling:
@@ -165,7 +165,7 @@ Evaluation is **holistic AI judgment** — not a numeric rubric. Guiding dimensi
 
 ## Results File Schema
 
-`~/.trayambak/skills/skill-stocktake/results.json`:
+`~/.nemo/skills/skill-stocktake/results.json`:
 
 **`evaluated_at`**: Must be set to the actual UTC time of evaluation completion.
 Obtain via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Never use a date-only approximation like `T00:00:00Z`.
@@ -181,7 +181,7 @@ Obtain via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Never use a date-only approximat
   },
   "skills": {
     "skill-name": {
-      "path": "~/.trayambak/skills/skill-name/SKILL.md",
+      "path": "~/.nemo/skills/skill-name/SKILL.md",
       "verdict": "Keep",
       "reason": "Concrete, actionable, unique value for X workflow",
       "mtime": "2026-01-15T08:30:00Z"

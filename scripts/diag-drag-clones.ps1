@@ -132,7 +132,7 @@ function Read-Buffer([int]$ConsolePid) {
       $tops++
       if ($r -ge $ci.win.T -and $r -le $ci.win.B) { $inViewTops++ } else { $outViewTops++ }
     }
-    if ($line.Contains('Ask Trayambak')) { $composers++ }
+    if ($line.Contains('Ask Nemo')) { $composers++ }
     if ($r -ge $ci.win.T -and $r -le $ci.win.B -and $viewport.Count -lt 80) {
       $viewport.Add(('{0}|{1}' -f $r, $line.TrimEnd()))
     }
@@ -250,7 +250,7 @@ function Invoke-Scenario([string]$Name) {
       $deadline = (Get-Date).AddSeconds(20)
       while ((Get-Date) -lt $deadline -and -not $t) {
         Start-Sleep -Milliseconds 300
-        $t = Find-TargetWindow $before 'Trayambak'
+        $t = Find-TargetWindow $before 'Nemo'
       }
       if (-not $t) { Write-Host 'FAIL: app window title never appeared'; return $false }
       $win = $t

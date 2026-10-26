@@ -1,20 +1,27 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, describe, expect, it } from "vitest"
 import React from "react"
 import { PassThrough } from "node:stream"
 import type { Instance } from "ink"
-import { BLUE_RAMP, SILVER_RAMP } from "./thinking-ribbon.js"
+import { BLUE_RAMP, GRID_COLS, GRID_ROWS, SILVER_RAMP } from "./thinking-ribbon.js"
+import type { MotionLevel } from "./animations.js"
+import { setMotionLevel } from "./motion-store.js"
 
 const OLD_FORCE_COLOR = process.env.FORCE_COLOR
 process.env.FORCE_COLOR = "3"
 
 const { render } = await import("ink")
 const { ThinkingOrbs } = await import("./ThinkingOrbs.js")
+
+// The sphere's frame depends on the motion level (travelling eyes at `full`, the
+// resting 3×3 below it), so this file names the level it paints instead of
+// inheriting whatever the developer who ran the suite last exported.
+setMotionLevel("full")
 
 afterAll(() => {
   if (OLD_FORCE_COLOR === undefined) delete process.env.FORCE_COLOR
@@ -59,6 +66,26 @@ describe("ThinkingOrbs", () => {
   it("paints a custom label verbatim (Generating… phase)", async () => {
     const out = stripAnsi(await paint("Generating…"))
     expect(out).toContain("Generating…")
+  }, 15000)
+
+  // The frame `reduced` and `off` show is designed, not sampled — and this is
+  // the assertion that says why. At `full`/frame 0 the shimmer band sits off the
+  // end of the word, so every char renders dim, and three of the nine grid cells
+  // are blank. Both of those are *mid-animation moments*; a still has to be the
+  // readable one, because the status word is the reason the widget exists.
+  it.each(["reduced", "off"])("paints the legible still at motion=%s", async (level) => {
+    setMotionLevel(level as MotionLevel)
+    try {
+      const sink = await paint("Thinking…")
+      const stripped = stripAnsi(sink)
+      expect(stripped).toContain("Thinking…")
+      // Whole 3×3 lit, not a corner of a travelling group.
+      expect((stripped.match(/·/g) ?? []).length).toBe(GRID_ROWS * GRID_COLS)
+      // Nothing dimmed: the word is at full brightness everywhere.
+      expect(sink).not.toContain("\x1b[2m")
+    } finally {
+      setMotionLevel("full")
+    }
   }, 15000)
 
   it("paints dots in blue and text in silver only", async () => {

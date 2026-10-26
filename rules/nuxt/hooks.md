@@ -10,7 +10,7 @@ paths:
 
 > This file extends [common/hooks.md](../common/hooks.md) with Nuxt specific content.
 
-These are Trayambak Code harness hooks for Nuxt work. They run via the harness, not Trayambak.
+These are Nemo Code harness hooks for Nuxt work. They run via the harness, not Nemo.
 
 ## Typecheck
 

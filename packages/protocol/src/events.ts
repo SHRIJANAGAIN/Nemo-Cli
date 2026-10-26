@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type { AgentMessage, AssistantMessage, ToolCallPart, ToolResultMessage } from "./messages.js"
@@ -79,6 +79,15 @@ export type AgentEvent =
       freedTokens: number
       estimatedBefore: number
       estimatedAfter: number
+      /**
+       * How the marker was produced. `"agentic"` = a model digest replaced
+       * the head; `"agentic-failed"` = the summarizer was asked and the
+       * deterministic marker answered; `"deterministic"` = no summarizer was
+       * consulted. Optional so existing status surfaces keep compiling, and
+       * present so a user who sees the same marker every time can tell a
+       * broken summarizer from an absent one.
+       */
+      strategy?: "agentic" | "agentic-failed" | "deterministic"
     }
   /** The provider endpoint became unreachable mid-turn (not a server error).
    *  The loop parks and probes rather than burning its retry budget. */

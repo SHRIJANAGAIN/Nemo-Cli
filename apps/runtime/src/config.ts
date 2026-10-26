@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -9,9 +9,15 @@ import * as os from "os"
 import * as path from "path"
 import type { McpOAuthConfig } from "../../../packages/mcp/src/oauth.js"
 import { parseTokenBudget } from "../../../packages/core/src/token_budget.js"
+import { isRemoteUncPath } from "../../../packages/core/src/validate.js"
+
+/** Canonical UNC guard lives in core/validate.ts (shared choke point);
+ *  re-exported here so existing importers (session.ts, session-manager.ts,
+ *  config-unc.test.ts) keep working unchanged. */
+export { isRemoteUncPath }
 import { agentignoreDenyRules } from "./agentignore.js"
 
-export interface TrayambakConfig {
+export interface NemoConfig {
   baseUrl: string
   model: string
   /** Cheap model for background chores (auto-titles). Falls back to `model` when unset. */
@@ -56,6 +62,17 @@ export interface TrayambakConfig {
   maxParallelToolCalls: number
   /** Enable llama.cpp native function calling; disable to use text fallback. */
   nativeTools: boolean
+  /**
+   * Model-driven context compaction. When the head of the session is large
+   * enough to be worth a model call, it is summarized into a structured
+   * handoff (goal / files / errors / decisions / remaining work) instead of
+   * a mechanical marker. Default ON.
+   *
+   * The deterministic compactor stays the guarantee: a failed or slow
+   * summarizer degrades to the marker, so this only controls whether the
+   * model is ASKED. Disable it to keep compaction model-free entirely.
+   */
+  agenticCompaction: boolean
   /** Context size for llama.cpp server (default 16384). */
   ctxSize?: number
   /** Batch size for llama.cpp server (default 256). */
@@ -71,35 +88,10 @@ export interface TrayambakConfig {
   reasoningEffort?: "low" | "medium" | "high" | "xhigh" | "max"
   /** Scratchpad directory for temporary files (defaults to cwd/.scratchpad). */
   scratchpadDir?: string
-  /** Model provider backend: "llamacpp", "nvidia", "nvidia-nim", "openai",
-   *  "xai", "huggingface", "anthropic", "google", "ollama", "custom",
-   *  plus OpenAI-compatible gateways: "groq", "mistral", "cerebras",
-   *  "together", "deepinfra", "cohere", "perplexity", "openrouter",
-   *  "fireworks", "venice", "azure", "skt-gateway"
+  /** Model provider backend: "nvidia" or "nvidia-nim" (the hosted backend),
+   *  "ollama" and "llamacpp" (local runtimes), or "custom"
    *  (bring-your-own OpenAI-compatible endpoint). */
-  provider?:
-    | "llamacpp"
-    | "nvidia"
-    | "nvidia-nim"
-    | "openai"
-    | "xai"
-    | "huggingface"
-    | "anthropic"
-    | "google"
-    | "ollama"
-    | "custom"
-    | "groq"
-    | "mistral"
-    | "cerebras"
-    | "together"
-    | "deepinfra"
-    | "cohere"
-    | "perplexity"
-    | "openrouter"
-    | "fireworks"
-    | "venice"
-    | "azure"
-    | "skt-gateway"
+  provider?: "llamacpp" | "nvidia" | "nvidia-nim" | "ollama" | "custom"
   /** MCP (Model Context Protocol) servers. Each maps a server name to a stdio
    *  (`command` + `args`) or HTTP (`url`) transport spec. Exposed as mcp__ tools.
    *  HTTP servers support `headers`, and OAuth 2.0 + PKCE via `oauth`
@@ -149,7 +141,7 @@ export interface TrayambakConfig {
   }>
   /** Active provider id. */
   activeProviderId?: string
-  /** Per-mode provider/model override (e.g. { debug: { provider: "openai", model: "gpt-4o" } }). */
+  /** Per-mode provider/model override (e.g. { debug: { provider: "ollama", model: "qwen2.5-coder" } }). */
   modeApiConfigs?: Record<string, { provider?: string; model?: string }>
   /** Model ids marked as favorites in the TUI model picker. */
   modelFavorites?: string[]
@@ -172,8 +164,20 @@ export interface TrayambakConfig {
    *  (EXTRACT_MEMORIES port: conservative no-LLM heuristic, max 2/turn,
    *  visible via /memory). Default true; set false to keep memory manual. */
   memoryAutoExtract?: boolean
-  /** Active terminal theme name (e.g. "trayambak-dark", "claude-dark", "claude-light"). */
+  /** Active terminal theme name (e.g. "nemo-dark", "claude-dark", "claude-light"). */
   themeName?: string
+  /** Animation level saved by /motion: "off" stops every timer, "reduced" keeps
+   *  colour breathing but stops anything travelling, "full" is the default.
+   *  Deliberately NOT folded into the NEMO_MOTION env merge below: that var
+   *  means "this run", this field means "usually", and the TUI's motion policy is
+   *  the one place that gets to put them in order. Flattening env into the config
+   *  here would make a one-off capture run outrank the saved preference forever. */
+  motion?: "off" | "reduced" | "full"
+  /** Spinner style saved by /spinner ("braille", "arc", "meter", …). Free text
+   *  like themeName: the name list lives with the frame tables in the TUI, and
+   *  duplicating it here would let the two lists drift apart. An unrecognised
+   *  name falls back to braille at paint time, the same way the env var does. */
+  spinner?: string
   /** Default option number for AskUserQuestion (1-indexed). Pressing Enter without typing selects this option. Changeable by typing a different number. */
   questionDefaultOption?: number
   /** AskUserQuestion answer mode: "both" (choose by number or type custom), "choose" (number only), "type" (text only). Default "both". */
@@ -219,19 +223,21 @@ export interface TrayambakConfig {
   mcpToolCacheTtlMs?: number
   /** MCP auto-reconnect: reconnect after transport failure. Default true. */
   mcpReconnectOnFailure?: boolean
-  /** Auto-update policy (SKT AI LABS parity): true = apply patch updates, false = never check, "notify" = only notify about updates. Default true. */
+  /** Auto-update policy (Shrijan parity): true = apply patch updates, false = never check, "notify" = only notify about updates. Default true. */
   autoupdate?: boolean | "notify"
-  /** License key for gated toolsets (TRAYAMBAK_LICENSE_KEY). Absent = pentest stripped. Never logged. */
+  /** Autonomous harness improvement: at session end, re-run the session's last real request under candidate harnesses and adopt what won. Default true; NEMO_DISABLE_HARNESS_AUTO is the kill switch. */
+  harnessAuto?: boolean
+  /** License key for gated features (NEMO_LICENSE_KEY). Absent = gated features stripped. Never logged. */
   licenseKey?: string
   /** GitHub login from CLI OAuth (/github login). Display identity only — persisted so the system prompt can name the operator. Never a secret. */
   githubLogin?: string
-  /** License server base URL (TRAYAMBAK_LICENSE_SERVER). Default https://skt.sktailabs.in. Self-host to run your own registry. */
+  /** License server base URL (NEMO_LICENSE_SERVER). Default https://skt.sktailabs.in. Self-host to run your own registry. */
   licenseServerUrl?: string
 }
 
-const DEFAULTS: TrayambakConfig = {
-  baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-  model: "gemini-2.5-flash",
+const DEFAULTS: NemoConfig = {
+  baseUrl: "https://integrate.api.nvidia.com",
+  model: "nvidia/nemotron-3-super-120b-a12b",
   small_model: undefined,
   subagent_model: undefined,
   judge_model: undefined,
@@ -254,6 +260,7 @@ const DEFAULTS: TrayambakConfig = {
   retryDelayMs: 750,
   maxParallelToolCalls: 4,
   nativeTools: true,
+  agenticCompaction: true,
   ctxSize: 16384,
   batchSize: 256,
   ubatchSize: 128,
@@ -278,8 +285,11 @@ const DEFAULTS: TrayambakConfig = {
   },
   scratchpadDir: ".scratchpad",
   autoupdate: true,
-  provider: "google",
+  harnessAuto: true,
+  provider: "nvidia",
   themeName: undefined,
+  motion: undefined,
+  spinner: undefined,
   questionDefaultOption: 1,
   questionAnswerMode: "both" as const,
   maxLengthContinuations: 10,
@@ -318,27 +328,31 @@ function detectDefaultShell(): string {
 }
 
 function configDir(): string {
-  const local = path.join(process.cwd(), ".trayambak")
-  if (fs.existsSync(local)) return local
-  return path.join(os.homedir(), ".trayambak")
+  const local = path.join(process.cwd(), ".nemo")
+  // A bare `.nemo/` directory is NOT an opt-in: the app itself creates one for
+  // harness/inbox state, and treating that as "this project has a config"
+  // silently discarded the user's ~/.nemo/config.json (empty key, default
+  // model). Only a project that actually ships a config file takes over.
+  if (fs.existsSync(path.join(local, "config.json"))) return local
+  return path.join(os.homedir(), ".nemo")
 }
 
 /**
- * True when the ACTIVE config file is `<cwd>/.trayambak/config.json` rather than
- * the user's own `~/.trayambak/config.json`.
+ * True when the ACTIVE config file is `<cwd>/.nemo/config.json` rather than
+ * the user's own `~/.nemo/config.json`.
  *
  * `configDir()` prefers the cwd copy so a project can ship defaults — but a
  * checkout is untrusted input (`git clone` + `cd` is all it takes), so that file
  * gets the reduced treatment in `stripRepoTrustedSettings`. `cwd === home` is
  * NOT a repo: there the two paths are one file and the user is at their own
- * prompt. An explicit `--config <file>` (TRAYAMBAK_CONFIG) is trusted by
+ * prompt. An explicit `--config <file>` (NEMO_CONFIG) is trusted by
  * definition — the user named it.
  */
 function isRepoLocalConfig(): boolean {
-  if (process.env.TRAYAMBAK_CONFIG) return false
-  const local = path.join(process.cwd(), ".trayambak")
-  if (!fs.existsSync(local)) return false
-  return path.resolve(local) !== path.resolve(os.homedir(), ".trayambak")
+  if (process.env.NEMO_CONFIG) return false
+  const local = path.join(process.cwd(), ".nemo")
+  if (!fs.existsSync(path.join(local, "config.json"))) return false
+  return path.resolve(local) !== path.resolve(os.homedir(), ".nemo")
 }
 
 /** Warn once per process per message — loadConfig runs on every turn. */
@@ -347,6 +361,92 @@ function warnOnce(key: string, message: string): void {
   if (warnedOnce.has(key)) return
   warnedOnce.add(key)
   console.warn(message)
+}
+
+/**
+ * Risky working directories (#38) — RECONSTRUCTED, NOT THE ORIGINAL.
+ *
+ * A concurrent session's uncommitted version of this function was destroyed by a
+ * careless `git checkout` in another session. This is a faithful rebuild from the
+ * contract its regression test pins (config-unc.test.ts, "risky cwd warning
+ * (#38)"), not the author's original code. The other session should replace it.
+ *
+ * The hazard: `--cwd /` or `NEMO_CWD=/etc` re-roots every path-relative tool
+ * (read/write/edit/glob/grep) at a system location. Nothing stops it, so the only
+ * defence is telling the operator, once, loudly enough to be noticed.
+ *
+ * Contract, from the test:
+ *  - the filesystem ROOT always warns; an ordinary directory never does
+ *  - the message contains "system location"
+ *  - once per resolved path per process (loadConfig runs every turn, so an
+ *    unconditional warn would spam the terminal every single turn)
+ *  - a genuinely NEW risky path still warns even after another was warned
+ */
+const RISKY_CWD_WARNED = new Set<string>()
+
+/**
+ * True when the path is a filesystem ROOT (or empty) — the "C:\" / "/" case.
+ *
+ * Depth is what distinguishes it: a root has no meaningful name to compare and
+ * is where every path-relative tool silently becomes a whole-filesystem tool. A
+ * deep path like /etc or C:\Windows\System32 is a deliberate choice by someone
+ * who typed it, and the test requires those to warn too (the second case), so
+ * this predicate deliberately covers ONLY the root.
+ */
+function isFilesystemRoot(cwd: string): boolean {
+  const trimmed = cwd.replace(/[\\/]+$/, "")
+  if (trimmed.length === 0) return true
+  return trimmed === path.parse(cwd).root.replace(/[\\/]+$/, "")
+}
+
+/**
+ * System locations that are risky even though they are not the root.
+ *
+ * The test requires `path.join(root, "Windows")` on win32 and `/etc` elsewhere to
+ * warn. Matching is case-insensitive and on a path SEGMENT boundary, so
+ * `C:\Windows` warns but `C:\WindowsApps\Thing` (a real app directory) does not
+ * false-positive on the substring.
+ */
+const RISKY_SYSTEM_DIRS = ["windows", "system32", "etc", "usr", "bin", "var", "boot", "proc", "sys"]
+
+function isRiskySystemPath(cwd: string): boolean {
+  if (isFilesystemRoot(cwd)) return true
+  const segments = cwd.split(/[\\/]+/).filter((s) => s.length > 0)
+  // Skip a drive-letter segment ("C:") — it is not a directory name.
+  const dirs = segments.filter((s) => !/^[A-Za-z]:$/.test(s))
+  return dirs.some((segment) => RISKY_SYSTEM_DIRS.includes(segment.toLowerCase()))
+}
+
+/** Warn once per process when the agent is rooted at a system location (#38). */
+export function warnOnRiskyCwd(cwd: string): void {
+  let resolved: string
+  try {
+    resolved = path.resolve(cwd)
+  } catch {
+    return
+  }
+  // A symlink launders the lexical check: <tmp>/link -> C:\Windows resolves
+  // lexically inside tmp. Check the real target too; a missing/unreadable
+  // target keeps the lexical answer.
+  let real = resolved
+  try {
+    real = fs.realpathSync(resolved)
+  } catch {
+    /* lexical only */
+  }
+  const hit = isRiskySystemPath(resolved) ? resolved : isRiskySystemPath(real) ? real : null
+  if (hit === null) {
+    RISKY_CWD_WARNED.add(resolved)
+    return
+  }
+  if (RISKY_CWD_WARNED.has(resolved) || RISKY_CWD_WARNED.has(real)) return
+  RISKY_CWD_WARNED.add(resolved)
+  RISKY_CWD_WARNED.add(real)
+  console.warn(
+    `nemo: cwd "${resolved}"${real !== resolved ? ` (resolves to "${real}")` : ""} is a system location. ` +
+      `Every path-relative tool will read and write there. ` +
+      `Point --cwd/NEMO_CWD at your project directory unless that is what you meant.`,
+  )
 }
 
 /** Blanket-approval spellings, including the legacy ones (#93). */
@@ -367,44 +467,42 @@ const BLANKET_APPROVAL_UI_MODES = new Set(["full-access", "auto-approve"])
  *
  * Each removal is announced loudly and names the file, once per process.
  */
-function stripRepoTrustedSettings(cfg: Partial<TrayambakConfig>, file: string): Partial<TrayambakConfig> {
-  const out: Partial<TrayambakConfig> = { ...cfg }
+function stripRepoTrustedSettings(cfg: Partial<NemoConfig>, file: string): Partial<NemoConfig> {
+  const out: Partial<NemoConfig> = { ...cfg }
   const perms = out.permissions
   if (perms && typeof perms === "object" && !Array.isArray(perms)) {
     const p = { ...(perms as Record<string, unknown>) }
     const uiMode = typeof p.uiMode === "string" ? p.uiMode : undefined
     const mode = typeof p.mode === "string" ? p.mode : undefined
     const blanket =
-      (uiMode !== undefined && BLANKET_APPROVAL_UI_MODES.has(uiMode)) ||
-      mode === "yolo" ||
-      p.askByDefault === false
+      (uiMode !== undefined && BLANKET_APPROVAL_UI_MODES.has(uiMode)) || mode === "yolo" || p.askByDefault === false
     if (blanket) {
       delete p.uiMode
       delete p.mode
       delete p.askByDefault
       warnOnce(
         `blanket:${file}`,
-        `trayambak: ignoring blanket-approval settings from ${file} — a repository ` +
+        `nemo: ignoring blanket-approval settings from ${file} — a repository ` +
           "cannot put the session into blanket-approval mode. Set it in " +
-          "~/.trayambak/config.json or point at a file you trust with --config instead.",
+          "~/.nemo/config.json or point at a file you trust with --config instead.",
       )
     }
-    out.permissions = p as TrayambakConfig["permissions"]
+    out.permissions = p as NemoConfig["permissions"]
   }
   if (typeof out.shellCommand === "string" && out.shellCommand.trim().length > 0) {
     delete out.shellCommand
     warnOnce(
       `shell:${file}`,
-      `trayambak: ignoring shellCommand from ${file} — a repository cannot choose ` +
-        "the shell the agent runs. Set TRAYAMBAK_SHELL_COMMAND or put shellCommand " +
-        "in ~/.trayambak/config.json instead.",
+      `nemo: ignoring shellCommand from ${file} — a repository cannot choose ` +
+        "the shell the agent runs. Set NEMO_SHELL_COMMAND or put shellCommand " +
+        "in ~/.nemo/config.json instead.",
     )
   }
   return out
 }
 
 /** `uiMode` outside its enum is dropped, wherever the config came from (#94). */
-function sanitizeUIMode(perms: unknown, warn: boolean): TrayambakConfig["permissions"] {
+function sanitizeUIMode(perms: unknown, warn: boolean): NemoConfig["permissions"] {
   if (!perms || typeof perms !== "object" || Array.isArray(perms)) return undefined
   const p = { ...(perms as Record<string, unknown>) }
   if (p.uiMode !== undefined) {
@@ -413,25 +511,25 @@ function sanitizeUIMode(perms: unknown, warn: boolean): TrayambakConfig["permiss
       delete p.uiMode
       if (warn) {
         console.warn(
-          `trayambak: ignoring permissions.uiMode ${JSON.stringify(p.uiMode)} — expected one of ${allowed.join(", ")}`,
+          `nemo: ignoring permissions.uiMode ${JSON.stringify(p.uiMode)} — expected one of ${allowed.join(", ")}`,
         )
       }
     }
   }
-  return p as TrayambakConfig["permissions"]
+  return p as NemoConfig["permissions"]
 }
 
 export function configPath(): string {
-  // Explicit override (TRAYAMBAK_CONFIG, set by `--config <file>`):
+  // Explicit override (NEMO_CONFIG, set by `--config <file>`):
   // resolve against the current directory so callers get one exact file.
-  const explicit = process.env.TRAYAMBAK_CONFIG
+  const explicit = process.env.NEMO_CONFIG
   if (explicit) {
     // #58: refuse a share BEFORE any fs probe. existsSync/readFileSync against
     // an attacker-chosen host would authenticate to it (NTLM hash leak) and
     // stall for seconds. Loud, never silent — the operator asked for this file.
     if (isRemoteUncPath(explicit)) {
       process.stderr.write(
-        `trayambak: refusing remote UNC config path ${JSON.stringify(explicit)} — ` +
+        `nemo: refusing remote UNC config path ${JSON.stringify(explicit)} — ` +
           "config on a network share leaks credentials and cannot be written atomically. " +
           "Using the default config location instead.\n",
       )
@@ -442,37 +540,8 @@ export function configPath(): string {
   return path.join(configDir(), "config.json")
 }
 
-/**
- * True when `p` addresses a file on a UNC/remote share rather than the local
- * filesystem.
- *
- * Session/config paths arriving over the network are rejected by callers
- * (`session.ts`, `session-manager.ts`) because the atomic-rename write they use
- * is not atomic across SMB, and a torn config file is worse than a failed one.
- * Recognised forms:
- *   - `\\host\share\file`      classic UNC
- *   - `//host/share/file`      same thing, forward slashes
- *   - `\\?\UNC\host\share`    extended-length UNC
- * Deliberately NOT remote, and therefore NOT rejected:
- *   - `C:\local\file`          local drive
- *   - `\\?\C:\local`           extended-length LOCAL path — still local
- *   - `\\.\PhysicalDrive0`     Win32 device namespace, not a share
- *   - relative paths          not remote by definition
- */
-export function isRemoteUncPath(p: string): boolean {
-  if (typeof p !== "string" || p.length === 0) return false
-  // Win32 device namespace (\\.\PhysicalDrive0, \\.\PIPE\x) is never a share.
-  if (/^\\\\\.\\/.test(p) || /^\/\/\.\//.test(p)) return false
-  // Extended-length UNC: \\?\UNC\host\share
-  if (/^\\\\\?\\UNC\\/i.test(p)) return true
-  // Extended-length LOCAL path (\\?\C:\local) is still local.
-  if (/^\\\\\?\\[a-z]:\\/i.test(p) || /^\/\/\?\/[a-z]:\//i.test(p)) return false
-  // Classic UNC in either separator style: \\host\share or //host/share
-  return /^\\\\[^\\]/.test(p) || /^\/\/[^/]/.test(p)
-}
-
-export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakConfig {
-  let fileConfig: Partial<TrayambakConfig> = {}
+export function loadConfig(overrides: Partial<NemoConfig> = {}): NemoConfig {
+  let fileConfig: Partial<NemoConfig> = {}
   const file = configPath()
   if (fs.existsSync(file)) {
     try {
@@ -480,7 +549,7 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
       // Legacy tolerance: an older CLI path persisted flag names verbatim
       // ("--apiKey", "--baseUrl", "--provider", "--model"). Map them onto the
       // canonical keys when the canonical key is absent — observed live in
-      // CWD .trayambak/config.json, where the stray keys hid the real config
+      // CWD .nemo/config.json, where the stray keys hid the real config
       // and forced provider/apiKey back to defaults (401s).
       for (const [flag, key] of [
         ["--apiKey", "apiKey"],
@@ -491,7 +560,7 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
         if (raw[key] === undefined && raw[flag] !== undefined) raw[key] = raw[flag]
         delete raw[flag]
       }
-      fileConfig = raw as Partial<TrayambakConfig>
+      fileConfig = raw as Partial<NemoConfig>
       // A checked-out repo's config is untrusted input: it may ship scoped
       // rules, never blanket approval or the shell (see the helper).
       if (isRepoLocalConfig()) fileConfig = stripRepoTrustedSettings(fileConfig, file)
@@ -502,10 +571,10 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
 
   // Home mcpServers merge UNDER the active file, per server (#bug: a repo file
   // carrying `"mcpServers": {}` silently uninstalled every home server).
-  // Only for the implicit <cwd>/.trayambak/config.json — an explicit
+  // Only for the implicit <cwd>/.nemo/config.json — an explicit
   // --config file stands alone.
-  if (!process.env.TRAYAMBAK_CONFIG && isRepoLocalConfig()) {
-    const homeFile = path.join(os.homedir(), ".trayambak", "config.json")
+  if (!process.env.NEMO_CONFIG && isRepoLocalConfig()) {
+    const homeFile = path.join(os.homedir(), ".nemo", "config.json")
     if (fs.existsSync(homeFile) && path.resolve(homeFile) !== path.resolve(file)) {
       try {
         const homeRaw = JSON.parse(fs.readFileSync(homeFile, "utf8")) as Record<string, unknown>
@@ -520,61 +589,61 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
     }
   }
 
-  const envConfig: Partial<TrayambakConfig> = {}
-  if (process.env.TRAYAMBAK_BASE_URL) envConfig.baseUrl = process.env.TRAYAMBAK_BASE_URL
-  if (process.env.TRAYAMBAK_MODEL) envConfig.model = process.env.TRAYAMBAK_MODEL
-  if (process.env.TRAYAMBAK_SMALL_MODEL) envConfig.small_model = process.env.TRAYAMBAK_SMALL_MODEL
-  if (process.env.TRAYAMBAK_SUBAGENT_MODEL) envConfig.subagent_model = process.env.TRAYAMBAK_SUBAGENT_MODEL
+  const envConfig: Partial<NemoConfig> = {}
+  if (process.env.NEMO_BASE_URL) envConfig.baseUrl = process.env.NEMO_BASE_URL
+  if (process.env.NEMO_MODEL) envConfig.model = process.env.NEMO_MODEL
+  if (process.env.NEMO_SMALL_MODEL) envConfig.small_model = process.env.NEMO_SMALL_MODEL
+  if (process.env.NEMO_SUBAGENT_MODEL) envConfig.subagent_model = process.env.NEMO_SUBAGENT_MODEL
   // Company-employee library. Env is the operator's lever for a machine-wide
   // default; unset everywhere means one model does all the work.
-  if (process.env.TRAYAMBAK_COMPANY_DIR) envConfig.companyDir = process.env.TRAYAMBAK_COMPANY_DIR
-  if (process.env.TRAYAMBAK_COMPANY_MODEL) envConfig.companyModel = process.env.TRAYAMBAK_COMPANY_MODEL
-  if (process.env.TRAYAMBAK_COMPANY_DISABLED) {
-    envConfig.companyDisabled = process.env.TRAYAMBAK_COMPANY_DISABLED.split(",")
+  if (process.env.NEMO_COMPANY_DIR) envConfig.companyDir = process.env.NEMO_COMPANY_DIR
+  if (process.env.NEMO_COMPANY_MODEL) envConfig.companyModel = process.env.NEMO_COMPANY_MODEL
+  if (process.env.NEMO_COMPANY_DISABLED) {
+    envConfig.companyDisabled = process.env.NEMO_COMPANY_DISABLED.split(",")
       .map((s) => s.trim())
       .filter(Boolean)
   }
-  if (process.env.TRAYAMBAK_COMPANY_ENABLED !== undefined) {
-    const v = process.env.TRAYAMBAK_COMPANY_ENABLED.trim().toLowerCase()
+  if (process.env.NEMO_COMPANY_ENABLED !== undefined) {
+    const v = process.env.NEMO_COMPANY_ENABLED.trim().toLowerCase()
     envConfig.companyEnabled = !(v === "0" || v === "false" || v === "off" || v === "no")
   }
-  if (process.env.TRAYAMBAK_JUDGE_MODEL) envConfig.judge_model = process.env.TRAYAMBAK_JUDGE_MODEL
-  if (process.env.TRAYAMBAK_API_KEY) envConfig.apiKey = process.env.TRAYAMBAK_API_KEY
-  if (process.env.TRAYAMBAK_CWD) envConfig.cwd = process.env.TRAYAMBAK_CWD
-  if (process.env.TRAYAMBAK_TEMPERATURE) envConfig.temperature = Number(process.env.TRAYAMBAK_TEMPERATURE)
-  if (process.env.TRAYAMBAK_TOP_P) envConfig.topP = Number(process.env.TRAYAMBAK_TOP_P)
-  if (process.env.TRAYAMBAK_MAX_TOKENS) envConfig.maxTokens = Number(process.env.TRAYAMBAK_MAX_TOKENS)
-  if (process.env.TRAYAMBAK_CONTEXT_WINDOW) envConfig.contextWindow = Number(process.env.TRAYAMBAK_CONTEXT_WINDOW)
-  if (process.env.TRAYAMBAK_TIMEOUT_MS) envConfig.timeoutMs = Number(process.env.TRAYAMBAK_TIMEOUT_MS)
-  if (process.env.TRAYAMBAK_SHELL_COMMAND) envConfig.shellCommand = process.env.TRAYAMBAK_SHELL_COMMAND
-  if (process.env.TRAYAMBAK_MAX_OUTPUT_LINES) envConfig.maxOutputLines = Number(process.env.TRAYAMBAK_MAX_OUTPUT_LINES)
-  if (process.env.TRAYAMBAK_MAX_OUTPUT_BYTES) envConfig.maxOutputBytes = Number(process.env.TRAYAMBAK_MAX_OUTPUT_BYTES)
-  if (process.env.TRAYAMBAK_MAX_TURNS) envConfig.maxTurns = Number(process.env.TRAYAMBAK_MAX_TURNS)
-  if (process.env.TRAYAMBAK_MAX_TOOL_CALLS) envConfig.maxToolCalls = Number(process.env.TRAYAMBAK_MAX_TOOL_CALLS)
-  if (process.env.TRAYAMBAK_BUDGET) envConfig.budget = process.env.TRAYAMBAK_BUDGET
-  if (process.env.TRAYAMBAK_MAX_DISTINCT_TOOL_CALLS)
-    envConfig.maxDistinctToolCalls = Number(process.env.TRAYAMBAK_MAX_DISTINCT_TOOL_CALLS)
-  if (process.env.TRAYAMBAK_TOOL_CALL_RATE) envConfig.toolCallRate = Number(process.env.TRAYAMBAK_TOOL_CALL_RATE)
-  if (process.env.TRAYAMBAK_MAX_RETRIES) envConfig.maxRetries = Number(process.env.TRAYAMBAK_MAX_RETRIES)
-  if (process.env.TRAYAMBAK_RETRY_DELAY_MS) envConfig.retryDelayMs = Number(process.env.TRAYAMBAK_RETRY_DELAY_MS)
-  if (process.env.TRAYAMBAK_MAX_PARALLEL_TOOL_CALLS)
-    envConfig.maxParallelToolCalls = Number(process.env.TRAYAMBAK_MAX_PARALLEL_TOOL_CALLS)
-  if (process.env.TRAYAMBAK_NATIVE_TOOLS) envConfig.nativeTools = process.env.TRAYAMBAK_NATIVE_TOOLS === "true"
-  if (process.env.TRAYAMBAK_SKILLS_DIR) envConfig.skillsDir = process.env.TRAYAMBAK_SKILLS_DIR
-  if (process.env.TRAYAMBAK_AGENT_PROFILE_DIRS) {
-    envConfig.agentProfileDirs = process.env.TRAYAMBAK_AGENT_PROFILE_DIRS.split(path.delimiter).filter(Boolean)
+  if (process.env.NEMO_JUDGE_MODEL) envConfig.judge_model = process.env.NEMO_JUDGE_MODEL
+  if (process.env.NEMO_API_KEY) envConfig.apiKey = process.env.NEMO_API_KEY
+  if (process.env.NEMO_CWD) envConfig.cwd = process.env.NEMO_CWD
+  if (process.env.NEMO_TEMPERATURE) envConfig.temperature = Number(process.env.NEMO_TEMPERATURE)
+  if (process.env.NEMO_TOP_P) envConfig.topP = Number(process.env.NEMO_TOP_P)
+  if (process.env.NEMO_MAX_TOKENS) envConfig.maxTokens = Number(process.env.NEMO_MAX_TOKENS)
+  if (process.env.NEMO_CONTEXT_WINDOW) envConfig.contextWindow = Number(process.env.NEMO_CONTEXT_WINDOW)
+  if (process.env.NEMO_TIMEOUT_MS) envConfig.timeoutMs = Number(process.env.NEMO_TIMEOUT_MS)
+  if (process.env.NEMO_SHELL_COMMAND) envConfig.shellCommand = process.env.NEMO_SHELL_COMMAND
+  if (process.env.NEMO_MAX_OUTPUT_LINES) envConfig.maxOutputLines = Number(process.env.NEMO_MAX_OUTPUT_LINES)
+  if (process.env.NEMO_MAX_OUTPUT_BYTES) envConfig.maxOutputBytes = Number(process.env.NEMO_MAX_OUTPUT_BYTES)
+  if (process.env.NEMO_MAX_TURNS) envConfig.maxTurns = Number(process.env.NEMO_MAX_TURNS)
+  if (process.env.NEMO_MAX_TOOL_CALLS) envConfig.maxToolCalls = Number(process.env.NEMO_MAX_TOOL_CALLS)
+  if (process.env.NEMO_BUDGET) envConfig.budget = process.env.NEMO_BUDGET
+  if (process.env.NEMO_MAX_DISTINCT_TOOL_CALLS)
+    envConfig.maxDistinctToolCalls = Number(process.env.NEMO_MAX_DISTINCT_TOOL_CALLS)
+  if (process.env.NEMO_TOOL_CALL_RATE) envConfig.toolCallRate = Number(process.env.NEMO_TOOL_CALL_RATE)
+  if (process.env.NEMO_MAX_RETRIES) envConfig.maxRetries = Number(process.env.NEMO_MAX_RETRIES)
+  if (process.env.NEMO_RETRY_DELAY_MS) envConfig.retryDelayMs = Number(process.env.NEMO_RETRY_DELAY_MS)
+  if (process.env.NEMO_MAX_PARALLEL_TOOL_CALLS)
+    envConfig.maxParallelToolCalls = Number(process.env.NEMO_MAX_PARALLEL_TOOL_CALLS)
+  if (process.env.NEMO_NATIVE_TOOLS) envConfig.nativeTools = process.env.NEMO_NATIVE_TOOLS === "true"
+  if (process.env.NEMO_SKILLS_DIR) envConfig.skillsDir = process.env.NEMO_SKILLS_DIR
+  if (process.env.NEMO_AGENT_PROFILE_DIRS) {
+    envConfig.agentProfileDirs = process.env.NEMO_AGENT_PROFILE_DIRS.split(path.delimiter).filter(Boolean)
   }
-  if (process.env.TRAYAMBAK_LLAMACPP_BIN) envConfig.llamaCppBin = process.env.TRAYAMBAK_LLAMACPP_BIN
-  if (process.env.TRAYAMBAK_MCP_SERVERS) {
+  if (process.env.NEMO_LLAMACPP_BIN) envConfig.llamaCppBin = process.env.NEMO_LLAMACPP_BIN
+  if (process.env.NEMO_MCP_SERVERS) {
     try {
-      envConfig.mcpServers = JSON.parse(process.env.TRAYAMBAK_MCP_SERVERS) as TrayambakConfig["mcpServers"]
+      envConfig.mcpServers = JSON.parse(process.env.NEMO_MCP_SERVERS) as NemoConfig["mcpServers"]
     } catch {
       /* ignore malformed env */
     }
   }
-  // Project scope: ./.trayambak/mcp.json merges under global config (project wins per-server).
+  // Project scope: ./.nemo/mcp.json merges under global config (project wins per-server).
   try {
-    const projectMcp = path.join(process.cwd(), ".trayambak", "mcp.json")
+    const projectMcp = path.join(process.cwd(), ".nemo", "mcp.json")
     if (fs.existsSync(projectMcp)) {
       const parsed = JSON.parse(fs.readFileSync(projectMcp, "utf8")) as { mcpServers?: Record<string, unknown> }
       const proj = cleanMcpServers(parsed.mcpServers ?? parsed)
@@ -583,53 +652,57 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   } catch {
     /* project MCP is best-effort */
   }
-  if (process.env.TRAYAMBAK_REASONING_EFFORT)
-    envConfig.reasoningEffort = process.env.TRAYAMBAK_REASONING_EFFORT as TrayambakConfig["reasoningEffort"]
-  if (process.env.TRAYAMBAK_SCRATCHPAD_DIR) envConfig.scratchpadDir = process.env.TRAYAMBAK_SCRATCHPAD_DIR
-  if (process.env.TRAYAMBAK_PROVIDER) envConfig.provider = process.env.TRAYAMBAK_PROVIDER as TrayambakConfig["provider"]
-  if (!envConfig.modelPath && process.env.TRAYAMBAK_MODEL_PATH) {
-    envConfig.modelPath = process.env.TRAYAMBAK_MODEL_PATH
+  if (process.env.NEMO_REASONING_EFFORT)
+    envConfig.reasoningEffort = process.env.NEMO_REASONING_EFFORT as NemoConfig["reasoningEffort"]
+  if (process.env.NEMO_SCRATCHPAD_DIR) envConfig.scratchpadDir = process.env.NEMO_SCRATCHPAD_DIR
+  if (process.env.NEMO_PROVIDER) envConfig.provider = process.env.NEMO_PROVIDER as NemoConfig["provider"]
+  if (!envConfig.modelPath && process.env.NEMO_MODEL_PATH) {
+    envConfig.modelPath = process.env.NEMO_MODEL_PATH
   }
-  if (process.env.TRAYAMBAK_THEME) envConfig.themeName = process.env.TRAYAMBAK_THEME
-  if (process.env.TRAYAMBAK_QUESTION_DEFAULT_OPTION)
-    envConfig.questionDefaultOption = Number(process.env.TRAYAMBAK_QUESTION_DEFAULT_OPTION)
-  if (process.env.TRAYAMBAK_QUESTION_ANSWER_MODE)
-    envConfig.questionAnswerMode = process.env.TRAYAMBAK_QUESTION_ANSWER_MODE as "both" | "choose" | "type"
-  if (process.env.TRAYAMBAK_CODE_FONT) envConfig.codeFont = process.env.TRAYAMBAK_CODE_FONT
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_ENABLED)
-    envConfig.browserAutomationEnabled = process.env.TRAYAMBAK_BROWSER_AUTOMATION_ENABLED === "true"
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_HEADLESS)
-    envConfig.browserAutomationHeadless = process.env.TRAYAMBAK_BROWSER_AUTOMATION_HEADLESS === "true"
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_MAX_PAGES)
-    envConfig.browserAutomationMaxPages = Number(process.env.TRAYAMBAK_BROWSER_AUTOMATION_MAX_PAGES)
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_TIMEOUT_MS)
-    envConfig.browserAutomationTimeoutMs = Number(process.env.TRAYAMBAK_BROWSER_AUTOMATION_TIMEOUT_MS)
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_VIEWPORT_WIDTH)
-    envConfig.browserAutomationViewportWidth = Number(process.env.TRAYAMBAK_BROWSER_AUTOMATION_VIEWPORT_WIDTH)
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_VIEWPORT_HEIGHT)
-    envConfig.browserAutomationViewportHeight = Number(process.env.TRAYAMBAK_BROWSER_AUTOMATION_VIEWPORT_HEIGHT)
-  if (process.env.TRAYAMBAK_BROWSER_AUTOMATION_CAPTURE_SCREENSHOT)
+  if (process.env.NEMO_THEME) envConfig.themeName = process.env.NEMO_THEME
+  if (process.env.NEMO_QUESTION_DEFAULT_OPTION)
+    envConfig.questionDefaultOption = Number(process.env.NEMO_QUESTION_DEFAULT_OPTION)
+  if (process.env.NEMO_QUESTION_ANSWER_MODE)
+    envConfig.questionAnswerMode = process.env.NEMO_QUESTION_ANSWER_MODE as "both" | "choose" | "type"
+  if (process.env.NEMO_CODE_FONT) envConfig.codeFont = process.env.NEMO_CODE_FONT
+  if (process.env.NEMO_BROWSER_AUTOMATION_ENABLED)
+    envConfig.browserAutomationEnabled = process.env.NEMO_BROWSER_AUTOMATION_ENABLED === "true"
+  if (process.env.NEMO_BROWSER_AUTOMATION_HEADLESS)
+    envConfig.browserAutomationHeadless = process.env.NEMO_BROWSER_AUTOMATION_HEADLESS === "true"
+  if (process.env.NEMO_BROWSER_AUTOMATION_MAX_PAGES)
+    envConfig.browserAutomationMaxPages = Number(process.env.NEMO_BROWSER_AUTOMATION_MAX_PAGES)
+  if (process.env.NEMO_BROWSER_AUTOMATION_TIMEOUT_MS)
+    envConfig.browserAutomationTimeoutMs = Number(process.env.NEMO_BROWSER_AUTOMATION_TIMEOUT_MS)
+  if (process.env.NEMO_BROWSER_AUTOMATION_VIEWPORT_WIDTH)
+    envConfig.browserAutomationViewportWidth = Number(process.env.NEMO_BROWSER_AUTOMATION_VIEWPORT_WIDTH)
+  if (process.env.NEMO_BROWSER_AUTOMATION_VIEWPORT_HEIGHT)
+    envConfig.browserAutomationViewportHeight = Number(process.env.NEMO_BROWSER_AUTOMATION_VIEWPORT_HEIGHT)
+  if (process.env.NEMO_BROWSER_AUTOMATION_CAPTURE_SCREENSHOT)
     envConfig.browserAutomationCaptureScreenshot =
-      process.env.TRAYAMBAK_BROWSER_AUTOMATION_CAPTURE_SCREENSHOT === "true"
-  if (process.env.TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED)
-    envConfig.mcpHealthCheckEnabled = process.env.TRAYAMBAK_MCP_HEALTH_CHECK_ENABLED === "true"
-  if (process.env.TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS)
-    envConfig.mcpHealthCheckIntervalMs = Number(process.env.TRAYAMBAK_MCP_HEALTH_CHECK_INTERVAL_MS)
-  if (process.env.TRAYAMBAK_MCP_TOOL_CACHE_ENABLED)
-    envConfig.mcpToolCacheEnabled = process.env.TRAYAMBAK_MCP_TOOL_CACHE_ENABLED === "true"
-  if (process.env.TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS)
-    envConfig.mcpToolCacheTtlMs = Number(process.env.TRAYAMBAK_MCP_TOOL_CACHE_TTL_MS)
-  if (process.env.TRAYAMBAK_MCP_RECONNECT_ON_FAILURE)
-    envConfig.mcpReconnectOnFailure = process.env.TRAYAMBAK_MCP_RECONNECT_ON_FAILURE !== "false"
-  if (process.env.TRAYAMBAK_AUTOUPDATE === "false" || process.env.TRAYAMBAK_AUTOUPDATE === "0")
+      process.env.NEMO_BROWSER_AUTOMATION_CAPTURE_SCREENSHOT === "true"
+  if (process.env.NEMO_MCP_HEALTH_CHECK_ENABLED)
+    envConfig.mcpHealthCheckEnabled = process.env.NEMO_MCP_HEALTH_CHECK_ENABLED === "true"
+  if (process.env.NEMO_MCP_HEALTH_CHECK_INTERVAL_MS)
+    envConfig.mcpHealthCheckIntervalMs = Number(process.env.NEMO_MCP_HEALTH_CHECK_INTERVAL_MS)
+  if (process.env.NEMO_MCP_TOOL_CACHE_ENABLED)
+    envConfig.mcpToolCacheEnabled = process.env.NEMO_MCP_TOOL_CACHE_ENABLED === "true"
+  if (process.env.NEMO_MCP_TOOL_CACHE_TTL_MS)
+    envConfig.mcpToolCacheTtlMs = Number(process.env.NEMO_MCP_TOOL_CACHE_TTL_MS)
+  if (process.env.NEMO_MCP_RECONNECT_ON_FAILURE)
+    envConfig.mcpReconnectOnFailure = process.env.NEMO_MCP_RECONNECT_ON_FAILURE !== "false"
+  if (process.env.NEMO_AUTOUPDATE === "false" || process.env.NEMO_AUTOUPDATE === "0")
     envConfig.autoupdate = false
-  else if (process.env.TRAYAMBAK_AUTOUPDATE === "notify") envConfig.autoupdate = "notify"
-  else if (process.env.TRAYAMBAK_AUTOUPDATE === "true" || process.env.TRAYAMBAK_AUTOUPDATE === "1")
+  else if (process.env.NEMO_AUTOUPDATE === "notify") envConfig.autoupdate = "notify"
+  else if (process.env.NEMO_AUTOUPDATE === "true" || process.env.NEMO_AUTOUPDATE === "1")
     envConfig.autoupdate = true
-  if (process.env.TRAYAMBAK_LICENSE_KEY) envConfig.licenseKey = process.env.TRAYAMBAK_LICENSE_KEY
-  if (process.env.TRAYAMBAK_LICENSE_SERVER) envConfig.licenseServerUrl = process.env.TRAYAMBAK_LICENSE_SERVER
+  if (process.env.NEMO_HARNESS_AUTO !== undefined)
+    envConfig.harnessAuto = !["false", "0", "off", "no"].includes(
+      process.env.NEMO_HARNESS_AUTO.trim().toLowerCase(),
+    )
+  if (process.env.NEMO_LICENSE_KEY) envConfig.licenseKey = process.env.NEMO_LICENSE_KEY
+  if (process.env.NEMO_LICENSE_SERVER) envConfig.licenseServerUrl = process.env.NEMO_LICENSE_SERVER
 
-  const merged: TrayambakConfig = {
+  const merged: NemoConfig = {
     ...DEFAULTS,
     ...fileConfig,
     ...envConfig,
@@ -639,7 +712,7 @@ export function loadConfig(overrides: Partial<TrayambakConfig> = {}): TrayambakC
   return sanitizeConfig(merged)
 }
 
-export function saveConfig(config: Partial<TrayambakConfig>): void {
+export function saveConfig(config: Partial<NemoConfig>): void {
   const dir = configDir()
   fs.mkdirSync(dir, { recursive: true })
   const file = configPath()
@@ -667,7 +740,7 @@ export function saveConfig(config: Partial<TrayambakConfig>): void {
   // before the switch is stale by definition (env outranks the file at load),
   // so any save scrubs it instead of preserving it — otherwise the switch to
   // env mode silently leaves the old secret on disk.
-  if (process.env.TRAYAMBAK_API_KEY && typeof existing.apiKey === "string") {
+  if (process.env.NEMO_API_KEY && typeof existing.apiKey === "string") {
     delete existing.apiKey
   }
   // Atomic publish: readers see the old file or the new file, never a
@@ -698,9 +771,9 @@ export function saveConfig(config: Partial<TrayambakConfig>): void {
 }
 
 function debugConfigLog(line: string): void {
-  if (process.env.TRAYAMBAK_DEBUG_INPUT !== "1") return
+  if (process.env.NEMO_DEBUG_INPUT !== "1") return
   try {
-    fs.appendFileSync("trayambak-config.log", `${new Date().toISOString()} ${line}\n`)
+    fs.appendFileSync("nemo-config.log", `${new Date().toISOString()} ${line}\n`)
   } catch {
     /* never break config writes for logging */
   }
@@ -717,9 +790,9 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
 /** Validate MCP server specs at load: bad entries used to sail through and
  *  crash later inside spawn/URL parsing. Invalid entries are dropped (a
  *  corrupt entry must never take down unrelated servers). */
-export function cleanMcpServers(raw: unknown): TrayambakConfig["mcpServers"] {
+export function cleanMcpServers(raw: unknown): NemoConfig["mcpServers"] {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
-  const out: NonNullable<TrayambakConfig["mcpServers"]> = {}
+  const out: NonNullable<NemoConfig["mcpServers"]> = {}
   for (const [name, spec] of Object.entries(raw as Record<string, unknown>)) {
     if (!spec || typeof spec !== "object" || Array.isArray(spec)) continue
     const s = spec as Record<string, unknown>
@@ -736,7 +809,7 @@ export function cleanMcpServers(raw: unknown): TrayambakConfig["mcpServers"] {
     // Exactly one transport, valid: stdio needs a non-empty argv, HTTP a real URL.
     if (url && hasCommand) continue
     if (!url && !hasCommand) continue
-    const clean: NonNullable<TrayambakConfig["mcpServers"]>[string] = {}
+    const clean: NonNullable<NemoConfig["mcpServers"]>[string] = {}
     if (hasCommand) clean.command = (s.command as string[]).slice(0, 32)
     if (url) clean.url = url
     if (s.env && typeof s.env === "object" && !Array.isArray(s.env)) {
@@ -759,7 +832,7 @@ export function cleanMcpServers(raw: unknown): TrayambakConfig["mcpServers"] {
     }
     if (typeof s.oauth === "boolean") clean.oauth = s.oauth
     else if (s.oauth && typeof s.oauth === "object" && !Array.isArray(s.oauth)) {
-      clean.oauth = s.oauth as NonNullable<TrayambakConfig["mcpServers"]>[string]["oauth"]
+      clean.oauth = s.oauth as NonNullable<NemoConfig["mcpServers"]>[string]["oauth"]
     }
     out[name] = clean
   }
@@ -804,13 +877,13 @@ export function sanitizeKeybindings(raw: unknown): Record<string, string[]> | un
 /** Test-facing alias: the sanitiser is pure and safe to assert directly. */
 export const sanitizeKeybindingsForTest = sanitizeKeybindings
 
-export function cleanToolHooks(raw: unknown): TrayambakConfig["hooks"] {
+export function cleanToolHooks(raw: unknown): NemoConfig["hooks"] {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined
-  const out: NonNullable<TrayambakConfig["hooks"]> = {}
+  const out: NonNullable<NemoConfig["hooks"]> = {}
   for (const point of ["preToolUse", "postToolUse"] as const) {
     const groups = (raw as Record<string, unknown>)[point]
     if (!Array.isArray(groups)) continue
-    const clean: NonNullable<NonNullable<TrayambakConfig["hooks"]>[typeof point]> = []
+    const clean: NonNullable<NonNullable<NemoConfig["hooks"]>[typeof point]> = []
     for (const g of groups.slice(0, 20)) {
       if (!g || typeof g !== "object" || Array.isArray(g)) continue
       const rec = g as Record<string, unknown>
@@ -875,39 +948,22 @@ function sanitizeTemperature(raw: unknown): number {
   return n
 }
 
-function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
+function sanitizeConfig(cfg: NemoConfig): NemoConfig {
   const provider = cfg.provider ?? DEFAULTS.provider ?? "llamacpp"
   const numDefault = (val: unknown, fallback: number | undefined): number => {
     const n = Number(val)
     if (!Number.isNaN(n)) return n
     return fallback ?? 0
   }
-  const safe: TrayambakConfig = {
+  const safe: NemoConfig = {
     baseUrl: (() => {
       // Per-provider endpoint defaults (like pi's provider catalogs: each
       // backend knows its own API root; explicit config always wins).
       const defaults: Record<string, string> = {
         nvidia: "https://integrate.api.nvidia.com",
         "nvidia-nim": "https://integrate.api.nvidia.com",
-        openai: "https://api.openai.com",
-        xai: "https://api.x.ai",
-        huggingface: "https://router.huggingface.co/v1",
-        anthropic: "https://api.anthropic.com",
-        google: "https://generativelanguage.googleapis.com/v1beta",
         ollama: "http://localhost:11434",
         custom: "http://localhost:8080",
-        groq: "https://api.groq.com/openai/v1",
-        mistral: "https://api.mistral.ai/v1",
-        cerebras: "https://api.cerebras.ai/v1",
-        together: "https://api.together.xyz/v1",
-        deepinfra: "https://api.deepinfra.com/v1/openai",
-        cohere: "https://api.cohere.com/compatibility/v1",
-        perplexity: "https://api.perplexity.ai",
-        openrouter: "https://openrouter.ai/api/v1",
-        fireworks: "https://api.fireworks.ai/inference/v1",
-        venice: "https://api.venice.ai/api/v1",
-        azure: "https://YOUR-RESOURCE.openai.azure.com/openai/deployments",
-        "skt-gateway": "https://gateway.skt-ai-labs.example/v1",
       }
       const raw =
         provider !== "llamacpp" && defaults[provider] !== undefined
@@ -923,25 +979,8 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       const defaults: Record<string, string> = {
         nvidia: "nvidia/nemotron-3-super-120b-a12b",
         "nvidia-nim": "nvidia/nemotron-3-super-120b-a12b",
-        openai: "gpt-4o",
-        xai: "grok-4",
-        huggingface: "meta-llama/Llama-3.3-70B-Instruct",
-        anthropic: "claude-3-5-sonnet-latest",
-        google: "gemini-2.5-flash",
         ollama: "llama3.1",
         custom: "",
-        groq: "llama-3.3-70b-versatile",
-        mistral: "mistral-large-latest",
-        cerebras: "llama3.1-70b",
-        together: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        deepinfra: "meta-llama/Llama-3.3-70B-Instruct",
-        cohere: "command-r-plus",
-        perplexity: "sonar-pro",
-        openrouter: "anthropic/claude-sonnet-4",
-        fireworks: "accounts/fireworks/models/llama-v3p3-70b-instruct",
-        venice: "llama-3.3-70b",
-        azure: "gpt-4o",
-        "skt-gateway": "auto",
       }
       if (provider !== "llamacpp" && defaults[provider] !== undefined) {
         const fallback = defaults[provider]
@@ -986,9 +1025,13 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       1,
       Math.min(32, numDefault(cfg.maxParallelToolCalls, DEFAULTS.maxParallelToolCalls)),
     ),
+    // Booleans fall back to the default on anything non-boolean, matching the
+    // repo rule that invalid config never throws.
+    agenticCompaction:
+      typeof cfg.agenticCompaction === "boolean" ? cfg.agenticCompaction : DEFAULTS.agenticCompaction,
     nativeTools: Boolean(cfg.nativeTools),
     // llama.cpp server sizing. These live in the config file (not just CLI
-    // flags) so `trayambak config set ctxSize 8192` round-trips instead of
+    // flags) so `nemo config set ctxSize 8192` round-trips instead of
     // being dropped by this rebuild and reported as an unknown key.
     ctxSize: Math.max(256, Math.min(4_194_304, numDefault(cfg.ctxSize, DEFAULTS.ctxSize))),
     batchSize: Math.max(1, Math.min(8192, numDefault(cfg.batchSize, DEFAULTS.batchSize))),
@@ -1002,7 +1045,7 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
       ? cfg.agentProfileDirs.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
       : [],
     reasoningEffort: ["low", "medium", "high", "xhigh", "max"].includes(cfg.reasoningEffort as string)
-      ? (cfg.reasoningEffort as TrayambakConfig["reasoningEffort"])
+      ? (cfg.reasoningEffort as NemoConfig["reasoningEffort"])
       : DEFAULTS.reasoningEffort,
     scratchpadDir:
       typeof cfg.scratchpadDir === "string" && cfg.scratchpadDir.trim().length > 0
@@ -1010,33 +1053,20 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
         : path.resolve(process.cwd(), ".scratchpad"),
     developerMode: cfg.developerMode && typeof cfg.developerMode === "object" ? cfg.developerMode : undefined,
     permissions: sanitizeUIMode(cfg.permissions, /*warn*/ true),
-    provider: [
-      "llamacpp",
-      "nvidia",
-      "nvidia-nim",
-      "openai",
-      "xai",
-      "huggingface",
-      "anthropic",
-      "google",
-      "ollama",
-      "custom",
-      "groq",
-      "mistral",
-      "cerebras",
-      "together",
-      "deepinfra",
-      "cohere",
-      "perplexity",
-      "openrouter",
-      "fireworks",
-      "venice",
-      "azure",
-      "skt-gateway",
-    ].includes(cfg.provider as string)
-      ? (cfg.provider as TrayambakConfig["provider"])
+    provider: ["llamacpp", "nvidia", "nvidia-nim", "ollama", "custom"].includes(cfg.provider as string)
+      ? (cfg.provider as NemoConfig["provider"])
       : DEFAULTS.provider,
     themeName: typeof cfg.themeName === "string" && cfg.themeName.trim().length > 0 ? cfg.themeName.trim() : undefined,
+    // Only the three canonical levels survive parsing: `/motion` normalises
+    // spellings ("0", "static", "low") to one of them before saving, so a value
+    // outside the set came from a hand-edit that cannot be trusted to mean what
+    // it looks like. Dropping it falls back to the env/default policy.
+    motion:
+      typeof cfg.motion === "string" && ["off", "reduced", "full"].includes(cfg.motion)
+        ? (cfg.motion as "off" | "reduced" | "full")
+        : undefined,
+    spinner:
+      typeof cfg.spinner === "string" && cfg.spinner.trim().length > 0 ? cfg.spinner.trim().toLowerCase() : undefined,
     questionDefaultOption:
       typeof cfg.questionDefaultOption === "number" && cfg.questionDefaultOption >= 1 && cfg.questionDefaultOption <= 9
         ? cfg.questionDefaultOption
@@ -1074,6 +1104,7 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
     mcpToolCacheTtlMs: Math.max(0, Math.min(3_600_000, numDefault(cfg.mcpToolCacheTtlMs, DEFAULTS.mcpToolCacheTtlMs))),
     mcpReconnectOnFailure: Boolean(cfg.mcpReconnectOnFailure),
     autoupdate: cfg.autoupdate === false || cfg.autoupdate === "notify" ? cfg.autoupdate : true,
+    harnessAuto: cfg.harnessAuto !== false,
     toolsets:
       cfg.toolsets && typeof cfg.toolsets === "object"
         ? {
@@ -1099,7 +1130,8 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
     // set it — that is "no opinion", so resolveCompanyState falls through to
     // env and then to its own default-ON. Coercing it to false here would
     // silently disable the whole company for every existing user.
-    companyDir: typeof cfg.companyDir === "string" && cfg.companyDir.trim().length > 0 ? cfg.companyDir.trim() : undefined,
+    companyDir:
+      typeof cfg.companyDir === "string" && cfg.companyDir.trim().length > 0 ? cfg.companyDir.trim() : undefined,
     companyEnabled: typeof cfg.companyEnabled === "boolean" ? cfg.companyEnabled : undefined,
     companyDisabled: Array.isArray(cfg.companyDisabled)
       ? cfg.companyDisabled.filter((d): d is string => typeof d === "string" && d.trim().length > 0)
@@ -1135,7 +1167,7 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
     providers: Array.isArray(cfg.providers)
       ? cfg.providers
           .filter(
-            (p): p is NonNullable<TrayambakConfig["providers"]>[number] =>
+            (p): p is NonNullable<NemoConfig["providers"]>[number] =>
               !!p &&
               typeof p === "object" &&
               typeof (p as { id?: unknown }).id === "string" &&
@@ -1174,6 +1206,11 @@ function sanitizeConfig(cfg: TrayambakConfig): TrayambakConfig {
   } catch {
     /* best effort */
   }
+  // #38: warn when the RESOLVED cwd is a system location, so `--cwd /` or
+  // `NEMO_CWD=/etc` cannot silently re-root every path-relative tool. Fires
+  // here rather than at the option-parse site so the value that actually took
+  // effect is the one checked.
+  warnOnRiskyCwd(safe.cwd)
   return safe
 }
 
@@ -1186,14 +1223,14 @@ function cleanBudget(raw: unknown): string | undefined {
   if (raw === undefined || raw === null) return undefined
   const candidate = typeof raw === "number" ? String(raw) : raw
   if (typeof candidate !== "string") {
-    console.warn(`trayambak: ignoring budget ${String(candidate)} — expected a spec like "50k" or "40 turns"`)
+    console.warn(`nemo: ignoring budget ${String(candidate)} — expected a spec like "50k" or "40 turns"`)
     return undefined
   }
   const spec = candidate.trim()
   if (spec === "") return undefined
   const parsed = parseTokenBudget(spec)
   if (!parsed.ok) {
-    console.warn(`trayambak: ignoring budget "${spec}" — ${parsed.reason}`)
+    console.warn(`nemo: ignoring budget "${spec}" — ${parsed.reason}`)
     return undefined
   }
   return spec

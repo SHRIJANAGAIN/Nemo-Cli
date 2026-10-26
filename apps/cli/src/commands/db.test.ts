@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { mkdtempSync, rmSync } from "node:fs"
@@ -20,7 +20,7 @@ afterEach(() => {
 })
 
 function seed(): void {
-  home = mkdtempSync(join(tmpdir(), "trayambak-db-"))
+  home = mkdtempSync(join(tmpdir(), "nemo-db-"))
   const db = initDatabases(home)
   db.saveThread("t1", { model: "m" })
   db.appendEvent("t1", "message", { text: "hi" })
@@ -30,7 +30,7 @@ function seed(): void {
 
 describe("dbPath", () => {
   it("points inside the given home", () => {
-    home = mkdtempSync(join(tmpdir(), "trayambak-db-"))
+    home = mkdtempSync(join(tmpdir(), "nemo-db-"))
 
     expect(dbPath(home)).toBe(join(home, "state", "state_1.json"))
   })
@@ -47,7 +47,7 @@ describe("dbThreads", () => {
   })
 
   it("says so when empty", () => {
-    home = mkdtempSync(join(tmpdir(), "trayambak-db-"))
+    home = mkdtempSync(join(tmpdir(), "nemo-db-"))
 
     expect(dbThreads(home)).toBe("No threads")
   })
@@ -65,7 +65,7 @@ describe("dbViolations", () => {
   })
 
   it("says so when empty", () => {
-    home = mkdtempSync(join(tmpdir(), "trayambak-db-"))
+    home = mkdtempSync(join(tmpdir(), "nemo-db-"))
 
     expect(dbViolations(home)).toBe("No violations")
   })

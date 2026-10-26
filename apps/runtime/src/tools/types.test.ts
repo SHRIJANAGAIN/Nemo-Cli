@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 import * as fs from "fs"
 import { spawnSync } from "child_process"
@@ -9,7 +9,7 @@ import * as os from "os"
 import * as path from "path"
 import { afterEach, describe, expect, it } from "vitest"
 import { assertMutablePath, resolveConstrainedPath, truncateOutput } from "./types.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 
 const home = os.homedir()
 const outsideRoot = path.join(path.parse(home).root, "outside-root-xyz")
@@ -144,9 +144,9 @@ describe("resolveConstrainedPath credential protection", () => {
   })
 
   it("blocks the agent's own token but keeps agent state reachable", () => {
-    expect(() => resolveConstrainedPath(path.join(home, ".trayambak", "credentials.json"), cwd)).toThrow(/protected/)
-    // Global skills load from ~/.trayambak/skills and must keep working.
-    expect(() => resolveConstrainedPath(path.join(home, ".trayambak", "skills", "demo"), cwd)).not.toThrow()
+    expect(() => resolveConstrainedPath(path.join(home, ".nemo", "credentials.json"), cwd)).toThrow(/protected/)
+    // Global skills load from ~/.nemo/skills and must keep working.
+    expect(() => resolveConstrainedPath(path.join(home, ".nemo", "skills", "demo"), cwd)).not.toThrow()
   })
 
   it("leaves ordinary home files readable", () => {
@@ -155,21 +155,21 @@ describe("resolveConstrainedPath credential protection", () => {
 
   it("keeps protected metadata readable (the write gate lives on the write path)", () => {
     expect(resolveConstrainedPath(path.join(cwd, ".git", "config"), cwd)).toBe(path.join(cwd, ".git", "config"))
-    expect(() => resolveConstrainedPath(path.join(cwd, ".trayambak", "config.json"), cwd)).not.toThrow()
+    expect(() => resolveConstrainedPath(path.join(cwd, ".nemo", "config.json"), cwd)).not.toThrow()
   })
 })
 
 describe("assertMutablePath protected metadata", () => {
-  it("denies .git and .trayambak segments anywhere in the path", () => {
+  it("denies .git and .nemo segments anywhere in the path", () => {
     expect(() => assertMutablePath("/w/.git/config")).toThrow(/protected metadata/)
     expect(() => assertMutablePath("/w/src/.git/hooks/pre-commit")).toThrow(/protected metadata/)
-    expect(() => assertMutablePath("/w/.trayambak/session.json")).toThrow(/protected metadata/)
-    expect(() => assertMutablePath("C:\\w\\.trayambak\\plans\\p.json")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("/w/.nemo/session.json")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("C:\\w\\.nemo\\plans\\p.json")).toThrow(/protected metadata/)
   })
 
   it("denies case-variant spellings of the metadata names", () => {
     expect(() => assertMutablePath("/w/.GIT/config")).toThrow(/protected metadata/)
-    expect(() => assertMutablePath("/w/.Trayambak/x")).toThrow(/protected metadata/)
+    expect(() => assertMutablePath("/w/.Nemo/x")).toThrow(/protected metadata/)
   })
 
   it("keeps segment look-alikes writable", () => {
@@ -177,7 +177,7 @@ describe("assertMutablePath protected metadata", () => {
     expect(() => assertMutablePath("/w/.github/workflows/ci.yml")).not.toThrow()
     expect(() => assertMutablePath("/w/.gitkeep")).not.toThrow()
     expect(() => assertMutablePath("/w/src/.gitignore")).not.toThrow()
-    expect(() => assertMutablePath("/w/.trayambakignore")).not.toThrow()
+    expect(() => assertMutablePath("/w/.nemoignore")).not.toThrow()
     expect(() => assertMutablePath("/w/src/index.ts")).not.toThrow()
   })
 
@@ -195,7 +195,7 @@ describe("assertMutablePath protected metadata", () => {
 })
 
 describe("truncateOutput byte budget", () => {
-  const config = { maxOutputLines: 5, maxOutputBytes: 16 } as unknown as TrayambakConfig
+  const config = { maxOutputLines: 5, maxOutputBytes: 16 } as unknown as NemoConfig
 
   it("keeps the tail preview within the BYTE budget, not just the unit budget", () => {
     // Ten lines of "α" (2 bytes per code unit): the whole text exceeds both

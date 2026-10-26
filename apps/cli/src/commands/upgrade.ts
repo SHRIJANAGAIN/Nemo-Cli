@@ -1,16 +1,16 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * `trayambak upgrade [target]` — SKT AI LABS's manual `upgrade` command ported to
- * trayambak's plain-stdout CLI style (no @clack prompts). Applies updates for
+ * `nemo upgrade [target]` — Shrijan's manual `upgrade` command ported to
+ * nemo's plain-stdout CLI style (no @clack prompts). Applies updates for
  * the two actionable install methods:
  *
  *   - git:   fetch, then `git pull --ff-only` (or `git checkout v<target>`),
- *            then `npm install` + `npm run build` (trayambak needs a build).
+ *            then `npm install` + `npm run build` (nemo needs a build).
  *   - npm:   `npm install -g <name>@<target|latest>`.
  *   - source (no .git): prints manual-update guidance instead.
  *
@@ -36,6 +36,17 @@ export interface UpgradeOptions {
   /** Test seams — location to walk up from and argv used for method detection. */
   startDir?: string
   argvPath?: string
+}
+
+/**
+ * upgradeCommand reports failures as RETURNED text (not throws), so the CLI
+ * dispatcher maps this predicate to a non-zero exit — otherwise every
+ * failure ("Upgrade failed: ...") exits 0 and scripts cannot detect it.
+ * Only the exact "Upgrade failed:" prefix counts: "already the requested
+ * version" and the source-copy guidance are not errors.
+ */
+export function isUpgradeFailure(output: string): boolean {
+  return output.startsWith("Upgrade failed:")
 }
 
 interface Step {
@@ -97,7 +108,7 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
   const env = opts.env ?? process.env
   const root = findInstallRoot({ startDir: opts.startDir, env })
   if (!root) {
-    return "Upgrade failed: could not locate the trayambak installation (set TRAYAMBAK_HOME to the project root)."
+    return "Upgrade failed: could not locate the nemo installation (set NEMO_HOME to the project root)."
   }
   const current = getInstalledVersion({ startDir: opts.startDir, env }) ?? "unknown"
   const method = detectMethod(root, opts.argvPath ?? process.argv[1] ?? "")
@@ -112,7 +123,7 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
 
   if (method === "source" || method === "unknown") {
     return [
-      `trayambak ${current} is installed from a source copy without git — it cannot be updated in place.`,
+      `nemo ${current} is installed from a source copy without git — it cannot be updated in place.`,
       "Update manually:",
       "  1. Refresh your copy (git pull, or re-download the release)",
       "  2. npm install",
@@ -124,9 +135,9 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
   const pkgName = (() => {
     try {
       const json = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")) as { name?: unknown }
-      return typeof json.name === "string" ? json.name : "Trayambak"
+      return typeof json.name === "string" ? json.name : "Nemo"
     } catch {
-      return "Trayambak"
+      return "Nemo"
     }
   })()
 
@@ -135,17 +146,17 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
     // fetchLatestNpmVersion, which only returns isSafeVersion tokens (#66).
     const latest = target ?? (await fetchLatestNpmVersion(pkgName))
     if (!latest) return "Upgrade failed: could not reach the npm registry."
-    if (latest === current) return `trayambak ${current} is already the latest version.`
-    process.stdout.write(`Upgrading trayambak ${current} → ${latest} (npm)...\n`)
+    if (latest === current) return `nemo ${current} is already the latest version.`
+    process.stdout.write(`Upgrading nemo ${current} → ${latest} (npm)...\n`)
     const step = runInherit("npm", ["install", "-g", `${pkgName}@${latest}`], root)
     if (!step.ok) return `Upgrade failed: ${step.note}`
-    return `Upgrade complete: ${current} → ${latest}. Restart trayambak to use the new version.`
+    return `Upgrade complete: ${current} → ${latest}. Restart nemo to use the new version.`
   }
 
   // method === "git"
   if (target) {
     const wanted = `v${target}`
-    if (target === current) return `trayambak ${current} is already the requested version.`
+    if (target === current) return `nemo ${current} is already the requested version.`
     process.stdout.write(`Fetching tags...\n`)
     const fetch = runInherit("git", ["fetch", "origin", "--tags", "--quiet"], root)
     if (!fetch.ok) return `Upgrade failed: could not fetch from origin (${fetch.note}).`
@@ -155,7 +166,7 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
     const build = finishBuild(root)
     if (!build.ok) return `Upgrade failed: ${build.note}`
     const now = readVersion(root) ?? target
-    return `Upgrade complete: ${current} → ${now}. Restart trayambak to use the new version.`
+    return `Upgrade complete: ${current} → ${now}. Restart nemo to use the new version.`
   }
 
   const headBefore = headOf(root)
@@ -172,12 +183,12 @@ export async function upgradeCommand(opts: UpgradeOptions = {}): Promise<string>
       latest && latest !== current
         ? ` (latest release tag is ${latest}; your checkout is on a branch without new commits)`
         : ""
-    return `Already up to date: trayambak ${current}.${hint}`
+    return `Already up to date: nemo ${current}.${hint}`
   }
 
   const build = finishBuild(root)
   if (!build.ok) return `Upgrade failed: ${build.note}`
   const now = readVersion(root) ?? current
-  if (now === current) return `Already up to date: trayambak ${current}.`
-  return `Upgrade complete: ${current} → ${now}. Restart trayambak to use the new version.`
+  if (now === current) return `Already up to date: nemo ${current}.`
+  return `Upgrade complete: ${current} → ${now}. Restart nemo to use the new version.`
 }

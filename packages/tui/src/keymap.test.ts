@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -43,7 +43,7 @@ describe("normalizeChord", () => {
   })
 
   it("strips padding dashes at the edges but leaves inner ones alone", () => {
-    // Inner dashes are not a spelling Trayambak emits anywhere, so rewriting them
+    // Inner dashes are not a spelling Nemo emits anywhere, so rewriting them
     // would be inventing a convention rather than tolerating a typo.
     expect(normalizeChord("--ctrl+x--")).toBe("ctrl+x")
     expect(normalizeChord("-ctrl+x-")).toBe("ctrl+x")

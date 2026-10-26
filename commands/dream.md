@@ -1,9 +1,9 @@
 ---
-description: Consolidate Trayambak memory — dedupe, drop expired, enforce caps, flag contradictions.
+description: Consolidate Nemo memory — dedupe, drop expired, enforce caps, flag contradictions.
 argument-hint: "[focus text | nightly | consolidate | status]"
 ---
 
-# /dream - Trayambak Memory Consolidation
+# /dream - Nemo Memory Consolidation
 
 Clean up persistent memory (`memory` tool store) so fresh sessions orient fast.
 Deterministic pass first, model judgment second. Never auto-rewrite contradictions.
@@ -14,7 +14,7 @@ Deterministic pass first, model judgment second. Never auto-rewrite contradictio
 `/dream <focus>` — same, biased to trailing text (e.g. `/dream focus on auth refactor`).
 `/dream status` — read-only: run `dream` tool `status`, report, change nothing.
 `/dream consolidate` — bare deterministic body: run `dream` tool `consolidate`, then resolve flags by hand.
-`/dream nightly` — schedule recurring nightly consolidation via `trayambak__CronCreate` with a random minute 00:00-05:59 local, recurring true, prompt `/dream consolidate`. Re-running replaces the old job (list via `trayambak__CronList`, delete the old id first).
+`/dream nightly` — schedule recurring nightly consolidation via `nemo__CronCreate` with a random minute 00:00-05:59 local, recurring true, prompt `/dream consolidate`. Re-running replaces the old job (list via `nemo__CronList`, delete the old id first).
 
 ## The 4-phase pass
 

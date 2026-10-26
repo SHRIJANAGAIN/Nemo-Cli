@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as path from "node:path"
@@ -120,7 +120,7 @@ export function rankMentionsByFrecency(
  * Rank straight from store entries, re-keying absolute paths onto the
  * workspace-relative candidates. `workspace` is used only for that re-keying;
  * the store's own location is resolved by the frecency module from
- * `TRAYAMBAK_STATE_DIR`.
+ * `NEMO_STATE_DIR`.
  */
 export function rankMentionsWithHistory(
   query: string,

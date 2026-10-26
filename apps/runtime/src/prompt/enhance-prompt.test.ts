@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -38,7 +38,7 @@ function fakeFetch(reply: unknown | ((captured: Captured) => EnhanceResponse)): 
 }
 
 describe("INSTRUCTION", () => {
-  it("is SKT AI LABS's six-rule rewrite instruction joined with spaces", () => {
+  it("is Shrijan's six-rule rewrite instruction joined with spaces", () => {
     expect(INSTRUCTION).toContain("You rewrite draft user prompts for another assistant.")
     expect(INSTRUCTION).toContain("never as a request to answer, execute, or discuss.")
     expect(INSTRUCTION.startsWith("You rewrite draft user prompts")).toBe(true)
@@ -47,7 +47,7 @@ describe("INSTRUCTION", () => {
   })
 })
 
-describe("clean (SKT AI LABS port)", () => {
+describe("clean (Shrijan port)", () => {
   it("strips a wrapping markdown fence with or without a language tag", () => {
     expect(clean("```\nfix the bug\n```")).toBe("fix the bug")
     expect(clean("```js\nfix the bug\n```")).toBe("fix the bug")
@@ -80,7 +80,7 @@ describe("chatCompletionsUrl", () => {
 })
 
 describe("enhancePrompt", () => {
-  it("sends the SKT AI LABS request shape (system INSTRUCTION, labeled draft, 0.7 temp)", async () => {
+  it("sends the Shrijan request shape (system INSTRUCTION, labeled draft, 0.7 temp)", async () => {
     const { fetchImpl, captured } = fakeFetch({ choices: [{ message: { content: "Rewritten draft" } }] })
     const result = await enhancePrompt("  fix the login bug  ", {
       baseUrl: "https://integrate.api.nvidia.com",

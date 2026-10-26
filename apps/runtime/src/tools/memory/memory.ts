@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -11,7 +11,7 @@ import path from "path"
 import { Tool } from "../types.js"
 import type { ToolResult } from "../types.js"
 
-/** SKT memory layer — active store is USEMEMORY.MD, archive is MEMORY.MD (read-only). */
+/** Nemo memory layer — active store is USEMEMORY.MD, archive is MEMORY.MD (read-only). */
 export interface MemoryEntry {
   id: string
   title?: string
@@ -34,20 +34,20 @@ export interface MemoryFrontmatter {
 }
 
 export function memoryFile(): string {
-  return path.join(os.homedir(), ".trayambak", "memory", "memory.json")
+  return path.join(os.homedir(), ".nemo", "memory", "memory.json")
 }
 
 export function useMemoryFile(): string {
-  return path.join(projectRoot(), "skt", "4-mem", "USEMEMORY.MD")
+  return path.join(projectRoot(), "nemo", "4-mem", "USEMEMORY.MD")
 }
 
 export function archiveMemoryFile(): string {
-  return path.join(projectRoot(), "skt", "4-mem", "MEMORY.MD")
+  return path.join(projectRoot(), "nemo", "4-mem", "MEMORY.MD")
 }
 
 function projectRoot(): string {
-  if (process.env.TRAYAMBAK_HOME && fs.existsSync(path.join(process.env.TRAYAMBAK_HOME, "package.json"))) {
-    return process.env.TRAYAMBAK_HOME
+  if (process.env.NEMO_HOME && fs.existsSync(path.join(process.env.NEMO_HOME, "package.json"))) {
+    return process.env.NEMO_HOME
   }
   let dir = __dirname
   for (let i = 0; i < 16; i++) {
@@ -146,7 +146,7 @@ function parseMemoryMd(raw: string): MemoryEntry[] {
 }
 
 function serializeMemoryMd(entries: MemoryEntry[]): string {
-  const header = `# SKT AI LABS - User Memory (Active)
+  const header = `# Shrijan - User Memory (Active)
 
 This is the **active** memory store. When the user says "remember this" or "add to memory", the assistant writes here. The older store lives in \`MEMORY.MD\` and is read-only for the assistant — it can be searched but not appended to.
 
@@ -217,7 +217,7 @@ export function loadMemory(): MemoryEntry[] {
 
 export function saveMemory(entries: MemoryEntry[]): void {
   // TWO separate trees: USEMEMORY.MD lives under the project root, but the
-  // legacy JSON lives under homedir/.trayambak/memory/. On a fresh profile
+  // legacy JSON lives under homedir/.nemo/memory/. On a fresh profile
   // neither exists — mkdir-ing only the first made the memory.json write
   // below throw ENOENT (caught by the harness as a broken tool). Each writer
   // creates its own directory.

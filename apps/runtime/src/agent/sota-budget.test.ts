@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -21,7 +21,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { Agent } from "./agent.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import { getRolloutBudget } from "../../../../packages/core/src/rollout_budget.js"
 import { resetBudget } from "../../../../packages/core/src/token_budget.js"
 import type { AssistantMessage } from "../../../../packages/protocol/src/index.js"
@@ -50,7 +50,7 @@ afterEach(() => {
   }
 })
 
-function makeConfig(cwd: string): TrayambakConfig {
+function makeConfig(cwd: string): NemoConfig {
   return {
     cwd,
     provider: "custom",
@@ -71,7 +71,7 @@ function makeConfig(cwd: string): TrayambakConfig {
     skillsDir: path.join(cwd, "no-skills"),
     permissions: { mode: "default", rules: [], askByDefault: false },
     toolsets: { defaults: ["core", "agentic", "ops", "tasks", "mcp", "skills"], disabled: [], platform: {} },
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 }
 
 const textMsg = (text: string): AssistantMessage => ({

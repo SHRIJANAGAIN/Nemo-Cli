@@ -8,7 +8,7 @@ Adversarial dual-review convergence loop using the santa-method skill. Two indep
 
 ## Purpose
 
-Run two independent reviewers (Trayambak Opus + an external model) against the current task output. Both must return NICE before the code is pushed. If either returns NAUGHTY, fix all flagged issues, commit, and re-run fresh reviewers — up to 3 rounds.
+Run two independent reviewers (Nemo Opus + an external model) against the current task output. Both must return NICE before the code is pushed. If either returns NAUGHTY, fix all flagged issues, commit, and re-run fresh reviewers — up to 3 rounds.
 
 ## Usage
 
@@ -62,7 +62,7 @@ Each reviewer evaluates every rubric criterion as PASS or FAIL, then returns str
 
 The verdict gate (Step 4) maps these to NICE/NAUGHTY: both PASS → NICE, either FAIL → NAUGHTY.
 
-#### Reviewer A: Trayambak Agent (always runs)
+#### Reviewer A: Nemo Agent (always runs)
 
 Launch an Agent (subagent_type: `code-reviewer`, model: `opus`) with the full rubric + all files under review. The prompt must include:
 
@@ -71,12 +71,12 @@ Launch an Agent (subagent_type: `code-reviewer`, model: `opus`) with the full ru
 - "You are an independent quality reviewer. You have NOT seen any other review. Your job is to find problems, not to approve."
 - Return the structured JSON verdict above
 
-#### Reviewer B: External Model (Trayambak fallback only if no external CLI installed)
+#### Reviewer B: External Model (Nemo fallback only if no external CLI installed)
 
 First, detect which CLIs are available:
 
 ```bash
-command -v trayambak >/dev/null 2>&1 && echo "trayambak" || true
+command -v nemo >/dev/null 2>&1 && echo "nemo" || true
 command -v gemini >/dev/null 2>&1 && echo "gemini" || true
 ```
 
@@ -91,22 +91,22 @@ EOF
 
 Use the first available CLI:
 
-**Trayambak Code CLI** (if installed)
+**Nemo Code CLI** (if installed)
 
 ```bash
-trayambak exec --sandbox read-only -m gpt-5.4 -C "$(pwd)" - < "$PROMPT_FILE"
+nemo exec --sandbox read-only -m gpt-5.4 -C "$(pwd)" - < "$PROMPT_FILE"
 rm -f "$PROMPT_FILE"
 ```
 
-**Gemini CLI** (if installed and trayambak is not)
+**Gemini CLI** (if installed and nemo is not)
 
 ```bash
 gemini -p "$(cat "$PROMPT_FILE")" -m gemini-2.5-pro
 rm -f "$PROMPT_FILE"
 ```
 
-**Trayambak Agent fallback** (only if neither `trayambak` nor `gemini` is installed)
-Launch a second Trayambak Agent (subagent_type: `code-reviewer`, model: `opus`). Log a warning that both reviewers share the same model family — true model diversity was not achieved but context isolation is still enforced.
+**Nemo Agent fallback** (only if neither `nemo` nor `gemini` is installed)
+Launch a second Nemo Agent (subagent_type: `code-reviewer`, model: `opus`). Log a warning that both reviewers share the same model family — true model diversity was not achieved but context isolation is still enforced.
 
 In all cases, the reviewer must return the same structured JSON verdict as Reviewer A.
 
@@ -156,7 +156,7 @@ Print the output report (see Output section below).
 ```
 SANTA VERDICT: [NICE / NAUGHTY (escalated)]
 
-Reviewer A (Trayambak Opus):   [PASS/FAIL]
+Reviewer A (Nemo Opus):   [PASS/FAIL]
 Reviewer B ([model used]):  [PASS/FAIL]
 
 Agreement:
@@ -170,10 +170,10 @@ Result:     [PUSHED / ESCALATED TO USER]
 
 ## Notes
 
-- Reviewer A (Trayambak Opus) always runs — guarantees at least one strong reviewer regardless of tooling.
-- Model diversity is the goal for Reviewer B. GPT-5.4 or Gemini 2.5 Pro gives true independence — different training data, different biases, different blind spots. The Trayambak-only fallback still provides value via context isolation but loses model diversity.
+- Reviewer A (Nemo Opus) always runs — guarantees at least one strong reviewer regardless of tooling.
+- Model diversity is the goal for Reviewer B. GPT-5.4 or Gemini 2.5 Pro gives true independence — different training data, different biases, different blind spots. The Nemo-only fallback still provides value via context isolation but loses model diversity.
 - Strongest available models are used: Opus for Reviewer A, GPT-5.4 or Gemini 2.5 Pro for Reviewer B.
-- External reviewers run with `--sandbox read-only` (Trayambak Code) to prevent repo mutation during review.
+- External reviewers run with `--sandbox read-only` (Nemo Code) to prevent repo mutation during review.
 - Fresh reviewers each round prevents anchoring bias from prior findings.
 - The rubric is the most important input. Tighten it if reviewers rubber-stamp or flag subjective style issues.
 - Commits happen on NAUGHTY rounds so fixes are preserved even if the loop is interrupted.

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -19,10 +19,10 @@ import { rgbToHex } from "./themeColors.js"
 import { g } from "./glyphs.js"
 import { getCatalogEntry } from "../../../provider/src/catalog.js"
 import { loadConfig, saveConfig, cleanApiKey } from "../../../../apps/runtime/src/config.js"
-import type { Theme as TrayambakTheme } from "../ui/theme.js"
+import type { Theme as NemoTheme } from "../ui/theme.js"
 
 /** Theme → option row for the theme picker (humanized name + dark/light + swatch). */
-export function themeToPickerOption(theme: TrayambakTheme) {
+export function themeToPickerOption(theme: NemoTheme) {
   return {
     name: theme.name,
     label: theme.name
@@ -43,11 +43,6 @@ export function providerLabelFor(id: string): string {
         llamacpp: "llama.cpp",
         nvidia: "NVIDIA",
         "nvidia-nim": "NVIDIA NIM",
-        openai: "OpenAI",
-        xai: "xAI Grok",
-        huggingface: "Hugging Face",
-        anthropic: "Anthropic",
-        google: "Google",
         ollama: "Ollama",
         custom: "Custom endpoint",
       } as Record<string, string>

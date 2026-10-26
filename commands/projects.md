@@ -13,13 +13,13 @@ List project registry entries and per-project instinct/observation counts for co
 Run the instinct CLI using the plugin root path:
 
 ```bash
-python3 "${TRAYAMBAK_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" projects
+python3 "${NEMO_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" projects
 ```
 
-Or if `TRAYAMBAK_PLUGIN_ROOT` is not set (manual installation):
+Or if `NEMO_PLUGIN_ROOT` is not set (manual installation):
 
 ```bash
-python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py projects
+python3 ~/.nemo/skills/continuous-learning-v2/scripts/instinct-cli.py projects
 ```
 
 ## Usage
@@ -30,7 +30,7 @@ python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py proje
 
 ## What to Do
 
-1. Read `~/.trayambak/homunculus/projects.json`
+1. Read `~/.nemo/homunculus/projects.json`
 2. For each project, display:
    - Project name, id, root, remote
    - Personal and inherited instinct counts

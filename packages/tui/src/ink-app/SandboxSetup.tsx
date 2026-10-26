@@ -1,13 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 import React, { type ReactNode, useState } from "react"
 import { Box, Text } from "ink"
 import { useAppInput } from "./useAppInput.js"
 import { isEnter } from "./keys.js"
-import { TrayambakLogo } from "./TrayambakLogo.js"
+import { NemoLogo } from "./NemoLogo.js"
 import type { PermissionMode } from "./types.js"
 import { g } from "./glyphs.js"
 
@@ -81,11 +81,11 @@ export function SandboxSetup({ cwd, onSelect }: SandboxSetupProps): ReactNode {
   return (
     <Box flexDirection="column" height="100%" paddingX={1} paddingY={1}>
       <Box flexDirection="column" alignItems="center" marginBottom={1}>
-        <TrayambakLogo />
+        <NemoLogo />
       </Box>
       <Box flexDirection="column" alignItems="center" marginBottom={1}>
         <Text bold color="green">
-          Trayambak — Sandbox setup
+          Nemo — Sandbox setup
         </Text>
         <Text dimColor>one-time setup, change anytime with /mode</Text>
       </Box>

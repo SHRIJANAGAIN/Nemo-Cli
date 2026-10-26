@@ -1,23 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type { ToolCallPart } from "../../protocol/src/index.js"
 import { LlamaCppProvider, createLlamaCppProvider } from "./llama-cpp.js"
 import { NvidiaProvider, createNvidiaProvider } from "./nvidia.js"
-import {
-  OpenAIProvider,
-  createOpenAIProvider,
-  OpenAICompatibleProvider,
-  createOpenAICompatibleProvider,
-} from "./openai.js"
-import { XAIProvider, createXAIProvider } from "./xai.js"
-import { HuggingFaceProvider, createHuggingFaceProvider } from "./huggingface.js"
 import { CustomProvider, createCustomProvider } from "./custom.js"
-import { AnthropicProvider, createAnthropicProvider } from "./anthropic.js"
-import { GoogleProvider, createGoogleProvider } from "./google.js"
 import { OllamaProvider, createOllamaProvider } from "./ollama.js"
 import {
   PROVIDER_CATALOG,
@@ -28,10 +18,7 @@ import {
 } from "./catalog.js"
 
 export { LlamaCppProvider, createLlamaCppProvider, NvidiaProvider, createNvidiaProvider }
-export { OpenAIProvider, createOpenAIProvider, createOpenAICompatibleProvider, OpenAICompatibleProvider }
-export { XAIProvider, createXAIProvider }
-export { HuggingFaceProvider, createHuggingFaceProvider, CustomProvider, createCustomProvider }
-export { AnthropicProvider, createAnthropicProvider, GoogleProvider, createGoogleProvider }
+export { CustomProvider, createCustomProvider }
 export { OllamaProvider, createOllamaProvider }
 export { PROVIDER_CATALOG, fetchModelsForProvider, fetchModelsDetailed, getCatalogEntry, verifyProviderKey }
 export type { ModelFetchStatus, KeyCheck } from "./catalog.js"

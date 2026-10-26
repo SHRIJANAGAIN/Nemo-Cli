@@ -1,4 +1,4 @@
-export * as TrayambakNotebook from "./notebook"
+export * as NemoNotebook from "./notebook"
 
 export interface NotebookCell {
   readonly id: string

@@ -5,10 +5,15 @@ on:
     paths:
       - "apps/**"
       - "packages/**"
-      - "skt/**"
+      - "nemo/**"
       - "eslint.config.mjs"
-      - "packages/eslint-plugin-trayambak/**"
-      - ".github/workflows/check-architecture.yml"
+      - "packages/eslint-plugin-nemo/**"
+      # Every workflow, not just this one. The SHA-pin check below reads all of
+      # them, so a new or edited workflow that adds an unpinned action has to be
+      # able to fail the build — scoping this to the single filename would let an
+      # unpinned action land unreviewed.
+      - ".github/workflows/**"
+      - "scripts/pin-actions.mjs"
   push:
     branches: [main, master]
   workflow_dispatch:
@@ -26,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -52,17 +57,10 @@ jobs:
             exit 1
           fi
           echo "execpolicy boundary ok"
-      - name: trayambak-ink must NOT deep-import core/src/*
-        run: |
-          VIOLATIONS=$(grep -rn "packages/core/src/" --include="*.ts" --include="*.tsx" packages/trayambak-ink/src 2>/dev/null || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::trayambak-ink deep-imports packages/core/src/* (use core index):"
-            echo "$VIOLATIONS"
-            exit 1
-          fi
-          echo "ink boundary ok"
-      - name: Custom lint rules pass (16 trayambak/* rules)
+      - name: Custom lint rules pass (16 nemo/* rules)
         run: npm run lint
+      - name: GitHub Actions must be SHA-pinned
+        run: node scripts/pin-actions.mjs --check
       - name: Workflow allowlist (no unknown workflow files)
         run: |
           node -e "

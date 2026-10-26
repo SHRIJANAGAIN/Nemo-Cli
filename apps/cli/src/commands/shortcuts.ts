@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 export type ShortcutAction =
@@ -33,7 +33,7 @@ export interface KeyBinding {
 
 export const DEFAULT_BINDINGS: KeyBinding[] = [
   { key: "c", ctrl: true, action: "stop_generation", description: "Stop AI generation / Exit" },
-  { key: "d", ctrl: true, action: "exit", description: "Exit trayambak" },
+  { key: "d", ctrl: true, action: "exit", description: "Exit nemo" },
   { key: "z", ctrl: true, action: "undo", description: "Undo last AI change" },
   { key: "y", ctrl: true, action: "redo", description: "Redo last undone change" },
   { key: "o", ctrl: true, action: "menu", description: "Open command menu" },

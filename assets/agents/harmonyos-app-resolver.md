@@ -45,7 +45,7 @@ In all code generation, Q&A, and technical recommendations, you MUST strictly fo
 
 ### Step 1: Understand Project Context
 
-- Read `Trayambak.md`, `module.json5`, `oh-package.json5` for project conventions
+- Read `Nemo.md`, `module.json5`, `oh-package.json5` for project conventions
 - Identify existing state management version (V1 vs V2) and routing approach
 - Check `build-profile.json5` for API level and device targets
 

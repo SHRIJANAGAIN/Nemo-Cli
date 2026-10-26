@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Trayambak Config",
+  "title": "Nemo Config",
   "type": "object",
   "properties": {
     "baseUrl": { "type": "string" },
@@ -11,36 +11,14 @@
     "apiKey": { "type": "string" },
     "provider": {
       "type": "string",
-      "enum": [
-        "llamacpp",
-        "nvidia",
-        "nvidia-nim",
-        "openai",
-        "xai",
-        "huggingface",
-        "anthropic",
-        "google",
-        "ollama",
-        "custom",
-        "groq",
-        "mistral",
-        "cerebras",
-        "together",
-        "deepinfra",
-        "cohere",
-        "perplexity",
-        "openrouter",
-        "fireworks",
-        "venice",
-        "azure",
-        "skt-gateway"
-      ]
+      "enum": ["llamacpp", "nvidia", "nvidia-nim", "ollama", "custom"]
     },
     "cwd": { "type": "string" },
     "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
     "maxTokens": { "type": "number" },
     "timeoutMs": { "type": "number" },
     "maxTurns": { "type": "integer", "minimum": 1, "maximum": 10000 },
-    "maxToolCalls": { "type": "number" }
+    "maxToolCalls": { "type": "number" },
+    "harnessAuto": { "type": "boolean" }
   }
 }

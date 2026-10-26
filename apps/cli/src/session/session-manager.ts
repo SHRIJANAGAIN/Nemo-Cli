@@ -31,21 +31,21 @@ function newSessionId(): string {
 }
 
 function sessionsFilePath(): string {
-  const explicit = process.env.TRAYAMBAK_SESSIONS_FILE
+  const explicit = process.env.NEMO_SESSIONS_FILE
   if (explicit) {
     if (isRemoteUncPath(explicit)) {
       // Fail closed without touching the path: existsSync on a UNC target
       // would authenticate to the remote host (NTLM hash leak).
       try {
         process.stderr.write(
-          `trayambak: refusing remote UNC sessions file "${explicit}" (NTLM/SMB risk) — using default instead.\n`,
+          `nemo: refusing remote UNC sessions file "${explicit}" (NTLM/SMB risk) — using default instead.\n`,
         )
       } catch {
         /* stderr unavailable */
       }
     } else return explicit
   }
-  return path.join(os.homedir(), ".trayambak", "sessions.json")
+  return path.join(os.homedir(), ".nemo", "sessions.json")
 }
 
 type StoredSession = Omit<SessionInfo, "createdAt" | "updatedAt"> & {

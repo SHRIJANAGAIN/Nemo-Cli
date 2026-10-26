@@ -1,4 +1,4 @@
-export * as TrayambakTaskResume from "./task-resume"
+export * as NemoTaskResume from "./task-resume"
 
 export interface TaskState {
   readonly taskId: string

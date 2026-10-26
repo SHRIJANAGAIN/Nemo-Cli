@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Thread store integrity (#68, #69):
@@ -9,7 +13,7 @@
  *     stale cache over a newer write.
  *
  * Every case runs against a throwaway store under the OS temp dir — the
- * default store is `~/.trayambak/threads`, i.e. the user's real history.
+ * default store is `~/.nemo/threads`, i.e. the user's real history.
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
@@ -21,7 +25,7 @@ let dir: string
 let store: ThreadStore
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "trayambak-threads-"))
+  dir = mkdtempSync(join(tmpdir(), "nemo-threads-"))
   store = resetThreadStore(dir)
 })
 

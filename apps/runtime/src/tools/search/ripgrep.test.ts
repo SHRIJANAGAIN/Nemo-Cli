@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -215,7 +215,7 @@ describe("runRipgrep mechanics (no rg binary required)", () => {
 
 describe.skipIf(REAL_RG === null)("searchRipgrep against a real binary", () => {
   const makeFixture = (): string => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-rg-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-rg-"))
     fs.mkdirSync(path.join(dir, "src"), { recursive: true })
     fs.mkdirSync(path.join(dir, "node_modules", "junk"), { recursive: true })
     fs.mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true })

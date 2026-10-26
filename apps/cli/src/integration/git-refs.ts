@@ -1,4 +1,4 @@
-export * as TrayambakGitRefs from "./git-refs"
+export * as NemoGitRefs from "./git-refs"
 
 export interface GitRef {
   readonly name: string

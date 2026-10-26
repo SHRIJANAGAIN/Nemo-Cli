@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -13,7 +13,7 @@
  * params arrive as a `ContentBlock[]`, and `session/update` carries a
  * spec-shaped `update` union built by {@link toSessionUpdate}.
  *
- * Run: `trayambak acp` — for ACP-capable editors (custom agent server).
+ * Run: `nemo acp` — for ACP-capable editors (custom agent server).
  * Full wire reference: `docs/acp.md`.
  */
 
@@ -260,7 +260,7 @@ async function dispatch(req: RpcRequest): Promise<void> {
           sessionCapabilities: {},
           auth: {},
         },
-        agentInfo: { name: "trayambak", version: VERSION }, // stamped from root package.json by sync-version
+        agentInfo: { name: "nemo", version: VERSION }, // stamped from root package.json by sync-version
       })
       break
     case "new_session":

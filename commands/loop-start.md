@@ -20,7 +20,7 @@ Start a managed autonomous loop pattern with safety defaults.
 1. Confirm repository state and branch strategy.
 2. Select loop pattern and model tier strategy.
 3. Enable required hooks/profile for the chosen mode.
-4. Create loop plan and write runbook under `.trayambak/plans/`.
+4. Create loop plan and write runbook under `.nemo/plans/`.
 5. Print commands to start and monitor the loop.
 
 ## Required Safety Checks

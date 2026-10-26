@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execFile } from "node:child_process"
@@ -90,7 +90,7 @@ const defaultAgentRunner: AgentRunner = async (prompt) => {
   return messages
 }
 
-/** `trayambak commit`: model-drafted conventional-commit message for the diff. */
+/** `nemo commit`: model-drafted conventional-commit message for the diff. */
 export async function commitCommand(
   opts: { mode?: "staged" | "all"; cwd?: string },
   deps: { runDiff?: DiffRunner; runAgent?: AgentRunner } = {},

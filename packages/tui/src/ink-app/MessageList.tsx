@@ -1,19 +1,22 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import React, { useEffect, useMemo, useRef, type ReactNode } from "react"
 import { Box, Static, Text, useStdout } from "ink"
 import { MessageRow } from "./MessageRow.js"
 import { ThinkingOrbs } from "./ThinkingOrbs.js"
-import type { TrayambakMessage, AppStatus } from "./types.js"
+import type { NemoMessage, AppStatus } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
+import { useTicker } from "./use-animation-clock.js"
+import { turnElapsedMs, type TurnClock } from "./use-turn-clock.js"
+import { formatElapsed } from "./duration-text.js"
 import { stringWidth, graphemes } from "./utils/stringWidth.js"
 
 export interface MessageListProps {
-  messages: TrayambakMessage[]
+  messages: NemoMessage[]
   isLoading?: boolean
   isStreaming?: boolean
   extraBottomRows?: number
@@ -41,13 +44,23 @@ export interface MessageListProps {
    *  (auto-scroll only). Value-stable → React bails out on the identical
    *  state, no setState loop. */
   onScrollDepth?: (depth: number) => void
+  /**
+   * Parked window end (exclusive): the frame shows messages below this index
+   * instead of the live tail. Alt-screen paging sets it below length so older
+   * history renders in-frame (the alternate buffer has no scrollback to read
+   * them from); rows at/after endIdx are hidden until the window snaps back.
+   * Defaults to messages.length — the live tail, byte-identical to before.
+   */
+  endIdx?: number
   /** Ctrl+O: tool outputs render full (200-line cap) instead of head+tail
    *  preview; tool-role rows and compaction markers unfold. */
   expandOutput?: boolean
-  /** Turn start epoch ms (App sets it on turn_start): the bottom status
-   *  line shows elapsed seconds (`Thinking… 12s`) so a slow model never
-   *  reads as dead. Absent → no seconds. */
-  turnStartedAt?: number
+  /** The live turn clock (App owns it via useTurnClock): the bottom status line
+   *  shows how long the turn has been WORKING (`Thinking… 2m 05s`), so a slow
+   *  model never reads as dead. Absent → no number. Time spent waiting on a
+   *  permission prompt or a question is already out of it — charging the model
+   *  for the human's absence is the one thing this readout must not do. */
+  turnClock?: TurnClock
 }
 
 /** Wrapped row count for text with hard newlines: every line contributes
@@ -71,7 +84,7 @@ function wrappedRows(text: string, width: number): number {
 /** The transcript body used for row math and head/tail slicing: final
  *  `content` when present, else the text parts (thinking/toolCall parts
  *  carry no transcript text). */
-export function messageText(m: TrayambakMessage): string {
+export function messageText(m: NemoMessage): string {
   if (m.content) return m.content
   if (m.parts && m.parts.length > 0) {
     const texts: string[] = []
@@ -84,7 +97,7 @@ export function messageText(m: TrayambakMessage): string {
 /** Only messages that render their body as plain text can be head/tail
  *  sliced (tool cards, collapsed tool rows and subagent cards draw their
  *  own boxes — slicing their content would corrupt the card). */
-export function rendersAsText(m: TrayambakMessage): boolean {
+export function rendersAsText(m: NemoMessage): boolean {
   return !m.subagentId && m.role !== "tool" && !(m.role === "assistant" && !!m.toolName && !!m.toolCallId)
 }
 
@@ -148,7 +161,7 @@ export function splitAtRows(text: string, availRows: number, cols: number): { he
  *  the NEWEST rows. `expandOutput` (Ctrl+O) must be passed through: an
  *  unfolded 200-line tool result budgets like one, or the frame overflows
  *  and the clip eats the live answer below it. */
-export function estimateMessageRows(m: TrayambakMessage, cols: number, expandOutput = false): number {
+export function estimateMessageRows(m: NemoMessage, cols: number, expandOutput = false): number {
   // TTL-expired notice (transientHidden): the frame renders it as NOTHING →
   // it must cost NO budget, or the split would evict real conversation to
   // make room for an invisible row. Flag-only — the row itself never leaves
@@ -222,7 +235,7 @@ export function estimateMessageRows(m: TrayambakMessage, cols: number, expandOut
  *  cards, and the message still streaming right now. Everything else is
  *  FINAL and may print to scrollback exactly once. */
 export function isUnstableMessage(
-  m: TrayambakMessage,
+  m: NemoMessage,
   idx: number,
   total: number,
   isLoading: boolean,
@@ -246,12 +259,13 @@ export interface MessageSplit {
 /** Pure split math (unit-tested): tail cap over the dynamic part plus the
  *  unstable frontier. */
 export function computeMessageSplit(
-  messages: TrayambakMessage[],
+  messages: NemoMessage[],
   isLoading: boolean,
   isStreaming: boolean,
   rowBudget: number,
   cols: number,
   expandOutput = false,
+  endIdx: number = messages.length,
 ): MessageSplit {
   let firstUnstable = messages.length
   for (let i = 0; i < messages.length; i += 1) {
@@ -260,14 +274,15 @@ export function computeMessageSplit(
       break
     }
   }
-  // Tail cap: keep the newest messages that fit — the frame clips
-  // (overflow="hidden") instead of shrinking rows, so over-running it
+  // Tail cap: keep the newest messages that fit ENDING at endIdx — the frame
+  // clips (overflow="hidden") instead of shrinking rows, so over-running it
   // would cut the NEWEST rows off the bottom.
+  const end = Math.max(0, Math.min(messages.length, endIdx))
   let used = 0
-  let capIdx = messages.length
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
+  let capIdx = end
+  for (let i = end - 1; i >= 0; i -= 1) {
     const rows = estimateMessageRows(messages[i], cols, expandOutput)
-    if (used + rows > rowBudget && capIdx !== messages.length) break
+    if (used + rows > rowBudget && capIdx !== end) break
     used += rows
     capIdx = i
   }
@@ -313,7 +328,7 @@ export interface HeadSplit {
   tailText: string
 }
 
-const stripForSlice = (m: TrayambakMessage, id: string, content: string): TrayambakMessage => ({
+const stripForSlice = (m: NemoMessage, id: string, content: string): NemoMessage => ({
   ...m,
   id,
   content,
@@ -337,12 +352,12 @@ const stripForSlice = (m: TrayambakMessage, id: string, content: string): Trayam
  *  Every item renders as a side-bordered slice of the conversation box
  *  (│ on both edges), so scrollback rows are never naked lines. */
 export function buildStaticItems(
-  messages: TrayambakMessage[],
+  messages: NemoMessage[],
   frontier: number,
   capIdx: number,
   splits: ReadonlyMap<string, HeadSplit>,
-): TrayambakMessage[] {
-  const out: TrayambakMessage[] = []
+): NemoMessage[] {
+  const out: NemoMessage[] = []
   for (let i = 0; i < frontier; i += 1) {
     const m = messages[i]
     const sp = splits.get(m.id)
@@ -371,7 +386,8 @@ export const MessageList = ({
   onHasPrefix,
   onScrollDepth,
   expandOutput = false,
-  turnStartedAt,
+  turnClock,
+  endIdx: endIdxProp,
 }: MessageListProps): ReactNode => {
   const { stdout } = useStdout()
   const theme = useThemeColors()
@@ -420,7 +436,22 @@ export const MessageList = ({
     splitsRef.current = new Map()
   }
 
-  const { capIdx, firstUnstable } = computeMessageSplit(messages, isLoading, isStreaming, rowBudget, cols, expandOutput)
+  const { capIdx, firstUnstable } = computeMessageSplit(
+    messages,
+    isLoading,
+    isStreaming,
+    rowBudget,
+    cols,
+    expandOutput,
+    // Parked window end is pre-clamped by the caller (App holds endIdx in
+    // [0, messages.length]); computeMessageSplit only ever walks backward
+    // from it, so a parked window can never reach past the transcript.
+    endIdxProp,
+  )
+  // Window end, resolved once: live tail by default, parked index in alt
+  // mode. Everything below renders; everything at/after it is hidden until
+  // the window snaps back (submit/PageDown to live).
+  const endIdx = Math.max(0, Math.min(messages.length, endIdxProp ?? messages.length))
 
   // Oversized COMPLETED answer: cut head/tail ONCE, permanently for this
   // epoch (Ink's static index only moves forward — a later re-cut would
@@ -463,26 +494,31 @@ export const MessageList = ({
     [messages, frontier, capIdx],
   )
 
-  // Frame window: ALWAYS the newest messages that fit the row budget, ending
-  // at the live tail (auto-scroll only — no offset state exists anywhere, so
-  // no scroll can hide the response). Rows older than the window fell out
-  // the top into the print-once prefix (see buildStaticItems above),
-  // reachable by the terminal's NATIVE scroll; the frame re-showing a prefix
-  // row would be a bottom-of-screen duplicate of scrollback content.
-  const dynamicMessages = messages.slice(capIdx)
+  // Frame window: the newest messages that fit, ending at endIdx — the live
+  // tail by default (auto-scroll only — no offset state exists in inline
+  // mode, so no scroll can hide the response), or a parked older window in
+  // alt-screen mode. Rows at/after endIdx are hidden until the window snaps
+  // back (submit/PageDown to live). Rows older than the window fell out the
+  // top into the print-once prefix where the terminal's NATIVE scroll reads
+  // them; the frame re-showing a prefix row would be a bottom-of-screen
+  // duplicate of scrollback content.
+  const dynamicMessages = messages.slice(capIdx, endIdx)
 
   // Elapsed-seconds ticker for the bottom status line: ticks ONLY while
   // the tail is loading (mid-turn repaints already flow then). At
   // idle there is deliberately no timer — zero writes, so the Windows
   // scrollbar and native drag hold position (idle-silence contract).
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!isLoading) return
-    const timer = setInterval(() => setTick((n) => n + 1), 1000)
-    return () => clearInterval(timer)
-  }, [isLoading])
-  const elapsedSuffix =
-    isLoading && turnStartedAt !== undefined ? ` ${Math.max(0, Math.floor((Date.now() - turnStartedAt) / 1000))}s` : ""
+  // Off the shared clock (no private interval, so it coalesces with the
+  // streaming repaints instead of forcing its own partial write) and off
+  // `useTicker` (a wall clock is information — the motion level must not
+  // be allowed to freeze it at "3s").
+  useTicker(1000, isLoading)
+  // The turn's WORK time, not its wall time: the clock the App owns already has
+  // the user-wait subtracted, so a two-minute approval does not read as a
+  // two-minute model. formatElapsed (live counting, coarse units) rather than
+  // formatDuration, because this repaints every second and a "450ms"→"1s" tier
+  // change would shuffle the rest of the row.
+  const elapsedSuffix = isLoading && turnClock ? ` ${formatElapsed(turnElapsedMs(turnClock))}` : ""
 
   // Tell App when the scrollback prefix exists so the root frame can drop
   // its TOP border — otherwise its ┌────┐ line renders between the prefix
@@ -496,7 +532,9 @@ export const MessageList = ({
   // Depth chip: tell App how many messages the frame window starts below
   // (all of them already live in the print-once prefix / scrollback).
   // Fires only when capIdx changes (append-only growth shrinks it), and
-  // setting the same value bails out in React — no loop.
+  // setting the same value bails out in React — no loop. In alt-screen parked
+  // mode the same count feeds the footer chip from the other side (App adds
+  // the rows hidden below the parked window).
   useEffect(() => {
     onScrollDepth?.(capIdx)
   }, [capIdx, onScrollDepth])
@@ -508,7 +546,7 @@ export const MessageList = ({
   // A FROZEN split is returned as-is (its head already printed to
   // scrollback — re-cutting would duplicate rows); an unstable one
   // recomputes every render so the cut re-anchors live while streaming.
-  const dynamicSlice = (msg: TrayambakMessage): string | null => {
+  const dynamicSlice = (msg: NemoMessage): string | null => {
     if (!rendersAsText(msg)) return null
     const frozen = splitsRef.current.get(msg.id)
     if (frozen) return frozen.tailText

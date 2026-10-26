@@ -1,17 +1,17 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * SKT AI LABS's terminal activity port: keep the terminal title in sync with agent
+ * Shrijan's terminal activity port: keep the terminal title in sync with agent
  * state (OSC 0), ring the bell, and OSD-notify when attention is needed
  * (approval / input / error / background task finished). Writes are
  * synchronous (fs.writeSync) so they can't interleave with Ink's frame
  * writes mid-sequence, throttled so a busy loop can't spam the terminal.
  *
- *   TRAYAMBAK_NO_NOTIFY=1  disables everything.
+ *   NEMO_NO_NOTIFY=1  disables everything.
  *   Non-TTY stdout         disables everything.
  */
 
@@ -50,7 +50,7 @@ const ACTIVITY_SUFFIX: Record<TerminalActivity, string> = {
  * otherwise shows the shell's cwd (a bare folder name like "engli"), which
  * tells the user nothing about what is running.
  */
-export const APP_TITLE_NAME = "Trayambak"
+export const APP_TITLE_NAME = "Nemo"
 
 /** Pure title builder — returns the OSC 0 payload text (ASCII only). */
 export function buildTerminalTitle(parts: TerminalTitleParts, appName = APP_TITLE_NAME): string {
@@ -134,13 +134,13 @@ export function buildAnimatedTitle(frame: string, state: TitleAnimationState = {
  * Terminal-effect kill switch.
  *
  * Read directly rather than through env_filter: getSafeEnv() is a *child
- * process* allowlist (it drops non-essentials and forces CODEX_SANDBOX), so
- * routing a local UI preference through it would both be the wrong tool and
- * silently discard the variable. A documented TRAYAMBAK_* preference is not a
- * secret-handling concern.
+ * process* allowlist (it drops non-essentials and stamps the sandbox
+ * marker), so routing a local UI preference through it would both be the
+ * wrong tool and silently discard the variable. A documented NEMO_*
+ * preference is not a secret-handling concern.
  */
 function notificationsDisabled(): boolean {
-  return process.env.TRAYAMBAK_NO_NOTIFY === "1"
+  return process.env.NEMO_NO_NOTIFY === "1"
 }
 
 /** Synchronous by default; replaceable only by the byte-level tests. */

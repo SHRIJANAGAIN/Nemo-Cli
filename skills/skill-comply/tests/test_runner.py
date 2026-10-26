@@ -105,7 +105,7 @@ class TestSetupSandboxSkipsShellBuiltins:
 class TestRunScenarioMaxTurnsTermination:
     """rc=1 with terminal_reason=max_turns is graceful termination, not failure.
 
-    trayambak -p returns rc=1 when --max-turns is reached, but the stream-json
+    nemo -p returns rc=1 when --max-turns is reached, but the stream-json
     output is still valid. Treating this as RuntimeError aborts scenarios
     that would have produced useful observations. Detect the marker in stdout
     and downgrade rc=1 + max_turns to non-fatal.
@@ -123,7 +123,7 @@ class TestRunScenarioMaxTurnsTermination:
         )
 
         fake_result = subprocess.CompletedProcess(
-            args=["trayambak"], returncode=1, stdout=max_turns_stdout, stderr=""
+            args=["nemo"], returncode=1, stdout=max_turns_stdout, stderr=""
         )
 
         with patch("scripts.runner.subprocess.run", return_value=fake_result):
@@ -136,11 +136,11 @@ class TestRunScenarioMaxTurnsTermination:
         monkeypatch.setattr("scripts.runner._setup_sandbox", lambda *a, **kw: None)
 
         fake_result = subprocess.CompletedProcess(
-            args=["trayambak"], returncode=1, stdout="", stderr="auth error"
+            args=["nemo"], returncode=1, stdout="", stderr="auth error"
         )
 
         with patch("scripts.runner.subprocess.run", return_value=fake_result):
-            with pytest.raises(RuntimeError, match="trayambak -p failed"):
+            with pytest.raises(RuntimeError, match="nemo -p failed"):
                 run_scenario(scenario, model="haiku")
 
 
@@ -290,7 +290,7 @@ class TestParseStreamJsonRedactsHomePath:
 class TestRunScenarioErrorIncludesStdoutTail:
     """Error messages must include stdout tail, not only stderr.
 
-    When trayambak -p fails inside an LLM call, useful diagnostic context often
+    When nemo -p fails inside an LLM call, useful diagnostic context often
     appears in stdout (partial stream-json events, model error JSON), not
     stderr. Including stdout tail in the RuntimeError message dramatically
     improves debug-ability without adding any new dependency.
@@ -302,7 +302,7 @@ class TestRunScenarioErrorIncludesStdoutTail:
 
         diagnostic_marker = "DIAG_STDOUT_MARKER_xyz123"
         fake_result = subprocess.CompletedProcess(
-            args=["trayambak"],
+            args=["nemo"],
             returncode=2,
             stdout=f"some context {diagnostic_marker} more text",
             stderr="generic error",

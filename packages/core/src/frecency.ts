@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "node:fs"
@@ -258,13 +258,13 @@ export function touchAndRank(filePath: string, target: string, options: Frecency
  * Where the store lives.
  *
  * Ranking is USER STATE, not project data, so it follows the same resolution as
- * the rest of the state layer: `TRAYAMBAK_STATE_DIR` wins, otherwise
- * `~/.trayambak`. Writing it into the project would dirty the user's repo on
+ * the rest of the state layer: `NEMO_STATE_DIR` wins, otherwise
+ * `~/.nemo`. Writing it into the project would dirty the user's repo on
  * every read — unacceptable for a cache.
  */
 export function frecencyStorePath(): string {
-  const override = process.env.TRAYAMBAK_STATE_DIR
-  const root = override && override.length > 0 ? override : path.join(os.homedir(), ".trayambak")
+  const override = process.env.NEMO_STATE_DIR
+  const root = override && override.length > 0 ? override : path.join(os.homedir(), ".nemo")
   return path.join(root, "frecency.json")
 }
 
@@ -273,7 +273,7 @@ export function frecencyStorePath(): string {
  *
  * The one-line form for call sites on the tool path, where a throw would be a
  * failed tool call over a cache file. Resolved per call so a test (or a later
- * process) that sets `TRAYAMBAK_STATE_DIR` is honoured immediately.
+ * process) that sets `NEMO_STATE_DIR` is honoured immediately.
  */
 export function noteOpen(target: string, now: number = Date.now()): void {
   try {

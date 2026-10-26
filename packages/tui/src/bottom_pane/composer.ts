@@ -1,7 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 import { Tui, Rect } from "../tui/terminal"
@@ -22,7 +25,7 @@ export interface ComposerInputResult {
  * Composer manages the bottom input pane: text input, slash-command entry,
  * and suggestion display.
  *
- * Ported from TRAYAMBAK TUI `bottom_pane.rs`  adapted for the Trayambak Terminal
+ * Ported from Codex TUI `bottom_pane.rs`  adapted for the Nemo Terminal
  * abstraction.
  */
 export class Composer {

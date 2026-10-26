@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 import { afterEach, describe, expect, it } from "vitest"
 import * as fs from "fs"
@@ -154,7 +158,7 @@ describe("resolveExecutable", () => {
   })
 
   it("resolves relative paths against the spawn cwd", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-resolve-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-resolve-"))
     try {
       fs.mkdirSync(path.join(dir, "sub"))
       fs.writeFileSync(path.join(dir, "sub", "thing"), "x")
@@ -219,14 +223,14 @@ describe.runIf(HAVE_GIT_BASH)("spawnProcess vs an MSYS shell", () => {
       command: [
         GIT_REAL_BASH,
         "-c",
-        'pwd; echo stamp=$CODEX_SANDBOX; echo net=${CODEX_SANDBOX_NETWORK_DISABLED:-dropped}',
+        'pwd; echo stamp=$NEMO_SANDBOX; echo net=${NEMO_SANDBOX_NETWORK_DISABLED:-dropped}',
       ],
       cwd: process.cwd(),
       sandboxType: SandboxType.WindowsRestrictedToken,
       env: {
         ...process.env,
-        CODEX_SANDBOX: "windows_sandbox",
-        CODEX_SANDBOX_NETWORK_DISABLED: "true",
+        NEMO_SANDBOX: "windows_sandbox",
+        NEMO_SANDBOX_NETWORK_DISABLED: "true",
       } as Record<string, string>,
       networkPolicy: { disableNetwork: true, allowedDomains: [], blockedDomains: [] },
       filesystemPolicy: {

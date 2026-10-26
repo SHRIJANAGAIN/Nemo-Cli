@@ -1,25 +1,25 @@
 ---
-name: trayambak-devfleet
-description: Orchestrate multi-agent coding tasks via Trayambak DevFleet — plan projects, dispatch parallel agents in isolated worktrees, monitor progress, and read structured reports. Use when dispatching parallel coding agents across isolated worktrees and tracking their reports.
+name: nemo-devfleet
+description: Orchestrate multi-agent coding tasks via Nemo DevFleet — plan projects, dispatch parallel agents in isolated worktrees, monitor progress, and read structured reports. Use when dispatching parallel coding agents across isolated worktrees and tracking their reports.
 metadata:
   origin: community
 ---
 
-# Trayambak DevFleet Multi-Agent Orchestration
+# Nemo DevFleet Multi-Agent Orchestration
 
 ## When to Use
 
-Use this skill when you need to dispatch multiple Trayambak Code agents to work on coding tasks in parallel. Each agent runs in an isolated git worktree with full tooling.
+Use this skill when you need to dispatch multiple Nemo Code agents to work on coding tasks in parallel. Each agent runs in an isolated git worktree with full tooling.
 
 ## Setup
 
 The DevFleet server is a separate project, not bundled with ECC. Install and
-run it from its repository first: <https://github.com/LEC-AI/trayambak-devfleet>
+run it from its repository first: <https://github.com/LEC-AI/nemo-devfleet>
 
 Then connect the running instance via MCP:
 
 ```bash
-trayambak mcp add devfleet --transport http http://localhost:18801/mcp
+nemo mcp add devfleet --transport http http://localhost:18801/mcp
 ```
 
 Before first use, verify the process listening on port 18801 is the DevFleet

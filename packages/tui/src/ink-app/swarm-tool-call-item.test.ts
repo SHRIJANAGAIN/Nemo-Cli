@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -14,7 +14,7 @@ import { describeSwarmCall } from "./SwarmToolCallItem.js"
 import type { ToolCallDisplay } from "./types.js"
 
 /**
- * SKT Swarm row coverage — the orchestrator must be visible while it runs
+ * Nemo Swarm row coverage — the orchestrator must be visible while it runs
  * (animated worker chase + strategy + goal) and settle to a static summary
  * when done (no interval left behind to churn the transcript).
  */
@@ -45,7 +45,7 @@ async function renderFrames(toolCall: ToolCallDisplay, settleMs = 500): Promise<
 
 const RUNNING_SWARM: ToolCallDisplay = {
   id: "sw1",
-  name: "skt__Swarm",
+  name: "nemo__Swarm",
   args: {
     goal: "ship the feature",
     strategy: "fanout",
@@ -60,13 +60,13 @@ const RUNNING_SWARM: ToolCallDisplay = {
 
 const DONE_SWARM: ToolCallDisplay = {
   id: "sw2",
-  name: "skt__Swarm",
+  name: "nemo__Swarm",
   args: { goal: "ship the feature", strategy: "vote", workers: 3 },
   status: "completed",
-  result: "## SKT Swarm report (vote)",
+  result: "## Nemo Swarm report (vote)",
 }
 
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 resetGlyphCache()
 
 describe("describeSwarmCall", () => {
@@ -95,7 +95,7 @@ describe("SwarmToolCallItem via ToolCallItem dispatch", () => {
   it("animates the running swarm with strategy, goal, and worker count", async () => {
     const frames = await renderFrames(RUNNING_SWARM)
 
-    expect(frames).toContain("SKT Swarm")
+    expect(frames).toContain("Nemo Swarm")
     expect(frames).toContain("fanout")
     expect(frames).toContain("ship the feature")
     expect(frames).toContain("3 worker")
@@ -104,7 +104,7 @@ describe("SwarmToolCallItem via ToolCallItem dispatch", () => {
   it("settles a finished swarm to a static workers-heard summary", async () => {
     const frames = await renderFrames(DONE_SWARM)
 
-    expect(frames).toContain("skt__Swarm")
+    expect(frames).toContain("nemo__Swarm")
     expect(frames).toContain("vote")
     expect(frames).toContain("3 workers heard")
   }, 15000)
@@ -112,7 +112,7 @@ describe("SwarmToolCallItem via ToolCallItem dispatch", () => {
   it("paints worker errors as failed, not heard", async () => {
     const frames = await renderFrames({ ...DONE_SWARM, status: "error", isError: true })
 
-    expect(frames).toContain("skt__Swarm")
+    expect(frames).toContain("nemo__Swarm")
     expect(frames).toContain("3 workers heard")
   }, 15000)
 })

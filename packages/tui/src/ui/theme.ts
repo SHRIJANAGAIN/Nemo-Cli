@@ -1,16 +1,19 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 /**
- * TRAYAMBAK TUI — full theme system.
- * Token-based color themes with truecolor ANSI output,
- * luminance-aware selection foreground, and bundled palettes.
+ * Nemo TUI theme system — token-based color themes with truecolor ANSI
+ * output, luminance-aware selection foreground, and bundled palettes.
+ * Ported from the Codex TUI (`codex-rs/tui/src/styles`, `color.rs`).
  */
 
-import { SKT_SPECS } from "./skt-themes.js"
+import { NEMO_SPECS } from "./nemo-themes.js"
 import npmStringWidth from "string-width"
 
 export type Rgb = { r: number; g: number; b: number; a?: number }
@@ -170,8 +173,8 @@ function build(spec: PaletteSpec): Theme {
 
 // -- Bundled palettes (rebranded) ---------------------------------------------
 
-const TRAYAMBAK_DARK = build({
-  name: "trayambak-dark",
+const NEMO_DARK = build({
+  name: "nemo-dark",
   dark: true,
   c: {
     primary: "#6cb6f5",
@@ -722,7 +725,7 @@ const ORANGE_LIGHT = build({
 })
 
 const themes: Theme[] = [
-  TRAYAMBAK_DARK,
+  NEMO_DARK,
   ORANGE_DARK,
   NIGHT_SKY,
   OCEAN_DEEP,
@@ -739,13 +742,13 @@ const themes: Theme[] = [
   VELVET_PURPLE,
   EVERGREEN,
   ARCTIC_FOX,
-  // SKT AI LABS Code port — 36 palettes (dark side), see scripts/convert-skt-themes.mjs
-  ...SKT_SPECS.map(build),
+  // Shrijan Code port — 36 palettes (dark side), see scripts/convert-nemo-themes.mjs
+  ...NEMO_SPECS.map(build),
 ]
 
 // -- Active theme state -------------------------------------------------------
 
-let active: Theme = TRAYAMBAK_DARK
+let active: Theme = NEMO_DARK
 
 // Bump on every switch so Ink re-reads the palette: useThemeColors()
 // subscribes via useSyncExternalStore, otherwise /theme only took effect
@@ -773,7 +776,7 @@ export function listThemes(): Theme[] {
 }
 
 /** Pre-rebrand theme names that must keep RESOLVING — persisted configs and
- *  TRAYAMBAK_THEME still name them, and an unknown name silently leaves the
+ *  NEMO_THEME still name them, and an unknown name silently leaves the
  *  default theme active (no error) — while never being displayed anywhere. */
 const LEGACY_THEME_ALIASES: Record<string, string> = {
   kilo: "solar-stone",

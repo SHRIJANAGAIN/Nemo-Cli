@@ -1,16 +1,16 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * OAuth 2.0 + PKCE authorization for remote MCP servers.
  *
- * Ported from SKT AI LABS Code's MCP auth stack (`mcp/auth.ts`, `mcp/oauth-provider.ts`,
- * `mcp/oauth-callback.ts`) adapted to trayambak's hand-rolled MCP client:
+ * Ported from Shrijan Code's MCP auth stack (`mcp/auth.ts`, `mcp/oauth-provider.ts`,
+ * `mcp/oauth-callback.ts`) adapted to nemo's hand-rolled MCP client:
  *
- * - a file-backed token store (`~/.trayambak/mcp-auth.json`, SKT AI LABS-parity schema),
+ * - a file-backed token store (`~/.nemo/mcp-auth.json`, Shrijan-parity schema),
  * - RFC 8414 metadata discovery with well-known fallbacks,
  * - RFC 7591 dynamic client registration (when the server supports it),
  * - Authorization Code flow with PKCE S256 + CSRF `state`,
@@ -45,7 +45,7 @@ export interface McpOAuthConfig {
 export interface McpOAuthTokens {
   accessToken: string
   refreshToken?: string
-  /** Absolute expiry in epoch **seconds** (SKT AI LABS-faithful). */
+  /** Absolute expiry in epoch **seconds** (Shrijan-faithful). */
   expiresAt?: number
   scope?: string
 }
@@ -58,7 +58,7 @@ export interface McpOAuthClientInfo {
   clientSecretExpiresAt?: number
 }
 
-/** One stored entry per MCP server name, mirroring SKT AI LABS's `mcp-auth.json` shape. */
+/** One stored entry per MCP server name, mirroring Shrijan's `mcp-auth.json` shape. */
 export interface McpAuthEntry {
   tokens?: McpOAuthTokens
   clientInfo?: McpOAuthClientInfo
@@ -86,9 +86,9 @@ export class McpAuthError extends Error {
 // Token store
 // ---------------------------------------------------------------------------
 
-/** Absolute path of the token store. `TRAYAMBAK_MCP_AUTH_FILE` overrides it (tests). */
+/** Absolute path of the token store. `NEMO_MCP_AUTH_FILE` overrides it (tests). */
 export function authFilePath(): string {
-  return process.env.TRAYAMBAK_MCP_AUTH_FILE || path.join(os.homedir(), ".trayambak", "mcp-auth.json")
+  return process.env.NEMO_MCP_AUTH_FILE || path.join(os.homedir(), ".nemo", "mcp-auth.json")
 }
 
 function readAuthStore(): Record<string, McpAuthEntry> {
@@ -118,7 +118,7 @@ export function getAuthEntry(name: string): McpAuthEntry | undefined {
   return readAuthStore()[name]
 }
 
-/** Like `getAuthEntry`, but drops entries recorded for a different server URL (SKT AI LABS's `getForUrl`). */
+/** Like `getAuthEntry`, but drops entries recorded for a different server URL (Shrijan's `getForUrl`). */
 export function getAuthEntryForUrl(name: string, serverUrl: string): McpAuthEntry | undefined {
   const entry = readAuthStore()[name]
   if (!entry) return undefined
@@ -145,7 +145,7 @@ export function removeMcpAuth(name: string): boolean {
   return true
 }
 
-/** SKT AI LABS-parity auth status: authenticated / expired / not_authenticated. */
+/** Shrijan-parity auth status: authenticated / expired / not_authenticated. */
 export function getMcpAuthStatus(name: string, serverUrl?: string): McpAuthStatus {
   const entry = serverUrl ? getAuthEntryForUrl(name, serverUrl) : getAuthEntry(name)
   if (!entry?.tokens) return "not_authenticated"
@@ -168,7 +168,7 @@ export function computeCodeChallenge(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url")
 }
 
-/** 64-hex-char CSRF state, matching SKT AI LABS's generator. */
+/** 64-hex-char CSRF state, matching Shrijan's generator. */
 export function generateState(): string {
   return crypto.randomBytes(32).toString("hex")
 }
@@ -239,6 +239,97 @@ function httpRequest(
 // Metadata discovery (RFC 8414 + OpenID fallback)
 // ---------------------------------------------------------------------------
 
+/**
+ * Narrow a requested scope to what the server actually supports.
+ *
+ * Why this exists
+ * ---------------
+ * `runAuthorize` had the server's own `scopes_supported` list in hand — it is
+ * fetched at the top of that function — and sent `config.scope` verbatim anyway.
+ * Two distinct failures follow, and they point in opposite directions:
+ *
+ *  - **A request that cannot succeed.** Config says `read write`, the server
+ *    supports `read`. The authorization endpoint rejects the whole thing with
+ *    `invalid_scope`, and the user is sent to a browser to watch it fail. The
+ *    answer was sitting in the same function.
+ *  - **Asking for more than intended.** Config says `admin delete read`, the
+ *    server supports only `read`. Requesting `admin` is a claim about privilege
+ *    the server will refuse — and on servers that quietly ignore scope components
+ *    they do not recognise, the resulting token can carry scopes nobody asked
+ *    for. Intersecting is the least-privilege behaviour as well as the correct one.
+ *
+ * What it deliberately does NOT do
+ * --------------------------------
+ * Treat absence as permission. `scopes_supported` is OPTIONAL in RFC 8414, so a
+ * server that omits it is not claiming to support everything and is not claiming
+ * to support only what was asked. An absent list means "unknown", and the
+ * requested scope passes through untouched. Assuming an empty list means
+ * "nothing is allowed" would break every server that legitimately omits the
+ * field, which is most of them.
+ *
+ * @param requested space-delimited scope string; may be undefined or empty
+ * @param supported the server's advertised list, or undefined when it omitted one
+ */
+export function resolveScopes(requested: string | undefined, supported: string[] | undefined): string | undefined {
+  const wanted = (requested ?? "")
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  if (wanted.length === 0) return undefined
+
+  // No USABLE advertisement: nothing to narrow against, and RFC 8414 makes the
+  // field optional. The check is on the filtered names rather than the array
+  // length, because a server emitting `"scopes_supported": ["", "  "]` has not
+  // told us anything — testing the length would treat a list of blanks as an
+  // authoritative "nothing is supported" and deny a request on the strength of
+  // noise.
+  const allowed = usableScopeSet(supported)
+  if (allowed.size === 0) return wanted.join(" ")
+
+  // Order follows the REQUEST, not the server's list, so the resulting string is
+  // stable for a given config — a scope string that reorders run to run makes a
+  // cache key useless and a failing request impossible to diff.
+  const kept = wanted.filter((s) => allowed.has(s))
+  return kept.length > 0 ? kept.join(" ") : undefined
+}
+
+/**
+ * The server's advertised scope names, blanks discarded.
+ *
+ * Empty means "the server did not tell us", which callers must treat as UNKNOWN
+ * rather than as an empty allow-list. That distinction is the whole reason this
+ * exists instead of an inline filter.
+ */
+function usableScopeSet(supported: string[] | undefined): Set<string> {
+  if (!Array.isArray(supported)) return new Set()
+  return new Set(supported.map((s) => s.trim()).filter((s) => s.length > 0))
+}
+
+/**
+ * What a narrowing dropped, and whether anything survived.
+ *
+ * Separate from the returned string because the two cases want different
+ * messages: "narrowed to X" is a routine adjustment the user need not see, while
+ * "nothing survived" is a misconfiguration the operator has to fix. Collapsing
+ * them into one undefined return loses that distinction.
+ */
+export function describeScopeDrop(
+  requested: string | undefined,
+  supported: string[] | undefined,
+): { dropped: string[]; nothingSurvived: boolean } {
+  const allowed = usableScopeSet(supported)
+  if (allowed.size === 0) return { dropped: [], nothingSurvived: false }
+  const wanted = (requested ?? "")
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  const kept = wanted.filter((s) => allowed.has(s))
+  return {
+    dropped: wanted.filter((s) => !allowed.has(s)),
+    nothingSurvived: wanted.length > 0 && kept.length === 0,
+  }
+}
+
 export interface OAuthMetadata {
   authorization_endpoint: string
   token_endpoint?: string
@@ -300,11 +391,11 @@ export async function discoverOAuthMetadata(serverUrl: string): Promise<OAuthMet
 // Client registration (RFC 7591) + client resolution
 // ---------------------------------------------------------------------------
 
-/** RFC 7591 client metadata sent during dynamic registration (SKT AI LABS-parity fields). */
+/** RFC 7591 client metadata sent during dynamic registration (Shrijan-parity fields). */
 export function clientMetadata(redirectUri: string, config: McpOAuthConfig): Record<string, unknown> {
   return {
     redirect_uris: [redirectUri],
-    client_name: "trayambak",
+    client_name: "nemo",
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
     token_endpoint_auth_method: config.clientSecret ? "client_secret_post" : "none",
@@ -499,7 +590,7 @@ export async function getValidAccessToken(
 
 /** Open the system browser at `target`. Returns false when launching is suppressed/fails. */
 export function openSystemBrowser(target: string): boolean {
-  if (process.env.TRAYAMBAK_NO_BROWSER === "1") return false
+  if (process.env.NEMO_NO_BROWSER === "1") return false
   try {
     if (process.platform === "win32") {
       // rundll32 avoids cmd.exe's `&`/quote parsing entirely (URLs carry query strings).
@@ -563,7 +654,7 @@ async function runAuthorize(
   const meta = await discoverOAuthMetadata(serverUrl)
 
   // Bind the callback first: the effective redirect URI feeds both dynamic
-  // registration and the authorization request (SKT AI LABS binds it the same way).
+  // registration and the authorization request (Shrijan binds it the same way).
   const callback = await ensureRunning(
     config.redirectUri ??
       (config.callbackPort ? `http://127.0.0.1:${config.callbackPort}${OAUTH_CALLBACK_PATH}` : undefined),
@@ -588,12 +679,26 @@ async function runAuthorize(
 
   const state = generateState()
   const verifier = generateCodeVerifier()
+
+  // The server told us what it supports, in `meta`, fetched above. Sending the
+  // configured scope verbatim instead is either a request that will be rejected
+  // or a claim of privilege the operator did not intend.
+  const narrowing = describeScopeDrop(config.scope, meta.scopes_supported)
+  if (narrowing.nothingSurvived) {
+    throw new McpAuthError(
+      `None of the configured scopes for '${name}' are supported by the server ` +
+        `(configured: ${config.scope ?? ""}; supported: ${(meta.scopes_supported ?? []).join(" ") || "none advertised"}).`,
+      "discovery",
+    )
+  }
+  const scope = resolveScopes(config.scope, meta.scopes_supported)
+
   const authorizationUrl = buildAuthorizationUrl(meta.authorization_endpoint, {
     clientId: clientInfo.clientId,
     redirectUri,
     state,
     codeChallenge: computeCodeChallenge(verifier),
-    scope: config.scope,
+    scope,
   })
 
   const waitMs = opts.waitMs ?? OAUTH_CALLBACK_TIMEOUT_MS

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -43,7 +43,7 @@ describe("loop approval ladder (approvalFor)", () => {
       approvalTracker: tracker,
     })
     expect(executed).toHaveLength(0)
-    expect(toolTexts(messages).join("\n")).toContain("Trayambak permission denied for probe")
+    expect(toolTexts(messages).join("\n")).toContain("Nemo permission denied for probe")
     expect(eventsOfType(events, "permission_request")).toHaveLength(0)
     expect(tracker.count("probe")).toBe(1)
     assertProviderCalls(scripted.calls(), 2, "deny path turns")

@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Tiny, safe-by-construction markdown renderer for assistant messages.
@@ -14,7 +18,7 @@
  * markdown.test.ts), so the app and the test cannot drift.
  */
 
-function trayambakEscapeHtml(value) {
+function nemoEscapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -23,7 +27,7 @@ function trayambakEscapeHtml(value) {
     .replace(/'/g, "&#39;")
 }
 
-function trayambakRenderMarkdown(source) {
+function nemoRenderMarkdown(source) {
   const text = String(source == null ? "" : source)
 
   // 1. Extract fenced code blocks (escaped immediately; placeholder
@@ -31,13 +35,13 @@ function trayambakRenderMarkdown(source) {
   const fences = []
   const withoutFences = text.replace(/```[\w+-]*\n?([\s\S]*?)```/g, (_match, code) => {
     const body = String(code).replace(/\n$/, "")
-    fences.push('<pre class="code"><code>' + trayambakEscapeHtml(body) + "</code></pre>")
+    fences.push('<pre class="code"><code>' + nemoEscapeHtml(body) + "</code></pre>")
     return "\u0000" + (fences.length - 1) + "\u0000"
   })
 
   // 2. Escape everything else — no raw HTML from the model ever reaches
   //    the DOM.
-  let out = trayambakEscapeHtml(withoutFences)
+  let out = nemoEscapeHtml(withoutFences)
 
   // 3. Inline code (content already escaped).
   out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>")
@@ -123,5 +127,5 @@ function trayambakRenderMarkdown(source) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { trayambakEscapeHtml, trayambakRenderMarkdown }
+  module.exports = { nemoEscapeHtml, nemoRenderMarkdown }
 }

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type {
@@ -13,7 +13,7 @@ import type {
 } from "../../../../packages/protocol/src/index.js"
 import { extractTextToolCalls } from "../../../../packages/provider/src/index.js"
 import type { Provider } from "../../../../packages/provider/src/index.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { Tool, ToolContext } from "../tools/index.js"
 import type { ToolResult } from "../../../../packages/protocol/src/index.js"
 import { toolResultImages } from "../../../../packages/protocol/src/index.js"
@@ -37,11 +37,18 @@ import { approvalFor, DenialTracker } from "../../../../packages/core/src/approv
 import { redactPayload } from "../../../../packages/core/src/secrets.js"
 import { annotateUntrustedToolResult, guardPrompt, type RefusalKind } from "./prompt-guard.js"
 import { compactMessages, policyFromConfig } from "../compaction.js"
-import { readInbox } from "../tools/trayambak/send-message.js"
+import { agenticCompact, shouldUseAgenticCompaction, type AgenticCompactionResult } from "../compaction-agentic.js"
+import { readInbox } from "../tools/nemo/send-message.js"
 import { runPreToolUseHooks, runPostToolUseHooks, type HookShellExecutor } from "../tools/hook-exec.js"
+import { withRetry } from "../../../../packages/core/src/retry.js"
+import {
+  classifyProviderError,
+  isContextOverflowError,
+  providerErrorHint,
+} from "../../../../packages/core/src/provider_errors.js"
 
 /**
- * SKT AI LABS plan mode: the permission deny-list (only read-only tools survive
+ * Shrijan plan mode: the permission deny-list (only read-only tools survive
  * evaluation in the agent loop) plus this suffix, so the model explores the
  * workspace and proposes a plan instead of acting on it.
  */
@@ -77,7 +84,7 @@ export interface RunConfig {
   provider: Provider
   tools: Tool[]
   session: Session
-  config: TrayambakConfig
+  config: NemoConfig
   emit: AgentEventSink
   signal?: AbortSignal
   developerMode?: DeveloperModeEngine
@@ -85,7 +92,7 @@ export interface RunConfig {
   maxParallelToolCalls?: number
   sessionId?: string
   onRequestPermission?: (tool: string, args: unknown, reason: string) => Promise<boolean>
-  /** Durable-inbox id this loop polls each turn (trayambak__SendMessage).
+  /** Durable-inbox id this loop polls each turn (nemo__SendMessage).
    *  Lets a running subagent actually RECEIVE messages and continue with
    *  context intact. Unset for foreground/main turns (no polling). */
   inboxId?: string
@@ -103,52 +110,48 @@ export interface RunConfig {
   audit?: { recordAudit(action: string, actor: string, target: string, result: string): void }
 }
 
+/**
+ * Provider chat with retry.
+ *
+ * Now delegated to `withRetry` in packages/core. The inline version this
+ * replaced had three defects that the shared module does not:
+ *
+ *  1. **Abort-listener leak.** It added an `abort` listener per retry sleep and
+ *     never removed it on the success path. A session that retried even a few
+ *     times accumulated one listener per attempt on the SAME AbortSignal, so the
+ *     warning threshold was crossed and every later abort walked a growing list.
+ *  2. **A false-positive transient match.** `\b5\d{2}\b` matched the three digits
+ *     "500" ANYWHERE in the message — including a model name, a token count, or a
+ *     quoted user prompt. "model qwen-500 failed: bad key" was therefore
+ *     classified transient and retried five times before surfacing a fatal error
+ *     the user needed to see.
+ *  3. **No jitter.** Every client backed off in lockstep, so the retry storm
+ *     amplified exactly the load spike that caused the outage.
+ *
+ * Retry-After is now honoured as a NUMBER (the old code typed it as a string and
+ * `parseInt`'d a number), and the magic "rate limits get at least 5 attempts"
+ * floor is gone — it was never documented and never configurable.
+ */
 async function chatWithRetry(run: RunConfig, request: Parameters<Provider["chat"]>[0]): ReturnType<Provider["chat"]> {
   const maxRetries = Math.max(0, run.config.maxRetries)
   const baseDelay = Math.max(100, run.config.retryDelayMs)
-  let attempt = 0
-  while (true) {
-    try {
-      return await run.provider.chat(request)
-    } catch (error) {
-      const raw: string = error instanceof Error ? error.message : String(error)
-      const isRateLimit = /429|too many requests|rate.?limit/i.test(raw)
-      // 5xx is server-side transient, same class as a dropped socket:
-      // gateway families (500/502/503/504) recover on retry. 4xx stays
-      // fatal — a retried 400/401/404 can only fail the same way.
-      const isTransient =
-        /ECONNRESET|EPIPE|socket hang up|connection closed|ENOTFOUND|ETIMEDOUT|timeout|\b5\d{2}\b/i.test(raw)
-      const effectiveRetries = isRateLimit ? Math.max(maxRetries, 5) : maxRetries
-      if (attempt >= effectiveRetries || run.signal?.aborted) {
-        throw error
-      }
-      let delay: number
-      if (isRateLimit) {
-        const retryAfter = (error as unknown as { retryAfter?: string })?.retryAfter
-        const parsedRetryAfter = retryAfter ? parseInt(retryAfter, 10) : NaN
-        delay =
-          !Number.isNaN(parsedRetryAfter) && parsedRetryAfter > 0
-            ? Math.min(parsedRetryAfter * 1000, 30_000)
-            : Math.min(baseDelay * Math.pow(2, attempt), 30_000)
-      } else if (isTransient) {
-        delay = Math.min(baseDelay * Math.pow(2, attempt), 30_000)
-      } else {
-        throw error
-      }
-      attempt++
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, delay)
-        run.signal?.addEventListener(
-          "abort",
-          () => {
-            clearTimeout(timer)
-            reject(new Error("Operation aborted during provider retry."))
-          },
-          { once: true },
-        )
-      })
-    }
-  }
+
+  const outcome = await withRetry(
+    async () => run.provider.chat(request),
+    {
+      // `maxRetries` counts RETRIES in config; withRetry counts ATTEMPTS.
+      maxAttempts: maxRetries + 1,
+      baseDelayMs: baseDelay,
+      maxDelayMs: 30_000,
+      jitterRatio: 0.25,
+    },
+    run.signal,
+  )
+
+  if (outcome.ok) return outcome.value as ReturnType<Provider["chat"]> extends Promise<infer T> ? T : never
+  // Rethrow the ORIGINAL error so the caller's error path (audit, transcript,
+  // aggregate-error recovery) sees exactly what the provider said.
+  throw outcome.error ?? new Error("provider chat failed")
 }
 
 export async function runAgentLoop(prompt: string, run: RunConfig): Promise<AgentMessage[]> {
@@ -165,7 +168,7 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
   }
   // Deterministic prompt guard, BEFORE any model call. Extraction asks
   // ("repeat system instructions…"), credential-value asks ("print exact
-  // TRAYAMBAK_API_KEY") and pure instruction-override prompts are answered
+  // NEMO_API_KEY") and pure instruction-override prompts are answered
   // here with zero provider invocations: a refusal the model never sees
   // cannot be jailbroken out of it, and there is no 180s timeout to burn.
   // Override-tainted prompts are neutralized (directive stripped, hierarchy
@@ -233,7 +236,7 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
       return run.session.messages
     }
     // Inbox delivery: a messageable subagent folds newly arrived inbox
-    // messages in as user turns, so trayambak__SendMessage continues it
+    // messages in as user turns, so nemo__SendMessage continues it
     // with context intact instead of appending to a file nobody reads.
     // Best-effort (never break a turn over inbox IO) and abort-aware.
     if (run.inboxId && !run.signal?.aborted) {
@@ -263,7 +266,7 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
     for (;;) {
       // Terminal activity (OSC 777) — the shell tab can then say what the turn
       // is actually doing instead of a title that only knows "busy"/"not busy".
-      // A no-op unless TRAYAMBAK_TERMINAL_ACTIVITY=1, so pipes stay clean.
+      // A no-op unless NEMO_TERMINAL_ACTIVITY=1, so pipes stay clean.
       publishActivity("busy")
       assistant = await streamAssistant(run, prompt, () => {})
       publishActivity(assistant ? "done" : "error")
@@ -387,7 +390,7 @@ async function streamAssistant(
   _prompt: string,
   onThinking?: (text: string) => void,
 ): Promise<AssistantMessage | null> {
-  // Proactive compaction (SKT AI LABS preflight): keep the session inside the
+  // Proactive compaction (Shrijan preflight): keep the session inside the
   // model's usable context window before every model call.
   await ensureContextWithinLimit(run)
   const wire = run.session.toWireMessages()
@@ -399,7 +402,7 @@ async function streamAssistant(
     (run.config.permissions as PermissionConfig | undefined)?.uiMode === "plan" && rawSystem
       ? `${rawSystem}\n\n${PLAN_MODE_INSTRUCTIONS}`
       : rawSystem
-  // Hide tools denied by permission rules from the model entirely (SKT AI LABS
+  // Hide tools denied by permission rules from the model entirely (Shrijan
   // behavior): a denied tool must not even be offered to the LLM.
   const effectiveDefs = (run.config.permissions as PermissionConfig | undefined) ?? DEFAULT_PERMISSIONS
   const toolDefs = run.tools
@@ -492,29 +495,25 @@ async function streamAssistant(
       // died with NO row and NO log line: "type a message, press Enter,
       // nothing happens" (the reported send-dead bug). Recover the nested
       // cause (or the error code) so the failure is always loud AND useful.
-      const nested: string =
-        typeof err === "object" && err !== null && Array.isArray((err as { errors?: unknown[] }).errors)
-          ? (err as { errors: unknown[] }).errors
-              .map((e) => (e instanceof Error ? e.message : String(e)))
-              .filter((m) => m.trim())
-              .join("; ")
-          : ""
-      const errCode: string =
-        typeof err === "object" && err !== null && "code" in err ? String((err as { code?: unknown }).code ?? "") : ""
-      const isContextOverflow = /exceeds the available context|exceed_context_size|context size|too many tokens/i.test(
-        raw,
-      )
-      if (isContextOverflow && recovered < MAX_RECOVER && run.session.messages.length > 1) {
+      //
+      // That flattening, and the three inline regexes that used to sit here
+      // (context-overflow / retryable / auth-hint), now live in
+      // `packages/core/src/provider_errors.ts`. They are duplicated there no
+      // longer — and the duplication was not harmless: the outer restart copy
+      // still carried the `\b5\d{2}\b` false-positive that `chatWithRetry`'s own
+      // docstring says was removed, so a session pointed at `qwen-500` retried
+      // a fatal bad-key error five times before surfacing it.
+      const info = classifyProviderError({ error: err })
+      const nested: string = info.message === raw ? "" : info.message
+      const errCode: string = info.code ?? ""
+      if (isContextOverflowError(info) && recovered < MAX_RECOVER && run.session.messages.length > 1) {
         // Reactive overflow recovery: force every compaction stage (prune →
         // truncate → fold head into a marker) and retry once it fits.
         await ensureContextWithinLimit(run, { force: true })
         recovered++
         continue
       }
-      const isRetryable =
-        /429|too many requests|rate.?limit|ECONNRESET|EPIPE|socket hang up|connection closed|ENOTFOUND|ETIMEDOUT|timeout|\b5\d{2}\b/i.test(
-          raw,
-        )
+      const isRetryable = info.retryable
       // #124 — a LOCAL network outage is not a server problem. The retry budget
       // below is sized for a gateway blip (5 tries / 120s); a refused socket
       // means nothing is answering until the interface comes back, so counting
@@ -567,16 +566,33 @@ async function streamAssistant(
           TRANSIENT_RESTART_MAX_MS,
         )
         transientRestarts++
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(resolve, delay)
-          run.signal?.addEventListener(
-            "abort",
-            () => {
-              clearTimeout(timer)
-              reject(new Error("Operation aborted during provider retry."))
-            },
-            { once: true },
-          )
+        // Abort-aware by RESOLVING early, not by rejecting.
+        //
+        // This await sits inside the `catch` that handled the provider failure, so
+        // a rejection thrown from here propagates out of the whole try/catch —
+        // there is no enclosing handler, and it surfaced as an unhandled
+        // rejection rather than a transcript row. Resolving lets the loop's next
+        // `if (run.signal?.aborted)` guard produce the proper `[model/connection
+        // error: Operation aborted during provider retry.]` message the tests pin.
+        //
+        // The listener is also removed on the normal path. `once: true` only
+        // detaches when the signal FIRES, so a successful sleep left a listener
+        // behind on the same signal for the rest of the session — one per retry,
+        // until the warning threshold was crossed.
+        await new Promise<void>((resolve) => {
+          if (run.signal?.aborted === true) {
+            resolve()
+            return
+          }
+          const onAbort = (): void => {
+            clearTimeout(timer)
+            resolve()
+          }
+          const timer = setTimeout(() => {
+            run.signal?.removeEventListener("abort", onAbort)
+            resolve()
+          }, delay)
+          run.signal?.addEventListener("abort", onAbort, { once: true })
         })
         continue
       }
@@ -588,11 +604,9 @@ async function streamAssistant(
       const message: string = raw.trim() || nested.trim() || errCode.trim() || "unknown provider error"
       // 401s are always credentials, never the model: point at the fix
       // instead of leaving "Invalid username or password" as a dead end.
-      const authHint = /401|invalid username or password|invalid api key|incorrect api key|authentication/i.test(
-        message,
-      )
-        ? "\nKey rejected — run `/provider key` to re-check and fix the API key (it pings the real chat endpoint)."
-        : ""
+      // The hint now comes from the classifier, so the transcript row, the
+      // audit log and the TUI banner cannot disagree about what to say.
+      const authHint = providerErrorHint(info) ?? ""
       await run.emit({
         type: "message_end",
         message: {
@@ -748,7 +762,7 @@ async function runOneTool(
       id: permissionId,
       tool: "doom_loop",
       args: call.arguments,
-      reason: `Trayambak detected a repeating tool call loop for ${call.name}. Approval required to continue.`,
+      reason: `Nemo detected a repeating tool call loop for ${call.name}. Approval required to continue.`,
     })
     let approved = false
     if (run.onRequestPermission) {
@@ -762,7 +776,7 @@ async function runOneTool(
     if (!approved) {
       recordGateAudit(run, call.name, "doom-loop-denied")
       const denied: ToolResult = {
-        content: [{ type: "text", text: `Trayambak blocked a repeating tool-call loop for ${call.name}.` }],
+        content: [{ type: "text", text: `Nemo blocked a repeating tool-call loop for ${call.name}.` }],
         isError: true,
       }
       await run.emit({
@@ -942,7 +956,7 @@ async function runOneTool(
       content: [
         {
           type: "text",
-          text: `Trayambak permission denied for ${call.name}: ${why}. This tool is hidden/blocked under the current permission ruleset.`,
+          text: `Nemo permission denied for ${call.name}: ${why}. This tool is hidden/blocked under the current permission ruleset.`,
         },
       ],
       isError: true,
@@ -967,7 +981,7 @@ async function runOneTool(
       reason:
         decision.source === "force-ask"
           ? `Sensitive operation (${decision.rule?.reason ?? "force-ask rule"}) — approval required for ${call.name}`
-          : `Trayambak approval required for ${call.name}`,
+          : `Nemo approval required for ${call.name}`,
       forceAsk: decision.source === "force-ask",
     })
     let approved = true
@@ -984,7 +998,7 @@ async function runOneTool(
     if (!approved) {
       recordGateAudit(run, call.name, "approval-declined")
       const denied: ToolResult = {
-        content: [{ type: "text", text: `Trayambak permission denied for ${call.name}. Tool execution blocked.` }],
+        content: [{ type: "text", text: `Nemo permission denied for ${call.name}. Tool execution blocked.` }],
         isError: true,
       }
       await run.emit({
@@ -1217,21 +1231,49 @@ export function isIncompleteReply(assistant: AssistantMessage): boolean {
  * emitted in that case so the UI can show what was freed).
  */
 async function ensureContextWithinLimit(run: RunConfig, opts?: { force?: boolean }): Promise<boolean> {
-  const result = compactMessages(run.session.messages, policyFromConfig(run.config), {
-    force: opts?.force ?? false,
-    systemPrompt: run.session.systemContext,
-  })
-  if (!result.changed) return false
+  const policy = policyFromConfig(run.config)
+  const systemPrompt = run.session.systemContext
+  const before = run.session.messages
+
+  // Agentic first, deterministic as the guarantee.
+  //
+  // `agenticCompact` never throws and never returns messages that overflow
+  // the window — its failure paths degrade to the deterministic marker, and
+  // its success path still runs the deterministic pass to guarantee the fit.
+  // So the only reason to skip it is when it would be pure latency: a head
+  // too small to be worth a model call. `shouldUseAgenticCompaction` answers
+  // that without spawning anything.
+  let result: AgenticCompactionResult | undefined
+  if (
+    run.config.agenticCompaction !== false &&
+    (opts?.force === true || shouldUseAgenticCompaction(before, policy, { systemPrompt }))
+  ) {
+    result = await agenticCompact(before, policy, {
+      provider: run.provider,
+      signal: run.signal,
+      systemPrompt,
+    })
+  }
+
+  const effective =
+    result?.strategy === "agentic" ? result : compactMessages(before, policy, { force: opts?.force ?? false, systemPrompt })
+
+  if (!effective.changed) return false
   run.session.clear()
-  for (const m of result.messages) run.session.add(m)
+  for (const m of effective.messages) run.session.add(m)
   await run.emit({
     type: "compaction",
     forced: opts?.force ?? false,
-    removedMessages: result.removedMessages,
-    prunedToolOutputs: result.prunedToolOutputs,
-    freedTokens: result.freedTokens,
-    estimatedBefore: result.estimatedBefore,
-    estimatedAfter: result.estimatedAfter,
+    removedMessages: effective.removedMessages,
+    prunedToolOutputs: effective.prunedToolOutputs,
+    freedTokens: effective.freedTokens,
+    estimatedBefore: effective.estimatedBefore,
+    estimatedAfter: effective.estimatedAfter,
+    // Which path produced this. `agentic-failed` means the model was asked
+    // and the deterministic marker answered — visible so a user who sees the
+    // same marker every time knows the summarizer is not working, rather
+    // than assuming there is no summarizer.
+    strategy: result?.strategy,
   })
   return true
 }

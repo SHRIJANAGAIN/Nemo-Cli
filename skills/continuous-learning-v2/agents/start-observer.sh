@@ -16,7 +16,7 @@
 set -e
 
 # NOTE: set -e is disabled inside the background subshell below
-# to prevent trayambak CLI failures from killing the observer loop.
+# to prevent nemo CLI failures from killing the observer loop.
 
 # ─────────────────────────────────────────────
 # Project detection

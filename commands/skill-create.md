@@ -6,7 +6,7 @@ allowed-tools: ["Bash", "Read", "Write", "Grep", "Glob"]
 
 # /skill-create - Local Skill Generation
 
-Analyze your repository's git history to extract coding patterns and generate SKILL.md files that teach Trayambak your team's practices.
+Analyze your repository's git history to extract coding patterns and generate SKILL.md files that teach Nemo your team's practices.
 
 ## Usage
 
@@ -21,7 +21,7 @@ Analyze your repository's git history to extract coding patterns and generate SK
 
 1. **Parses Git History** - Analyzes commits, file changes, and patterns
 2. **Detects Patterns** - Identifies recurring workflows and conventions
-3. **Generates SKILL.md** - Creates valid Trayambak Code skill files
+3. **Generates SKILL.md** - Creates valid Nemo Code skill files
 4. **Optionally Creates Instincts** - For the continuous-learning-v2 system
 
 ## Analysis Steps
@@ -64,14 +64,14 @@ Set `skill-name` once; it defaults to the normalized `{repo-name}-patterns`, and
 the same value must be used for the directory and frontmatter. Validate the
 final `skill-name`, then write the generated skill to
 `<output-dir>/<skill-name>/SKILL.md`. The default project root is
-`.trayambak/skills/`; a global skill uses `~/.trayambak/skills/`.
+`.nemo/skills/`; a global skill uses `~/.nemo/skills/`.
 
 Discovery depends on the root, not only the filename. A custom `--output` is a
 configured skill root only when the active harness is set up to discover it.
 Otherwise, treat the result as an export-only artifact that must be installed
 into a configured root before it can activate.
 
-The directory form is required for discovery: Trayambak Code treats
+The directory form is required for discovery: Nemo Code treats
 `<name>/SKILL.md` as the skill entrypoint. Keep the directory name and
 frontmatter `name:` identical.
 
@@ -179,4 +179,4 @@ For advanced features (10k+ commits, team sharing, auto-PRs), use the [Skill Cre
 
 ---
 
-_Part of [Everything Trayambak Code](https://github.com/affaan-m/trayambak)_
+_Part of [Everything Nemo Code](https://github.com/affaan-m/nemo)_

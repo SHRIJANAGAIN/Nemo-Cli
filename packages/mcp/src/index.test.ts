@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -16,29 +16,29 @@ import { mcpChildEnv } from "./index.js"
  */
 describe("mcpChildEnv", () => {
   it("strips secret-bearing process vars but keeps ordinary env and spec.env (#62)", () => {
-    process.env.TRAYAMBAK_MCP_ENV_KEEP = "visible-thing"
-    process.env.TRAYAMBAK_MCP_ENV_SECRET = "leaked-credential"
+    process.env.NEMO_MCP_ENV_KEEP = "visible-thing"
+    process.env.NEMO_MCP_ENV_SECRET = "leaked-credential"
     try {
       const env = mcpChildEnv({ env: { SPEC_DECLARED: "1" } })
-      expect(env.TRAYAMBAK_MCP_ENV_KEEP).toBe("visible-thing")
-      expect(env.TRAYAMBAK_MCP_ENV_SECRET).toBeUndefined()
+      expect(env.NEMO_MCP_ENV_KEEP).toBe("visible-thing")
+      expect(env.NEMO_MCP_ENV_SECRET).toBeUndefined()
       expect(env.SPEC_DECLARED).toBe("1")
       // Shells and toolchains still resolve in the child (Path casing varies
       // per platform; neither name matches a blocked pattern).
       expect(env.PATH ?? env.Path).toBeDefined()
     } finally {
-      delete process.env.TRAYAMBAK_MCP_ENV_KEEP
-      delete process.env.TRAYAMBAK_MCP_ENV_SECRET
+      delete process.env.NEMO_MCP_ENV_KEEP
+      delete process.env.NEMO_MCP_ENV_SECRET
     }
   })
 
   it("lets spec.env re-declare a name the base filter strips (config wins)", () => {
-    process.env.TRAYAMBAK_MCP_TOKEN_X = "from-process"
+    process.env.NEMO_MCP_TOKEN_X = "from-process"
     try {
-      const env = mcpChildEnv({ env: { TRAYAMBAK_MCP_TOKEN_X: "from-spec" } })
-      expect(env.TRAYAMBAK_MCP_TOKEN_X).toBe("from-spec")
+      const env = mcpChildEnv({ env: { NEMO_MCP_TOKEN_X: "from-spec" } })
+      expect(env.NEMO_MCP_TOKEN_X).toBe("from-spec")
     } finally {
-      delete process.env.TRAYAMBAK_MCP_TOKEN_X
+      delete process.env.NEMO_MCP_TOKEN_X
     }
   })
 })

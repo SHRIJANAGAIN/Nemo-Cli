@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "node:fs"
@@ -23,7 +23,7 @@ afterEach(() => {
 
 describe("marketplace agent name resolution", () => {
   it("installs the advertised frontmatter name even when the file name differs", () => {
-    shelf = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-shelf2-"))
+    shelf = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-shelf2-"))
     fs.mkdirSync(path.join(shelf, "agents"), { recursive: true })
     // File base name ≠ frontmatter name. scanMarketplace advertises "reviewer"
     // (from frontmatter); install looked up agents/reviewer.md and failed.
@@ -34,9 +34,9 @@ describe("marketplace agent name resolution", () => {
     )
     expect(scanMarketplace(shelf)).toContainEqual({ kind: "agent", name: "reviewer", description: "Reviews code" })
 
-    project = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-proj2-"))
+    project = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-proj2-"))
     const res = installMarketplaceEntry(shelf, "agent", "reviewer", project)
     expect(res.ok).toBe(true) // RED: ok:false — "Agent 'reviewer' is not on the shelf."
-    expect(fs.existsSync(path.join(project, ".trayambak", "agents", "reviewer.md"))).toBe(true)
+    expect(fs.existsSync(path.join(project, ".nemo", "agents", "reviewer.md"))).toBe(true)
   })
 })

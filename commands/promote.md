@@ -13,13 +13,13 @@ Promote instincts from project scope to global scope in continuous-learning-v2.
 Run the instinct CLI using the plugin root path:
 
 ```bash
-python3 "${TRAYAMBAK_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" promote [instinct-id] [--force] [--dry-run]
+python3 "${NEMO_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" promote [instinct-id] [--force] [--dry-run]
 ```
 
-Or if `TRAYAMBAK_PLUGIN_ROOT` is not set (manual installation):
+Or if `NEMO_PLUGIN_ROOT` is not set (manual installation):
 
 ```bash
-python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py promote [instinct-id] [--force] [--dry-run]
+python3 ~/.nemo/skills/continuous-learning-v2/scripts/instinct-cli.py promote [instinct-id] [--force] [--dry-run]
 ```
 
 ## Usage
@@ -38,4 +38,4 @@ python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py promo
 3. Otherwise, find cross-project candidates that:
    - Appear in at least 2 projects
    - Meet confidence threshold
-4. Write promoted instincts to `~/.trayambak/homunculus/instincts/personal/` with `scope: global`
+4. Write promoted instincts to `~/.nemo/homunculus/instincts/personal/` with `scope: global`

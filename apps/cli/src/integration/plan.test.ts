@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -15,7 +15,7 @@ import type { Plan, PlanService } from "./plan.js"
 /**
  * plan.ts resolves PLANS_DIR from os.homedir() AT MODULE LOAD, so the temp
  * home is installed before the dynamic import in beforeAll and the real
- * ~/.trayambak/plans.json is never read or written. `import type` above is
+ * ~/.nemo/plans.json is never read or written. `import type` above is
  * erased, so it cannot pull the module in early.
  *
  * Ids are `Date.now().toString(36)`-derived, so every test runs under a fake
@@ -25,7 +25,7 @@ import type { Plan, PlanService } from "./plan.js"
  *
  * HOME stays stubbed for the WHOLE suite: the store path is resolved per call
  * (not captured at import), so a restored HOME would send writes to the
- * developer's real ~/.trayambak. afterAll puts the environment back.
+ * developer's real ~/.nemo. afterAll puts the environment back.
  */
 
 let mod: typeof PlanModule
@@ -45,7 +45,7 @@ function stepTo(time: number): void {
 }
 
 beforeAll(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-plan-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-plan-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -284,8 +284,8 @@ describe("PlanService store round-trip", () => {
 
 describe("plan storage location", () => {
   it("resolves the plans file under the module's home, not the working directory", () => {
-    expect(mod.getPlansFilePath()).toBe(path.join(home, ".trayambak", "plans.json"))
-    expect(path.dirname(mod.getPlansFilePath())).toBe(path.join(home, ".trayambak"))
+    expect(mod.getPlansFilePath()).toBe(path.join(home, ".nemo", "plans.json"))
+    expect(path.dirname(mod.getPlansFilePath())).toBe(path.join(home, ".nemo"))
     expect(path.resolve(home).startsWith(path.resolve(process.cwd()))).toBe(false)
   })
 })

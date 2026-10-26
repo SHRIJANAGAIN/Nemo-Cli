@@ -9,7 +9,7 @@ metadata:
 
 Convene four advisors for ambiguous decisions:
 
-- the in-context Trayambak voice
+- the in-context Nemo voice
 - a Skeptic subagent
 - a Pragmatist subagent
 - a Critic subagent
@@ -165,7 +165,7 @@ Keep it scannable on a phone screen.
 
 ## Persistence Rule
 
-Do **not** write ad-hoc notes to `~/.trayambak/notes` or other shadow paths from this skill.
+Do **not** write ad-hoc notes to `~/.nemo/notes` or other shadow paths from this skill.
 
 If the council materially changes the recommendation:
 

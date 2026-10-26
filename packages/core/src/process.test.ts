@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * ProcessManager behaviour — the exec path behind the `bash` tool.
@@ -82,7 +86,7 @@ describe("ProcessManager.spawn output capture", () => {
   it("reports a spawn failure as exit code 1", async () => {
     const pm = new ProcessManager()
     const handle = await pm.spawn({
-      command: ["trayambak-binary-that-does-not-exist-xyz"],
+      command: ["nemo-binary-that-does-not-exist-xyz"],
       cwd: process.cwd(),
       env: childEnv(),
     })

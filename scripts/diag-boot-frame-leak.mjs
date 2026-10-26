@@ -1,7 +1,7 @@
 /* Boot-time frame-leak probe: the idle WelcomeScreen repaints every 500ms
  * (clock + logo phase). If those repaints APPEND instead of rewriting in
  * place, the whole frame stacks in scrollback once per tick ("same structure
- * copy-paste ho raha"). This boots the REAL TrayambakApp against a fake TTY,
+ * copy-paste ho raha"). This boots the REAL NemoApp against a fake TTY,
  * captures raw stdout for a few seconds and reports whether each repaint
  * re-prints the full frame or erases first.
  *
@@ -18,8 +18,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
 
-process.env.TRAYAMBAK_HOME = repo
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_HOME = repo
+process.env.NEMO_GLYPHS = "unicode"
 
 const ROWS = Number(process.argv[2] ?? 40)
 const COLS = Number(process.argv[3] ?? 120)
@@ -48,13 +48,13 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 const { loadConfig } = await import(
   pathToFileURL(path.join(repo, "dist", "apps", "runtime", "src", "config.js")).href
 )
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: { ...loadConfig(), baseUrl: "http://127.0.0.1:9/api", apiKey: "k", model: "test/m", cwd: repo },
     modelName: "test/m",
     permissionMode: "ask",
@@ -68,10 +68,10 @@ const log = (...a) => process.stdout.write(a.join(" ") + "\n")
 
 await wait(1200)
 const bootBytes = raw.length
-const bootComposer = (raw.match(/Ask Trayambak to do anything/g) ?? []).length
+const bootComposer = (raw.match(/Ask Nemo to do anything/g) ?? []).length
 await wait(4000)
 
-const composerCount = (raw.match(/Ask Trayambak to do anything/g) ?? []).length - bootComposer
+const composerCount = (raw.match(/Ask Nemo to do anything/g) ?? []).length - bootComposer
 const logoCount = (raw.match(/⣿/g) ?? []).length
 const borderCount = (raw.match(/╭─/g) ?? []).length
 const clearScreen = (raw.match(/\x1b\[2J/g) ?? []).length
@@ -103,7 +103,7 @@ screenRows.slice(-6).forEach((r, i) => log(`${String(i).padStart(3, " ")}│${r}
 // Dump the exact byte stream so the conhost replay probe (diag-conhost-replay.ps1)
 // can push it through a REAL Windows console — the only place the fullscreen-
 // clear mask vs incremental-erase difference shows up.
-const dump = path.join(process.env.TEMP ?? ".", "trayambak-boot-bytes.bin")
+const dump = path.join(process.env.TEMP ?? ".", "nemo-boot-bytes.bin")
 fs.writeFileSync(dump, Buffer.from(raw, "binary"))
 log(`byte stream dumped: ${dump} (${raw.length} chars)`)
 

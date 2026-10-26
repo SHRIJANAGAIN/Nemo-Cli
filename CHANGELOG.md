@@ -1,12 +1,287 @@
 # Changelog
 
-All notable changes to trayambak are documented here. The format is based on keeping an
+All notable changes to nemo are documented here. The format is based on keeping an
 `Unreleased` section; released sections are immutable.
 
 ## [Unreleased]
 
+- **The CLI is now `nemo`, not Trayambak.** Every package, binary, env var,
+  on-disk path (`~/.nemo/`), slash command, docs page and help string uses the
+  nemo name. The published npm tarball is `@shrijan/nemo-cli`; the source
+  checkout keeps `nemo-code`. The `trayambak` name, the SKT AI LABS brand and
+  the old `SKT-ST-X-0-3B` model id are gone.
+
+- **Licensed under Apache-2.0 with no copyright line.** `LICENSE` carries the
+  verbatim Apache-2.0 text and every source file carries the standard
+  `Licensed under the Apache License, Version 2.0` header — without a
+  `Copyright …` line. Bundled third-party OSS notices are unchanged:
+  `bin/LICENSE-LLVM-OpenMP`, `data/licenses.json` and
+  `THIRD_PARTY_NOTICES.md` still list their upstream licenses.
+
+- **One gateway: NVIDIA plus local endpoints.** The `nemo-gateway` service and
+  the third-party cloud backends are deleted. `PROVIDER_CATALOG` now has five
+  entries — `nvidia`, `nvidia-nim` (same `NvidiaProvider`), `ollama`,
+  `llamacpp` and `custom` — and the 401 hints, cost table, `/provider` picker,
+  `/models` fallback list and docs are trimmed to match. `NVIDIA_API_KEY` /
+  `nvapi-…` from build.nvidia.com is the only cloud credential.
+
+- **Telemetry is gone entirely.** The `packages/telemetry` package, the px HTTP
+  sink (`packages/tui/src/ink-app/px-telemetry.ts`), the `nemo.telemetry`
+  VS Code setting and the `nemo/10-upload/` uploader (TypeScript + Python) are
+  all deleted. The CLI no longer collects or transmits usage, crash or
+  performance data: there is no sink, no opt-in switch and no upload path.
+  `packages/core/src/analytics.ts` stays — it is in-memory only and feeds the
+  local `/stats` view. The licence check is unaffected and is still the one
+  documented path that sends data (see `PRIVACY.md`).
+
+- **The offensive security suite is gone.** The pentest toolset, its execution
+  gate, the pentest plan gate on the licence, and the `/license/usage` and
+  `/admin/usage` endpoints that reported tool names and scan targets are all
+  removed. Nothing in the tree scans a target any more. Developer mode still
+  works and still verifies a licence online; it just no longer unlocks an
+  attack surface.
+
+- **Harness improvement is now autonomous — no command required.** When an
+  interactive session ends after real work (a substantive request and at
+  least one tool call), `apps/runtime/src/agent/session-improve.ts` writes
+  the session's request to `~/.nemo/harness/pending/` and spawns a
+  detached `harness auto <task-file>` child before the TUI exits. The child
+  runs the existing recursion at `k=1`/parallel over a bounded copy of the
+  workspace (build output, caches and checkpoints are skipped), and adopts
+  the winning harness only when the run filed a durable lesson. The next
+  session reads it back automatically: `improved-harness.ts` renders the
+  active harness plus the newest lesson indexes into the system prompt on
+  every refresh, so `/harness apply` is no longer part of the loop. New
+  config `harnessAuto` (default true) and the `NEMO_DISABLE_HARNESS_AUTO`
+  kill switch; `NEMO_HARNESS_AUTO=0` also disables it. Manual control
+  stays available as `nemo harness <show|init|run|lessons|apply>` and
+  the `/harness` (aliases `hn`, `impro`) slash command.
+
+- **The same child now updates the CLI itself.** `apps/runtime/src/update/
+  self-update.ts` runs after the improvement in the detached session-end
+  process — the one moment a git checkout can be updated safely, because the
+  TUI is already gone. npm installs keep the existing patch auto-apply; git
+  checkouts are fast-forwarded (`git pull --ff-only` after `git fetch`) and
+  rebuilt only when the tree is clean, so local work is never stashed,
+  reset or discarded. At most one attempt per 24h (`~/.nemo/update/
+  last-auto.json`), `autoupdate: false | "notify"` and
+  `NEMO_DISABLE_AUTOUPDATE` still apply, every outcome is logged to
+  `~/.nemo/harness/auto.log`, and failures never throw.
+
+- **Idle screen shows what `impro` learned.** `HarnessStatusLine` (welcome
+  screen, one row: "✦ impro · N lessons · adopted 3h ago", or "◌ impro ·
+  learning from the last session" while a job is queued) types itself in and
+  runs a short light sweep on adoption, then settles — it never repaints
+  forever. The banner gains a diagonal light sweep over the existing
+  twinkle. The row only renders when the viewport has slack for it, keeping
+  the welcome frame an exact fit.
+
+- **More motion on the home screen.** The footer's idle status mark and the
+  composer's placeholder star twinkle through real glyphs (`✦ → ✧ → · → ✧`)
+  on the 900 ms breathe instead of changing colour only; the frame outline
+  breathes silver while the home screen is idle; and the Directory line
+  carries a twinkling lead-in on the 500 ms beat. Because the mark itself
+  changes, the animation survives colourless output (pipes, `NO_COLOR`, test
+  streams). The starfield fill is off on request — the welcome background is
+  a plain themed fill again — and the transcript view keeps its static edge
+  and zero-byte idle contract.
+
+- **Fixed: idle/live flip crashed the TUI with a hooks-order error.**
+  `useTravel` called `useMotionLevel` behind `active && …`, so the hook count
+  changed whenever a box went idle↔live; React mis-aligned the surrounding
+  hooks and threw inside `useSyncExternalStore` ("change in the order of
+  Hooks called by NemoApp"). The level hook now runs unconditionally on
+  every render, pinned by a rerender regression test.
+
+- **The harness can now improve itself (`/harness`).** A new recursive
+  harness subsystem (`packages/core/src/harness/`) makes the system around
+  the model — system prompt, guardrails, memory, tool guidance, skills,
+  subagents, scripts, plugins — something the agent can refine on its own.
+  Task-level recursion runs Propose → Probe → Compose: candidates are
+  proposed along two disjoint dimensions (how the agent works vs. what
+  the work IS), each is probed against the same task, and the contrasting
+  executions are composed into a refined harness; `parallel` explores
+  width, `sequential` explores depth from the previous checkpoint.
+  Harnessing-level recursion keeps the harness that was adopted and the
+  lesson it taught, and reads them on the next task — a lesson is only
+  stored when it carries a cue, a lesson and evidence. Selection is blind
+  (outputs only, anonymised), never abstains, and falls back instead of
+  raising. The budget identity (4k rollouts, 3k sessions per task) is
+  enforced. The engine is model-agnostic — every model call goes through
+  ports — so the whole shape is deterministic in tests. The CLI command
+  exposes `show`, `init`, `run`, `lessons` and `apply`; the agent now
+  accepts a `harnessBlock` so a candidate harness can shape a real run.
+  Adapted from Harness² (Copyright 2026 Google LLC, Apache-2.0) — see
+  `packages/core/src/harness/NOTICE.md`.
+
+- **Promo site (`promo/`).** The product film and a branded landing page
+  live together: a paper-cream page with the brand shapes, the film's own
+  video as the hero, the use cases that need no code, the surfaces that
+  actually ship, the safety story and the install card. Brand tokens live
+  in `promo/brand.css` so the site and the film share one system.
+
+- **Motion reel (`assets/motion/`).** A 42s, 1920x1080 / 30fps product
+  film for Nemo, rendered deterministically by
+  `scripts/make-motion-video.mjs` (@napi-rs/canvas + ffmpeg). Motion-graphics
+  direction: cream paper, structured geometric shapes in yellow/green/sky,
+  kinetic type with a magenta accent word, fanned product cards, flat
+  Linux-style buttons (square corners, 1px border, monospace label), a live
+  dark terminal card (typed prompt, tool chips, approval gate, the real
+  status bar) and a halftone-dotted close. Scenes cover the hero, the
+  terminal, the four surfaces that actually ship (CLI, `nemo serve`,
+  `nemo mcp`, the provider switch), non-coder
+  use cases, the real permission modal and the install card. Ships the MP4, a
+  GIF cut, poster frames and `preview.html`. No build-time dependency is
+  added to the package — the script resolves ffmpeg and canvas from the
+  environment.
+
+- **First-party px telemetry sink (`telemetry.sktailabs.in`).** New
+  `PxHttpTelemetry` posts `{"events":[{site_id, key, kind,
+  platform:"desktop", path, device, visitor, props}]}` as `text/plain`
+  (preflight-free, same shape for extension `sendBeacon` later). Ships ONLY
+  allowlisted lifecycle types with scalar props (tool names, counts,
+  durations, booleans) through `redactPayload`; message text, thinking,
+  tool args/results, prompts, paths and message arrays never leave the
+  process (pinned by hostile-payload tests). Visitor = the anonymous
+  install UUID from `~/.nemo/machine-id`; device = os/arch/node only
+  (no hostname, user, cwd, IP). Silent unless `NEMO_TELEMETRY_SITE_ID`
+  + `_KEY` are set; `NEMO_TELEMETRY=0` kills everything; failures drop
+  the batch without throwing or retrying. TUI wires one capture per agent
+  event with batch-per-turn flush. Endpoint overridable via
+  `NEMO_TELEMETRY_ENDPOINT`.
+
+- **Pet dock removed.** The composer-top buddy is gone (dock, half-block
+  renderer and their tests with it); the budget line is back to its old
+  shape. The `ink-app/bloub/` data layer (expressions, moods, colors)
+  stays — data only, nothing displayed.
+
+- **ASCII-art sidekick removed.** The baked Bloub sidekick beside the
+  wordmark is gone (its loader, both baked frames, the generator script and
+  its tests with it): the welcome lockup is the wordmark alone again, and
+  the background-paint guard is green. The `ink-app/bloub/` data layer
+  (expressions, moods, colors) stays — data only, nothing displayed.
+
+- **Bloub data layer extracted (`ink-app/bloub/`).** All 16 expressions
+  (verbatim eye geometry + the expression→state animation map), the full
+  mood lexicon (English + Hindi-mix + CJK, verbatim scoring), and all 23
+  customizer colors incl. the reference blue #1b4fe8 — each file carrying
+  its MIT credit (Copyright (c) 2026 Jérémy Perret). Data only, no wiring:
+  12 new tests pin counts, the anger/sadness mirror-tilts and the tie rules.
+
+- **Resize settle now rebuilds after big growth jumps (maximise fix).**
+  Slow stretches repainted inside a tracking window and stayed clean, but a
+  maximise (or super-fast stretch) jumps dozens of cells at once while the
+  repaint outruns the window manager: the new-size frame paints into the
+  still-old window and the overflow scrolls into scrollback, where no blank
+  can reach it. Single-jump growth past 32 columns / 16 rows now latches the
+  same damage as a shrink, so the settle wipes viewport+scrollback and
+  reprints the transcript once quiet (rows-only jumps take the quiet path
+  with no immediate blank). Slow drags, same-size echoes and
+  minimise-restores stay untouched — no wipe, no flicker.
+
+- **Manual geometry pin (`NEMO_COLUMNS` / `NEMO_ROWS`).** Some
+  terminals report a pty size wider than their visible window (seen live:
+  Termius wraps the frame's right walls away and stacks clones on every
+  repaint, while conhost stays clean on the same build) — and no in-process
+  call can see the true width when the pty itself lies. An explicit pin now
+  wins per axis inside `readLiveWindowSize`, so it flows through the shared
+  cache into Ink's own layout too: set it to the VISIBLE width and the frame
+  fits. Malformed or sub-floor values are ignored; fully-pinned axes survive
+  even a throwing syscall. Unset means byte-identical behavior to before.
+
+- **Turn-end full re-render kills streaming clones.** Streaming stacks
+  intermediate live frames terminal-side (each repaint grows the frame;
+  anything past the viewport scrolls and stays), so every grown turn ended
+  with stale full-frame copies above the live frame. A grown turn now ends
+  with a viewport blank + scrollback clear + transcript reprint from item 0
+  — one clean frame, same byte sequence as the shrink-settle rebuild, in the
+  same load-bearing order (wipes first, reprint after). Quiet turns (slash
+  feedback, denials, errors before any row) skip it; pipes/tests (no live
+  owner) get no bytes and no remount. The growth latch lives in the new
+  `turn-finalize.ts`, so App.tsx stays under its 4000-line cap.
+
+- **System prompt stopped promising `/plan` switches modes.**
+  `buildPlanningSection()` and `buildSlashCommandsSection()` told the model
+  `/plan` enters plan mode ("mutations are denied until you approve the
+  plan"), but `/plan` on every surface (TUI fallthrough, headless registry,
+  `nemo plan` CLI) is the multi-step plan-FILE tracker — the mode never
+  changed, so mutations stayed allowed while the model told the user they
+  were denied. The `/mode` line also named modes no `/mode` accepts
+  (coder/planner/browser). Prompt now matches observed behavior: Shift-Tab
+  or `/mode plan` enters plan mode, `/plan` manages plan files, `/mode` =
+  read-only | plan | ask | auto-approve | full-access.
+
+- **Opt-in idle breathe for footer + composer (`NEMO_IDLE_ANIM=1`).**
+  At rest the TUI still writes zero bytes by default (the idle-silence
+  contract the Windows scrollbar and native drag depend on). With the flag
+  on, the footer border + status dot drift steel-to-silver on a slow
+  ~0.9s breathe and the empty composer glows its prompt, shimmers its
+  caret color, and twinkles a silver star beside the placeholder — same
+  metal as the logo starfield. Typing, loading, or any live turn kills it
+  instantly; flag off stays byte-identical.
+
+- **Transcript heap guard now sees subagent card prompts.** `foldTranscript`'s
+  soft-cap accounting (`rowBytes`) counted `content`/`thinking`/`result`/
+  `subagentDetail` but missed `subagentPrompt` — the full task prompt retained
+  on every subagent card — so a prompt-heavy transcript could hold megabytes
+  the 1.5MB cap read as "under limit" and no tool payloads folded. The prompt
+  bytes now count toward the cap (the card still renders them intact; the cap
+  just tips the fold pass for old tool rows). Red→green test in
+  `transcript-fold.test.ts`.
+
+- **Installer banners go silver + stronger star twinkle.** The
+  `skt.sktailabs.in` one-line installers (`install.ps1` / `install.sh`) shimmer
+  `T R A Y A M B A K` in steel-to-silver now instead of violet-to-cyan —
+  same wave mechanics, brand metal. The TUI twinkle breathes harder too
+  (±34%), so the denser starfield reads alive. No rival-company names in
+  these notes.
+
+- **REPL crash reasons are now captured instead of scrolling away.** The Ink
+  REPL child's stderr used to inherit the console raw, so a fatal message tore
+  through the TUI frame and was never written anywhere — five `exited with
+  code 134` crashes (2026-09-30 → 10-07) stayed undiagnosed because the one
+  line naming the reason (`FATAL ERROR: …`) evaporated. stderr is now piped
+  and tee'd to the launcher's stderr (same live rendering), with the tail
+  retained in memory (256KB cap) and appended — redacted through
+  `redactPayload` — to `~/.nemo/logs/repl-stderr.log` on child exit with
+  an exit-code header (same `NEMO_LOG_FILE=off` kill switch and 1MB
+  rotation as `nemo.log`). Non-zero exits now name the capture file in
+  the fatal log line. Measured on this box: `process.abort()` exits 134, a
+  pure JS-heap OOM also exits 134 (V8's fatal abort — confirmed both with and
+  without `--max-old-space-size`, matching the 10-07 12:32 crash message
+  "JavaScript heap out of memory" at 4058/4090 MB), uncaught throws exit 1 —
+  so the fatal line — heap, native, or V8 check — now lands in the capture
+  instead of scrolling away.
+
+- **Alt-screen mode is now scrollable in-app: PageUp/PageDown +
+  mouse wheel page a parked transcript window, footer shows the distance.**
+  Alternate screen has no scrollback, so native wheel/scrollbar die there —
+  history was reachable only by leaving. App now owns a parked window
+  (`scrollBack` offset, `endIdx` window end): keys and wheel move it through
+  the existing tested scroll-math (clamp + growth anchor, so appended rows
+  never drag the reading window), submit snaps back to live, and the footer
+  `↑ N` chip shows hidden rows (it never rendered before — now wired, only in
+  alt mode). Mouse reporting turns on only in alt mode (the generation gate
+  stands down there so exactly one owner writes the sequences) and off again
+  on unmount plus every exit path. Inline mode is byte-identical: keys stay
+  inert, reporting stays off, auto-scroll only. Pinned by split/window unit
+  tests, parked-window render tests, gate + bus + wiring tests.
+
+- **Startup clear no longer erases scrollback, and alt-screen is a strict
+  opt-in again (default = inline).** The inline boot now emits only `2J` +
+  `H` — no ED3 — so the pre-launch shell history (banner, prompt, earlier
+  sessions) stays intact above the app forever;
+  `ink-repl-startup-clear.test.ts` pins the absence of `[3J` in every
+  startup write. `resolveAltScreen` defaults to OFF again: default runs are
+  inline because scrollback IS the transcript, with `--alt-screen` /
+  `NEMO_ALT_SCREEN=1` as the explicit skt-style opt-in and
+  `--no-alt-screen` / `NEMO_ALT_SCREEN=0` still accepted. The only
+  scrollback clear left in the product is the resize guard's shrink-settle,
+  which reprints the transcript from item 0 after clearing. Pinned by the
+  startup-clear contract tests and the default-off resolver tests.
+
 - **Welcome screen is now wordmark + starfield: the T is gone, silver stars
-  twinkle above TRAYAMBAK CLI.** The hexagon ring and T monogram are retired —
+  twinkle above NEMO CLI.** The hexagon ring and T monogram are retired —
   the wordmark alone carries the brand, and the S1-TITANIUM identity lives in
   metal and stars. The sky is a seeded scatter (same stars every regeneration;
   an unseeded field would wander and fail its own tests), tiered dim steel to
@@ -17,16 +292,16 @@ All notable changes to trayambak are documented here. The format is based on kee
   metal. Pinned by starfield composition tests, twinkle-gradient tests, and a
   Directory-label render test.
 
-- **Resize settle now clears scrollback and reprints the transcript (pi's
-  `fullRender(true)`, ported).** Viewport blanks alone cannot reach scrollback
-  damage: reflow splits and one over-tall paint push rows there terminal-side,
-  before any app paint. So after any shrink settles, the guard wipes viewport
-  AND scrollback (ED3) and App remounts Static via the existing `staticEpoch`
-  — the transcript reprints from item 0, history survives clean instead of
-  cloned. Order is load-bearing (paint-before-clear would be wiped, clear
-  without reprint would eat history); growth-only settles stay quiet.
-  Framework-free bridge (no props/events across the mount boundary), same
-  no-owner stand-down as the blank, debounced by the existing settle.
+- **Resize settle now clears scrollback and reprints the transcript.** Viewport
+  blanks alone cannot reach scrollback damage: reflow splits and one over-tall
+  paint push rows there terminal-side, before any app paint. So after any
+  shrink settles, the guard wipes viewport AND scrollback (ED3) and App
+  remounts Static via the existing `staticEpoch` — the transcript reprints
+  from item 0, history survives clean instead of cloned. Order is load-bearing
+  (paint-before-clear would be wiped, clear without reprint would eat
+  history); growth-only settles stay quiet. Framework-free bridge (no
+  props/events across the mount boundary), same no-owner stand-down as the
+  blank, debounced by the existing settle.
 
 - **Fixed: minimize-to-taskbar leaves permanent viewport residue.** Minimizing
   transiently reports 0x0 / letterbox sizes; accepting one collapses every
@@ -36,29 +311,29 @@ All notable changes to trayambak are documented here. The format is based on kee
   too-big paint into a hidden window is harmless; a too-small one poisons
   everything after it). Pinned by floor unit tests.
 
-- **Fixed (top clone): the TUI now runs on the terminal's alternate buffer by
-  default, codex-style — `--alt-screen` / `TRAYAMBAK_ALT_SCREEN` to force it,
-  `--no-alt-screen` / `TRAYAMBAK_ALT_SCREEN=0` to opt out.** This is the
-  answer to "why does codex never clone": the alternate buffer has no
-  scrollback, so resizes, over-height paints and stale erases can only ever
-  disturb the live viewport — clones are structurally impossible there, no
-  per-case fixes needed. Reproduced both sides with
-  `scripts/diag-boot-clone.mjs`: the inline run's width shrink strands a
-  full frame (37 rows) into scrollback where no `2J` can reach it, while the
-  same run under `?1049h` ends with the primary scrollback untouched (0
-  rows) and exactly one frame on screen. The price, stated plainly: with no
-  scrollback the device scrollbar and wheel go dead for the session, and
-  history that leaves the frame cannot be scrolled back to (rollouts stay
-  listable/resumable). Inline mode — terminal scrollback, clones included —
-  is reachable only by explicit opt-out.
+- **Top clone: alternate screen is a strict OPT-IN, inline stays the default
+  (`--alt-screen` / `NEMO_ALT_SCREEN=1` to enable; default runs keep
+  terminal scrollback).** The alternate buffer answers "why does Nemo clones
+" — no scrollback, so resizes, over-height paints and stale erases
+  can only disturb the live viewport — but scrollback IS the transcript, so
+  it may not be the default. Clone-freedom for the default inline path is
+  enforced by the resize guard: never-throttled blank on width shrink,
+  rehome on rate-limited grow events, and a shrink-settle that clears
+  scrollback and reprints the transcript from item 0 (entry above).
+  Verified with `scripts/diag-boot-clone.mjs` on both sides: inline
+  `--prod --shrink` ends with 0 scrollback rows and exactly one frame, and
+  the same run under `?1049h` is equally clean. The alternate buffer's
+  price, stated plainly: the device scrollbar and wheel go dead for the
+  session, and history that leaves the frame cannot be scrolled back to
+  (rollouts stay listable/resumable).
   Wiring: `--alt-screen` / `--no-alt-screen` on run/chat/resume (tri-state —
-  absent inherits ambient env, else the resolver's default ON), translated to env for the spawned REPL;
-  direct `ink-repl` users set the env var. Entry/exit is TTY-gated (never into
-  a pipe), skips the scrollback-nuking startup clear (fresh blank buffer),
-  always restores the main buffer plus caret — normal exit, crash
-  (uncaughtException/unhandledRejection print then exit 1), and SIGINT/SIGTERM
-  — so a killed run can never strand the shell in the alt buffer. Pinned by
-  resolver unit tests and entry-point source assertions.
+  absent inherits ambient env, else the resolver's default OFF), translated
+  to env for the spawned REPL; direct `ink-repl` users set the env var.
+  Entry/exit is TTY-gated (never into a pipe), skips the startup clear
+  (fresh blank buffer), always restores the main buffer plus caret — normal
+  exit, crash (uncaughtException/unhandledRejection print then exit 1), and
+  SIGINT/SIGTERM — so a killed run can never strand the shell in the alt
+  buffer. Pinned by resolver unit tests and entry-point source assertions.
 
 - **Known issue: PowerShell 5.1 under Windows Terminal never delivers window
   resizes to console apps.** Verified live: stretching the window emits zero
@@ -71,17 +346,6 @@ All notable changes to trayambak are documented here. The format is based on kee
   CLI from `cmd.exe` (verified) or PowerShell 7. The 250ms syscall poll and
   render-time cache refresh stay in place — they converge instantly on hosts
   where the syscall moves, and are silent no-ops elsewhere.
-
-- **New: Trayambak Desktop — an Electron chat app over the same Agent the
-  CLI, TUI, and ACP server run.** `npm run desktop` builds and launches it
-  (`npm run desktop:quick` when dist is current): context-isolated renderer
-  with no Node access, a typed IPC bridge (single-flight prompts,
-  cancel-aborts-the-run, one agent per workspace with a folder picker),
-  assistant text rendered as markdown while tool output stays verbatim,
-  links protocol-limited, `window.open` denied to the system browser. The
-  bridge contract and the exact renderer markdown bytes the app loads are
-  unit-tested with no Electron in the test loop; postbuild stages the
-  renderer into dist/ so publish ships it.
 
 - **Fixed: ACP `session/cancel` never aborted the run, and an idle cancel
   poisoned the next prompt.** Attack-round finding: the handler only set a
@@ -103,7 +367,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   home-dir dependency AGENTS.md forbids. It now pins an explicit
   project-level `baseUrl` (which also dodges `sanitizeConfig`'s trailing
   `/v1` strip), sandboxes HOME/USERPROFILE for the whole file instead of
-  only during import, and clears ambient `TRAYAMBAK_HOME` through the
+  only during import, and clears ambient `NEMO_HOME` through the
   existing env-key loop.
 
 - **Fixed: resize clones on consoles where 'resize' never fires.** Verified
@@ -191,7 +455,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   still be dropped by the renderer.
 
 - **The logo is now a full lockup: hexagon + a complete T monogram, with the
-  TRAYAMBAK CLI wordmark in silver alongside.** The wordmark is set from a
+  NEMO CLI wordmark in silver alongside.** The wordmark is set from a
   hand-drawn 5-row bitmap font and emitted as runs of full blocks — no
   sampling, so the letterforms are crisp by construction rather than crisp by
   luck. It is silver (an all-metal palette, lit from the upper right), replacing
@@ -255,7 +519,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   flagged `App.js -> ../../../../apps/runtime/*`, and those are fine.
 
 - **The logo is drawn from maths now, not from a photo — the dotted,
-  unstructured look is gone for good.** `skt-icon.jpeg` is retired as the
+  unstructured look is gone for good.** `nemo-icon.png` is retired as the
   source. Rasterising it could never ship a clean mark, and the reason was
   structural rather than a tuning problem: JPEG is lossy and resampling adds
   more error, so every pixel on the silhouette rim is genuinely uncertain and
@@ -322,7 +586,7 @@ All notable changes to trayambak are documented here. The format is based on kee
 
 - **The welcome status block shows the folder NAME, not the path, and no longer
   repeats the model.** `shortPath` now returns the direct directory name
-  (`trayambak`, not `C:\Users\engli\trayambak`) — the footer chip already
+  (`nemo`, not `C:\Users\engli\nemo`) — the footer chip already
   carries the full context, so the path was noise in a narrow column. The
   `modelName` prop and its line under the logo are gone for the same reason:
   the footer names the active model on every frame. Under the logo: live clock,
@@ -343,7 +607,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   unchanged. Pinned by 24 logo tests plus the theme-picker layout probes,
   which now look for braille instead of half-blocks.
 
-- **Logo rebuilt from `skt-icon.jpeg`, and the black box around it is gone.**
+- **Logo rebuilt from `nemo-icon.png`, and the black box around it is gone.**
   Pipeline is `scripts/make-logo-grid.ps1` (pixel dump — PowerShell only because
   System.Drawing is the only decoder here) feeding `scripts/make-logo.mjs`
   (silhouette + colour, in Node where it is testable): 64 cols × 14 rows, two
@@ -370,19 +634,18 @@ All notable changes to trayambak are documented here. The format is based on kee
   non-black theme instead of defaulting to `#000000`.
 - **Default provider is now Google (`google` / `gemini-2.5-flash`).** Fresh
   installs route to `https://generativelanguage.googleapis.com/v1beta` with
-  `TRAYAMBAK_API_KEY`. Existing configs with an explicit `provider` are
-  untouched — switch with `trayambak config set provider google`.
-- **Help header brands SKT AI LABS** (`TRAYAMBAK  coding agent by SKT AI
-  LABS`), replacing the third-party "powered by" tagline.
+  `NEMO_API_KEY`. Existing configs with an explicit `provider` are
+  untouched — switch with `nemo config set provider google`.
+- **Help header brands Shrijan** (`NEMO  coding agent by Nemo Code`), replacing the third-party "powered by" tagline.
 - **No slash command hides anymore.** The command palette only listed
   registry-dispatched commands and `/help` only listed the static set, so
   `/provider` never reached the palette and `/company` never reached `/help`.
   Both surfaces now merge the two sources append-only (`mergeSlashRows`).
 - **Welcome screen: a real status block instead of the static banner line,
-  and the boot cinematic is off.** The "Welcome To Trayambak CLI" text is
+  and the boot cinematic is off.** The "Welcome To Nemo CLI" text is
   replaced by a left-aligned status block under the logo: live
   `Tue Oct 6 15:42:07` clock (breathing through the brand hues), the active
-  model, and the shortened workspace path (`C:/.../engli/trayambak`). Date and
+  model, and the shortened workspace path (`C:/.../engli/nemo`). Date and
   path shortening are pure + ASCII-only (mojibake guard for legacy console
   codepages), pinned by 8 unit tests. The eye/title/codename boot splash no
   longer plays on launch (`showBootCine = false`; `BootCine.tsx` is kept and
@@ -426,9 +689,9 @@ All notable changes to trayambak are documented here. The format is based on kee
   render test (`/pro` → `/provider`, `/compa` → `/company`).
 - **Default provider is now Google (`google` / `gemini-2.5-flash`).**
   Fresh installs route to `https://generativelanguage.googleapis.com/v1beta`
-  with `TRAYAMBAK_API_KEY` as the key. Existing configs with an explicit
+  with `NEMO_API_KEY` as the key. Existing configs with an explicit
   `provider` are untouched — switch with
-  `trayambak config set provider google` (plus model/baseUrl as needed).
+  `nemo config set provider google` (plus model/baseUrl as needed).
 
 ## [1.0.0-S1-TITANIUM] — S1 "TITANIUM"
 
@@ -440,7 +703,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   the same 400 for unrecognized arguments, and `OpenAICompatibleProvider`'s
   own docstring promises "never provider-specific fields" while inheriting
   the key. So the key is now default-off everywhere it can kill a call, with
-  explicit operator opt-in (`TRAYAMBAK_PROMPT_CACHE_KEY_ENABLED=1`) for
+  explicit operator opt-in (`NEMO_PROMPT_CACHE_KEY_ENABLED=1`) for
   gateways that document it. Pinned by wire tests (strip by default on
   NVIDIA cloud + OpenAI + loopback; restore on opt-in; key mechanics
   unchanged under opt-in).
@@ -503,7 +766,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   NVIDIA's own endpoints (`nvidiaReasoningParamsAllowed`), so strict
   gateways can't 400 on the NVIDIA-dialect field.
 - **Company runs on its own model (optional; default is one model for
-  everything)**: `companyModel` config (`TRAYAMBAK_COMPANY_MODEL`) sends
+  everything)**: `companyModel` config (`NEMO_COMPANY_MODEL`) sends
   only company-employee subagents to that model — unset means the session
   model does all the work, no rebuild churn. Explicit per-task models still
   win; specificity order is explicit > company > `subagent_model`. The
@@ -515,7 +778,7 @@ All notable changes to trayambak are documented here. The format is based on kee
   `Permissions-Policy` denying camera/mic/geolocation (+extras). Oversized
   URLs (>2KB → 414) and header blocks (>8KB → 431) are rejected up front,
   and `/.well-known/security.txt` publishes the vulnerability contact
-  (`support@sktailabs.in`, overridable via `TRAYAMBAK_SECURITY_CONTACT`).
+  (`support@sktailabs.in`, overridable via `NEMO_SECURITY_CONTACT`).
 
 ## [0.6.7]
 
@@ -541,8 +804,8 @@ All notable changes to trayambak are documented here. The format is based on kee
   silently split `C:\Program Files\…` at argv[0].
 
 - **Home config no longer mistaken for a repo config**: launching with the
-  working directory set to `~` made `<cwd>/.trayambak/config.json` and
-  `~/.trayambak/config.json` the same file, so the #93 guard stripped the
+  working directory set to `~` made `<cwd>/.nemo/config.json` and
+  `~/.nemo/config.json` the same file, so the #93 guard stripped the
   user's own `permissions.uiMode: "full-access"` and warned them to set it
   in the very path it was ignoring (status bar stayed `Mode: ASK`). The
   trust check now exempts the real home config (case-insensitive on
@@ -584,11 +847,11 @@ All notable changes to trayambak are documented here. The format is based on kee
   - `npm.cmd` spawned shell-less = EINVAL on Windows, so every auto-apply
     died before npm ran (proven on-machine) — the apply now spawns through
     a shell like `upgrade` always did.
-  - A stale `TRAYAMBAK_HOME` pointing at a source checkout hijacked root
+  - A stale `NEMO_HOME` pointing at a source checkout hijacked root
     detection for global installs (wrong version compared, wrong package
     name for install) — the running module's root wins now, env is fallback.
   - Failed applies were silent — the TUI now shows one `Auto-update
-failed … run trayambak upgrade` line instead of nothing.
+failed … run nemo upgrade` line instead of nothing.
 - **Run-until-complete transient resilience (ECONNRESET stop fix)**:
   turn-level restarts 2 → 5 with exponential backoff off the retry base
   (≈23s patience at defaults) plus a 120s wall-clock budget and
@@ -626,22 +889,22 @@ failed … run trayambak upgrade` line instead of nothing.
   entries stay permanently listed in the chooser (never hidden).
 - **`/company`: a whole agent collection as one company**: an external
   library of `.md` personas in division dirs (e.g. `agency-agents-main`,
-  18 departments / 282 agents live-verified) mounts via `TRAYAMBAK_COMPANY_DIR`
+  18 departments / 282 agents live-verified) mounts via `NEMO_COMPANY_DIR`
   or `companyDir` (`~/agency-agents-main` by default). `/company` lists
   departments, `/company list [division]` + `info` browse, `run` launches
   any persona as a subagent (multi-word names match by longest prefix),
   `run <division|all>` launches a whole department or the entire enabled
   roster in bounded foreground batches;
   every division also feeds normal discovery, so company agents list in
-  `/agent`, the picker, `AgentCatalog`, and run through `trayambak__Agent`.
+  `/agent`, the picker, `AgentCatalog`, and run through `nemo__Agent`.
   On/off switches: `/company off` takes the library out of listing,
   running, `assign`, and discovery (browsing still works, marked OFF);
   `/company disable <division>` / `enable` toggles one department —
   switches persist to config and rebuild the agent at once (devmode
-  pattern); `status` reports master + off list; `TRAYAMBAK_COMPANY_ENABLED`
-  / `TRAYAMBAK_COMPANY_DISABLED` cover env-driven setups. The model itself
+  pattern); `status` reports master + off list; `NEMO_COMPANY_ENABLED`
+  / `NEMO_COMPANY_DISABLED` cover env-driven setups. The model itself
   knows the company: a `## COMPANY` system-prompt block names every enabled
-  department with counts and teaches self-spawning via `trayambak__Agent`
+  department with counts and teaches self-spawning via `nemo__Agent`
   (slash commands stay user-only), so it picks personas on its own — OFF /
   disabled departments never appear in its roster.
 - **Bash timeout fixed (no more 30s kill)**: the outer runner capped every
@@ -653,7 +916,7 @@ failed … run trayambak upgrade` line instead of nothing.
   `[Pasted Content N chars]` while the model runs the full text — the log
   stores both (full `content` + `display` block), so resumes replay the
   block with model context intact.
-- **Home MCP servers survive a repo-local config**: `<cwd>/.trayambak/
+- **Home MCP servers survive a repo-local config**: `<cwd>/.nemo/
   config.json` replaced home wholesale, so `"mcpServers": {}` silently
   uninstalled every home server (live: puppeteer vanished). Home now
   merges underneath per server, file wins per key — `/mcp list` shows
@@ -676,7 +939,7 @@ failed … run trayambak upgrade` line instead of nothing.
 ## [0.6.6]
 
 - **RunTeam single-call fan-out bounded** (audit, #109):
-  - **#109** — `trayambak__RunTeam` accepted any non-empty `tasks`
+  - **#109** — `nemo__RunTeam` accepted any non-empty `tasks`
     array: the runner batches foreground concurrency but walks every
     task, and each `background: true` task is detached as it starts —
     so a single model-authored (or prompt-injected) call could queue
@@ -725,7 +988,7 @@ failed … run trayambak upgrade` line instead of nothing.
     `[exe, ...args]` spawns keep CRT quoting (verbatim breaks spaced
     exe paths — both shapes probed). Proof: 2 new tests (bash tool
     itself + ProcessManager integration), both red on the old code.
-  - **#76** — `trayambak__Monitor` ran model-supplied commands with raw
+  - **#76** — `nemo__Monitor` ran model-supplied commands with raw
     `process.env` (a `set` poll dumps every secret into context — `bash`
     cannot), buffered child output unbounded (repo 256KB rule), had no
     spawn `error` listener (missing shell → process crash), never killed
@@ -807,7 +1070,7 @@ red against the old code. (`planPath` was already traversal-safe via
   Proof: new `session_store.test.ts` — 8 tests, 5 red against the old code.
 
 - **Upgrade path hardened against a hostile registry** (supply-chain audit,
-  #66): `trayambak upgrade` spawns `npm install -g pkg@<version>` with
+  #66): `nemo upgrade` spawns `npm install -g pkg@<version>` with
   `shell: true` on Windows, and the version came from the npm registry as
   an unvalidated string — a poisoned `latest` was shell syntax. Version
   tokens are now `isSafeVersion()`-checked at the origin
@@ -894,14 +1157,14 @@ red against the old code. (`planPath` was already traversal-safe via
 
 - **Redaction closes the disk-sink gaps** (round-5 audit, #51-54): the CLI
   log file now runs the embedded-secret pass before anything is appended to
-  `~/.trayambak/logs/trayambak.log` — previously only secret-key names and
+  `~/.nemo/logs/nemo.log` — previously only secret-key names and
   string heads were masked, so a credential mid-sentence (`ghp_…` in a git
   remote URL, a JWT, an AWS key id, a Stripe/Slack/npm token, a PEM block,
   `scheme://user:pass@` connection strings) landed at rest verbatim; the
   key-name set grows to the password/credential family (`password`,
   `passwd`, `passphrase`, `credential`, `cookie`, `privateKey`,
   `connectionString`) across every sink (hook payloads, analytics,
-  telemetry, security trail, logger); and `TRAYAMBAK_TELEMETRY=0` now
+  telemetry, security trail, logger); and `NEMO_TELEMETRY=0` now
   silences `flush()` as well as `capture()`. Prose, paths, and token
   counters stay byte-for-byte intact.
 
@@ -989,7 +1252,7 @@ red against the old code. (`planPath` was already traversal-safe via
 - **System-prompt exfil lock + security trail**: `--dump-system-prompt`
   attempts are now stored as `prompt_exfil_attempt` events, and every
   pentest tool run/refusal is stored as `pentest_run` (tool, target,
-  outcome, capped output) — append-only JSONL at `~/.trayambak/security.log`,
+  outcome, capped output) — append-only JSONL at `~/.nemo/security.log`,
   redacted, never throwing.
 - **Pentest tools honor devmode OFF**: the execution gate only checked the
   license, so a live trial key ran scans with developer mode OFF. The gate
@@ -1079,7 +1342,7 @@ red against the old code. (`planPath` was already traversal-safe via
 
 ### Fixed — "read-only" mode wrote to disk, and four read-only tools read anywhere
 
-- **Read-only and plan mode were not read-only.** `memory`, `todo`, and `artifact` are in `READ_ONLY_TOOLS`, and the read-only gate matched on the tool **name** alone, so every action was `allow` — including the ones that write. `memory.save` writes `~/.trayambak/memory/memory.json` (exactly the path `assertMutablePath` exists to block), `todo.write` writes `~/.trayambak/todos/<sessionId>.json`, and `artifact.create` writes `<cwd>/skt/10-upload/artifacts/` — its manager even `mkdirSync`s that tree in the CONSTRUCTOR, so merely reaching the tool mutated the workspace. Measured before the fix: an `artifact create` in a `uiMode: "read-only"` session returned `allow` and left `1.json` + `manifest.json` on disk. The gate is now action-aware for exactly these three (the same shape as the existing `web_fetch` POST rule): their read actions still pass — `memory.search`/`list`, `todo.read`, `artifact.get`/`list`/`search` — and every writing action is denied in both `read-only` and `plan`. A missing, non-string, or unrecognised `action` fails closed, so omitting it is not a way into the writing branch; the one deliberate exception is the agent loop's catalogue-listing call, which passes `args === undefined` and must not have a tool's read half hidden from the model.
+- **Read-only and plan mode were not read-only.** `memory`, `todo`, and `artifact` are in `READ_ONLY_TOOLS`, and the read-only gate matched on the tool **name** alone, so every action was `allow` — including the ones that write. `memory.save` writes `~/.nemo/memory/memory.json` (exactly the path `assertMutablePath` exists to block), `todo.write` writes `~/.nemo/todos/<sessionId>.json`, and `artifact.create` writes `<cwd>/nemo/10-upload/artifacts/` — its manager even `mkdirSync`s that tree in the CONSTRUCTOR, so merely reaching the tool mutated the workspace. Measured before the fix: an `artifact create` in a `uiMode: "read-only"` session returned `allow` and left `1.json` + `manifest.json` on disk. The gate is now action-aware for exactly these three (the same shape as the existing `web_fetch` POST rule): their read actions still pass — `memory.search`/`list`, `todo.read`, `artifact.get`/`list`/`search` — and every writing action is denied in both `read-only` and `plan`. A missing, non-string, or unrecognised `action` fails closed, so omitting it is not a way into the writing branch; the one deliberate exception is the agent loop's catalogue-listing call, which passes `args === undefined` and must not have a tool's read half hidden from the model.
 - **Four read-only tools bypassed path containment entirely.** `read_file`, `glob`, `list_dir`, `grep`, and `skills` route `args.path` through `resolveConstrainedPath`. `code_search`, `symbols`, `semantic_search`, and `read_manifest` each did a bare `path.resolve(ctx.cwd, args.path)` and read the result. Because the gate permits cwd-or-home, "no gate" means _anywhere on the filesystem_ — verified before the fix: pointed at a directory outside both, `read_manifest` returned its `package.json` (`name: out-of-scope-canary`) and `code_search` returned matching file **content**, while `read_file` on the same path returned `Access denied`. Since these tools hand back file contents, that was a read primitive the gated tool refused, reachable by an injected tool call. All four now go through the shared helper, which also re-checks containment through reparse points and applies the protected-path list.
 - A fifth site named in review was checked and found **not to be a finding**: `tsc-diagnostics.ts` resolves paths only to normalise a comparison key (`diagnosticsPathKey`) and to walk upward for project-root discovery (`findUp`) from a path the tool already chose — neither reads a model-supplied path.
 - Tests: new `apps/runtime/src/tools/containment.test.ts` (4 tools × refuse-out-of-scope + still-read-the-project, staged from a one-file directory outside cwd and home) and `apps/runtime/src/tools/artifacts/artifact-readonly.test.ts` (each writing action denied before `execute` is reached, and nothing created — not even the directory); 14 new cases in `packages/protocol/src/permission-rules.test.ts`. All verified to fail against the old behaviour and pass against the new one.
@@ -1090,12 +1353,12 @@ red against the old code. (`planPath` was already traversal-safe via
 - **The local supervisor's decision call was never charged either** (`developer-mode/local-supervisor.ts`). It sits outside the turn loop too, and re-sends the whole bounded mistake log plus its system prompt on every penalty decision — measured at 186 budget units per call that no cap could see. Now charged, both sides (`#64`: a penalty round is input-heavy, so charging output only would have kept it nearly invisible).
 - **One implementation of the budget formula.** `recordModelUsage(inputText, outputText)` moved the estimation + `recordUsage` pair out of the loop's private helper into `apps/runtime/src/agent/usage-accounting.ts`, so the loop and both new call sites cannot drift apart on the `rollout_budget_units` weighting. The loop's behaviour is unchanged — `recordAssistantUsage` now delegates.
 - **A failed subagent no longer reports a free run.** `SubagentEngine` recorded usage only on the success path, so a worker that burned N turns and tool calls before throwing produced no entry at all: `usageFor()` was `undefined` and the failure aggregated as if nothing had happened, while the nested loop had already charged those tokens to the budget. Workers can now throw `SubagentWorkerError`, which carries the run's real usage; the engine keeps it on the foreground and background/cancellation paths and returns it on the outcome. The failure contract is unchanged (still `worker_failed`, still no throw), and a worker that fails before doing any work still reports nothing rather than a fabricated zero.
-- Every production `provider.chat` call site was audited, not just the two fixed: the remaining two (`tools/trayambak/sota-solve.ts`, the CoT generator and its judge) are built on the local llama.cpp/Ollama backend by design — the tool's own description promises "no remote provider is ever connected" — so they cost no tokens and stay uncharged against a token-denominated budget.
+- Every production `provider.chat` call site was audited, not just the two fixed: the remaining two (`tools/nemo/sota-solve.ts`, the CoT generator and its judge) are built on the local llama.cpp/Ollama backend by design — the tool's own description promises "no remote provider is ever connected" — so they cost no tokens and stay uncharged against a token-denominated budget.
 - Tests: new `apps/runtime/src/agent/sota-budget.test.ts`; a new case in `developer-mode/local-supervisor.test.ts` asserting the exact unit count; four new cases in `packages/core/src/subagents.test.ts` (foreground, background, no-work-failure, mixed aggregate). Each was verified to fail against the old behaviour — the two accounting tests fail on exactly `0` — and pass against the new one.
 
 ### Fixed — a cloned repository could put the session into blanket-approval mode
 
-- **A repo-committed config can no longer grant itself full access (#93).** `configDir()` deliberately prefers `<cwd>/.trayambak/` over `~/.trayambak/`, so running the agent inside a checked-out repo makes that repo's committed `config.json` the effective one — `git clone` plus `cd` is all it took. `deriveUIMode` then returned `permissions.uiMode` verbatim, and `evaluatePermission` short-circuits to `allow` for `"full-access"` before any rule is evaluated. Measured before the fix: a committed `{"permissions":{"uiMode":"full-access"}}` gave `rm -rf /` → `allow` and `write_file /etc/passwd` → `allow`, with no prompt and no warning. A repo-local config is now stripped of blanket-approval settings — `uiMode: full-access` / `auto-approve` and the legacy `mode: "yolo"` / `askByDefault: false` that both mean auto-approve — each with a loud warning naming the file, and the session falls back to asking. Sources a human chose are untouched: `~/.trayambak/config.json` and an explicit `--config <file>` still honour `full-access`, including while standing inside an attacker repo.
+- **A repo-committed config can no longer grant itself full access (#93).** `configDir()` deliberately prefers `<cwd>/.nemo/` over `~/.nemo/`, so running the agent inside a checked-out repo makes that repo's committed `config.json` the effective one — `git clone` plus `cd` is all it took. `deriveUIMode` then returned `permissions.uiMode` verbatim, and `evaluatePermission` short-circuits to `allow` for `"full-access"` before any rule is evaluated. Measured before the fix: a committed `{"permissions":{"uiMode":"full-access"}}` gave `rm -rf /` → `allow` and `write_file /etc/passwd` → `allow`, with no prompt and no warning. A repo-local config is now stripped of blanket-approval settings — `uiMode: full-access` / `auto-approve` and the legacy `mode: "yolo"` / `askByDefault: false` that both mean auto-approve — each with a loud warning naming the file, and the session falls back to asking. Sources a human chose are untouched: `~/.nemo/config.json` and an explicit `--config <file>` still honour `full-access`, including while standing inside an attacker repo.
 - **`uiMode` is now validated against the real enum.** `deriveUIMode` accepted any string, so a typo or a crafted value became a mode. Invalid values are dropped with a warning and the defaults apply — "never throw on bad user config" means fall back, not fail. A `permissions` block of the wrong shape (string, number, array, null) is dropped the same way instead of being spread into the config.
 - Repo-authored **scoped rules are deliberately left working**, denies included: they are narrow and explicit, and force-ask still overrides an allow rule, so a repo cannot unlock a destructive command that way.
 - Tests: new `apps/runtime/src/config-permissions.test.ts` — 6 cases, each with the artifact that proves it (a real temp repo on disk, `process.chdir` into it, then evaluating permissions through the same `evaluatePermission` the agent uses).
@@ -1116,66 +1379,66 @@ red against the old code. (`planPath` was already traversal-safe via
 
 ### Fixed — round-4 audit: web auth, agent-run ceiling, CLI exit codes, stale key at rest
 
-- **The web server mints bearer auth on every bind, loopback included** (`packages/server/src/index.ts`). Previously only non-loopback binds auto-generated a token, so a default `skt web` served `/v1/agent` (full agent execution with tools, attacker-controlled `prompt`), `/api/sessions` (session IDs + workDir paths) and the license-admin tooling to any local process with no auth. Now an unset token is always replaced with a 64-hex generated one, printed once at startup and exposed as `effectiveToken`; every route except `/health` and the documented public surface requires it.
+- **The web server mints bearer auth on every bind, loopback included** (`packages/server/src/index.ts`). Previously only non-loopback binds auto-generated a token, so a default `nemo web` served `/v1/agent` (full agent execution with tools, attacker-controlled `prompt`), `/api/sessions` (session IDs + workDir paths) and the license-admin tooling to any local process with no auth. Now an unset token is always replaced with a 64-hex generated one, printed once at startup and exposed as `effectiveToken`; every route except `/health` and the documented public surface requires it.
 - **`/github/*` is bearer-gated on top of the stored GitHub login.** The public allowlist carried all six `/github/*` routes, so after any GitHub login any local process could read/write repo files and open PRs as the user — even on a token-protected server. `/auth/github/*` stays public (the browser OAuth dance cannot present a bearer token, and those endpoints only move OAuth state).
 - **`/health` answers liveness only** — the configured model name no longer leaks from an unauthenticated endpoint.
-- **`/v1/agent` gets a server-side run ceiling** (`TRAYAMBAK_AGENT_TIMEOUT_MS`, default 120s, clamped 5s–10min): a model call that never settles previously held the socket open forever with zero bytes while the server stayed responsive — one curl per socket toward connection exhaustion. On timeout the run is aborted, an error event is written, and the response ends. Client-abort cancellation already existed and is untouched.
-- **`/v1/agent` only accepts a `sessionFile` inside the transcript store.** The Agent persists its transcript to that path (mkdir + write), so an unconstrained value was an arbitrary-path JSON write primitive. Anything resolving outside `~/.trayambak/sessions/…` is now `400`.
-- **`saveConfig` scrubs a stale file key in env mode (#48).** When `TRAYAMBAK_API_KEY` is set, the effective key comes from the environment and any key in `config.json` is stale by definition — yet it was preserved on every save, parking live-looking key material in plaintext at rest while `login status` reported env mode. Saving now drops `apiKey` from the file in that case (an explicit `config set apiKey` under env mode is a file no-op; env still wins). File writes were and remain atomic + 0600.
+- **`/v1/agent` gets a server-side run ceiling** (`NEMO_AGENT_TIMEOUT_MS`, default 120s, clamped 5s–10min): a model call that never settles previously held the socket open forever with zero bytes while the server stayed responsive — one curl per socket toward connection exhaustion. On timeout the run is aborted, an error event is written, and the response ends. Client-abort cancellation already existed and is untouched.
+- **`/v1/agent` only accepts a `sessionFile` inside the transcript store.** The Agent persists its transcript to that path (mkdir + write), so an unconstrained value was an arbitrary-path JSON write primitive. Anything resolving outside `~/.nemo/sessions/…` is now `400`.
+- **`saveConfig` scrubs a stale file key in env mode (#48).** When `NEMO_API_KEY` is set, the effective key comes from the environment and any key in `config.json` is stale by definition — yet it was preserved on every save, parking live-looking key material in plaintext at rest while `login status` reported env mode. Saving now drops `apiKey` from the file in that case (an explicit `config set apiKey` under env mode is a file no-op; env still wins). File writes were and remain atomic + 0600.
 - **`worktree list` outside a repo says so and fails (#49).** git's raw `fatal: not a git repository` dump no longer leaks to stderr (all git stdio is piped now); outside a repo the command returns `Worktree error: not a git repository: <cwd>` with exit 1, and an in-repo listing failure throws instead of printing a false `No worktrees found` with exit 0.
 - **`checkpoint` usage errors exit 2 (#50)**, like the rest of the tree. Usage errors across `worktree` (bad input, unknown action) also exit 2 now; git/runtime failures exit 1 — a bare string on stdout with exit 0 never again means something failed.
 - Tests: server suite extended (always-minted token gates every route; health omits the model; `sessionFile` traversal + absolute-path rejection; timeout clamping; `isAllowedSessionFile` unit tests), new `checkpoint.test.ts`, worktree tests updated to the fail-loud contract, config scrub test. `docs/web.md` rewritten for the new auth default.
 
-### Changed — the terminal tab now says `Trayambak` and animates while working
+### Changed — the terminal tab now says `Nemo` and animates while working
 
-- **The tab/window title is claimed on startup.** The shell keeps reporting its cwd as the title, so a trayambak tab read `engli` (or whatever folder) and gave no hint what was running. On mount the TUI now sets the title to the product name via OSC 0, then keeps an activity-aware title (`Trayambak - working`, `! Trayambak - approval needed`, …) as state changes — the existing `terminal-notify` port, now wired to claim the title instead of only reacting to activity.
+- **The tab/window title is claimed on startup.** The shell keeps reporting its cwd as the title, so a nemo tab read `engli` (or whatever folder) and gave no hint what was running. On mount the TUI now sets the title to the product name via OSC 0, then keeps an activity-aware title (`Nemo - working`, `! Nemo - approval needed`, …) as state changes — the existing `terminal-notify` port, now wired to claim the title instead of only reacting to activity.
 - **Live animation while a turn runs**: the title cycles an ASCII spinner (`| / - \`) every 120 ms during load/streaming, showing background-subagent count and phase, then settles back to the static title when the turn ends, when an approval/error/input needs attention, and on unmount. Restart-safe (each start clears the previous timer) and `unref`'d so a cosmetic animation can never hold the process open.
 - **ASCII-only frames on purpose**, matching the existing activity marks: a braille spinner renders as mojibake on non-UTF8 conhost tabs.
-- **Never touches a pipe.** Writes stay gated on `stdout.isTTY` and `TRAYAMBAK_NO_NOTIFY=1`, and remain synchronous (`fs.writeSync`) so a title change cannot interleave with an Ink frame. Verified by driving the _shipped_ `dist` module with piped stdout: **0 bytes** emitted, no escape sequences at all.
+- **Never touches a pipe.** Writes stay gated on `stdout.isTTY` and `NEMO_NO_NOTIFY=1`, and remain synchronous (`fs.writeSync`) so a title change cannot interleave with an Ink frame. Verified by driving the _shipped_ `dist` module with piped stdout: **0 bytes** emitted, no escape sequences at all.
 - Title writes are deduplicated, and every emitted title is asserted free of control characters (a BEL/ESC inside the payload would terminate the OSC sequence early and spill raw bytes into the terminal).
 - Tests: `terminal-notify.test.ts` extended (product name, animated-title builder, animation lifecycle, restart-without-leak, kill-switch, no-TTY), plus a new byte-level `terminal-title-bytes.test.ts` that captures the exact OSC 0 bytes and asserts the frame order `| / - \ |` and that nothing arrives after `stop()`. A pty-level check (`terminal-title-pty.test.ts`) is Unix-only and explicitly **skips** on Windows rather than silently passing without a pty.
 
 ### Fixed — the leak was still live in the _installed_ CLI, and the shims hid it
 
-- **The patched repo was not what `trayambak` on `PATH` ran.** The globally installed `@skt-ai-labs/trayambak-cli@0.6.5` shadowed the `bin\*.cmd` shims, and its bundled `dist` still contained the dump handler: `trayambak --dump-system-prompt` printed **92 KB** of the live prompt (tool definitions, memory block, project rules) and exited **0**, so it looked like a successful no-op to any script. npm's latest is also 0.6.5, so no upgrade path existed — the leaky global copy was uninstalled and `PATH` now resolves to the patched `bin\trayambak.cmd` / `bin\skt.cmd`. Verified end-to-end after the change: both binaries print the 100-byte refusal and nothing else, with exit 2.
-- **`bin\trayambak.cmd` and `bin\skt.cmd` swallowed the CLI's exit code.** `endlocal` resets `ERRORLEVEL`, so _every_ refusal and error surfaced as exit 0 through the shim — including this one, which is why the leak looked harmless. Both shims now capture `%ERRORLEVEL%` before `endlocal` and re-exit with it; confirmed the shim now reports 2 for the refusal and for an unknown command, and 0 for `--version`.
+- **The patched repo was not what `nemo` on `PATH` ran.** The globally installed `@shrijan/nemo-cli@0.6.5` shadowed the `bin\*.cmd` shims, and its bundled `dist` still contained the dump handler: `nemo --dump-system-prompt` printed **92 KB** of the live prompt (tool definitions, memory block, project rules) and exited **0**, so it looked like a successful no-op to any script. npm's latest is also 0.6.5, so no upgrade path existed — the leaky global copy was uninstalled and `PATH` now resolves to the patched `bin\nemo.cmd` / `bin\nemo-code.cmd`. Verified end-to-end after the change: both binaries print the 100-byte refusal and nothing else, with exit 2.
+- **`bin\nemo.cmd` and `bin\nemo-code.cmd` swallowed the CLI's exit code.** `endlocal` resets `ERRORLEVEL`, so _every_ refusal and error surfaced as exit 0 through the shim — including this one, which is why the leak looked harmless. Both shims now capture `%ERRORLEVEL%` before `endlocal` and re-exit with it; confirmed the shim now reports 2 for the refusal and for an unknown command, and 0 for `--version`.
 - Recorded so the same trap is visible next time: a patched source tree means nothing while a stale published copy shadows it, and a shim that flattens exit codes hides the difference between "refused" and "succeeded".
 
 ### Removed — `--dump-system-prompt`: the system prompt is never printed or persisted
 
-- **`trayambak --dump-system-prompt` is gone** (handler, `GLOBAL_FLAGS` entry, and all three docs + README mentions). It wrote the agent's full prompt — every tool definition, the memory block, project rules, mode/specialist blocks — to stdout, where it lands in shell scrollback, CI logs, crash artifacts and screenshots. An old script now gets a loud refusal on stderr and **exit 2** instead of a silent empty chat (an unrecognised flag in the command position falls through to `case undefined:`, so without the refusal the flag exited 0 having printed nothing). Refusal lives in `refuseSystemPromptDump()` (`command-registry.ts`) so it is unit-testable without `main()`'s evalr side effects.
+- **`nemo --dump-system-prompt` is gone** (handler, `GLOBAL_FLAGS` entry, and all three docs + README mentions). It wrote the agent's full prompt — every tool definition, the memory block, project rules, mode/specialist blocks — to stdout, where it lands in shell scrollback, CI logs, crash artifacts and screenshots. An old script now gets a loud refusal on stderr and **exit 2** instead of a silent empty chat (an unrecognised flag in the command position falls through to `case undefined:`, so without the refusal the flag exited 0 having printed nothing). Refusal lives in `refuseSystemPromptDump()` (`command-registry.ts`) so it is unit-testable without `main()`'s evalr side effects.
 - **The prompt is no longer written to disk**: `Session.save()` persisted `{ system, messages }`, parking the full capability spec in plaintext in every `--session` file (and any backup/archive of it). It was also never read back — `Agent` rebuilds the prompt from config via `setSystemPrompt()` immediately after `Session.load()` and again before every run — so the stored copy had no consumer. `save()` now writes messages only; `load()` still accepts a legacy `system` field and **discards** it, so old session files resume unchanged while ceasing to be a leak.
-- **Attempted dumps are recorded, not executed**: the refusal logs a `prompt_exfil_attempt` event (`apps/runtime/src/security-log.ts`, append-only JSONL, `TRAYAMBAK_SECURITY_LOG` to relocate) with the shim name and flag — the attempt is the evidence, the prompt is never in the log. Verified live: both `trayambak --dump-system-prompt` and `trayambak run --dump-system-prompt` exit 2 with the refusal on stderr and nothing on stdout, each attempt landing as one JSONL row.
+- **Attempted dumps are recorded, not executed**: the refusal logs a `prompt_exfil_attempt` event (`apps/runtime/src/security-log.ts`, append-only JSONL, `NEMO_SECURITY_LOG` to relocate) with the shim name and flag — the attempt is the evidence, the prompt is never in the log. Verified live: both `nemo --dump-system-prompt` and `nemo run --dump-system-prompt` exit 2 with the refusal on stderr and nothing on stdout, each attempt landing as one JSONL row.
 - **Guards**: `apps/cli/src/system-prompt-lock.test.ts` pins that the refusal fires for the flag in _any_ argv position, writes nothing for ordinary argv, and uses the invoking shim name; the registry test asserts no registered flag name/description can dump the prompt (it would otherwise reappear in `--help` and shell completion); new `apps/runtime/src/session/session.test.ts` pins messages round-trip, prompt absent from disk, and the legacy-field discard; a new `check-forbidden-strings.yml` step fails on any _executable_ reference to the retired flag, a re-persisted `system:` in `session.ts`, any stdout/stderr write of the prompt, or removal of the refusal/guard tests. Locally simulated with four synthetic regressions (re-persisted prompt, stdout write, deleted refusal, deleted guard test) — all four detected.
 - Verified there is no other surface: the server, ACP and MCP surfaces never expose it, and compaction receives it purely for token accounting (it is never written into a summary, the `compaction` event carries counts only, and analytics redacts that event's only free-text field).
 
 ### Added — weakness-audit round 2 (security hardening, test-depth sweep, real bugs fixed)
 
 - **Audit log tamper-evidence**: `packages/core/src/state_db.ts` audit rows are now a SHA-256 hash chain (`prev_hash`/`hash`, `GENESIS_PREV_HASH` genesis, guarded `ALTER TABLE` migration, JSON-backend parity + JSON→sqlite import) with a new exported `verifyAuditChain(db)` flowing through the core index and 17 chain tests. `recordAudit`'s signature is unchanged; the tail-truncation limitation is documented honestly.
-- **Redaction wired into every sink** (prose-safe `redactPayload()` in `packages/core/src/secrets.ts` — credential-gated only, cycle-safe, never truncates; tests prove >24-char paths/prose round-trip byte-for-byte, and `ghp_`/`gho_`/`github_pat_` patterns were added): hook handler boundary + hook-produced output (`hook_runtime.ts`), shell-hook stdin `tool_input` + child-env allowlist (`apps/runtime/src/tools/hook-exec.ts`), analytics `recordEvent`/hook facts/compaction metadata (`analytics.ts`), telemetry debug stderr (redact→JSON, 2000-char cap, stderr-only) — plus a new `packages/telemetry/src/index.test.ts` (8 tests, previously zero) covering the `TRAYAMBAK_TELEMETRY=0` kill-switch.
+- **Redaction wired into every sink** (prose-safe `redactPayload()` in `packages/core/src/secrets.ts` — credential-gated only, cycle-safe, never truncates; tests prove >24-char paths/prose round-trip byte-for-byte, and `ghp_`/`gho_`/`github_pat_` patterns were added): hook handler boundary + hook-produced output (`hook_runtime.ts`), shell-hook stdin `tool_input` + child-env allowlist (`apps/runtime/src/tools/hook-exec.ts`), analytics `recordEvent`/hook facts/compaction metadata (`analytics.ts`), telemetry debug stderr (redact→JSON, 2000-char cap, stderr-only) — plus a new `packages/telemetry/src/index.test.ts` (8 tests, previously zero) covering the `NEMO_TELEMETRY=0` kill-switch.
 - **Sandbox + exec honesty (remainder)**: `enforcementForBackend()` is the single reporting source and every path reports `policy-only` while the flag is off (`packages/sandbox/src/gate.ts`); bash `buildBashEnv` is an allowlist applied after `filterEnv`; win32 `detectAvailableSandbox()` no longer claims `WindowsRestrictedToken` (returns `None` with the delegation note) + new `packages/sandbox/src/types.test.ts` (6 tests pinning `SANDBOX` honesty across platforms); `docs/security.md` rewritten to describe flag-adjusted behavior instead of overstating it.
-- **CI guard-the-guard**: the "approval switches must be exhaustive" step (satisfied by any `default:` within two lines of any `switch`) is replaced by assertions that the AST rule `trayambak/approval-mode-exhaustive` exists, is registered `error` _everywhere_ it appears in `eslint.config.mjs`, keeps its behavioral tests, and that `approvalFor()` remains the single decision point. Verified locally against the real tree plus synthetic downgrade/export-removal cases.
+- **CI guard-the-guard**: the "approval switches must be exhaustive" step (satisfied by any `default:` within two lines of any `switch`) is replaced by assertions that the AST rule `nemo/approval-mode-exhaustive` exists, is registered `error` _everywhere_ it appears in `eslint.config.mjs`, keeps its behavioral tests, and that `approvalFor()` remains the single decision point. Verified locally against the real tree plus synthetic downgrade/export-removal cases.
 - **`no-cross-package-import` apps/cli boundary ratcheted, not disabled**: `ENFORCE_APPS_CLI_SCOPE = true` with exactly the 9 measured legacy import sites grandfathered per file+package (documented debt), so any _new_ apps/cli import outside `core`/`execpolicy` is an error. The map only shrinks — migrating a site deletes its row, it never grows.
 - **Real bugs the new tests exposed**: ACP `stopReason: "cancelled"` was unreachable (the cancel flag was deleted before it was read) and a cancel flag could outlive a failed run, muting the next prompt on that session (now cleared in `finally`; `packages/acp` at 16 tests); `SubagentOrchestrator` stored `crossMonitorSubagents` detached from its receiver, so the monitor interval threw on every tick with prototype-method engines (invoker closure; the test now drives the raw engine, so reintroducing the detached store fails it); `ParentWatchdogService.start()` double-arm leaked an interval `stop()` could never reach; `TextStreamService` chunked with `/./`, which silently dropped every newline in multi-line output (`/[\s\S]/` + byte-for-byte round-trip tests).
-- **Server CORS wildcard removed (security)**: `packages/server/src/index.ts` sent `Access-Control-Allow-Origin: *`, so any website a user visited could call the endpoints that sit _below_ the auth gate by design — `/license/activate`, `/license/mint-trial`, `/auth/github/*`, `/github/read` — from that page. New `packages/server/src/cors.ts` decides per request: no `Origin` (curl, node client, the CLI) passes; same-origin passes; loopback origins pass on any port (local dev servers); extra origins come from `TRAYAMBAK_WEB_ORIGINS` (exact match, `*` restores the wildcard); anything else is **refused with `403` before routing** — refusing server-side is the load-bearing part, since a "simple" cross-origin POST (`Content-Type: text/plain`) triggers no preflight and would still have reached an unauthenticated route with CORS headers merely stripped. Echoed origins get `Vary: Origin`; `OPTIONS` answers `403` instead of `204` for a refused origin. 19 new tests (15 policy + 4 end-to-end through a live server), plus `docs/web.md`, `docs/getting-started.md`, `README.md` and the CLI `Environment` help block.
+- **Server CORS wildcard removed (security)**: `packages/server/src/index.ts` sent `Access-Control-Allow-Origin: *`, so any website a user visited could call the endpoints that sit _below_ the auth gate by design — `/license/activate`, `/license/mint-trial`, `/auth/github/*`, `/github/read` — from that page. New `packages/server/src/cors.ts` decides per request: no `Origin` (curl, node client, the CLI) passes; same-origin passes; loopback origins pass on any port (local dev servers); extra origins come from `NEMO_WEB_ORIGINS` (exact match, `*` restores the wildcard); anything else is **refused with `403` before routing** — refusing server-side is the load-bearing part, since a "simple" cross-origin POST (`Content-Type: text/plain`) triggers no preflight and would still have reached an unauthenticated route with CORS headers merely stripped. Echoed origins get `Vary: Origin`; `OPTIONS` answers `403` instead of `204` for a refused origin. 19 new tests (15 policy + 4 end-to-end through a live server), plus `docs/web.md`, `docs/getting-started.md`, `README.md` and the CLI `Environment` help block.
 - **Same-millisecond id collisions no longer overwrite data**: plans, notebooks and board posts derived ids straight from `Date.now()`, so two creates inside one millisecond collided — and `plans`/`notebooks` are `Map`-keyed by id, meaning the second `create()` silently replaced the first while the caller still held the dangling object; plan steps collided too, so `updateStep` patched whichever row the scan found first. New `apps/cli/src/integration/unique-id.ts` keeps the time prefix (ids stay sortable, readable, and every persisted id keeps working) and appends a numeric suffix only on an actual collision, checked against live _and_ on-disk ids so a fresh process cannot reissue one.
-- **`plan.ts` resolves its store path per call** instead of capturing `os.homedir()` at import (which made the path depend on import-time environment). The two integration suites now hold the temp-HOME stub for the whole file instead of restoring it right after the dynamic import — that restore was only safe while the path was frozen at load, so writes would otherwise have landed in the developer's real `~/.trayambak`.
+- **`plan.ts` resolves its store path per call** instead of capturing `os.homedir()` at import (which made the path depend on import-time environment). The two integration suites now hold the temp-HOME stub for the whole file instead of restoring it right after the dynamic import — that restore was only safe while the path was frozen at load, so writes would otherwise have landed in the developer's real `~/.nemo`.
 - **`isSecretKey` no longer masks token counters**: the substring rule meant `maxTokens`, `inputTokens`, `tokensBefore`, `tokenCount` (and `max_tokens`) were replaced by `"****"` — NaN-ing analytics aggregates and handing hooks `maxTokens: "****"` instead of a budget. A narrow `TOKEN_COUNTER` vocabulary (fixed modifier/suffix list, and only when the key carries no _other_ secret marker) is now exempt, while a bare `token`/`tokens`, `githubToken`, `apiToken`, `accessToken`, `refreshToken`, `idToken` and anything containing `secret`/`apiKey`/`authorization` still mask. All three redactors (`redactSecrets`, `redactLogValue`, `redactPayload`) now route through the single `isSecretKey` decision point instead of re-implementing the check.
-- **License-header drift closed**: 6 files written after the relicense sweep still carried our Apache-2.0 header (`core/secrets.ts`, `core/approval.ts` + test, `execpolicy/policy.test.ts`, `agent/loop-approval-ladder.test.ts`, `tools/toolset-parity.test.ts`); `scripts/relicense-proprietary.mjs` reverted exactly those 6. The only remaining mentions are intentional data — the sweep's own `/Apache License/` match pattern and `rebrand-skt.mjs`'s Apache `NEW_HEADER` constant.
+- **License-header drift closed**: 6 files written after the relicense sweep still carried our Apache-2.0 header (`core/secrets.ts`, `core/approval.ts` + test, `execpolicy/policy.test.ts`, `agent/loop-approval-ladder.test.ts`, `tools/toolset-parity.test.ts`); `scripts/relicense-proprietary.mjs` reverted exactly those 6. The only remaining mentions are intentional data — the sweep's own `/Apache License/` match pattern and `rebrand-nemo.mjs`'s Apache `NEW_HEADER` constant.
 - **Test depth**: 41 new files / 388 tests in previously zero-coverage areas — `packages/acp`, `packages/cli` registry (100%), tools/commands, planner, knowledge-gate, evidence, mistakes, developer-mode (50 tests, dir 99.0% lines), `packages/tui/src/logic` (9 files, 44 tests, 99.6% lines), `apps/cli/src/integration` (14 files, 124 tests, 98.8% lines), the extracted `provider-model-support` helpers, the new `cors` policy and `unique-id` helper. Suite: **240 files / 2,705 passed** (4 skipped); coverage **66.00 / 77.35 / 73.23 / 66.00** repo (floors 55/73/63/55) and **86.96 / 87.45 / 87.14 / 86.96** core (floors 79/85/83/79); `verify-all-tools` 71/71 ok against the 83-tool catalog; `npm run lint` 0 errors; typecheck, build, e2e, `check:links` and `format:check` green.
 - **`packages/tui/src/ink-app/App.tsx` back under the 4000-line cap by extraction, not by a cap raise**: the 4061-line shell now delegates its stateless provider/model helpers (picker row mapping, provider label/host, model-cache + `resolveModels`, per-backend key memory) to a new `provider-model-support.ts`. Every extracted function closed over module imports only, so the hoist is behavior-identical; its test module pins that. The new test also caught a display bug: `providerHostFor("localhost:8080")` returned an **empty host** (`new URL` parses scheme-less input as a protocol with no host), so the picker showed a blank provider for a host:port the user had typed — now it falls back to the raw input.
 
 ### Changed — relicense back to proprietary (owner-authorized)
 
-- `LICENSE`: Apache License 2.0 → **Trayambak CLI Proprietary License** (limited, non-exclusive, non-transferable use licence; copying/modification/redistribution/reverse engineering require written permission; third-party components keep their own terms). This reverses the 0.6.0 relicense and restores the original distribution terms.
+- `LICENSE`: Apache License 2.0 → **Nemo Code Proprietary License** (limited, non-exclusive, non-transferable use licence; copying/modification/redistribution/reverse engineering require written permission; third-party components keep their own terms). This reverses the 0.6.0 relicense and restores the original distribution terms.
 - `package.json` / `package-lock.json` (root entry) / `apps/vscode-extension/package.json` / `publish/package.json`: license → `SEE LICENSE IN LICENSE`; `package.json` description updated.
-- 432 source headers reverted to the proprietary header via new `scripts/relicense-proprietary.mjs` (idempotent, leading-comment-only, skips third-party content). `scripts/rebrand-skt.mjs`'s `NEW_HEADER` constant fixed — it still held the Apache text and would have re-Apache-ized the tree if rerun.
+- 432 source headers reverted to the proprietary header via new `scripts/relicense-proprietary.mjs` (idempotent, leading-comment-only, skips third-party content). `scripts/rebrand-nemo.mjs`'s `NEW_HEADER` constant fixed — it still held the Apache text and would have re-Apache-ized the tree if rerun.
 - `README.md` License section, `AGENTS.md`, `docs/README.md` updated to proprietary terms (they had carried the Apache wording since the 0.6.0 relicense).
 - Untouched on purpose: bundled skills' `license:` frontmatter (third-party Apache-2.0/MIT content — see `skills/energy-procurement/SKILL.md:12`), `package-lock.json` dependency license fields (factually correct for those packages), `CHANGELOG.md` 0.6.0 entry (immutable release history).
 
 ### Fixed — web server auth fail-closed on non-loopback binds
 
-- `packages/server/src/index.ts`: binding to a non-loopback address without a configured token used to serve unauthenticated control of the runtime. It now auto-generates a random 64-hex token, exposes it as `effectiveToken` on `TrayambakServer`, and prints it once at listen time — fail-closed by default, not opt-in. Loopback-only binds without a token keep their documented local-dev behavior, and an explicitly configured token still wins. +2 tests in `packages/server/src/index.test.ts` (6 total). Docs aligned: `docs/web.md`, `docs/security.md`.
+- `packages/server/src/index.ts`: binding to a non-loopback address without a configured token used to serve unauthenticated control of the runtime. It now auto-generates a random 64-hex token, exposes it as `effectiveToken` on `NemoServer`, and prints it once at listen time — fail-closed by default, not opt-in. Loopback-only binds without a token keep their documented local-dev behavior, and an explicitly configured token still wins. +2 tests in `packages/server/src/index.test.ts` (6 total). Docs aligned: `docs/web.md`, `docs/security.md`.
 
 ### Removed — `better-sqlite3` residue (audit / clean-install gap)
 
@@ -1191,22 +1454,22 @@ red against the old code. (`planPath` was already traversal-safe via
 
 ### Added — subagent engine + budget enforcement + checkpoint/rewind (power round)
 
-- **Subagent spawning is real and guarded**: `apps/runtime/src/agent/agent.ts` injects a depth-guarded runner through the `trayambak__Agent` tool — each spawn gets a fresh `Session`, reuses the parent provider (or the `model` override), strips fan-out tools (`trayambak__Agent`/`RunTeam`/`ParallelReview`/`ParallelExecute`) and routes through `SubagentEngine` (`packages/core/src/subagents.ts`): `maxDepth` 3 with a structured `depth_limit_exceeded` refusal _before_ any child loop, per-task usage summaries (`turns`/`toolCalls`/`durationMs`/tokens), background registry (start/status/await/cancel via `AbortController`), emitting the existing `subagent_start/end` + `subagent_background_start/end` protocol events. Harness: `subagent-spawn.test.ts` proves a child loop really runs (tool result lands in the child session only), the parent gains summary-only, and a depth-3 agent is refused before any level-4 provider call.
+- **Subagent spawning is real and guarded**: `apps/runtime/src/agent/agent.ts` injects a depth-guarded runner through the `nemo__Agent` tool — each spawn gets a fresh `Session`, reuses the parent provider (or the `model` override), strips fan-out tools (`nemo__Agent`/`RunTeam`/`ParallelReview`/`ParallelExecute`) and routes through `SubagentEngine` (`packages/core/src/subagents.ts`): `maxDepth` 3 with a structured `depth_limit_exceeded` refusal _before_ any child loop, per-task usage summaries (`turns`/`toolCalls`/`durationMs`/tokens), background registry (start/status/await/cancel via `AbortController`), emitting the existing `subagent_start/end` + `subagent_background_start/end` protocol events. Harness: `subagent-spawn.test.ts` proves a child loop really runs (tool result lands in the child session only), the parent gains summary-only, and a depth-3 agent is refused before any level-4 provider call.
 - **Budget enforcement in the loop** (previously silently bypassed — nothing consulted `shouldBlockForBudget()`): `runAgentLoop` applies `config.budget` on entry, checks `shouldContinueTurn()` at the top of every turn, and stops with a new `budget_exhausted` protocol event (`{used, max, remaining}`, one additive union member — all consumers grepped first) followed by `agent_end`. Never silently continues; integration test proves `providerCalls` stays bounded (2 calls instead of 50).
-- **Budget surface**: `budget` config field, `TRAYAMBAK_BUDGET` env (rides the existing config env allowlist — no new lint warnings), and a global `--budget <spec>` flag (`50k`, `1.5M`, `50000 tokens`, `40 turns`; `-1` disables). Invalid specs warn + fall back per config rules. `packages/core/src/token_budget.ts` rewritten (`parseTokenBudget`, `toRolloutBudgetConfig`, `applyBudget`, `budgetStatus`, `shouldContinueTurn`) — `rollout_budget.ts` touched only through its public API. Token usage per response uses the documented `ceil(chars/4)` estimator (protocol carries no real usage fields — labeled estimated everywhere); dollars are rejected on purpose (no pricing tables — would invent precision).
-- **Checkpoint/rewind tools**: `trayambak__Checkpoint` (sha256 manifest, 10MB/file + 100MB total caps, atomic tmp+rename with manifest written last, cwd-only + symlink-escape guards, refuses `.trayambak/checkpoints/**` self-recursion) and `trayambak__Rewind` (verifies hashes _before any write_, stashes current bytes under `<id>/replaced/`, subset restore, id/label lookup, no path ever joined from raw input). Both registered in the `core` toolset so `Arsenal.resolveTools` actually delivers them to the model. 20 tests (1 privilege-gated skip on non-elevated Windows).
-- Docs/help: root help Environment block lists `TRAYAMBAK_BUDGET`; `docs/getting-started.md` documents `--budget`.
+- **Budget surface**: `budget` config field, `NEMO_BUDGET` env (rides the existing config env allowlist — no new lint warnings), and a global `--budget <spec>` flag (`50k`, `1.5M`, `50000 tokens`, `40 turns`; `-1` disables). Invalid specs warn + fall back per config rules. `packages/core/src/token_budget.ts` rewritten (`parseTokenBudget`, `toRolloutBudgetConfig`, `applyBudget`, `budgetStatus`, `shouldContinueTurn`) — `rollout_budget.ts` touched only through its public API. Token usage per response uses the documented `ceil(chars/4)` estimator (protocol carries no real usage fields — labeled estimated everywhere); dollars are rejected on purpose (no pricing tables — would invent precision).
+- **Checkpoint/rewind tools**: `nemo__Checkpoint` (sha256 manifest, 10MB/file + 100MB total caps, atomic tmp+rename with manifest written last, cwd-only + symlink-escape guards, refuses `.nemo/checkpoints/**` self-recursion) and `nemo__Rewind` (verifies hashes _before any write_, stashes current bytes under `<id>/replaced/`, subset restore, id/label lookup, no path ever joined from raw input). Both registered in the `core` toolset so `Arsenal.resolveTools` actually delivers them to the model. 20 tests (1 privilege-gated skip on non-elevated Windows).
+- Docs/help: root help Environment block lists `NEMO_BUDGET`; `docs/getting-started.md` documents `--budget`.
 - Tests: +66 across the three features (24 budget, 22 subagent, 20 checkpoint) — suite at 123 files / 1,465 passed; coverage totals now 48.44/74.19/59.91/48.44 vs thresholds 42/72/51/42.
 
 ### Fixed — production-readiness hardening
 
-- `apps/cli/src/session/session-manager.ts`: UUID ids (no `Date.now()` collisions), disk persistence (`~/.trayambak/sessions.json`, atomic 0600 writes), `fork()` honors requested name, `update()` preserves `id`/`createdAt`.
+- `apps/cli/src/session/session-manager.ts`: UUID ids (no `Date.now()` collisions), disk persistence (`~/.nemo/sessions.json`, atomic 0600 writes), `fork()` honors requested name, `update()` preserves `id`/`createdAt`.
 - `apps/runtime/src/config.ts` + `packages/session-backends/src/index.ts`: atomic writes with `0600` perms for `config.json` and transcripts.
 - `package.json`: strict `build`/`build:ink` (fail on type errors, `build:loose` keeps old behavior), new `test`/`lint`/`format`/`sbom` scripts, `publish:npm --provenance`, `publish:build:debug` skip-obfuscation flag.
 - CI: new `.github/workflows/ci.yml` (typecheck, eslint, prettier, vitest matrix 18/20/22, build smoke, npm audit + SBOM).
 - `SECURITY.md`: supported versions, 3-day ack / 14-day fix SLA, scope, secret-handling, provenance/SBOM notes.
 - `Dockerfile` + `.dockerignore`: Linux prod image; `eslint.config.mjs` + `.prettierrc.json` added.
-- `scripts/make-publish.mjs`: `TRAYAMBAK_SKIP_OBFUSCATION=1` for debuggable builds.
+- `scripts/make-publish.mjs`: `NEMO_SKIP_OBFUSCATION=1` for debuggable builds.
 
 ### Added
 
@@ -1221,14 +1484,14 @@ red against the old code. (`planPath` was already traversal-safe via
 
 ### Security — a session id named an arbitrary directory, and the session picker deleted it
 
-- **`skt/9-session/session.ts` joined `sessionId` into a path four times with no validation.** `deleteSession` fed it straight to `fs.rmSync(dir, { recursive: true, force: true })`, and `appendConversation`, `updateConversationToolResult` and `loadConversation` fed it to `mkdirSync` + `appendFileSync`, a whole-file rewrite, and `readFileSync` respectively. `sessions.json` is a plain JSON file, so a poisoned entry (`{"sessionId":"../../src"}`) was enough — and `packages/tui/src/ink-app/session-picker-actions.ts` imports `deleteSession` directly from this module, so deleting that entry in the interactive picker ran the recursive delete outside the sessions root. Verified before the fix: `deleteSession("../../canary")` returned `true` having destroyed the canary; `loadConversation("../../canary")` returned the canary's parsed contents; `appendConversation` created and appended to a directory outside the root; `updateConversationToolResult` rewrote a file outside it. All four now validate at entry via core's canonical `assertSessionId` — the same rule `packages/session-backends` and the CLI's `archive` command already used — and fail closed **without throwing**, so no caller's return contract changes (`false` / `[]` / no-op).
-- **The runtime `todo` tool had the same shape, and the CLI copy of it was already fixed.** `apps/runtime/src/tools/planning/todo.ts` built `~/.trayambak/todos/<sessionId>.json` from the id verbatim, so `todo_read` parsed and rendered whatever `../../canary/secrets` landed on and the `write` action created or truncated it. `sessionId` reaches this through `ToolContext`, which an embedding host or MCP server sets — outside the trust boundary, even though the local CLI never supplies anything hostile. `apps/cli/src/commands/todo.ts` has carried this exact guard (and a comment saying so) all along; the runtime copy now matches, and an unusable id is reported as a tool error rather than thrown, consistent with every other failure on that path.
+- **`nemo/9-session/session.ts` joined `sessionId` into a path four times with no validation.** `deleteSession` fed it straight to `fs.rmSync(dir, { recursive: true, force: true })`, and `appendConversation`, `updateConversationToolResult` and `loadConversation` fed it to `mkdirSync` + `appendFileSync`, a whole-file rewrite, and `readFileSync` respectively. `sessions.json` is a plain JSON file, so a poisoned entry (`{"sessionId":"../../src"}`) was enough — and `packages/tui/src/ink-app/session-picker-actions.ts` imports `deleteSession` directly from this module, so deleting that entry in the interactive picker ran the recursive delete outside the sessions root. Verified before the fix: `deleteSession("../../canary")` returned `true` having destroyed the canary; `loadConversation("../../canary")` returned the canary's parsed contents; `appendConversation` created and appended to a directory outside the root; `updateConversationToolResult` rewrote a file outside it. All four now validate at entry via core's canonical `assertSessionId` — the same rule `packages/session-backends` and the CLI's `archive` command already used — and fail closed **without throwing**, so no caller's return contract changes (`false` / `[]` / no-op).
+- **The runtime `todo` tool had the same shape, and the CLI copy of it was already fixed.** `apps/runtime/src/tools/planning/todo.ts` built `~/.nemo/todos/<sessionId>.json` from the id verbatim, so `todo_read` parsed and rendered whatever `../../canary/secrets` landed on and the `write` action created or truncated it. `sessionId` reaches this through `ToolContext`, which an embedding host or MCP server sets — outside the trust boundary, even though the local CLI never supplies anything hostile. `apps/cli/src/commands/todo.ts` has carried this exact guard (and a comment saying so) all along; the runtime copy now matches, and an unusable id is reported as a tool error rather than thrown, consistent with every other failure on that path.
 - **`TODO_DIR` is now resolved per call instead of captured at module load.** A frozen constant baked in whatever `HOME` happened to be at import time and made the traversal untestable in isolation. Matches `sessionsDir()` in the sibling module.
-- Tests: `skt/9-session/session-id-guard.test.ts` and `apps/runtime/src/tools/planning/todo-session-id.test.ts`. Both stage a real canary outside the root that the traversal genuinely resolves to, so they fail if the guard is removed rather than passing because the payload missed — and both pin the inverse too (a valid id still works, inside the root). Each guard was verified to fail against the old behaviour: 4 of 4 skt cases, and the todo read **and** write cases, which fail on the overwritten canary itself.
+- Tests: `nemo/9-session/session-id-guard.test.ts` and `apps/runtime/src/tools/planning/todo-session-id.test.ts`. Both stage a real canary outside the root that the traversal genuinely resolves to, so they fail if the guard is removed rather than passing because the payload missed — and both pin the inverse too (a valid id still works, inside the root). Each guard was verified to fail against the old behaviour: 4 of 4 nemo cases, and the todo read **and** write cases, which fail on the overwritten canary itself.
 
 ### Fixed — `exec` reported success for a run that accomplished nothing
 
-- **The CI-facing command exited 0 unconditionally.** `trayambak exec "..." | tee log` streams the agent's events as JSON and inspected none of them, so a run in which policy refused every tool call — or one the rollout budget cut short — told the shell it had succeeded having done nothing. The `EXIT_DENIED` code already existed for precisely this ("the check ran fine, the answer is no — CI-gatable"); only the agent path never consulted it. `recordRunSignal`/`exitCodeForSignals` now derive a status from the events: `EXIT_ERROR` when the rollout budget ended the loop or its own `verification_end` reported failure, `EXIT_DENIED` when nothing at all was permitted. An existing non-zero code is never downgraded.
+- **The CI-facing command exited 0 unconditionally.** `nemo exec "..." | tee log` streams the agent's events as JSON and inspected none of them, so a run in which policy refused every tool call — or one the rollout budget cut short — told the shell it had succeeded having done nothing. The `EXIT_DENIED` code already existed for precisely this ("the check ran fine, the answer is no — CI-gatable"); only the agent path never consulted it. `recordRunSignal`/`exitCodeForSignals` now derive a status from the events: `EXIT_ERROR` when the rollout budget ended the loop or its own `verification_end` reported failure, `EXIT_DENIED` when nothing at all was permitted. An existing non-zero code is never downgraded.
 - Deliberately narrow, because the risk of this change is breaking working pipelines: a denial only matters when **no** call was permitted, since one refusal inside an otherwise productive run is a normal conversational turn; and `mcp_fail`/`subagent_fail` degrade a run rather than failing it, so neither is recorded.
 - Tests: `apps/cli/src/commands/exec-exit-status.test.ts`. The negative cases are the point — 8 of its 11 cases assert the code **stays silent** on healthy, partially-denied, degraded and long runs, so it fails just as happily against an implementation that failed every pipeline. Verified to fail (exactly the 3 positive cases) against the old always-zero behaviour.
 
@@ -1263,9 +1526,9 @@ red against the old code. (`planPath` was already traversal-safe via
 
 - Env filter hardened: 9 → 19 deny patterns (DATABASE_URL, DSN, WEBHOOK, NPM/Bearer/JWT/Cookie/Session/Auth, Docker, Kube) + tests; shells keep working env.
 - `logout()` clears without deleting (no path oracle); `loginStatus` reads key presence, not file existence + tests.
-- ExecPolicy `.rules` files load from `./.trayambak/exec.rules` + `~/.trayambak/exec.rules` on first use (DSL was dead); network matching is separator-aware (`domainMatches` + tests).
+- ExecPolicy `.rules` files load from `./.nemo/exec.rules` + `~/.nemo/exec.rules` on first use (DSL was dead); network matching is separator-aware (`domainMatches` + tests).
 - Server token compare is constant-time (`timingSafeEqual`); Docker runs as `node`, not root.
-- `TRAYAMBAK_TELEMETRY=0/false/off/no` force-disables telemetry + test.
+- `NEMO_TELEMETRY=0/false/off/no` force-disables telemetry + test.
 - Fixed WIP breakage found along the way: duplicate `getDatabase` import, `github.ts` base64 `undefined`, dev-mode test `required: []`.
 
 ### Fixed — approvalFor() ladder is now the real gate (user-reported audit)
@@ -1289,7 +1552,7 @@ red against the old code. (`planPath` was already traversal-safe via
 
 ### Fixed — orphaned AgentCatalog tool (user-reported)
 
-- `trayambak__AgentCatalog` was registered but belonged to no toolset, so `Arsenal.resolveTools` stripped it whenever config existed while the system prompt advertised it → "Unknown tool". Added to the `agentic` toolset; new `toolset-parity.test.ts` asserts both directions (every registered tool in ≥1 toolset, every toolset entry registered) including the exact reported scenario. Guard proven to fail without the fix.
+- `nemo__AgentCatalog` was registered but belonged to no toolset, so `Arsenal.resolveTools` stripped it whenever config existed while the system prompt advertised it → "Unknown tool". Added to the `agentic` toolset; new `toolset-parity.test.ts` asserts both directions (every registered tool in ≥1 toolset, every toolset entry registered) including the exact reported scenario. Guard proven to fail without the fix.
 
 ### Fixed — provider picker overflow (user-reported)
 
@@ -1307,21 +1570,21 @@ red against the old code. (`planPath` was already traversal-safe via
 
 ### Added — core systems (AGENTS.md module map)
 
-- `packages/core/src/feature_flags.ts` (+test): `STABLE_FEATURES` + `FEATURE_<NAME>` env overrides; surfaced as `trayambak flags`.
+- `packages/core/src/feature_flags.ts` (+test): `STABLE_FEATURES` + `FEATURE_<NAME>` env overrides; surfaced as `nemo flags`.
 - `packages/core/src/permissions.ts` (+test): `Tool(glob)` rule engine, deny-first evaluation, `DenialTracker`.
-- `packages/core/src/plan_mode.ts` (+test): read-only tool gate, 0600 plan files under `.trayambak/plans/`, approved-command checks.
+- `packages/core/src/plan_mode.ts` (+test): read-only tool gate, 0600 plan files under `.nemo/plans/`, approved-command checks.
 - `packages/core/src/subagents.ts` (+test): isolated Task workers with `MAX_SUBAGENT_DEPTH` guard + usage summaries (injected runner: deterministic, network-free).
 - `packages/core/src/token_budget.ts` (+test): `128k`/`1.5M` budget parsing, `TurnBudget` consumption/exhaustion/bounded continuation.
 - `docs/architecture.md` module table updated.
 
 ### Changed — Apache-2.0 relicense (owner-authorized) + WIP stabilization
 
-- `LICENSE`: Proprietary v1.0 → Apache License 2.0 (© 2026 SKT AI LABS PRIVATE LIMITED); `package.json` license `Apache-2.0`; 400 source headers + `AGENTS.md`/`docs/README.md`/vscode-extension manifest updated.
+- `LICENSE`: Proprietary v1.0 → Apache License 2.0 (© 2026 Shrijan); `package.json` license `Apache-2.0`; 400 source headers + `AGENTS.md`/`docs/README.md`/vscode-extension manifest updated.
 - Fixed concurrent-author WIP so the tree is green again: sandbox `spawn.ts` (seatbelt names, pid guards, signal casts), `core/process.ts` (no require, typed signals/streams), `core/env_filter.ts` (ProcessEnv input), `core/state_db.ts` (JSON-file backend — no native `better-sqlite3` dep; same API), `core/hook_runtime.ts` (`additionalContext`), `core/agent_registry.ts` (`uuid()`), `command-exec/bash.ts` (no `ctx.emit`, unknown-cast permissions), `prompt/auto-title.test.ts` (unknown-shape helper), `tools/text/*.test.ts` (protocol import), `tui/ui/footer*.ts` (Theme import, indicator fn), sandbox `index.ts` (dedup re-exports).
 
 ### Fixed — TUI glyph corruption (broken `?` symbols)
 
-- New `packages/tui/src/ink-app/glyphs.ts`: single glyph table (`g()`) + `TRAYAMBAK_GLYPHS=ascii|unicode` override (Unicode default with `❯` user markers; ASCII strictly opt-in). Restored all recoded literals (`?`/U+FFFD → ●○◌✓✗★❯█⚠) across 19 components; `vitest.setup.ts` pins Unicode so the suite is OS-deterministic.
+- New `packages/tui/src/ink-app/glyphs.ts`: single glyph table (`g()`) + `NEMO_GLYPHS=ascii|unicode` override (Unicode default with `❯` user markers; ASCII strictly opt-in). Restored all recoded literals (`?`/U+FFFD → ●○◌✓✗★❯█⚠) across 19 components; `vitest.setup.ts` pins Unicode so the suite is OS-deterministic.
 - Resume picker: rows render as one truncating text node on exact fixed-width columns (status/date padded, name budgeted with …); wrapped tails no longer collide. Picker opens with list-time backfill (`backfillUntitledSessions` + test) so default-named sessions show their real title immediately; resume-select backfill kept as well.
 
 ## [0.5.0]
@@ -1331,14 +1594,14 @@ red against the old code. (`planPath` was already traversal-safe via
 - **Dead code removal**: deleted orphaned `apps/cli/src/agent/` (58 files — enforcement actually lives in agent-loop, protocol engine and runtime bash), plus fake/dead commands (`stats`, `daemon`, `profile`, `roll-call`, `cloud`, `session-import`, `console`, `integration/cloud`, `integration/config-validation`). Wired previously dead `resume` and `export` as real subcommands; `export` honors `--format json|text|markdown`.
 - **Release correctness**: version single-sourced from `package.json` via `scripts/sync-version.mjs` (stamps `apps/cli/src/version.ts`; CI fails on drift). Every build runs `clean-dist.mjs` so stale dist is structurally impossible; `bin/*.cmd` shims self-heal via `check-dist.mjs`. New `verify:pack` gate asserts tarball contents (entry+shebang, no tests/maps/journals, ≥50 personas, secret scan).
 - **Command registry**: new `command-registry.ts` as single source for root help, `<cmd> --help` / `help <cmd>`, strict flag validation (aliases canonicalized, unknown flags exit 2) and shell completion (bash/zsh/fish/powershell); exit codes standardized (0 ok / 1 error / 2 usage).
-- **Observability**: structured JSON logger with file sink + rotation (`TRAYAMBAK_LOG`, `TRAYAMBAK_LOG_LEVEL`, `TRAYAMBAK_LOG_DIR`); unknown commands and fatals are logged, not swallowed.
+- **Observability**: structured JSON logger with file sink + rotation (`NEMO_LOG`, `NEMO_LOG_LEVEL`, `NEMO_LOG_DIR`); unknown commands and fatals are logged, not swallowed.
 - **Sandbox honesty**: `detectBackend()` now probes for real integrations (`/usr/bin/sandbox-exec`, `/usr/bin/bwrap`) and returns `fallback` otherwise — it no longer claims unwired OS backends (landlock/restricted-token are documented as reserved). Every check reports `enforcement: "policy-only"`; `sandbox`/`execpolicy` CLI output states that no OS sandbox is spawned. `DEFAULT_EXEC_RULES` strengthened (mkfs/dd/reg delete/vssadmin/pipe-to-shell, ordered first-match).
-- **Config**: `--config <file>` / `TRAYAMBAK_CONFIG` now actually honored by `configPath()` (was declared in `--help` but unused); applied uniformly to every flag-parsing command.
-- **Mistake journal**: `skt/1-errors/mistakes.json` moved to user state dir (`~/.trayambak/skt/1-errors`, `TRAYAMBAK_STATE_DIR` override) with one-time legacy migration — never shipped in the tarball.
+- **Config**: `--config <file>` / `NEMO_CONFIG` now actually honored by `configPath()` (was declared in `--help` but unused); applied uniformly to every flag-parsing command.
+- **Mistake journal**: `nemo/1-errors/mistakes.json` moved to user state dir (`~/.nemo/nemo/1-errors`, `NEMO_STATE_DIR` override) with one-time legacy migration — never shipped in the tarball.
 - **CI/CD**: `ceo-audit.yml` deleted (depended on unavailable external repos/secrets, could never pass); `ci.yml` gained blocking `npm audit --omit=dev --audit-level=high`, SBOM artifact, coverage-threshold job, version-sync gate, Windows test/build legs with `bin\*.cmd` shim smoke tests, and a `verify:pack` job; `release.yml` gained tag↔version gates, blocking SBOM, pre-publish tarball verification and auto GitHub Release notes.
 - **Repo hygiene**: 2,029 files / 12.9 MB removed (stale `.bak`, compiled artifacts, legacy reference TUI); `.gitignore` covers coverage/, journals, bin binaries, backups; `bin/README.md` documents llama.cpp binary provenance.
 - **Lint + format**: repo-wide Prettier pass (579 files) and all ESLint errors fixed (was 16: dead files `file-icon.ts`/`update_prompt*.js` deleted, `require()` → ESM imports, dead render-cache vars removed, `@ts-ignore` dropped once proven unnecessary); `npm run lint` exits 0 and `format:check` passes.
-- **Help rendering**: long usage lines no longer glue onto their summary (`trayambak config …[value]Manage configuration values` bug), with a regression test over every visible command row.
+- **Help rendering**: long usage lines no longer glue onto their summary (`nemo config …[value]Manage configuration values` bug), with a regression test over every visible command row.
 - **Docs integrity**: new `npm run check:links` gate (`scripts/check-docs-links.mjs`) validates every internal doc link and `#anchor` slug; wired into CI's schema job.
 - **Release path proven**: obfuscated `publish:build` + `verify:pack` verified end-to-end (332 files obfuscated; pack gate's version check correctly falls back to `publish/package.json` when the literal is string-array-inlined); obfuscated artifact smoke-tested (`--version`, `help <cmd>`, unknown-command exit 2).
 
@@ -1346,7 +1609,7 @@ red against the old code. (`planPath` was already traversal-safe via
 
 - `packages/modes/src/index.ts` + `modes` cmd: 5 built-ins + `.roomodes` loader; `docs/modes.md`.
 - `packages/approval/src/index.ts`: prefix allow/deny + protected files; `packages/core/src/validate.ts` required-args guard; `docs/approval.md`.
-- `packages/mcp-server/src/index.ts`: real `read_file`/`bash` exec (bounded); project `.trayambak/mcp.json` scope merged in `config.ts`.
+- `packages/mcp-server/src/index.ts`: real `read_file`/`bash` exec (bounded); project `.nemo/mcp.json` scope merged in `config.ts`.
 - `packages/checkpoints/src/index.ts` + `checkpoint` cmd: file-snapshot create/list.
 - `packages/core/src/i18n.ts` (en/hi) + `PRIVACY.md`; `scripts/e2e.mjs` + `test:e2e` + CI e2e gate.
 - Providers unchanged (10 BYOK) per request.
@@ -1359,8 +1622,8 @@ red against the old code. (`planPath` was already traversal-safe via
 ### Added — parity push to 10
 
 - `packages/session-backends/src/transcript.ts`: per-session `sessions/<uuid>/{context.jsonl,wire.jsonl,state.json}`, empty-skip, legacy migrate, newest-first list.
-- `packages/acp/src/index.ts`: ACP stdio JSON-RPC (`initialize/new_session/load_session/list_sessions/set_model/prompt/cancel`); CLI `trayambak acp`.
-- `packages/server/src/index.ts`: `/api/sessions`, `/openapi.json`, CORS, `Bearer` token (`TRAYAMBAK_WEB_TOKEN`); CLI `trayambak web --port 8787`.
+- `packages/acp/src/index.ts`: ACP stdio JSON-RPC (`initialize/new_session/load_session/list_sessions/set_model/prompt/cancel`); CLI `nemo acp`.
+- `packages/server/src/index.ts`: `/api/sessions`, `/openapi.json`, CORS, `Bearer` token (`NEMO_WEB_TOKEN`); CLI `nemo web --port 8787`.
 - `apps/cli/src/index.ts` + `flags.ts`: wired dead `serve`/`download`, new `acp`/`web`, `--key=value` + `--no-*` parsing, `--config/--port/--host` flags.
 - `packages/core/src/secrets.ts`: `withFileLock` + `redactSecrets` + `secureDir` (0700).
 - `.github/workflows/release.yml`: multi-OS build + SBOM + npm `--provenance` publish; `docs/README.md`; version `0.4.0`.

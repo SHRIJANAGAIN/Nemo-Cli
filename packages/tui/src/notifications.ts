@@ -1,11 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execFile, execFileSync } from "child_process"
 import type { AgentEvent } from "../../protocol/src/index.js"
+import { envFlag, envString } from "../../core/src/env_read.js"
 import { writeSync } from "fs"
 
 export interface NotificationConfig {
@@ -26,13 +27,19 @@ const OSC9_TERMINALS: ReadonlySet<string> = new Set(["ghostty", "iTerm.app", "ki
 
 export function terminalSupportsOsc9(): boolean {
   if (!process.stdout.isTTY) return false
-  const termProgram = process.env.TERM_PROGRAM
+  const termProgram = envString("TERM_PROGRAM")
   if (!termProgram) return false
   return OSC9_TERMINALS.has(termProgram)
 }
 
 export function isTmux(): boolean {
-  return !!process.env.TMUX
+  // Inside a tmux session OSC-777 notifications are rewritten by the terminal
+  // multiplexer, so the escape is suppressed. The literal was `!!process.env.TMUX`,
+  // where `TMUX=""` already read as false, so the flag default is false.
+  return envFlag(
+    "TMUX",
+    /*fallbackWhenUnset*/ false,
+  )
 }
 
 function escapeTmuxPayload(message: string): string {
@@ -99,7 +106,7 @@ export function osNotify(title: string, body: string): void {
 }
 
 export function notifyPermissionRequest(tool: string, body: string): void {
-  const title = "TRAYAMBAK – Approval Required"
+  const title = "NEMO – Approval Required"
   if (process.platform === "win32") {
     const safeTitle = title.replace(/'/g, "''")
     const safeBody = `${tool} needs approval: ${body}`.replace(/'/g, "''").replace(/\r?\n/g, " ").slice(0, 400)
@@ -137,10 +144,13 @@ const lastBalloonAt = new Map<string, number>()
  * notify-send. Unlike osNotify's blocking MessageBox this fires and forgets,
  * so it is safe to call inside Ink's event loop. Failures are swallowed, a
  * busy agent can't spam the desktop (minGapMs per key), and
- * TRAYAMBAK_NO_NOTIFY=1 disables it entirely.
+ * NEMO_NO_NOTIFY=1 disables it entirely.
  */
 export function notifyBalloon(key: string, title: string, body: string, minGapMs = 4000): boolean {
-  if (process.env.TRAYAMBAK_NO_NOTIFY === "1") return false
+  // The documented spelling was exactly "1". envFlag additionally honours 0/off/
+    // no/true/on/yes and falls back on anything else, so `NEMO_NO_NOTIFY=0`
+    // (the obvious way to turn it OFF) can no longer mean "notifications on".
+    if (envFlag("NEMO_NO_NOTIFY", /*fallbackWhenUnset*/ false)) return false
   const now = Date.now()
   if (now - (lastBalloonAt.get(key) ?? 0) < minGapMs) return false
   lastBalloonAt.set(key, now)
@@ -202,9 +212,9 @@ export function shouldNotify(event: AgentEvent, config: NotificationConfig): boo
 
 export function notifyForEvent(event: AgentEvent, config: NotificationConfig = DEFAULT_NOTIFICATION_CONFIG): void {
   if (!shouldNotify(event, config)) return
-  if (event.type === "tool_execution_end") osNotify("TRAYAMBAK – Tool Error", event.toolName + " failed")
+  if (event.type === "tool_execution_end") osNotify("NEMO – Tool Error", event.toolName + " failed")
   else if (event.type === "permission_request") notifyPermissionRequest(event.tool, event.reason)
-  else if (event.type === "agent_end") osNotify("TRAYAMBAK – Done", "Agent finished")
+  else if (event.type === "agent_end") osNotify("NEMO – Done", "Agent finished")
 }
 
 export function createNotificationSink(

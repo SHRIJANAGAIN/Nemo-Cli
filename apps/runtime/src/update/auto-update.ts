@@ -1,27 +1,27 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Auto-update — port of SKT AI LABS's cli/upgrade.ts policy, adapted to trayambak's
+ * Auto-update — port of Shrijan's cli/upgrade.ts policy, adapted to nemo's
  * install reality (source checkout with a build step, not a prebuilt binary):
  *
- *   - `autoupdate: true | false | "notify"` (SKT AI LABS semantics) + the
- *     TRAYAMBAK_DISABLE_AUTOUPDATE kill switch (SKT AI LABS's SKT_AI_LABS_DISABLE_AUTOUPDATE).
+ *   - `autoupdate: true | false | "notify"` (Shrijan semantics) + the
+ *     NEMO_DISABLE_AUTOUPDATE kill switch (Shrijan's SHRIJAN_DISABLE_AUTOUPDATE).
  *   - Install-method detection: "npm" (global node_modules install), "git"
  *     (checkout with .git), "source" (manual copy — never updated here).
  *   - Latest-version fetch: npm registry for npm installs, `git ls-remote`
  *     release tags for git installs. Any failure is silent — an update check
  *     must never break boot.
- *   - Release-type gating (SKT AI LABS): only `patch` updates auto-apply when
+ *   - Release-type gating (Shrijan): only `patch` updates auto-apply when
  *     `autoupdate === true`; minor/major (and everything under "notify")
  *     produce an update-available notice instead.
- *   - Documented deviation: git checkouts NEVER auto-apply (unlike SKT AI LABS's
+ *   - Documented deviation: git checkouts NEVER auto-apply (unlike Shrijan's
  *     npm), because updating requires `git pull` + `npm install` + a rebuild
  *     under the running process — they always get the notice and run
- *     `trayambak upgrade` explicitly.
+ *     `nemo upgrade` explicitly.
  */
 
 import { spawn } from "child_process"
@@ -71,7 +71,7 @@ export function isSafeVersion(raw: string): boolean {
   return /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(raw)
 }
 
-/** SKT AI LABS's Installation.getReleaseType port: how `latest` relates to `current`. */
+/** Shrijan's Installation.getReleaseType port: how `latest` relates to `current`. */
 export function getReleaseType(current: string, latest: string): ReleaseType {
   const a = parseVersion(current)
   const b = parseVersion(latest)
@@ -84,8 +84,8 @@ export function getReleaseType(current: string, latest: string): ReleaseType {
   return "unknown"
 }
 
-/** How trayambak itself was installed (not the user's project — `cwd` must be
- * the trayambak install root). npm-global wins over an adjacent .git. */
+/** How nemo itself was installed (not the user's project — `cwd` must be
+ * the nemo install root). npm-global wins over an adjacent .git. */
 export function detectMethod(cwd: string, argvPath = process.argv[1] ?? ""): UpdateMethod {
   if (/[\\/]node_modules[\\/]/.test(argvPath)) return "npm"
   if (cwd && fs.existsSync(path.join(cwd, ".git"))) return "git"
@@ -108,29 +108,29 @@ function readPackageJson(dir: string): { name?: string; version?: string } | und
 }
 
 /**
- * Install-root package names: the source tree is "trayambak", but the
- * published npm tarball is "@skt-ai-labs/trayambak-cli" — matching only the
- * former made every production install unlocatable, so checkForUpdate
+ * Install-root package names: the source tree is "nemo-code", but the
+ * published npm tarball is "@shrijan/nemo-cli" — matching only the
+ * published name made every source checkout unlocatable, so checkForUpdate
  * always skipped with "cannot determine installed version" (observed live:
  * auto-update never fired outside dev checkouts).
  */
 export function isInstallRootName(name: unknown): boolean {
   if (typeof name !== "string") return false
   const n = name.toLowerCase()
-  return n === "trayambak" || n === "@skt-ai-labs/trayambak-cli"
+  return n === "nemo" || n === "nemo-code" || n === "@shrijan/nemo-cli"
 }
 
 /**
- * Locate the trayambak installation root: walk up from the running module
- * FIRST (ground truth of the code that is executing — a stale TRAYAMBAK_HOME
+ * Locate the nemo installation root: walk up from the running module
+ * FIRST (ground truth of the code that is executing — a stale NEMO_HOME
  * pointing at a source checkout used to hijack every global install into
  * comparing/updating the wrong tree: observed live, auto-update never fired
  * outside dev checkouts and `upgrade` targeted the wrong package name),
- * then fall back to TRAYAMBAK_HOME (exotic runners outside any install
+ * then fall back to NEMO_HOME (exotic runners outside any install
  * tree). Works from both the source tree and dist/ (walk-up is
  * depth-independent). Stray package.json files can't hijack version
- * detection: only install-root names match (source "trayambak" or published
- * "@skt-ai-labs/trayambak-cli").
+ * detection: only install-root names match (source "nemo" or published
+ * "@shrijan/nemo-cli").
  */
 export function findInstallRoot(opts?: { startDir?: string; env?: NodeJS.ProcessEnv }): string | undefined {
   const start = opts?.startDir ?? (typeof __dirname !== "undefined" ? __dirname : process.cwd())
@@ -143,7 +143,7 @@ export function findInstallRoot(opts?: { startDir?: string; env?: NodeJS.Process
     dir = parent
   }
   const envRoot = opts?.env ?? process.env
-  const raw = envRoot.TRAYAMBAK_HOME
+  const raw = envRoot.NEMO_HOME
   if (raw) {
     const pkg = readPackageJson(path.resolve(raw))
     if (isInstallRootName(pkg?.name)) return path.resolve(raw)
@@ -151,7 +151,7 @@ export function findInstallRoot(opts?: { startDir?: string; env?: NodeJS.Process
   return undefined
 }
 
-/** Installed version from the install root's package.json (SKT AI LABS's compiled
+/** Installed version from the install root's package.json (Shrijan's compiled
  * InstallationVersion constant, read at runtime instead). */
 export function getInstalledVersion(opts?: { startDir?: string; env?: NodeJS.ProcessEnv }): string | undefined {
   const root = findInstallRoot(opts)
@@ -312,7 +312,7 @@ async function applyNpmUpdate(root: string, pkgName: string, latest: string): Pr
 }
 
 export interface CheckForUpdateOptions {
-  /** Any object carrying the `autoupdate` policy field (TrayambakConfig fits). */
+  /** Any object carrying the `autoupdate` policy field (NemoConfig fits). */
   config: { autoupdate?: boolean | "notify" }
   env?: NodeJS.ProcessEnv
   /** Module/location to walk up from when locating the install root. */
@@ -321,15 +321,15 @@ export interface CheckForUpdateOptions {
 }
 
 /**
- * SKT AI LABS's `upgrade()` policy, returning an outcome instead of emitting bus
+ * Shrijan's `upgrade()` policy, returning an outcome instead of emitting bus
  * events: the TUI turns "update-available" into a transcript notice, the CLI
  * command does explicit upgrades.
  */
 export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<UpdateOutcome> {
   const env = opts.deps?.env ?? opts.env ?? process.env
   if (opts.config.autoupdate === false) return { kind: "skipped", reason: "autoupdate disabled" }
-  if (env.TRAYAMBAK_DISABLE_AUTOUPDATE && !["0", "false"].includes(env.TRAYAMBAK_DISABLE_AUTOUPDATE)) {
-    return { kind: "skipped", reason: "TRAYAMBAK_DISABLE_AUTOUPDATE set" }
+  if (env.NEMO_DISABLE_AUTOUPDATE && !["0", "false"].includes(env.NEMO_DISABLE_AUTOUPDATE)) {
+    return { kind: "skipped", reason: "NEMO_DISABLE_AUTOUPDATE set" }
   }
 
   const root = findInstallRoot({ startDir: opts.startDir, env })
@@ -341,7 +341,7 @@ export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<Updat
     return { kind: "skipped", reason: `unsupported install method: ${method}` }
   }
 
-  const pkgName = readPackageJson(root)?.name ?? "Trayambak"
+  const pkgName = readPackageJson(root)?.name ?? "Nemo"
   const fetchLatest =
     opts.deps?.fetchLatest ??
     ((m: UpdateMethod): Promise<string | undefined> =>
@@ -363,11 +363,11 @@ export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<Updat
   }
 
   const releaseType = getReleaseType(current, latest)
-  // SKT AI LABS gates auto-apply to patches under `autoupdate: true`; we additionally
+  // Shrijan gates auto-apply to patches under `autoupdate: true`; we additionally
   // force notify for git checkouts (rebuild-under-running-process is unsafe).
   // Shell-safety of the apply (win32 shell:true): the version token is
   // isSafeVersion-gated at the registry edge and the package name can only
-  // ever be an install-root name ("trayambak" / "@skt-ai-labs/trayambak-cli",
+  // ever be an install-root name ("nemo" / "@shrijan/nemo-cli",
   // any case — findInstallRoot matched it exactly), so neither shell-bound
   // token carries metacharacters (DEP0190 concat is safe here).
   const notifyOnly = opts.config.autoupdate === "notify" || releaseType !== "patch" || method === "git"

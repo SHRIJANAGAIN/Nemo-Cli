@@ -1,15 +1,19 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
- * Trayambak desktop chat UI. Talks ONLY through the preload bridge
- * (`window.trayambak`) — no Node, no raw IPC. Rendering contract: user
+ * Nemo desktop chat UI. Talks ONLY through the preload bridge
+ * (`window.nemo`) — no Node, no raw IPC. Rendering contract: user
  * input and assistant text go through the markdown renderer; tool
  * output is appended verbatim inside <pre> (never markdown).
  */
 (function () {
   "use strict"
 
-  var api = window.trayambak
+  var api = window.nemo
   var log = document.getElementById("log")
   var input = document.getElementById("input")
   var sendBtn = document.getElementById("send")
@@ -66,7 +70,7 @@
     textBlock.acc += text
     // Re-render the whole turn from markdown source on every delta —
     // incremental HTML splicing would break code fences mid-stream.
-    textBlock.el.innerHTML = window.trayambakRenderMarkdown(textBlock.acc)
+    textBlock.el.innerHTML = window.nemoRenderMarkdown(textBlock.acc)
     scrollToEnd()
   }
 
@@ -83,7 +87,7 @@
       thoughtBlock = { el: body, acc: "" }
     }
     thoughtBlock.acc += text
-    thoughtBlock.el.innerHTML = window.trayambakRenderMarkdown(thoughtBlock.acc)
+    thoughtBlock.el.innerHTML = window.nemoRenderMarkdown(thoughtBlock.acc)
     scrollToEnd()
   }
 

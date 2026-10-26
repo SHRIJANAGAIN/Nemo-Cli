@@ -1,14 +1,14 @@
 {
-  "name": "trayambak",
-  "version": "1.0.0-S1-TITANIUM",
+  "name": "nemo-code",
+  "version": "1.0.0-S1.1-TITANIUM",
   "private": true,
   "type": "commonjs",
-  "description": "Trayambak is a CLI coding agent designed for autonomous software development. It is developed and maintained by **SKT AI LABS PRIVATE LIMITED** and licensed under the **Trayambak CLI Proprietary License**.",
-  "license": "SEE LICENSE IN LICENSE",
-  "author": "SKT AI LABS PRIVATE LIMITED",
+  "description": "Nemo Code is a CLI coding agent designed for autonomous software development. It is developed and maintained by **Shrijan** and licensed under the **Apache License 2.0**.",
+  "license": "Apache-2.0",
+  "author": "Shrijan",
   "bin": {
-    "trayambak": "dist/apps/cli/src/index.js",
-    "skt": "dist/apps/cli/src/index.js"
+    "nemo": "dist/apps/cli/src/index.js",
+    "nemo-code": "dist/apps/cli/src/index.js"
   },
   "files": [
     "dist"
@@ -33,10 +33,10 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "node scripts/e2e.mjs",
     "smoke": "node scripts/run-smokes.mjs",
-    "lint": "eslint apps packages skt",
-    "lint:fix": "eslint apps packages skt --fix",
-    "format": "prettier --write \"apps/**/*.{ts,tsx,json,md}\" \"packages/**/*.{ts,tsx,json,md}\" \"skt/**/*.{ts,md}\" \"*.{json,md}\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,md}\" \"packages/**/*.{ts,tsx,json,md}\" \"skt/**/*.{ts,md}\" \"*.{json,md}\"",
+    "lint": "eslint apps packages nemo",
+    "lint:fix": "eslint apps packages nemo --fix",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,json,md}\" \"packages/**/*.{ts,tsx,json,md}\" \"nemo/**/*.{ts,md}\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,md}\" \"packages/**/*.{ts,tsx,json,md}\" \"nemo/**/*.{ts,md}\" \"*.{json,md}\"",
     "sbom": "npm sbom --sbom-format=cyclonedx --omit=dev > sbom.cyclonedx.json",
     "install-global": "node scripts/install-global.js",
     "publish:build": "npm run build && node scripts/make-publish.mjs",
@@ -61,9 +61,6 @@
     "vitest": "2.1.9"
   },
   "dependencies": {
-    "@claude-code/local-observability": "file:packages/trayambak-ink/vendor/claude-code-local-observability",
-    "@claude-code/output": "file:packages/trayambak-ink/vendor/claude-code-output",
-    "@claude-code/repl": "file:packages/trayambak-ink/vendor/claude-code-repl",
     "@modelcontextprotocol/sdk": "1.30.0",
     "bidi-js": "1.1.0",
     "figures": "6.1.0",

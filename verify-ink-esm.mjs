@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -71,7 +71,7 @@ for (const { file, expect } of ENTRY_POINTS) {
 
 /**
  * NOTE: there is deliberately no "no specifier may escape this root" check here.
- * App.js legitimately reaches ../../../../apps/runtime/* and ../../skt/*, which
+ * App.js legitimately reaches ../../../../apps/runtime/* and ../../nemo/*, which
  * land on the CommonJS build and are served fine by Node's CJS-ESM interop.
  * Failing those would be a false alarm — an earlier version of this file did
  * exactly that and had to be backed out.

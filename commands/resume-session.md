@@ -1,5 +1,5 @@
 ---
-description: Load the most recent session file from ~/.trayambak/session-data/ and resume work with full context from where the last session ended.
+description: Load the most recent session file from ~/.nemo/session-data/ and resume work with full context from where the last session ended.
 ---
 
 # Resume Session Command
@@ -12,15 +12,15 @@ This command is the counterpart to `/save-session`.
 - Starting a new session to continue work from a previous day
 - After starting a fresh session due to context limits
 - When handing off a session file from another source (just provide the file path)
-- Any time you have a session file and want Trayambak to fully absorb it before proceeding
+- Any time you have a session file and want Nemo to fully absorb it before proceeding
 
 ## Usage
 
 ```
-/resume-session                                                      # loads most recent file in ~/.trayambak/session-data/
+/resume-session                                                      # loads most recent file in ~/.nemo/session-data/
 /resume-session 2024-01-15                                           # loads most recent session for that date
-/resume-session ~/.trayambak/session-data/2024-01-15-abc123de-session.tmp  # loads a current short-id session file
-/resume-session ~/.trayambak/sessions/2024-01-15-session.tmp               # loads a specific legacy-format file
+/resume-session ~/.nemo/session-data/2024-01-15-abc123de-session.tmp  # loads a current short-id session file
+/resume-session ~/.nemo/sessions/2024-01-15-session.tmp               # loads a specific legacy-format file
 ```
 
 ## Process
@@ -29,20 +29,20 @@ This command is the counterpart to `/save-session`.
 
 If no argument provided:
 
-1. Check `~/.trayambak/session-data/`
+1. Check `~/.nemo/session-data/`
 2. Read the matching `*-session.tmp` candidates and apply the candidate ranking below
 3. Load the highest-ranked candidate
 4. If the folder does not exist or has no eligible matching files, tell the user:
    ```
-   No session files found in ~/.trayambak/session-data/
+   No session files found in ~/.nemo/session-data/
    Run /save-session at the end of a session to create one.
    ```
    Then stop.
 
 If an argument is provided:
 
-- If it looks like a date (`YYYY-MM-DD`), search `~/.trayambak/session-data/` first, then the legacy
-  `~/.trayambak/sessions/`, for files matching `YYYY-MM-DD-session.tmp` (legacy format) or
+- If it looks like a date (`YYYY-MM-DD`), search `~/.nemo/session-data/` first, then the legacy
+  `~/.nemo/sessions/`, for files matching `YYYY-MM-DD-session.tmp` (legacy format) or
   `YYYY-MM-DD-<shortid>-session.tmp` (current format), apply the candidate ranking below across
   all matches, and load the highest-ranked candidate for that date
 - If it looks like a file path, read exactly that file directly. Do not apply candidate ranking or
@@ -140,7 +140,7 @@ empty or unreadable without loading a substitute.
 ## Example Output
 
 ```
-SESSION LOADED: /Users/you/.trayambak/session-data/2024-01-15-abc123de-session.tmp
+SESSION LOADED: /Users/you/.nemo/session-data/2024-01-15-abc123de-session.tmp
 ════════════════════════════════════════════════
 
 PROJECT: my-app — JWT Authentication

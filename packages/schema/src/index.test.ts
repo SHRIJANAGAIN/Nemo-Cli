@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, it, expect } from "vitest"
 import { validateConfig, assertConfig } from "./index.js"
-import type { TrayambakConfig } from "../../../apps/runtime/src/index.js"
+import type { NemoConfig } from "../../../apps/runtime/src/index.js"
 
-const validConfig: TrayambakConfig = {
+const validConfig: NemoConfig = {
   baseUrl: "https://api.openai.com",
   model: "gpt-4",
   apiKey: "sk-test",
@@ -28,6 +28,7 @@ const validConfig: TrayambakConfig = {
   retryDelayMs: 750,
   maxParallelToolCalls: 4,
   nativeTools: true,
+  agenticCompaction: true,
 }
 
 describe("validateConfig", () => {

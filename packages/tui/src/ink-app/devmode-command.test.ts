@@ -1,11 +1,15 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * `/devmode` contract tests (devmode-command.ts).
  *
- * The handler is security- and licensing-relevant: it gates a 83-tool pentest
- * catalog behind a live server check, and it is the only path that turns a
- * reviewer-facing toolset on. These tests pin the two properties that matter:
+ * The handler is security- and licensing-relevant: it is the only path that
+ * turns the reviewer-facing toolset on. These tests pin the two properties
+ * that matter:
  *
  *  1. **No state change without a live-valid license.** Every refusal path
  *     leaves config exactly as it found it and reports what IS, not what the
@@ -24,7 +28,6 @@ vi.mock("../../../../apps/runtime/src/license.js", async () => {
   return {
     ...actual,
     serverVerifyLicenseKey: vi.fn(async () => ({ valid: false, reason: "no license" })),
-    serverCanUsePentest: vi.fn(async () => ({ valid: false, reason: "no valid license" })),
     serverActivateLicenseKey: vi.fn(async () => ({ ok: false, reason: "bad key" })),
     serverMintTrial: vi.fn(async () => ({ ok: false, reason: "trial exhausted" })),
   }
@@ -44,17 +47,15 @@ import { runDevmode, devSnapshot, type DevmodeDeps } from "./devmode-command.js"
 import { loadConfig, saveConfig } from "../../../../apps/runtime/src/config.js"
 import {
   serverActivateLicenseKey,
-  serverCanUsePentest,
   serverMintTrial,
   serverVerifyLicenseKey,
 } from "../../../../apps/runtime/src/license.js"
 import type { QuestionRequest } from "./types.js"
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 
 const loadMock = loadConfig as unknown as ReturnType<typeof vi.fn>
 const saveMock = saveConfig as unknown as ReturnType<typeof vi.fn>
 const verifyMock = serverVerifyLicenseKey as unknown as ReturnType<typeof vi.fn>
-const pentestMock = serverCanUsePentest as unknown as ReturnType<typeof vi.fn>
 const activateMock = serverActivateLicenseKey as unknown as ReturnType<typeof vi.fn>
 const trialMock = serverMintTrial as unknown as ReturnType<typeof vi.fn>
 
@@ -75,7 +76,7 @@ function harness(base: Record<string, unknown> = {}): Harness {
     },
     setPendingQuestion: (request) => questions.push(request),
     questionResolverRef: { current: null },
-    agentConfigRef: { current: { provider: "nvidia" } as unknown as TrayambakConfig },
+    agentConfigRef: { current: { provider: "nvidia" } as unknown as NemoConfig },
     agentRef: { current: { sentinel: true } },
     config: null,
   }
@@ -100,16 +101,15 @@ afterEach(() => {
 })
 
 describe("devSnapshot", () => {
-  it("reads all three switches from persisted config", () => {
+  it("reads both switches from persisted config", () => {
     loadMock.mockImplementation(() => ({
       developerMode: { enabled: true, gateEnabled: true },
-      toolsets: { disabled: ["pentest"] },
     }))
-    expect(devSnapshot()).toEqual({ enabled: true, gate: true, pentest: false })
+    expect(devSnapshot()).toEqual({ enabled: true, gate: true })
   })
 
   it("treats a missing config as everything off", () => {
-    expect(devSnapshot()).toEqual({ enabled: false, gate: false, pentest: true })
+    expect(devSnapshot()).toEqual({ enabled: false, gate: false })
   })
 })
 
@@ -233,64 +233,6 @@ describe("license prompt", () => {
   })
 })
 
-describe("pentest gate", () => {
-  it("refuses to enable pentest without a live-valid license and leaves the toolset alone", async () => {
-    pentestMock.mockResolvedValue({ valid: false, reason: "plan does not include pentest" })
-    const h = harness({ developerMode: { enabled: true } })
-    runDevmode("pentest", h)
-    h.answer(["1"])
-    await flush()
-
-    expect(h.rows.join("\n")).toContain("plan does not include pentest")
-    // The toolsets write must not happen — only the developerMode write would.
-    expect(saveMock).not.toHaveBeenCalledWith(expect.objectContaining({ toolsets: expect.anything() }))
-  })
-
-  it("enables pentest once the license check passes", async () => {
-    pentestMock.mockResolvedValue({ valid: true })
-    const h = harness({ developerMode: { enabled: true }, toolsets: { disabled: ["pentest"] } })
-    runDevmode("pentest", h)
-    h.answer(["1"])
-    await flush()
-
-    expect(saveMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        toolsets: expect.objectContaining({ disabled: [] }),
-      }),
-    )
-    expect(h.agentRef.current).toBeNull()
-  })
-
-  it("disabling never needs a license check", async () => {
-    const h = harness({ developerMode: { enabled: true } })
-    runDevmode("pentest", h)
-    h.answer(["2"])
-    await flush()
-
-    expect(pentestMock).not.toHaveBeenCalled()
-    expect(saveMock).toHaveBeenCalledWith(
-      expect.objectContaining({ toolsets: expect.objectContaining({ disabled: ["pentest"] }) }),
-    )
-  })
-
-  it("cancelling the pentest menu writes nothing", async () => {
-    const h = harness({ developerMode: { enabled: true } })
-    runDevmode("pentest", h)
-    h.answer(["3"])
-    await flush()
-
-    expect(saveMock).not.toHaveBeenCalled()
-  })
-
-  it("the menu is unreachable while developer mode is OFF", () => {
-    const h = harness({ developerMode: { enabled: false } })
-    runDevmode("pentest", h)
-
-    expect(h.questions).toHaveLength(0)
-    expect(h.rows.join("\n")).toContain("Developer mode is OFF")
-  })
-})
-
 describe("configured unlock (/devmode on)", () => {
   it("refuses without a valid configured license and never enables mode", async () => {
     verifyMock.mockResolvedValue({ valid: false, reason: "expired" })
@@ -302,14 +244,14 @@ describe("configured unlock (/devmode on)", () => {
     expect(saveMock).not.toHaveBeenCalled()
   })
 
-  it("enables mode and opens the pentest menu once verified", async () => {
+  it("enables mode once verified", async () => {
     verifyMock.mockResolvedValue({ valid: true })
     const h = harness({ licenseKey: "1102-AAAA", developerMode: { enabled: false } })
     runDevmode("on", h)
     await flush()
 
     expect(saveMock).toHaveBeenCalledWith({ developerMode: { enabled: true } })
-    expect(h.questions.at(-1)?.header).toBe("Devmode · Pentest")
+    expect(h.agentRef.current).toBeNull()
   })
 })
 
@@ -324,7 +266,7 @@ describe("/devmode trial", () => {
     expect(saveMock).not.toHaveBeenCalled()
   })
 
-  it("persists the minted key and opens the pentest menu on success", async () => {
+  it("persists the minted key on success", async () => {
     trialMock.mockResolvedValue({ ok: true, key: "1102-TRIAL-KEY-1", days: 7 })
     const h = harness()
     runDevmode("trial", h)
@@ -333,7 +275,7 @@ describe("/devmode trial", () => {
     expect(saveMock).toHaveBeenCalledWith(
       expect.objectContaining({ licenseKey: "1102-TRIAL-KEY-1", developerMode: { enabled: true } }),
     )
-    expect(h.questions.at(-1)?.header).toBe("Devmode · Pentest")
+    expect(h.agentRef.current).toBeNull()
   })
 
   it("persists the canonical key when the server returns a lowercased copy", async () => {
@@ -353,13 +295,13 @@ describe("/devmode trial", () => {
 describe("/devmode status", () => {
   it("reports the live switches plus an invalid-license note without writing", async () => {
     verifyMock.mockResolvedValue({ valid: false, reason: "no license" })
-    const h = harness({ developerMode: { enabled: true, gateEnabled: false }, toolsets: { disabled: ["pentest"] } })
+    const h = harness({ developerMode: { enabled: true, gateEnabled: false } })
     runDevmode("status", h)
     await flush()
 
     const out = h.rows.join("\n")
     expect(out).toContain("Developer mode: ON")
-    expect(out).toContain("Pentest tools: DISABLED")
+    expect(out).toContain("Gate: OFF")
     expect(out).toContain("invalid (no license)")
     expect(saveMock).not.toHaveBeenCalled()
   })
@@ -375,11 +317,11 @@ describe("/devmode status", () => {
 })
 
 describe("/devmode off", () => {
-  it("disables mode and reports the pentest state it left behind", () => {
-    const h = harness({ developerMode: { enabled: true }, toolsets: { disabled: ["pentest"] } })
+  it("disables mode", () => {
+    const h = harness({ developerMode: { enabled: true } })
     runDevmode("off", h)
 
     expect(saveMock).toHaveBeenCalledWith({ developerMode: { enabled: false } })
-    expect(h.rows.join("\n")).toContain("pentest tools stay DISABLED")
+    expect(h.rows.join("\n")).toContain("Developer mode: OFF")
   })
 })

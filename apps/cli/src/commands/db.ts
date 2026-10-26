@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import {
@@ -14,18 +14,18 @@ import { usageOutput } from "../command-registry.js"
 
 export type DbAction = "path" | "summary" | "threads" | "violations"
 
-function readDb(codexHome?: string): DatabaseDatabase {
-  return codexHome ? initDatabases(codexHome) : getDatabase()
+function readDb(nemoHome?: string): DatabaseDatabase {
+  return nemoHome ? initDatabases(nemoHome) : getDatabase()
 }
 
-/** `trayambak db path`: where the state file lives. */
-export function dbPath(codexHome?: string): string {
-  return stateFilePath(codexHome)
+/** `nemo db path`: where the state file lives. */
+export function dbPath(nemoHome?: string): string {
+  return stateFilePath(nemoHome)
 }
 
-/** `trayambak db threads`: one line per stored thread. */
-export function dbThreads(codexHome?: string): string {
-  const threads = readDb(codexHome).getAllThreads() as Array<{
+/** `nemo db threads`: one line per stored thread. */
+export function dbThreads(nemoHome?: string): string {
+  const threads = readDb(nemoHome).getAllThreads() as Array<{
     id: string
     updated_at: number
     metadata: unknown
@@ -37,9 +37,9 @@ export function dbThreads(codexHome?: string): string {
   )
 }
 
-/** `trayambak db violations`: sandbox/policy violations, newest first. */
-export function dbViolations(codexHome?: string): string {
-  const violations = readDb(codexHome).getViolations() as Array<{
+/** `nemo db violations`: sandbox/policy violations, newest first. */
+export function dbViolations(nemoHome?: string): string {
+  const violations = readDb(nemoHome).getViolations() as Array<{
     type: string
     path: string | null
     operation: string
@@ -57,28 +57,28 @@ export function dbViolations(codexHome?: string): string {
   )
 }
 
-/** `trayambak db <action>`: inspect the local state store. */
-export function dbCommand(action: string, codexHome?: string): string {
+/** `nemo db <action>`: inspect the local state store. */
+export function dbCommand(action: string, nemoHome?: string): string {
   const normalized = action.trim().toLowerCase() as DbAction | ""
   switch (normalized) {
     case "path":
-      return dbPath(codexHome)
+      return dbPath(nemoHome)
     case "":
     case "summary": {
-      const db = readDb(codexHome)
+      const db = readDb(nemoHome)
       const threads = db.getAllThreads() as unknown[]
       const violations = db.getViolations() as unknown[]
       return [
-        `State: ${dbPath(codexHome)}`,
+        `State: ${dbPath(nemoHome)}`,
         `backend: ${db.backendKind()}`,
         `threads: ${threads.length}`,
         `violations: ${violations.length}`,
       ].join("\n")
     }
     case "threads":
-      return dbThreads(codexHome)
+      return dbThreads(nemoHome)
     case "violations":
-      return dbViolations(codexHome)
+      return dbViolations(nemoHome)
     default:
       return usageOutput(`Unknown db action: ${action}. Available: path|summary|threads|violations`)
   }

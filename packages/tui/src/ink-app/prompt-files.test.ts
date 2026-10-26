@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, it, expect, afterEach } from "vitest"
@@ -147,8 +147,8 @@ describe("loadPromptCommandsFromDir / loadPromptCommands", () => {
 
     const dirs = defaultPromptCommandDirs("/proj", "/home/u")
     expect(dirs[0]).toBe(path.join("/proj", "commands"))
-    expect(dirs[1]).toBe(path.join("/proj", ".trayambak", "commands"))
-    expect(dirs[2]).toBe(path.join("/home/u", ".trayambak", "commands"))
+    expect(dirs[1]).toBe(path.join("/proj", ".nemo", "commands"))
+    expect(dirs[2]).toBe(path.join("/home/u", ".nemo", "commands"))
   })
 
   it("bundled dirs resolve from a module dir and load with lowest precedence", () => {

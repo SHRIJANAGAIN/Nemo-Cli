@@ -11,7 +11,7 @@
  *   3. Re-picking the live session reloaded state from disk (which lags:
  *      replies persist on message_end) and stacked another banner.
  *
- * This drives the REAL TrayambakApp (dist) against a sandboxed,
+ * This drives the REAL NemoApp (dist) against a sandboxed,
  * deliberately polluted store and asserts:
  *   - the picker restores the history WITHOUT the stale banners,
  *   - exactly ONE fresh banner renders, AFTER the restored messages,
@@ -37,8 +37,8 @@ const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
 
 // ── Sandboxed session store, polluted the way the old build polluted it ──
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-resume-"))
-const convDir = path.join(sandbox, "skt", "8-conversations")
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-resume-"))
+const convDir = path.join(sandbox, "nemo", "8-conversations")
 fs.mkdirSync(path.join(convDir, "sess_smoke1"), { recursive: true })
 fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "resume-smoke" }))
 // Seeded session sits in the store; boot must NOT surface it (first screen),
@@ -73,8 +73,8 @@ const polluted = [
 const seededLines = polluted.length
 fs.writeFileSync(logFile, polluted.map((e) => JSON.stringify(e)).join("\n") + "\n")
 
-// session.ts resolves its store from TRAYAMBAK_HOME at CALL time.
-process.env.TRAYAMBAK_HOME = sandbox
+// session.ts resolves its store from NEMO_HOME at CALL time.
+process.env.NEMO_HOME = sandbox
 
 // ── Fake TTY (byte-for-byte what a real terminal delivers) ───────────────
 const stdin = new PassThrough()
@@ -97,15 +97,15 @@ const sanitizedStdin = createSanitizedStdin(stdin)
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "")
 const countIn = (hay, needle) => hay.split(needle).length - 1
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark", // skip ThemePicker
+      themeName: "nemo-dark", // skip ThemePicker
       baseUrl: "http://127.0.0.1:9/api", // unroutable — no network ever needed
       apiKey: "test-key",
       model: "test/model",

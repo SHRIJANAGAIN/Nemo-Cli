@@ -101,7 +101,7 @@ Do not assume `npm test`. The commands in the steps and examples below use `<tes
    node scripts/setup-package-manager.js --detect
    ```
 
-   It resolves the package manager (npm / pnpm / yarn / bun) from, in order: `TRAYAMBAK_PACKAGE_MANAGER`, `.trayambak/package-manager.json`, the `package.json` `packageManager` field, the lockfile, then global config.
+   It resolves the package manager (npm / pnpm / yarn / bun) from, in order: `NEMO_PACKAGE_MANAGER`, `.nemo/package-manager.json`, the `package.json` `packageManager` field, the lockfile, then global config.
 
 2. **Distinguish the package manager from the test runner — they are not the same.** A project can use Bun to install dependencies yet still run Jest or Vitest. Inspect `package.json` `scripts.test` and the test files:
    - `scripts.test` invokes `jest` / `vitest` -> run through the detected PM (`npm test`, `pnpm test`, `yarn test`, or `bun run test`).
@@ -251,10 +251,10 @@ Store the evidence report in the project's standard documentation directory, for
 ```text
 docs/testing/<plan-or-task-name>.tdd.md
 .github/tdd/<plan-or-task-name>.tdd.md
-.trayambak/tdd/<plan-or-task-name>.tdd.md
+.nemo/tdd/<plan-or-task-name>.tdd.md
 ```
 
-If the repository already uses Trayambak-specific local artifacts, the `.trayambak/tdd/` location is also acceptable. Include:
+If the repository already uses Nemo-specific local artifacts, the `.nemo/tdd/` location is also acceptable. Include:
 
 1. **Source plan** - link the `*.plan.md` file if one was used, or state that journeys were derived during this TDD run.
 2. **User journeys** - list the journeys from the plan or the ones written in Step 1.

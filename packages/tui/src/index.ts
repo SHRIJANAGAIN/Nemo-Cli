@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 // Full UI component library (theme system, boxes, spinners, toasts, footer, dialogs)
@@ -15,16 +15,21 @@ export * from "./approval-notification"
 // -- Legacy (pre-ink) TUI tree — kept ALIVE: typechecked, emitted, exported --
 // The raw-terminal state machine + composer + chat widget that predate the
 // ink renderer. Their AppEvent/ApprovalRequest are DIFFERENT shapes from the
-// live names above (ui types, approval-notification), so those two travel
+// live names above (approval-notification), so those two travel
 // under state-machine-origin aliases — a plain `export *` from ./app/index
 // would raise TS2308 on the ambiguity. Rect/Frame/DrawCallback/TerminalSize
 // come from ./tui/terminal below; the legacy events module's same-shape
 // copies stay internal to the tree.
+//
+// `./ui/types` used to be re-exported from ./ui/index and is now gone. It held
+// 57 type exports and 16 zod schemas, none of which had a consumer anywhere in
+// the repository, and the credential schemas described an auth model this product
+// does not have — see BUG_HUNT_LEDGER for why wiring them was the wrong fix.
 export { AppState, type AppStateOptions } from "./app/index"
 export type {
   AppEvent as AppStateEvent,
   ApprovalRequest as AppStateApprovalRequest,
-  TrayambakConfig,
+  NemoConfig,
   PermissionRequest,
   PermissionResponse,
   ServerNotification,

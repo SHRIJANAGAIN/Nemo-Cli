@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, test } from "vitest"
@@ -29,21 +29,21 @@ import {
   welcomeFillRows,
   welcomeLogoCompact,
 } from "./app-bootstrap.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * app-bootstrap is the state-free half of App.tsx. These tests pin the two
  * behavioral contracts that have regressed before in live use:
  *  - createAgentConfig: optional fields must PASS THROUGH (dropping
- *    `provider` silently rebuilt every agent as NVIDIA → HF logins 401'd;
- *    dropping `developerMode` reset /devmode on every restart; dropping
- *    `githubLogin` rebuilt every fresh session logged-out).
+ *    `provider` silently rebuilt every agent as NVIDIA → a local-model
+ *    session 401'd; dropping `developerMode` reset /devmode on every
+ *    restart; dropping `githubLogin` rebuilt every fresh session logged-out).
  *  - convertToAgentMessages: history rebuilds must keep tool context
  *    (toolCall + result rows) and thinking parts across turns.
  */
 describe("createAgentConfig passthrough", () => {
   test("provider survives the rebuild when present, is not forced when absent", () => {
-    expect(createAgentConfig({ provider: "huggingface" }).provider).toBe("huggingface")
+    expect(createAgentConfig({ provider: "ollama" }).provider).toBe("ollama")
     expect(createAgentConfig({}).provider).toBeUndefined()
   })
 
@@ -184,6 +184,46 @@ describe("readLiveWindowSize", () => {
       rows: MIN_USABLE_ROWS,
     })
   })
+
+  test("explicit pin wins per axis (lying pty: reported wider than visible)", () => {
+    // Termius case: the pty claims 120 while the window shows ~100 — every
+    // full-width row wraps terminal-side and repaints stack clones. The pin
+    // is the visible width, so the frame fits again.
+    const sys = { getWindowSize: () => [120, 30] }
+    expect(readLiveWindowSize(sys, { NEMO_COLUMNS: "100" })).toEqual({ columns: 100, rows: 30 })
+    expect(readLiveWindowSize(sys, { NEMO_ROWS: "24" })).toEqual({ columns: 120, rows: 24 })
+    expect(readLiveWindowSize(sys, { NEMO_COLUMNS: "100", NEMO_ROWS: "24" })).toEqual({
+      columns: 100,
+      rows: 24,
+    })
+  })
+
+  test("malformed or sub-floor pins are ignored, never applied", () => {
+    const sys = { getWindowSize: () => [120, 30] }
+    for (const env of [
+      { NEMO_COLUMNS: "wide" },
+      { NEMO_COLUMNS: "" },
+      { NEMO_COLUMNS: "10" },
+      { NEMO_ROWS: "-5" },
+      { NEMO_COLUMNS: "10", NEMO_ROWS: "5" },
+    ]) {
+      expect(readLiveWindowSize(sys, env)).toEqual({ columns: 120, rows: 30 })
+    }
+  })
+
+  test("pinned axes survive a throwing syscall; one axis is never invented", () => {
+    const throwing = {
+      getWindowSize: () => {
+        throw new Error("weird pty")
+      },
+    }
+    expect(readLiveWindowSize(throwing, { NEMO_COLUMNS: "100", NEMO_ROWS: "24" })).toEqual({
+      columns: 100,
+      rows: 24,
+    })
+    expect(readLiveWindowSize(throwing, { NEMO_COLUMNS: "100" })).toBeNull()
+    expect(readLiveWindowSize(throwing, {})).toBeNull()
+  })
 })
 
 describe("syncWindowSizeCache", () => {
@@ -197,6 +237,17 @@ describe("syncWindowSizeCache", () => {
   test("quiet when already in sync or when there is nothing to read", () => {
     expect(syncWindowSizeCache({ columns: 110, rows: 26, getWindowSize: () => [110, 26] })).toBe(false)
     expect(syncWindowSizeCache({ columns: 110, rows: 26 })).toBe(false)
+  })
+
+  test("applies the explicit pin to the cache (Ink layouts follow it too)", () => {
+    // The whole point of syncing through the shared cache: Ink's Yoga
+    // widths, wrap, and erase math all read stdout.columns — one assignment
+    // steers every layer, app and framework alike.
+    const stdout = { columns: 120, rows: 30, getWindowSize: () => [120, 30] }
+    expect(syncWindowSizeCache(stdout, { NEMO_COLUMNS: "100" })).toBe(true)
+    expect(stdout.columns).toBe(100)
+    expect(stdout.rows).toBe(30)
+    expect(syncWindowSizeCache(stdout, { NEMO_COLUMNS: "100" })).toBe(false)
   })
 })
 
@@ -242,7 +293,7 @@ describe("convertToAgentMessages", () => {
     const out = convertToAgentMessages([
       { role: "system", content: "sys" },
       { role: "user", content: "hi" },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     expect(out).toEqual([
       { role: "system", content: "sys" },
       { role: "user", content: "hi" },
@@ -259,7 +310,7 @@ describe("convertToAgentMessages", () => {
         result: "file.txt",
         isError: false,
       },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     expect(out).toHaveLength(2)
     expect(out[0]).toEqual({
       role: "assistant",
@@ -278,7 +329,7 @@ describe("convertToAgentMessages", () => {
   test("assistant tool row WITHOUT a result keeps the call only (no phantom tool turn)", () => {
     const out = convertToAgentMessages([
       { role: "assistant", content: "{}", toolCallId: "c", toolName: "read" },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ role: "assistant", stopReason: "tool_use" })
   })
@@ -286,7 +337,7 @@ describe("convertToAgentMessages", () => {
   test("malformed / non-object tool args degrade to { value } instead of throwing", () => {
     const malformed = convertToAgentMessages([
       { role: "assistant", content: "not json {", toolCallId: "c", toolName: "t" },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     const call = malformed[0]?.content
     expect(Array.isArray(call) && call[0] && typeof call[0] === "object" && "arguments" in call[0]).toBe(true)
     expect(Array.isArray(call) ? (call[0] as { arguments: unknown }).arguments : null).toEqual({
@@ -295,7 +346,7 @@ describe("convertToAgentMessages", () => {
 
     const nonObject = convertToAgentMessages([
       { role: "assistant", content: "[1,2]", toolCallId: "c", toolName: "t" },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     const call2 = nonObject[0]?.content
     expect(Array.isArray(call2) ? (call2[0] as { arguments: unknown }).arguments : null).toEqual({
       value: [1, 2],
@@ -305,7 +356,7 @@ describe("convertToAgentMessages", () => {
   test("thinking rides along ahead of the text part", () => {
     const out = convertToAgentMessages([
       { role: "assistant", content: "answer", thinking: "hmm…" },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     expect(out[0]?.content).toEqual([
       { type: "thinking", text: "hmm…" },
       { type: "text", text: "answer" },
@@ -317,7 +368,7 @@ describe("convertToAgentMessages", () => {
     const out = convertToAgentMessages([
       { role: "tool", content: "orphan" },
       { role: "tool", content: "ok", toolCallId: "t1", toolName: "read", isError: true },
-    ] as TrayambakMessage[])
+    ] as NemoMessage[])
     expect(out).toHaveLength(1)
     expect(out[0]).toEqual({
       role: "tool",
@@ -375,32 +426,32 @@ describe("useResizingFlag", () => {
 });
 
 describe("resolveAltScreen", () => {
-  test("default ON: no flag, no env — clone-free buffer is the default path", () => {
-    expect(resolveAltScreen({})).toBe(true);
-    expect(resolveAltScreen({ env: {} })).toBe(true);
+  test("default OFF: no flag, no env — inline (the transcript IS the scrollback) is the default path", () => {
+    expect(resolveAltScreen({})).toBe(false);
+    expect(resolveAltScreen({ env: {} })).toBe(false);
   });
 
   test("an explicitly set env var decides by truthiness — empty counts as opt-out", () => {
-    expect(resolveAltScreen({ env: { TRAYAMBAK_ALT_SCREEN: "" } })).toBe(false);
+    expect(resolveAltScreen({ env: { NEMO_ALT_SCREEN: "" } })).toBe(false);
     for (const v of ["1", "true", "TRUE", "yes", "on", " Y "]) {
-      expect(resolveAltScreen({ env: { TRAYAMBAK_ALT_SCREEN: v } }), v).toBe(true);
+      expect(resolveAltScreen({ env: { NEMO_ALT_SCREEN: v } }), v).toBe(true);
     }
     for (const v of ["0", "false", "no", "off", "maybe"]) {
-      expect(resolveAltScreen({ env: { TRAYAMBAK_ALT_SCREEN: v } }), v).toBe(false);
+      expect(resolveAltScreen({ env: { NEMO_ALT_SCREEN: v } }), v).toBe(false);
     }
   });
 
   test("explicit CLI flag wins over env either way", () => {
-    expect(resolveAltScreen({ flag: true, env: { TRAYAMBAK_ALT_SCREEN: "0" } })).toBe(true);
-    expect(resolveAltScreen({ flag: false, env: { TRAYAMBAK_ALT_SCREEN: "1" } })).toBe(false);
+    expect(resolveAltScreen({ flag: true, env: { NEMO_ALT_SCREEN: "0" } })).toBe(true);
+    expect(resolveAltScreen({ flag: false, env: { NEMO_ALT_SCREEN: "1" } })).toBe(false);
     expect(resolveAltScreen({ flag: "true", env: {} })).toBe(true);
-    expect(resolveAltScreen({ flag: "false", env: { TRAYAMBAK_ALT_SCREEN: "1" } })).toBe(false);
+    expect(resolveAltScreen({ flag: "false", env: { NEMO_ALT_SCREEN: "1" } })).toBe(false);
   });
 });
 
 describe("alt-screen sequences", () => {
   test("enter switches to the alternate buffer and nothing else", () => {
-    const written = [];
+    const written: string[] = [];
     enterAltScreen((chunk) => written.push(chunk));
     expect(written).toEqual(["\x1b[?1049h"]);
     expect(ALT_SCREEN_ENTER).toBe("\x1b[?1049h");
@@ -410,17 +461,17 @@ describe("alt-screen sequences", () => {
     // The app hides the hardware caret for its lifetime and process.exit
     // skips React's unmount cleanup, so leaving without ?25h would hand the
     // shell back caret-less after every alt-screen session.
-    const written = [];
+    const written: string[] = [];
     leaveAltScreen((chunk) => written.push(chunk));
-    expect(written).toEqual(["\x1b[?1049l\x1b[?25h"]);
-    expect(ALT_SCREEN_LEAVE).toBe("\x1b[?1049l\x1b[?25h");
+    expect(written).toEqual(["\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1006l"]);
+    expect(ALT_SCREEN_LEAVE).toBe("\x1b[?1049l\x1b[?25h\x1b[?1000l\x1b[?1006l");
   });
 });
 
 describe("settle reprint slot", () => {
   test("single owner: register invokes, replace swaps, unregister silences", async () => {
     const { registerSettleReprintHandler, requestSettleReprint } = await import("./app-bootstrap.js");
-    const seen = [];
+    const seen: string[] = [];
     registerSettleReprintHandler(() => seen.push("a"));
     requestSettleReprint();
     registerSettleReprintHandler(() => seen.push("b"));
@@ -428,5 +479,96 @@ describe("settle reprint slot", () => {
     registerSettleReprintHandler(undefined);
     requestSettleReprint();
     expect(seen).toEqual(["a", "b"]);
+  });
+});
+
+describe("turn-end fullRender slot", () => {
+  test("reports whether a wipe happened: false with no guard, true + called when registered", async () => {
+    const { registerFullRenderHandler, requestFullRender } = await import("./app-bootstrap.js");
+    registerFullRenderHandler(undefined);
+    expect(requestFullRender()).toBe(false);
+    let calls = 0;
+    registerFullRenderHandler(() => {
+      calls += 1;
+      return true;
+    });
+    expect(requestFullRender()).toBe(true);
+    expect(calls).toBe(1);
+    registerFullRenderHandler(undefined);
+    expect(requestFullRender()).toBe(false);
+    expect(calls).toBe(1);
+  });
+
+  test("a refusing guard propagates false (App must not remount without a wipe)", async () => {
+    const { registerFullRenderHandler, requestFullRender } = await import("./app-bootstrap.js");
+    registerFullRenderHandler(() => false);
+    expect(requestFullRender()).toBe(false);
+    registerFullRenderHandler(undefined);
+  });
+});
+
+describe("turn-end fullRender wiring (source pins the contract)", () => {
+  // Same reason as the scroll wiring above: App.tsx is too heavy to import,
+  // so the growth latch (arm while streaming, consume once at turn end) and
+  // the guard registration are pinned textually. What matters: ONLY a grown
+  // turn wipes (quiet turns stay put), and the wipe+reprint pair lives in
+  // the guard next to the settle path — never a remount without a wipe.
+  const appSource = (): string =>
+    fs.readFileSync(path.join(process.cwd(), "packages", "tui", "src", "ink-app", "App.tsx"), "utf8");
+  const guardSource = (): string =>
+    fs.readFileSync(path.join(process.cwd(), "packages", "tui", "src", "ink-app", "resize-guard.ts"), "utf8");
+  const latchSource = (): string =>
+    fs.readFileSync(path.join(process.cwd(), "packages", "tui", "src", "ink-app", "turn-finalize.ts"), "utf8");
+
+  test("App arms growth on every row path and finishes once per turn", () => {
+    const src = appSource();
+    expect(src).toContain("createTurnFinalize");
+    expect(src).toContain("turnGrowthRef.current.markGrewIfRunning(isRunningRef.current)");
+    expect(src.match(/turnGrowthRef\.current\.markGrew\(\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(src).toContain("turnGrowthRef.current.reset()");
+    expect(src).toContain("turnGrowthRef.current.finishTurn()");
+  });
+
+  test("the latch pairs wipe+reprint and never remounts without a wipe", () => {
+    const src = latchSource();
+    expect(src).toContain("requestFullRender()");
+    expect(src).toContain("if (!grew) return false");
+  });
+
+  test("the guard owns the wipe+reprint pair behind the slot", () => {
+    const src = guardSource();
+    expect(src).toContain("registerFullRenderHandler(");
+    expect(src).toContain("requestSettleReprint()");
+  });
+});
+
+describe("App alt-screen scroll wiring (source pins the contract)", () => {
+  // App.tsx is too heavy to import (full agent loop), so these pin the
+  // wiring textually — the same pattern ink-repl-startup-clear uses for the
+  // entrypoint. What matters: every scroll path below is gated on altScreen,
+  // so inline mode keeps native scroll byte-identical to before. The parked
+  // window itself lives in use-parked-window.ts (4000-line cap) and is
+  // behavior-tested there; here only the App-side plugs are pinned.
+  const appSource = (): string =>
+    fs.readFileSync(path.join(process.cwd(), "packages", "tui", "src", "ink-app", "App.tsx"), "utf8");
+
+  test("parked window comes from the hook, end index feeds the frame", () => {
+    const src = appSource();
+    expect(src).toContain("const parked = useParkedWindow(messages.length, altScreen, stdout)");
+    expect(src).toContain("const endIdx = parked.endIdx");
+    expect(src).toContain("endIdx={endIdx}");
+  });
+
+  test("keys, snap and chip go through the hook (no inline scroll paths)", () => {
+    const src = appSource();
+    expect(src).toContain("onHistoryScroll={parked.onHistoryScroll}");
+    expect(src).toContain("if (altScreen) parked.snapToLive()");
+    expect(src).toContain("onScrollDepth={setFrameStartIdx}");
+    expect(src).toContain("parked.hiddenBelow");
+  });
+
+  test("footer chip shows parked distance only in alt-screen mode", () => {
+    const src = appSource();
+    expect(src).toContain("scrollDepth:");
   });
 });

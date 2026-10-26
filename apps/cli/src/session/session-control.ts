@@ -1,4 +1,4 @@
-export * as TrayambakSessionControl from "./session-control"
+export * as NemoSessionControl from "./session-control"
 
 export type SessionControlStatus = "running" | "paused" | "stopped" | "error"
 

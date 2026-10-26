@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { mkdtempSync } from "node:fs"
@@ -20,7 +20,7 @@ afterEach(() => {
 
 function tmpStore() {
   const dir = mkdtempSync(join(tmpdir(), "lic-store-"))
-  return new LicenseStore({ file: join(dir, "licenses.json"), usageFile: join(dir, "usage.jsonl") }, SECRET)
+  return new LicenseStore({ file: join(dir, "licenses.json") }, SECRET)
 }
 
 function expDaysFromToday(days: number): number {
@@ -30,11 +30,11 @@ function expDaysFromToday(days: number): number {
 describe("LicenseStore", () => {
   it("registers minted keys and persists them across instances", () => {
     const dir = mkdtempSync(join(tmpdir(), "lic-persist-"))
-    const paths = { file: join(dir, "licenses.json"), usageFile: join(dir, "usage.jsonl") }
+    const paths = { file: join(dir, "licenses.json") }
     const a = new LicenseStore(paths, SECRET)
-    const key = mintActivationKey({ plan: "pentest", expDays: expDaysFromToday(30) }, SECRET)
+    const key = mintActivationKey({ plan: "pro", expDays: expDaysFromToday(30) }, SECRET)
     const rec = a.register(key, "acme")
-    expect(rec.plan).toBe("pentest")
+    expect(rec.plan).toBe("pro")
     expect(rec.customer).toBe("acme")
     expect(rec.boundMachineId).toBeUndefined()
     const b = new LicenseStore(paths, SECRET)
@@ -45,7 +45,7 @@ describe("LicenseStore", () => {
 
   it("runs the full lifecycle: activate -> verify -> conflict -> unbind -> revoke", () => {
     const s = tmpStore()
-    const key = mintActivationKey({ plan: "pentest", expDays: expDaysFromToday(30) }, SECRET)
+    const key = mintActivationKey({ plan: "pro", expDays: expDaysFromToday(30) }, SECRET)
     s.register(key)
     const first = s.activate(key, "machine-1")
     expect(first.ok).toBe(true)
@@ -70,18 +70,18 @@ describe("LicenseStore", () => {
   it("rejects forged keys: valid checksum, unknown registry id", () => {
     const s = tmpStore()
     // Attacker extracts the check key and mints — checksum verifies fine.
-    const forged = mintActivationKey({ plan: "pentest", expDays: expDaysFromToday(30) }, SECRET)
+    const forged = mintActivationKey({ plan: "pro", expDays: expDaysFromToday(30) }, SECRET)
     const c = s.check(forged, "machine-1")
     expect(c.valid).toBe(false)
     expect(c.reason ?? "").toContain("not issued")
     expect(s.activate(forged, "machine-1").ok).toBe(false)
   })
 
-  it("rejects expired, revoked-unknown, malformed, and basic-plan pentest", () => {
+  it("rejects expired, revoked-unknown, and malformed codes", () => {
     const s = tmpStore()
     // Expired codes die at the checksum/expiry step — before the registry
     // is even consulted (nothing worth registering).
-    const expired = mintActivationKey({ plan: "pentest", expDays: 1 }, SECRET)
+    const expired = mintActivationKey({ plan: "pro", expDays: 1 }, SECRET)
     expect(s.check(expired, "m").valid).toBe(false)
     expect(s.activate(expired, "m").ok).toBe(false)
     expect(s.check("garbage!!", "m").valid).toBe(false)
@@ -89,9 +89,7 @@ describe("LicenseStore", () => {
     const basic = mintActivationKey({ plan: "basic", expDays: expDaysFromToday(30) }, SECRET)
     s.register(basic)
     expect(s.activate(basic, "m").ok).toBe(true) // activation is plan-agnostic
-    const pentest = s.checkPentestOnly(basic, "m")
-    expect(pentest.valid).toBe(false)
-    expect(pentest.reason ?? "").toContain("does not cover pentest")
+    expect(s.check(basic, "m").valid).toBe(true)
   })
 
   it("accepts legacy pre-prefix codes via import (re-activation path)", () => {
@@ -99,33 +97,14 @@ describe("LicenseStore", () => {
     // before the 1102 brand prefix): minted fresh here so the test never
     // rots on a hardcoded expiry. The verifier still reads it via fallback.
     const dir = mkdtempSync(join(tmpdir(), "lic-leg-"))
-    const mine = new LicenseStore({ file: join(dir, "l.json"), usageFile: join(dir, "u.jsonl") }, SECRET)
-    const legacy = mintLegacyActivationKey({ plan: "pentest", expDays: expDaysFromToday(365) }, SECRET)
+    const mine = new LicenseStore({ file: join(dir, "l.json") }, SECRET)
+    const legacy = mintLegacyActivationKey({ plan: "pro", expDays: expDaysFromToday(365) }, SECRET)
     const rec = mine.register(legacy, "legacy-corp")
-    expect(rec.plan).toBe("pentest")
+    expect(rec.plan).toBe("pro")
     expect(mine.activate(legacy, "m1").ok).toBe(true)
     expect(mine.check(legacy, "m1").valid).toBe(true)
     const other = tmpStore()
     expect(other.check(legacy, "m1").valid).toBe(false) // other registry, unknown
-  })
-
-  it("appends usage telemetry and tails it", () => {
-    const s = tmpStore()
-    const key = mintActivationKey({ plan: "pentest", expDays: expDaysFromToday(30) }, SECRET)
-    const rec = s.register(key)
-    s.appendUsage({
-      keyId: rec.id,
-      machineId: "m1",
-      tool: "trayambak__PentestRunTool",
-      target: "example.com",
-      ok: true,
-    })
-    s.appendUsage({ keyId: rec.id, machineId: "m1", tool: "trayambak__PentestPortScan", target: "", ok: false })
-    const tail = s.readUsageTail(10)
-    expect(tail).toHaveLength(2)
-    expect(tail[0]?.tool).toBe("trayambak__PentestRunTool")
-    expect(tail[0]?.target).toBe("example.com")
-    expect(typeof tail[0]?.ts).toBe("string")
   })
 
   it("refuses to register garbage", () => {

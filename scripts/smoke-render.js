@@ -39,7 +39,7 @@ async function testTui() {
   ui.flushAssistant()
   // Tool call + result.
   ui.toolCall("list_dir", { path: "." })
-  ui.toolResult("list_dir", ".agents/\n.trayambak/\n", false)
+  ui.toolResult("list_dir", ".agents/\n.nemo/\n", false)
   ui.toolCall("bash", { command: "boom" })
   ui.toolResult("bash", "not found", true)
 

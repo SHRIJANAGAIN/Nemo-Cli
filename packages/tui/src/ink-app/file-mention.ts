@@ -1,15 +1,15 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * SKT AI LABS `@`-mention port for the Ink composer: find the in-progress `@query`
+ * Shrijan `@`-mention port for the Ink composer: find the in-progress `@query`
  * ending at the cursor, keep a cached workspace file list, rank it fuzzy, and
  * insert the picked path back into the buffer.
  *
- * Design ported from SKT AI LABS's useFileMention.ts / file-mention-utils.ts,
+ * Design ported from Shrijan's useFileMention.ts / file-mention-utils.ts,
  * simplified for a single-line append-only composer (no left/right cursor, so
  * "at the cursor" == end of buffer): files + folders only — no sessions,
  * worktrees, or VS Code attachment plumbing. The inserted `@path` travels
@@ -38,7 +38,7 @@ export interface MentionState {
  * follow whitespace (so `user@host` never triggers), the query may contain
  * spaces (paths like `my report.txt` stay searchable), and a later ` @`
  * restarts the query so a second mention isn't swallowed by the first — all
- * ported verbatim from SKT AI LABS's AT_PATTERN.
+ * ported verbatim from Shrijan's AT_PATTERN.
  */
 export const AT_PATTERN = /(?:^|\s)@(?![^\n]*\s@)([^\n]*)$/
 
@@ -47,7 +47,7 @@ export const AT_PATTERN = /(?:^|\s)@(?![^\n]*\s@)([^\n]*)$/
  * filename being typed: the query must start with the token that was actually
  * inserted at this `@`, the next char must be whitespace, and no LONGER known
  * path may still extend the whole query (that would mean the user is typing
- * toward e.g. `src/a.tsx` instead of moving on). Ported from SKT AI LABS's
+ * toward e.g. `src/a.tsx` instead of moving on). Ported from Shrijan's
  * mentionSettled.
  */
 export function mentionSettled(rawQuery: string, token: string | undefined, known: readonly string[]): boolean {
@@ -104,7 +104,7 @@ export function filterMentions(query: string, candidates: readonly MentionCandid
 /**
  * Replace the in-progress `@query` before the cursor with `@path` and append a
  * separating space unless the text after the cursor already starts with
- * whitespace. Ported from SKT AI LABS's buildTextAfterMentionSelect.
+ * whitespace. Ported from Shrijan's buildTextAfterMentionSelect.
  */
 export function insertMention(before: string, after: string, candidatePath: string): string {
   const replaced = before.replace(AT_PATTERN, (match) =>
@@ -124,7 +124,7 @@ const IGNORED_DIRS = new Set([
   "out",
   "coverage",
   ".cache",
-  ".trayambak",
+  ".nemo",
   ".next",
   ".nuxt",
   ".turbo",

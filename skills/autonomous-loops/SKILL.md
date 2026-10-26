@@ -1,6 +1,6 @@
 ---
 name: autonomous-loops
-description: "Patterns and architectures for autonomous Trayambak Code loops — from simple sequential pipelines to RFC-driven multi-agent DAG systems. Retained for compatibility only: when new autonomous loop guidance is needed, use continuous-agent-loop instead."
+description: "Patterns and architectures for autonomous Nemo Code loops — from simple sequential pipelines to RFC-driven multi-agent DAG systems. Retained for compatibility only: when new autonomous loop guidance is needed, use continuous-agent-loop instead."
 metadata:
   origin: ECC
 ---
@@ -12,7 +12,7 @@ metadata:
 > should be authored there, while this skill remains available to avoid
 > breaking existing workflows.
 
-Patterns, architectures, and reference implementations for running Trayambak Code autonomously in loops. Covers everything from simple `trayambak -p` pipelines to full RFC-driven multi-agent DAG orchestration.
+Patterns, architectures, and reference implementations for running Nemo Code autonomously in loops. Covers everything from simple `nemo -p` pipelines to full RFC-driven multi-agent DAG orchestration.
 
 ## When to Use
 
@@ -29,24 +29,24 @@ From simplest to most sophisticated:
 
 | Pattern                                                                  | Complexity | Best For                                                  |
 | ------------------------------------------------------------------------ | ---------- | --------------------------------------------------------- |
-| [Sequential Pipeline](#1-sequential-pipeline-trayambak--p)               | Low        | Daily dev steps, scripted workflows                       |
+| [Sequential Pipeline](#1-sequential-pipeline-nemo--p)               | Low        | Daily dev steps, scripted workflows                       |
 | [NanoClaw REPL](#2-nanoclaw-repl)                                        | Low        | Interactive persistent sessions                           |
 | [Infinite Agentic Loop](#3-infinite-agentic-loop)                        | Medium     | Parallel content generation, spec-driven work             |
-| [Continuous Trayambak PR Loop](#4-continuous-trayambak-pr-loop)          | Medium     | Multi-day iterative projects with CI gates                |
+| [Continuous Nemo PR Loop](#4-continuous-nemo-pr-loop)          | Medium     | Multi-day iterative projects with CI gates                |
 | [De-Sloppify Pattern](#5-the-de-sloppify-pattern)                        | Add-on     | Quality cleanup after any Implementer step                |
 | [Ralphinho / RFC-Driven DAG](#6-ralphinho--rfc-driven-dag-orchestration) | High       | Large features, multi-unit parallel work with merge queue |
 
 ---
 
-## 1. Sequential Pipeline (`trayambak -p`)
+## 1. Sequential Pipeline (`nemo -p`)
 
-**The simplest loop.** Break daily development into a sequence of non-interactive `trayambak -p` calls. Each call is a focused step with a clear prompt.
+**The simplest loop.** Break daily development into a sequence of non-interactive `nemo -p` calls. Each call is a focused step with a clear prompt.
 
 ### Core Insight
 
 > If you can't figure out a loop like this, it means you can't even drive the LLM to fix your code in interactive mode.
 
-The `trayambak -p` flag runs Trayambak Code non-interactively with a prompt, exits when done. Chain calls to build a pipeline:
+The `nemo -p` flag runs Nemo Code non-interactively with a prompt, exits when done. Chain calls to build a pipeline:
 
 ```bash
 #!/bin/bash
@@ -55,21 +55,21 @@ The `trayambak -p` flag runs Trayambak Code non-interactively with a prompt, exi
 set -e
 
 # Step 1: Implement the feature
-trayambak -p "Read the spec in docs/auth-spec.md. Implement OAuth2 login in src/auth/. Write tests first (TDD). Do NOT create any new documentation files."
+nemo -p "Read the spec in docs/auth-spec.md. Implement OAuth2 login in src/auth/. Write tests first (TDD). Do NOT create any new documentation files."
 
 # Step 2: De-sloppify (cleanup pass)
-trayambak -p "Review all files changed by the previous commit. Remove any unnecessary type tests, overly defensive checks, or testing of language features (e.g., testing that TypeScript generics work). Keep real business logic tests. Run the test suite after cleanup."
+nemo -p "Review all files changed by the previous commit. Remove any unnecessary type tests, overly defensive checks, or testing of language features (e.g., testing that TypeScript generics work). Keep real business logic tests. Run the test suite after cleanup."
 
 # Step 3: Verify
-trayambak -p "Run the full build, lint, type check, and test suite. Fix any failures. Do not add new features."
+nemo -p "Run the full build, lint, type check, and test suite. Fix any failures. Do not add new features."
 
 # Step 4: Commit
-trayambak -p "Create a conventional commit for all staged changes. Use 'feat: add OAuth2 login flow' as the message."
+nemo -p "Create a conventional commit for all staged changes. Use 'feat: add OAuth2 login flow' as the message."
 ```
 
 ### Key Design Principles
 
-1. **Each step is isolated** — A fresh context window per `trayambak -p` call means no context bleed between steps.
+1. **Each step is isolated** — A fresh context window per `nemo -p` call means no context bleed between steps.
 2. **Order matters** — Steps execute sequentially. Each builds on the filesystem state left by the previous.
 3. **Negative instructions are dangerous** — Don't say "don't test type systems." Instead, add a separate cleanup step (see [De-Sloppify Pattern](#5-the-de-sloppify-pattern)).
 4. **Exit codes propagate** — `set -e` stops the pipeline on failure.
@@ -80,39 +80,39 @@ trayambak -p "Create a conventional commit for all staged changes. Use 'feat: ad
 
 ```bash
 # Research with Opus (deep reasoning)
-trayambak -p --model opus "Analyze the codebase architecture and write a plan for adding caching..."
+nemo -p --model opus "Analyze the codebase architecture and write a plan for adding caching..."
 
 # Implement with Sonnet (fast, capable)
-trayambak -p "Implement the caching layer according to the plan in docs/caching-plan.md..."
+nemo -p "Implement the caching layer according to the plan in docs/caching-plan.md..."
 
 # Review with Opus (thorough)
-trayambak -p --model opus "Review all changes for security issues, race conditions, and edge cases..."
+nemo -p --model opus "Review all changes for security issues, race conditions, and edge cases..."
 ```
 
 **With environment context:**
 
 ```bash
 # Pass context via files, not prompt length
-echo "Focus areas: auth module, API rate limiting" > .trayambak-context.md
-trayambak -p "Read .trayambak-context.md for priorities. Work through them in order."
-rm .trayambak-context.md
+echo "Focus areas: auth module, API rate limiting" > .nemo-context.md
+nemo -p "Read .nemo-context.md for priorities. Work through them in order."
+rm .nemo-context.md
 ```
 
 **With `--allowedTools` restrictions:**
 
 ```bash
 # Read-only analysis pass
-trayambak -p --allowedTools "Read,Grep,Glob" "Audit this codebase for security vulnerabilities..."
+nemo -p --allowedTools "Read,Grep,Glob" "Audit this codebase for security vulnerabilities..."
 
 # Write-only implementation pass
-trayambak -p --allowedTools "Read,Write,Edit,Bash" "Implement the fixes from security-audit.md..."
+nemo -p --allowedTools "Read,Write,Edit,Bash" "Implement the fixes from security-audit.md..."
 ```
 
 ---
 
 ## 2. NanoClaw REPL
 
-**ECC's built-in persistent loop.** A session-aware REPL that calls `trayambak -p` synchronously with full conversation history.
+**ECC's built-in persistent loop.** A session-aware REPL that calls `nemo -p` synchronously with full conversation history.
 
 ```bash
 # Start the default session
@@ -124,8 +124,8 @@ CLAW_SESSION=my-project CLAW_SKILLS=tdd-workflow,security-review node scripts/cl
 
 ### How It Works
 
-1. Loads conversation history from `~/.trayambak/claw/{session}.md`
-2. Each user message is sent to `trayambak -p` with full history as context
+1. Loads conversation history from `~/.nemo/claw/{session}.md`
+2. Each user message is sent to `nemo -p` with full history as context
 3. Responses are appended to the session file (Markdown-as-database)
 4. Sessions persist across restarts
 
@@ -171,9 +171,9 @@ PROMPT 1 (Orchestrator)              PROMPT 2 (Sub-Agents)
    - A snapshot of existing iterations (for uniqueness)
 4. **Wave Management** — For infinite mode, deploys waves of 3-5 agents until context is exhausted
 
-### Implementation via Trayambak Code Commands
+### Implementation via Nemo Code Commands
 
-Create `.trayambak/commands/infinite.md`:
+Create `.nemo/commands/infinite.md`:
 
 ```markdown
 Parse the following arguments from $ARGUMENTS:
@@ -215,23 +215,23 @@ Don't rely on agents to self-differentiate. The orchestrator **assigns** each ag
 
 ---
 
-## 4. Continuous Trayambak PR Loop
+## 4. Continuous Nemo PR Loop
 
-**A production-grade shell script** that runs Trayambak Code in a continuous loop, creating PRs, waiting for CI, and merging automatically. Created by AnandChowdhary (credit: @AnandChowdhary).
+**A production-grade shell script** that runs Nemo Code in a continuous loop, creating PRs, waiting for CI, and merging automatically. Created by AnandChowdhary (credit: @AnandChowdhary).
 
 ### Core Loop
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  CONTINUOUS TRAYAMBAK ITERATION                        │
+│  CONTINUOUS NEMO ITERATION                        │
 │                                                     │
-│  1. Create branch (continuous-trayambak/iteration-N)   │
-│  2. Run trayambak -p with enhanced prompt              │
-│  3. (Optional) Reviewer pass — separate trayambak -p   │
-│  4. Commit changes (trayambak generates message)       │
+│  1. Create branch (continuous-nemo/iteration-N)   │
+│  2. Run nemo -p with enhanced prompt              │
+│  3. (Optional) Reviewer pass — separate nemo -p   │
+│  4. Commit changes (nemo generates message)       │
 │  5. Push + create PR (gh pr create)                 │
 │  6. Wait for CI checks (poll gh pr checks)          │
-│  7. CI failure? → Auto-fix pass (trayambak -p)         │
+│  7. CI failure? → Auto-fix pass (nemo -p)         │
 │  8. Merge PR (squash/merge/rebase)                  │
 │  9. Return to main → repeat                         │
 │                                                     │
@@ -242,29 +242,29 @@ Don't rely on agents to self-differentiate. The orchestrator **assigns** each ag
 
 ### Installation
 
-> **Warning:** Install continuous-trayambak from its repository after reviewing the code. Do not pipe external scripts directly to bash.
+> **Warning:** Install continuous-nemo from its repository after reviewing the code. Do not pipe external scripts directly to bash.
 
 ### Usage
 
 ```bash
 # Basic: 10 iterations
-continuous-trayambak --prompt "Add unit tests for all untested functions" --max-runs 10
+continuous-nemo --prompt "Add unit tests for all untested functions" --max-runs 10
 
 # Cost-limited
-continuous-trayambak --prompt "Fix all linter errors" --max-cost 5.00
+continuous-nemo --prompt "Fix all linter errors" --max-cost 5.00
 
 # Time-boxed
-continuous-trayambak --prompt "Improve test coverage" --max-duration 8h
+continuous-nemo --prompt "Improve test coverage" --max-duration 8h
 
 # With code review pass
-continuous-trayambak \
+continuous-nemo \
   --prompt "Add authentication feature" \
   --max-runs 10 \
   --review-prompt "Run npm test && npm run lint, fix any failures"
 
 # Parallel via worktrees
-continuous-trayambak --prompt "Add tests" --max-runs 5 --worktree tests-worker &
-continuous-trayambak --prompt "Refactor code" --max-runs 5 --worktree refactor-worker &
+continuous-nemo --prompt "Add tests" --max-runs 5 --worktree tests-worker &
+continuous-nemo --prompt "Refactor code" --max-runs 5 --worktree refactor-worker &
 wait
 ```
 
@@ -285,25 +285,25 @@ The critical innovation: a `SHARED_TASK_NOTES.md` file persists across iteration
 - The mock setup in tests/helpers.ts can be reused
 ```
 
-Trayambak reads this file at iteration start and updates it at iteration end. This bridges the context gap between independent `trayambak -p` invocations.
+Nemo reads this file at iteration start and updates it at iteration end. This bridges the context gap between independent `nemo -p` invocations.
 
 ### CI Failure Recovery
 
-When PR checks fail, Continuous Trayambak automatically:
+When PR checks fail, Continuous Nemo automatically:
 
 1. Fetches the failed run ID via `gh run list`
-2. Spawns a new `trayambak -p` with CI fix context
-3. Trayambak inspects logs via `gh run view`, fixes code, commits, pushes
+2. Spawns a new `nemo -p` with CI fix context
+3. Nemo inspects logs via `gh run view`, fixes code, commits, pushes
 4. Re-waits for checks (up to `--ci-retry-max` attempts)
 
 ### Completion Signal
 
-Trayambak can signal "I'm done" by outputting a magic phrase:
+Nemo can signal "I'm done" by outputting a magic phrase:
 
 ```bash
-continuous-trayambak \
+continuous-nemo \
   --prompt "Fix all bugs in the issue tracker" \
-  --completion-signal "CONTINUOUS_TRAYAMBAK_PROJECT_COMPLETE" \
+  --completion-signal "CONTINUOUS_NEMO_PROJECT_COMPLETE" \
   --completion-threshold 3  # Stops after 3 consecutive signals
 ```
 
@@ -351,10 +351,10 @@ Instead of constraining the Implementer, let it be thorough. Then add a focused 
 
 ```bash
 # Step 1: Implement (let it be thorough)
-trayambak -p "Implement the feature with full TDD. Be thorough with tests."
+nemo -p "Implement the feature with full TDD. Be thorough with tests."
 
 # Step 2: De-sloppify (separate context, focused cleanup)
-trayambak -p "Review all changes in the working tree. Remove:
+nemo -p "Review all changes in the working tree. Remove:
 - Tests that verify language/framework behavior rather than business logic
 - Redundant type checks that the type system already enforces
 - Over-defensive error handling for impossible states
@@ -369,16 +369,16 @@ Keep all business logic tests. Run the test suite after cleanup to ensure nothin
 ```bash
 for feature in "${features[@]}"; do
   # Implement
-  trayambak -p "Implement $feature with TDD."
+  nemo -p "Implement $feature with TDD."
 
   # De-sloppify
-  trayambak -p "Cleanup pass: review changes, remove test/code slop, run tests."
+  nemo -p "Cleanup pass: review changes, remove test/code slop, run tests."
 
   # Verify
-  trayambak -p "Run build + lint + tests. Fix any failures."
+  nemo -p "Run build + lint + tests. Fix any failures."
 
   # Commit
-  trayambak -p "Commit with message: feat: add $feature"
+  nemo -p "Commit with message: feat: add $feature"
 done
 ```
 
@@ -473,11 +473,11 @@ Each stage runs in its own agent process with its own context window:
 | ------------ | -------------- | ---------------------------------------- |
 | Research     | Sonnet         | Read codebase + RFC, produce context doc |
 | Plan         | Opus           | Design implementation steps              |
-| Implement    | Trayambak Code | Write code following the plan            |
+| Implement    | Nemo Code | Write code following the plan            |
 | Test         | Sonnet         | Run build + test suite                   |
 | PRD Review   | Sonnet         | Spec compliance check                    |
 | Code Review  | Opus           | Quality + security check                 |
-| Review Fix   | Trayambak Code | Address review issues                    |
+| Review Fix   | Nemo Code | Address review issues                    |
 | Final Review | Opus           | Quality gate (large tier only)           |
 
 **Critical design:** The reviewer never wrote the code it reviews. This eliminates author bias — the most common source of missed issues in self-review.
@@ -554,7 +554,7 @@ Pipeline stages for the same unit **share** a worktree, preserving state (contex
 | Need parallel implementation       | Yes           | No                           |
 | Merge conflicts likely             | Yes           | No (sequential is fine)      |
 | Single-file change                 | No            | Yes (sequential pipeline)    |
-| Multi-day project                  | Yes           | Maybe (continuous-trayambak) |
+| Multi-day project                  | Yes           | Maybe (continuous-nemo) |
 | Spec/RFC already written           | Yes           | Maybe                        |
 | Quick iteration on one thing       | No            | Yes (NanoClaw or pipeline)   |
 
@@ -570,7 +570,7 @@ Is the task a single focused change?
 └─ No → Is there a written spec/RFC?
          ├─ Yes → Do you need parallel implementation?
          │        ├─ Yes → Ralphinho (DAG orchestration)
-         │        └─ No → Continuous Trayambak (iterative PR loop)
+         │        └─ No → Continuous Nemo (iterative PR loop)
          └─ No → Do you need many variations of the same thing?
                   ├─ Yes → Infinite Agentic Loop (spec-driven generation)
                   └─ No → Sequential Pipeline with de-sloppify
@@ -582,17 +582,17 @@ These patterns compose well:
 
 1. **Sequential Pipeline + De-Sloppify** — The most common combination. Every implement step gets a cleanup pass.
 
-2. **Continuous Trayambak + De-Sloppify** — Add `--review-prompt` with a de-sloppify directive to each iteration.
+2. **Continuous Nemo + De-Sloppify** — Add `--review-prompt` with a de-sloppify directive to each iteration.
 
 3. **Any loop + Verification** — Use ECC's `/verify` command or `verification-loop` skill as a gate before commits.
 
 4. **Ralphinho's tiered approach in simpler loops** — Even in a sequential pipeline, you can route simple tasks to Haiku and complex tasks to Opus:
    ```bash
    # Simple formatting fix
-   trayambak -p --model haiku "Fix the import ordering in src/utils.ts"
+   nemo -p --model haiku "Fix the import ordering in src/utils.ts"
 
    # Complex architectural change
-   trayambak -p --model opus "Refactor the auth module to use the strategy pattern"
+   nemo -p --model opus "Refactor the auth module to use the strategy pattern"
    ```
 
 ---
@@ -603,7 +603,7 @@ These patterns compose well:
 
 1. **Infinite loops without exit conditions** — Always have a max-runs, max-cost, max-duration, or completion signal.
 
-2. **No context bridge between iterations** — Each `trayambak -p` call starts fresh. Use `SHARED_TASK_NOTES.md` or filesystem state to bridge context.
+2. **No context bridge between iterations** — Each `nemo -p` call starts fresh. Use `SHARED_TASK_NOTES.md` or filesystem state to bridge context.
 
 3. **Retrying the same failure** — If an iteration fails, don't just retry. Capture the error context and feed it to the next attempt.
 
@@ -621,6 +621,6 @@ These patterns compose well:
 | --------------------- | -------------- | ---------------------------------------- |
 | Ralphinho             | enitrat        | credit: @enitrat                         |
 | Infinite Agentic Loop | disler         | credit: @disler                          |
-| Continuous Trayambak  | AnandChowdhary | credit: @AnandChowdhary                  |
+| Continuous Nemo  | AnandChowdhary | credit: @AnandChowdhary                  |
 | NanoClaw              | ECC            | `/claw` command in this repo             |
 | Verification Loop     | ECC            | `skills/verification-loop/` in this repo |

@@ -17,7 +17,7 @@ metadata:
 
 ## How It Works
 
-Uses the browser automation MCP (trayambak-in-chrome, Playwright, or Puppeteer) to interact with live pages like a real user.
+Uses the browser automation MCP (nemo-in-chrome, Playwright, or Puppeteer) to interact with live pages like a real user.
 
 ### Safety first — blast radius (run read-only by default)
 
@@ -108,7 +108,7 @@ credentials/tokens/PII before saving any screenshot.
 
 Works with any browser MCP:
 
-- `mChild__trayambak-in-chrome__*` tools (preferred — uses your actual Chrome)
+- `mChild__nemo-in-chrome__*` tools (preferred — uses your actual Chrome)
 - Playwright via `mcp__browserbase__*`
 - Direct Puppeteer scripts
 

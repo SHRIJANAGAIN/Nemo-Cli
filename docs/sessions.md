@@ -1,16 +1,16 @@
 # Sessions
 
-How Trayambak stores, lists, resumes, and cleans up conversation sessions.
+How Nemo stores, lists, resumes, and cleans up conversation sessions.
 Grounded in `packages/session-backends/src/transcript.ts` (transcripts),
 `apps/cli/src/session/session-manager.ts` (the index), and
 `apps/cli/src/commands/archive.ts` (the CLI verbs).
 
 ## On-disk layout
 
-Two separate stores under `~/.trayambak/`:
+Two separate stores under `~/.nemo/`:
 
 ```
-~/.trayambak/
+~/.nemo/
 ├── sessions.json                     # index of named sessions (SessionManager)
 └── sessions/
     ├── <uuid>/                       # one transcript per session
@@ -23,7 +23,7 @@ Two separate stores under `~/.trayambak/`:
 
 | Concern          | Detail                                                                                                                                         |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Root override    | `TRAYAMBAK_SESSIONS_DIR` changes `sessions/`; `TRAYAMBAK_SESSIONS_FILE` changes `sessions.json`                                                |
+| Root override    | `NEMO_SESSIONS_DIR` changes `sessions/`; `NEMO_SESSIONS_FILE` changes `sessions.json`                                                |
 | Permissions      | `state.json` is written atomically with `0600` (tmp + rename); `context.jsonl` / `wire.jsonl` are append-only                                  |
 | Titles           | The first user message becomes the title (first 50 chars) unless you set a custom one                                                          |
 | Empty sessions   | Sessions with no content are skipped when listing (never shown as ghosts)                                                                      |
@@ -73,9 +73,9 @@ Two separate stores under `~/.trayambak/`:
 ## From the command line
 
 ```sh
-trayambak archive <id>       # move sessions/<id>/ -> sessions/.archived/<id>/
-trayambak unarchive <id>     # move it back
-trayambak delete <id>        # remove sessions/<id>/ and .archived/<id>/ (recursive, forced)
+nemo archive <id>       # move sessions/<id>/ -> sessions/.archived/<id>/
+nemo unarchive <id>     # move it back
+nemo delete <id>        # remove sessions/<id>/ and .archived/<id>/ (recursive, forced)
 ```
 
 Each prints `archived <id>` / `unarchived <id>` / `deleted <id>`, or an error
@@ -85,9 +85,9 @@ Other session-related flags:
 
 | Flag                         | Effect                                                                                         |
 | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `trayambak --session <file>` | Persist the session transcript to a JSON file (also passed to the REPL as `TRAYAMBAK_SESSION`) |
-| `trayambak exec "…"`         | Stateless single prompt — events stream to stdout, nothing is resumed next run                 |
-| `trayambak run "…"`          | Interactive session that runs that prompt on launch                                            |
+| `nemo --session <file>` | Persist the session transcript to a JSON file (also passed to the REPL as `NEMO_SESSION`) |
+| `nemo exec "…"`         | Stateless single prompt — events stream to stdout, nothing is resumed next run                 |
+| `nemo run "…"`          | Interactive session that runs that prompt on launch                                            |
 
 ## Compaction
 
@@ -96,10 +96,10 @@ Context compaction keeps long sessions within the model's window
 it).
 
 ```sh
-trayambak compact config     # maxTokens / targetTokens / preserveRecent
-trayambak compact estimate   # would this session compact?
-trayambak compact run        # run compaction over the store
-trayambak compact reset      # reset compaction state
+nemo compact config     # maxTokens / targetTokens / preserveRecent
+nemo compact estimate   # would this session compact?
+nemo compact run        # run compaction over the store
+nemo compact reset      # reset compaction state
 ```
 
 In the REPL, `/compact` does it for the live session.
@@ -108,8 +108,8 @@ In the REPL, `/compact` does it for the live session.
 
 | Surface                   | What it exposes                                                                     |
 | ------------------------- | ----------------------------------------------------------------------------------- |
-| `trayambak web`           | `GET /api/sessions` returns the transcript list (see [Web](web.md))                 |
-| `trayambak acp`           | `new_session`, `load_session`/`resume_session`, `list_sessions` (see [ACP](acp.md)) |
+| `nemo web`           | `GET /api/sessions` returns the transcript list (see [Web](web.md))                 |
+| `nemo acp`           | `new_session`, `load_session`/`resume_session`, `list_sessions` (see [ACP](acp.md)) |
 | `/api/sessions` over HTTP | Same transcript index — token-protected when a token is configured                  |
 
 ## Related

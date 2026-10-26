@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
  * Read-only mode must not write to disk.
  *
  * `artifact` is in `READ_ONLY_TOOLS` because its read actions are safe, but it
- * also creates and deletes files under `<cwd>/skt/10-upload/artifacts/` — and
+ * also creates and deletes files under `<cwd>/nemo/10-upload/artifacts/` — and
  * its manager `mkdirSync`s that tree in the CONSTRUCTOR, so merely reaching
  * the tool mutated the workspace. The read-only gate matched on the tool name
  * alone, so `artifact create` was allowed in read-only and plan mode and wrote
@@ -59,7 +59,7 @@ async function runGated(args: Record<string, unknown>, cwd: string): Promise<"de
   return "ran"
 }
 
-const artifactsDir = (cwd: string): string => path.join(cwd, "skt", "10-upload", "artifacts")
+const artifactsDir = (cwd: string): string => path.join(cwd, "nemo", "10-upload", "artifacts")
 
 describe("artifact under a read-only session", () => {
   it.each([

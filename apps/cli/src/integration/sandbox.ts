@@ -1,4 +1,4 @@
-export * as TrayambakSandbox from "./sandbox"
+export * as NemoSandbox from "./sandbox"
 
 export interface SandboxConfig {
   readonly enabled: boolean

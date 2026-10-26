@@ -1,23 +1,23 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
 import { formatTranscript } from "./clipboard.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 /** formatTranscript only — no real clipboard writes in unit tests. */
 
-const user = (id: string, content: string): TrayambakMessage => ({
+const user = (id: string, content: string): NemoMessage => ({
   id,
   timestamp: 0,
   role: "user",
   content,
 })
 
-const assistant = (id: string, content: string): TrayambakMessage => ({
+const assistant = (id: string, content: string): NemoMessage => ({
   id,
   timestamp: 0,
   role: "assistant",

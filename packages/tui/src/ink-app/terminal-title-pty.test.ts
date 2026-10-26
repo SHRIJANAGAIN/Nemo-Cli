@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -48,14 +48,14 @@ describe.skipIf(!PTY_AVAILABLE)("terminal title over a real pty", () => {
   afterEach(() => {
     captured = ""
     try {
-      fs.rmSync(path.join(os.tmpdir(), "trayambak-title-pty"), { recursive: true, force: true })
+      fs.rmSync(path.join(os.tmpdir(), "nemo-title-pty"), { recursive: true, force: true })
     } catch {
       /* best effort */
     }
   })
 
   it("emits OSC 0 with the product name when the app claims the title", () => {
-    const script = path.join(os.tmpdir(), "trayambak-title-emit.mjs")
+    const script = path.join(os.tmpdir(), "nemo-title-emit.mjs")
     fs.writeFileSync(
       script,
       [
@@ -70,7 +70,7 @@ describe.skipIf(!PTY_AVAILABLE)("terminal title over a real pty", () => {
     const out = spawnSync("script", ["-qec", `node ${script}`, "/dev/null"], { timeout: 20_000 })
     captured = String(out.stdout ?? "")
     expect(OSC0.test(captured)).toBe(true)
-    expect(captured).toContain("Trayambak")
+    expect(captured).toContain("Nemo")
   })
 })
 

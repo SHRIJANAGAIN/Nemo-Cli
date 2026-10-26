@@ -1,5 +1,5 @@
 /* Scrollability diagnostic v3 — "puri tarah se scrollable ho, ye sahi nahi
- * check". Drives the BUILT TrayambakApp on fake TTY ends with the EXACT
+ * check". Drives the BUILT NemoApp on fake TTY ends with the EXACT
  * byte sequences a real terminal sends and measures what the frame shows.
  *
  * v3 changes over v2 (lessons from the first runs):
@@ -36,13 +36,13 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-process.env.TRAYAMBAK_DEBUG_INPUT = "1"
+process.env.NEMO_DEBUG_INPUT = "1"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 // Resolved BEFORE TEMP is pointed at .smoke-tmp below → OS temp, not the
 // repo (other diag-* scripts print to console only; no repo litter).
-const diagFile = path.join(tmpdir(), "trayambak-diag-scroll.log")
+const diagFile = path.join(tmpdir(), "nemo-diag-scroll.log")
 try {
   unlinkSync(diagFile)
 } catch {
@@ -67,7 +67,7 @@ try {
 } catch {
   /* best effort */
 }
-process.env.TRAYAMBAK_LOGO_PATH = pathToFileURL(
+process.env.NEMO_LOGO_PATH = pathToFileURL(
   path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm", "logo_ansi.txt"),
 ).href
 
@@ -75,16 +75,16 @@ process.env.TRAYAMBAK_LOGO_PATH = pathToFileURL(
 let sandboxHome = ""
 {
   const fsMem = await import("node:fs")
-  sandboxHome = fsMem.mkdtempSync(path.join(tmpdir(), "trayambak-scroll-"))
-  const convDir = path.join(sandboxHome, "skt", "8-conversations")
+  sandboxHome = fsMem.mkdtempSync(path.join(tmpdir(), "nemo-scroll-"))
+  const convDir = path.join(sandboxHome, "nemo", "8-conversations")
   fsMem.mkdirSync(convDir, { recursive: true })
   fsMem.writeFileSync(path.join(sandboxHome, "package.json"), JSON.stringify({ name: "scroll-diag" }))
   fsMem.writeFileSync(path.join(convDir, "sessions.json"), "[]")
-  process.env.TRAYAMBAK_HOME = sandboxHome
+  process.env.NEMO_HOME = sandboxHome
 }
-dlog(`TRAYAMBAK_HOME = ${sandboxHome}`)
+dlog(`NEMO_HOME = ${sandboxHome}`)
 
-const logPath = path.join(tmpdir(), "trayambak-input.log")
+const logPath = path.join(tmpdir(), "nemo-input.log")
 try {
   unlinkSync(logPath)
 } catch {
@@ -121,7 +121,7 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(
+const { NemoApp } = await import(
   pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm", "index.js")).href
 )
 
@@ -243,8 +243,8 @@ async function waitIdleStable(marker, ms) {
 
 // ── Boot ────────────────────────────────────────────────────────────────
 const instance = render(
-  React.createElement(TrayambakApp, {
-    config: { themeName: "trayambak-dark" },
+  React.createElement(NemoApp, {
+    config: { themeName: "nemo-dark" },
     modelName: "smoke-model",
     permissionMode: "ask",
   }),

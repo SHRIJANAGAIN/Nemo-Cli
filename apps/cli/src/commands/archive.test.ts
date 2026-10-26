@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -13,8 +13,8 @@ import { archiveSession, deleteSession, unarchiveSession } from "./archive.js"
 
 /**
  * archive/unarchive/delete operate on sessionsRoot()/sessionDir(id), and
- * sessionsRoot() honors TRAYAMBAK_SESSIONS_DIR — so every case runs against a
- * throwaway directory and the user's ~/.trayambak/sessions is never touched.
+ * sessionsRoot() honors NEMO_SESSIONS_DIR — so every case runs against a
+ * throwaway directory and the user's ~/.nemo/sessions is never touched.
  */
 
 let sessionsDir = ""
@@ -40,16 +40,16 @@ function makeSession(id: string, marker = "hello"): void {
 }
 
 beforeEach(() => {
-  sessionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sessions-"))
-  savedEnv = process.env.TRAYAMBAK_SESSIONS_DIR
-  process.env.TRAYAMBAK_SESSIONS_DIR = sessionsDir
+  sessionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-sessions-"))
+  savedEnv = process.env.NEMO_SESSIONS_DIR
+  process.env.NEMO_SESSIONS_DIR = sessionsDir
   savedExitCode = exitCode()
   process.exitCode = undefined
 })
 
 afterEach(() => {
-  if (savedEnv === undefined) delete process.env.TRAYAMBAK_SESSIONS_DIR
-  else process.env.TRAYAMBAK_SESSIONS_DIR = savedEnv
+  if (savedEnv === undefined) delete process.env.NEMO_SESSIONS_DIR
+  else process.env.NEMO_SESSIONS_DIR = savedEnv
   process.exitCode = savedExitCode
   try {
     fs.rmSync(sessionsDir, { recursive: true, force: true })
@@ -127,7 +127,7 @@ describe("session id traversal (finding #28)", () => {
   const hostile = ["../../../../important", "..", "../x", "/abs/path", "", "a/b", "a\\b"]
 
   it("rejects hostile ids in all three commands without touching the filesystem", () => {
-    const canary = path.join(os.tmpdir(), `trayambak-canary-${Date.now()}`)
+    const canary = path.join(os.tmpdir(), `nemo-canary-${Date.now()}`)
     fs.writeFileSync(canary, "do not touch", "utf8")
     try {
       for (const id of hostile) {

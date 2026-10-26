@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -10,7 +10,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { sessionExportCommand } from "./session-export.js"
 // Persisted conversation store — the same one resume/restore reads.
-import { appendConversation, createSession } from "../../../../skt/9-session/session.js"
+import { appendConversation, createSession } from "../../../../nemo/9-session/session.js"
 
 let savedExitCode: number | undefined
 let savedHome: string | undefined
@@ -23,8 +23,8 @@ function readExitCode(): number | undefined {
 afterEach(() => {
   process.exitCode = savedExitCode
   if (tempHome) {
-    if (savedHome !== undefined) process.env.TRAYAMBAK_HOME = savedHome
-    else delete process.env.TRAYAMBAK_HOME
+    if (savedHome !== undefined) process.env.NEMO_HOME = savedHome
+    else delete process.env.NEMO_HOME
     savedHome = undefined
     try {
       fs.rmSync(tempHome, { recursive: true, force: true })
@@ -35,15 +35,15 @@ afterEach(() => {
   }
 })
 
-/** Isolate the skt conversation store (session.test.ts pattern): TRAYAMBAK_HOME
- *  must contain BOTH package.json and skt/8-conversations, or sessions would
+/** Isolate the nemo conversation store (session.test.ts pattern): NEMO_HOME
+ *  must contain BOTH package.json and nemo/8-conversations, or sessions would
  *  land in the repo. */
 function isolateSessionStore(): void {
-  tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-export-home-"))
+  tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-export-home-"))
   fs.writeFileSync(path.join(tempHome, "package.json"), '{"name":"tmp"}', "utf8")
-  fs.mkdirSync(path.join(tempHome, "skt", "8-conversations"), { recursive: true })
-  savedHome = process.env.TRAYAMBAK_HOME
-  process.env.TRAYAMBAK_HOME = tempHome
+  fs.mkdirSync(path.join(tempHome, "nemo", "8-conversations"), { recursive: true })
+  savedHome = process.env.NEMO_HOME
+  process.env.NEMO_HOME = tempHome
 }
 
 describe("sessionExportCommand", () => {

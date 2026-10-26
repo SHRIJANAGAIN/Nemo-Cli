@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Trayambak key handling: type-safe key IDs, terminal sequence decoding,
+ * Nemo key handling: type-safe key IDs, terminal sequence decoding,
  * and keybinding matching.
  *
- * Designed after pi-main's keybinding architecture, adapted for trayambak's
+ * Designed after pi-main's keybinding architecture, adapted for nemo's
  * TUI layers (TerminalUI, PremiumTerminalUI, InkUI).
  */
 

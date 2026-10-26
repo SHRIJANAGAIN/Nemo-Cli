@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -43,7 +43,7 @@ export class HarnessRuntime {
   private readonly contextValue: HarnessContext
 
   constructor(cwd: string, sessionId = `harness_${Date.now().toString(36)}`) {
-    this.file = path.join(cwd, ".trayambak", "harness.json")
+    this.file = path.join(cwd, ".nemo", "harness.json")
     this.state = this.load(sessionId)
     this.contextValue = {
       cwd,

@@ -15,17 +15,17 @@ trap { W ("TRAP: " + $_.Exception.Message); exit 1 }
 $seconds = if ($args.Count -ge 1) { [int]$args[0] } else { 12 }
 W "console: cols=$([Console]::WindowWidth) rows=$([Console]::WindowHeight) buffer=$([Console]::BufferHeight) top=$([Console]::WindowTop)"
 
-$cli = "C:\Users\engli\AppData\Roaming\npm\node_modules\@skt-ai-labs\trayambak-cli\dist\apps\cli\src\index.js"
+$cli = "C:\Users\engli\AppData\Roaming\npm\node_modules\@shrijan\nemo-cli\dist\apps\cli\src\index.js"
 if (-not (Test-Path $cli)) { W "NO_CLI_ENTRY $cli"; exit 1 }
 W "cli entry: $cli"
 
 $start = Get-Date
-# TRAYAMBAK_TRACE=1 tees every stdout byte to trayambak-trace.log in the cwd -
+# NEMO_TRACE=1 tees every stdout byte to nemo-trace.log in the cwd -
 # ground truth for what the real console actually received.
 $traceDir = if ($args.Count -ge 5 -and $args[4]) { [string]$args[4] } else { Join-Path $env:TEMP "tb-boot-trace" }
 New-Item -ItemType Directory -Path $traceDir -Force | Out-Null
-Get-ChildItem $traceDir -Filter trayambak-trace.log -ErrorAction SilentlyContinue | Remove-Item -Force
-$env:TRAYAMBAK_TRACE = "1"
+Get-ChildItem $traceDir -Filter nemo-trace.log -ErrorAction SilentlyContinue | Remove-Item -Force
+$env:NEMO_TRACE = "1"
 $proc = Start-Process -FilePath "node.exe" -ArgumentList $cli -NoNewWindow -PassThru -WorkingDirectory $traceDir
 W "started pid=$($proc.Id) trace=$traceDir"
 

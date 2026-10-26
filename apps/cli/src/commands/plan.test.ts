@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -14,7 +14,7 @@ import type * as PlanModule from "./plan.js"
 /**
  * plan.ts resolves its storage root from os.homedir() AT MODULE LOAD, so the
  * temp home is installed before the dynamic import in beforeAll — the real
- * ~/.trayambak/plans is never touched. `import type` is erased at runtime.
+ * ~/.nemo/plans is never touched. `import type` is erased at runtime.
  */
 
 let plan: typeof PlanModule
@@ -22,7 +22,7 @@ let home = ""
 let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
-const planDir = (): string => path.join(home, ".trayambak", "plans")
+const planDir = (): string => path.join(home, ".nemo", "plans")
 
 const planFile = (id: string): string => path.join(planDir(), `${id}.json`)
 
@@ -47,7 +47,7 @@ function createPlan(name: string, description?: string): string {
 }
 
 beforeAll(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-plan-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-plan-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -257,8 +257,8 @@ describe("planCommand id and status validation (round 11 attack)", () => {
       expect(plan.planCommand({ action: "complete", planId: bad })).toBe(`Invalid plan id: ${bad}`)
     }
     // Nothing escaped the plans root (the traversal would have read/written
-    // a sibling of ~/.trayambak/plans).
-    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+    // a sibling of ~/.nemo/plans).
+    expect(fs.existsSync(path.join(home, ".nemo", "evil.json"))).toBe(false)
     expect(fs.existsSync(path.join(home, "evil.json"))).toBe(false)
   })
 
@@ -285,6 +285,6 @@ describe("planCommand id and status validation (round 11 attack)", () => {
     expect(() => plan.planCommand({ action: "add-step", planId: "plan-crafted", stepDescription: "d" })).toThrow(
       /invalid plan id/,
     )
-    expect(fs.existsSync(path.join(home, ".trayambak", "evil.json"))).toBe(false)
+    expect(fs.existsSync(path.join(home, ".nemo", "evil.json"))).toBe(false)
   })
 })

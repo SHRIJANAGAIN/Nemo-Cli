@@ -192,9 +192,9 @@ Ask final clarifying questions:
 
 ## Phase 7: GENERATE - Write PRD
 
-**Output path**: `.trayambak/PRPs/prds/{kebab-case-name}.prd.md`
+**Output path**: `.nemo/PRPs/prds/{kebab-case-name}.prd.md`
 
-Create directory if needed: `mkdir -p .trayambak/PRPs/prds`
+Create directory if needed: `mkdir -p .nemo/PRPs/prds`
 
 ### PRD Template
 
@@ -365,7 +365,7 @@ After generating, report:
 ```markdown
 ## PRD Created
 
-**File**: `.trayambak/PRPs/prds/{name}.prd.md`
+**File**: `.nemo/PRPs/prds/{name}.prd.md`
 
 ### Summary
 
@@ -398,7 +398,7 @@ After generating, report:
 
 ### To Start Implementation
 
-Run: `/prp-plan .trayambak/PRPs/prds/{name}.prd.md`
+Run: `/prp-plan .nemo/PRPs/prds/{name}.prd.md`
 
 This will automatically select the next pending phase and create an implementation plan.
 ```
@@ -433,7 +433,7 @@ This will automatically select the next pending phase and create an implementati
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
-│  GENERATE: Write PRD to .trayambak/PRPs/prds/              │
+│  GENERATE: Write PRD to .nemo/PRPs/prds/              │
 └─────────────────────────────────────────────────────────┘
 ```
 

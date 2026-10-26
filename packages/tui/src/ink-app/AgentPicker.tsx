@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Subagent picker overlay — SKT AI LABS's subagent dialog ported to Ink: the six
- * builtin types (the trayambak__Agent enum) plus discovered profiles, a
+ * Subagent picker overlay — Shrijan's subagent dialog ported to Ink: the six
+ * builtin types (the nemo__Agent enum) plus discovered profiles, a
  * numbered list with a selected-row cursor, and no free-text search (so it
  * can't hijack keys from other overlays). Selecting arms the composer: the
  * next prompt becomes that subagent's task (see App's pendingAgentTypeRef).

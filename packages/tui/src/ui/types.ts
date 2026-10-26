@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Shared types for the Trayambak Code UI TypeScript port.
- * Ported from Rust ratatui/crossterm structures in the Trayambak Code TUI.
+ * Shared types for the Nemo Code UI TypeScript port.
+ * Ported from Rust ratatui/crossterm structures in the Nemo Code TUI.
  */
 
 import { z } from "zod"

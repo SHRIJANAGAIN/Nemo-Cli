@@ -1,15 +1,13 @@
-// Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
-// Trayambak CLI Proprietary License - use, copying, modification, and
-// distribution require a written license agreement with SKT AI LABS
-// PRIVATE LIMITED. See LICENSE for the full terms.
-// /
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 
 import { render } from "ink"
 import { createElement } from "react"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import fs from "node:fs"
-import { TrayambakApp } from "../ink-app-esm/index.js"
+import { NemoApp } from "../ink-app-esm/index.js"
 import { createSanitizedStdin } from "../ink-app-esm/stdin-sanitizer.js"
 import { createResizeRedrawGuard } from "../ink-app-esm/resize-guard.js"
 import { enterAltScreen, leaveAltScreen, resolveAltScreen } from "../ink-app-esm/app-bootstrap.js"
@@ -25,7 +23,7 @@ import { setKeymap } from "../keymap.js"
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 function loadConfig() {
-  const raw = process.env.TRAYAMBAK_CONFIG_JSON
+  const raw = process.env.NEMO_CONFIG_JSON
   if (raw) {
     try {
       return JSON.parse(raw)
@@ -35,15 +33,15 @@ function loadConfig() {
 }
 
 function loadPrompt() {
-  const raw = process.env.TRAYAMBAK_PROMPT
+  const raw = process.env.NEMO_PROMPT
   return raw || undefined
 }
 
 const config = loadConfig()
 const prompt = loadPrompt()
 setKeymap(config.keybindings)
-process.env.TRAYAMBAK_LOGO_PATH =
-  process.env.TRAYAMBAK_LOGO_PATH || path.join(here, "..", "ink-app-esm", "logo_ansi.txt")
+process.env.NEMO_LOGO_PATH =
+  process.env.NEMO_LOGO_PATH || path.join(here, "..", "ink-app-esm", "logo_ansi.txt")
 
 // The parent CLI must not consume or pause the inherited console handle.
 // Only disable raw mode if the stdin supports it and is currently in raw mode.
@@ -63,7 +61,7 @@ const renderOptions = {
   // createSanitizedStdin itself).
   stdin: createSanitizedStdin(process.stdin),
   stdout: process.stdout,
-  // Ctrl-C belongs to Trayambak, not Ink: Ink's default exitOnCtrlC exits
+  // Ctrl-C belongs to Nemo, not Ink: Ink's default exitOnCtrlC exits
   // the whole TUI on a single press (before our handlers run), which made
   // accidental session death unavoidable. Disabled here; PromptInput routes
   // empty-composer Ctrl-C to App (deny dialog / abort turn / arm-exit
@@ -94,15 +92,15 @@ process.stdin.resume()
 // from (0,0). See resize-guard.ts for the full write-up.
 const resizeGuard = createResizeRedrawGuard(process.stdout)
 
-// TRAYAMBAK_TRACE=1: tee every stdout byte into trayambak-trace.log (cwd).
-// The stuck-header report ("text frozen beside the TRAYAMBAK logo") has never
+// NEMO_TRACE=1: tee every stdout byte into nemo-trace.log (cwd).
+// The stuck-header report ("text frozen beside the NEMO logo") has never
 // reproduced under the screen-replay harness — every fullscreen frame is a
 // clean full clear+rewrite across all tested paths — so the next real-world
 // repro needs ground truth. Raw bytes only (replayable through
 // scripts/vt-screen.mjs), capped at 20MB, and failures never break the UI.
-if (process.env.TRAYAMBAK_TRACE === "1") {
+if (process.env.NEMO_TRACE === "1") {
   try {
-    const tracePath = path.resolve(process.cwd(), "trayambak-trace.log")
+    const tracePath = path.resolve(process.cwd(), "nemo-trace.log")
     const fd = fs.openSync(tracePath, "w")
     const LIMIT = 20 * 1024 * 1024
     let written = 0
@@ -126,13 +124,13 @@ if (process.env.TRAYAMBAK_TRACE === "1") {
       }
       return origWrite(chunk, encoding, cb)
     }
-    process.stderr.write(`[trayambak] stdout trace ON → ${tracePath}\n`)
+    process.stderr.write(`[nemo] stdout trace ON → ${tracePath}\n`)
   } catch (err) {
-    process.stderr.write(`[trayambak] trace failed to start: ${err?.message ?? err}\n`)
+    process.stderr.write(`[nemo] trace failed to start: ${err?.message ?? err}\n`)
   }
 }
 
-// Alternate screen (codex-style --alt-screen / TRAYAMBAK_ALT_SCREEN): the
+// Alternate screen (codex-style --alt-screen / NEMO_ALT_SCREEN): the
 // whole TUI runs on the terminal's alternate buffer, which HAS no scrollback
 // — resizes, over-height paints and stale erases can only ever disturb the
 // live viewport, so clones are structurally impossible there. That is the
@@ -141,7 +139,7 @@ if (process.env.TRAYAMBAK_TRACE === "1") {
 // (37 stray rows into scrollback) and shows the same run clean under
 // ?1049h. The price is paid by the default path too: with no scrollback the
 // device scrollbar and wheel go dead and history that leaves the frame
-// cannot be scrolled back to. --no-alt-screen / TRAYAMBAK_ALT_SCREEN=0
+// cannot be scrolled back to. --no-alt-screen / NEMO_ALT_SCREEN=0
 // restores inline mode (terminal scrollback, clones included) explicitly.
 const useAltScreen = resolveAltScreen({ env: process.env })
 const altScreenActive = useAltScreen && process.stdout.isTTY === true
@@ -172,16 +170,16 @@ if (altScreenActive) {
 }
 
 // Clear the terminal ONCE, before the renderer exists, so the host shell's
-// banner and prompt are not the first thing on screen — and, with ED3, are not
-// sitting at the bottom of the scrollback either. This is the INLINE path's
-// clear (the explicit --no-alt-screen opt-out); the default alternate-screen
+// banner and prompt are not the first thing on screen. This is the INLINE
+// path's clear (the explicit --no-alt-screen opt-out); the default alternate-screen
 // path opens a fresh blank buffer instead and skips all of this.
 //
 //   2J  erase the viewport
-//   3J  erase the SCROLLBACK, which is what actually removes the banner: with
-//       2J alone it survives and reappears on the first scroll up. Terminals
-//       that do not implement ED3 ignore it and simply keep the banner.
 //   H   home the cursor
+//
+// ED3 (erase scrollback) is deliberately NOT sent: the scrollback IS the
+// transcript, so the banner, the prompt and earlier sessions stay intact
+// above the app. Nothing above the frame is ever erased at startup.
 //
 // This is a ONE-TIME startup clear, which is what makes the three requirements
 // compatible. It runs before the first render, so the renderer has no frame
@@ -195,12 +193,9 @@ if (altScreenActive) {
 //     its buffer has no scrollback at all, so the rows the UI settles into
 //     <Static> cannot be scrolled back to once they leave the frame — the
 //     price paid for frames that reflow can never duplicate. --no-alt-screen
-//     / TRAYAMBAK_ALT_SCREEN=0 runs this inline path instead: real terminal
+//     / NEMO_ALT_SCREEN=0 runs this inline path instead: real terminal
 //     scrollback, and the reflow clones it can strand (diag-boot-clone
 //     reproduces both sides).
-//
-// Cost, stated plainly: the shell's pre-launch scrollback is erased along with
-// the banner. That is the only thing lost, and it is what "no banner" requires.
 //
 //   ?1000l ?1002l ?1003l ?1006l ?1015l
 //       turn OFF every mouse-reporting mode. This is what makes the DEVICE's
@@ -225,14 +220,14 @@ if (process.stdout.isTTY === true) {
     enterAltScreen(process.stdout.write.bind(process.stdout))
     process.stdout.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
   } else {
-    process.stdout.write("\x1b[2J\x1b[3J\x1b[H\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
+    process.stdout.write("\x1b[2J\x1b[H\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l")
   }
 }
 
 const instance = render(
-  createElement(TrayambakApp, {
+  createElement(NemoApp, {
     config: config,
-    modelName: config.model ?? "trayambak Fable 5",
+    modelName: config.model ?? "nemo Fable 5",
     permissionMode: "ask",
     onExit: () => {
       // process.exit skips React's unmount cleanup, so restore the main
@@ -251,4 +246,4 @@ const instance = render(
 )
 resizeGuard.attach(instance)
 
-export { TrayambakApp }
+export { NemoApp }

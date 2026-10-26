@@ -110,5 +110,5 @@ SCREEN_REPLAY_OK
 ││ test/m  ● thinking  Mode: ASK  Tokens: 1085  >> Queue: 21  S1-TITANIUM ││
 │╰────────────────────────────────────────────────────────────────────────╯│
 │                                                                          │
-│❯ █Ask Trayambak to do anything...                                        │
+│❯ █Ask Nemo to do anything...                                        │
 ╰──────────────────────────────────────────────────────────────────────────╯

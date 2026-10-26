@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { exec } from "child_process"
@@ -12,7 +12,7 @@ import {
   type CommandHook,
   type HookShellExecutor,
   type MergedHookOutcome,
-} from "../../../../skt/14-hooks/index.js"
+} from "../../../../nemo/14-hooks/index.js"
 import {
   getHookRuntime,
   registerDefaultHooks,
@@ -22,7 +22,7 @@ import {
 } from "../../../../packages/core/src/hook_runtime.js"
 import { redactPayload } from "../../../../packages/core/src/secrets.js"
 import { getSafeEnv } from "../../../../packages/core/src/env_filter.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 
 export type { HookShellExecutor }
 
@@ -37,7 +37,7 @@ function sliceCap(text: string): string {
 
 /** Environment handed to hook child processes. Hooks are user-authored shell
  *  commands, but inheriting the FULL parent environment would hand them every
- *  API key in the process (`TRAYAMBAK_API_KEY`, `OPENAI_API_KEY`, …) — so the
+ *  API key in the process (`NEMO_API_KEY`, `OPENAI_API_KEY`, …) — so the
  *  inherited env runs through `getSafeEnv` first (credential-shaped names are
  *  dropped, `PATH`/`HOME`/… survive), then config-declared extras merge on top
  *  (those are explicit, operator-supplied values). Exported for tests. */
@@ -143,7 +143,7 @@ function ensureDefaultHooks(): void {
   defaultsRegistered = true
 }
 
-function buildRuntimeContext(config: TrayambakConfig, input: HookPointInput, eventName: HookEventName): HookContext {
+function buildRuntimeContext(config: NemoConfig, input: HookPointInput, eventName: HookEventName): HookContext {
   return {
     eventName,
     source: HookSource.System,
@@ -151,7 +151,7 @@ function buildRuntimeContext(config: TrayambakConfig, input: HookPointInput, eve
     args: (input.args ?? {}) as Record<string, unknown>,
     sessionId: input.sessionId,
     cwd: input.cwd,
-    // Structural casts: TrayambakConfig is a closed interface; the runtime
+    // Structural casts: NemoConfig is a closed interface; the runtime
     // treats config/permissions as opaque records and never narrows them.
     config: config as unknown as Record<string, unknown>,
     permissions: (config.permissions ?? {}) as unknown as Record<string, unknown>,
@@ -162,7 +162,7 @@ function buildRuntimeContext(config: TrayambakConfig, input: HookPointInput, eve
  *  Order: programmatic HookRuntime first (in-process, fast-fail — a registered
  *  hook that denies skips every shell subprocess), then config shell hooks. */
 export async function runPreToolUseHooks(
-  config: TrayambakConfig,
+  config: NemoConfig,
   input: HookPointInput,
   executor: HookShellExecutor = execHookShell,
 ): Promise<PreToolUseVerdict> {
@@ -229,7 +229,7 @@ export async function runPreToolUseHooks(
  *  Config shell hooks keep their documented order first; programmatic
  *  HookRuntime observers append after — post hooks observe, never veto. */
 export async function runPostToolUseHooks(
-  config: TrayambakConfig,
+  config: NemoConfig,
   input: HookPointInput,
   executor: HookShellExecutor = execHookShell,
 ): Promise<string[]> {

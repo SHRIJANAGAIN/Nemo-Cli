@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, describe, expect, it } from "vitest"
@@ -13,15 +13,15 @@ import { loadConfig } from "./config.js"
 /**
  * Home mcpServers survive a repo-local config file.
  *
- * `configDir()` prefers `<cwd>/.trayambak/config.json` over
- * `~/.trayambak/config.json` wholesale — a project file carrying
+ * `configDir()` prefers `<cwd>/.nemo/config.json` over
+ * `~/.nemo/config.json` wholesale — a project file carrying
  * `"mcpServers": {}` silently uninstalled every home server ("mcp is not
  * coming" — observed live: puppeteer vanished when running from a
  * checkout). Home servers merge UNDER the active file, per server, with
- * the file winning per key (same rule as ./.trayambak/mcp.json).
+ * the file winning per key (same rule as ./.nemo/mcp.json).
  */
 
-const savedConfig = process.env.TRAYAMBAK_CONFIG
+const savedConfig = process.env.NEMO_CONFIG
 const savedUserprofile = process.env.USERPROFILE
 const savedHome = process.env.HOME
 let savedCwd: string | undefined
@@ -30,8 +30,8 @@ const tmpRoots: string[] = []
 afterEach(() => {
   if (savedCwd !== undefined) process.chdir(savedCwd)
   savedCwd = undefined
-  if (savedConfig === undefined) delete process.env.TRAYAMBAK_CONFIG
-  else process.env.TRAYAMBAK_CONFIG = savedConfig
+  if (savedConfig === undefined) delete process.env.NEMO_CONFIG
+  else process.env.NEMO_CONFIG = savedConfig
   if (savedUserprofile === undefined) delete process.env.USERPROFILE
   else process.env.USERPROFILE = savedUserprofile
   if (savedHome === undefined) delete process.env.HOME
@@ -49,18 +49,18 @@ const stdio = (cmd: string): Record<string, unknown> => ({ command: ["node", cmd
 
 /** Fake HOME carrying `homeConfig` + cd into a repo carrying `repoConfig`. */
 function enterRepoWithHome(homeConfig: unknown, repoConfig: unknown): void {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-home-"))
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-home-"))
   tmpRoots.push(home)
-  fs.mkdirSync(path.join(home, ".trayambak"), { recursive: true })
-  fs.writeFileSync(path.join(home, ".trayambak", "config.json"), JSON.stringify(homeConfig))
+  fs.mkdirSync(path.join(home, ".nemo"), { recursive: true })
+  fs.writeFileSync(path.join(home, ".nemo", "config.json"), JSON.stringify(homeConfig))
   process.env.USERPROFILE = home
   process.env.HOME = home
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-repo-"))
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-repo-"))
   tmpRoots.push(repo)
-  fs.mkdirSync(path.join(repo, ".trayambak"), { recursive: true })
-  fs.writeFileSync(path.join(repo, ".trayambak", "config.json"), JSON.stringify(repoConfig))
+  fs.mkdirSync(path.join(repo, ".nemo"), { recursive: true })
+  fs.writeFileSync(path.join(repo, ".nemo", "config.json"), JSON.stringify(repoConfig))
   savedCwd = process.cwd()
-  delete process.env.TRAYAMBAK_CONFIG
+  delete process.env.NEMO_CONFIG
   process.chdir(repo)
 }
 
@@ -87,20 +87,20 @@ describe("home mcpServers merge under a repo-local file", () => {
   })
 
   it("an explicit --config file stands alone (no home merge)", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-home-"))
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-home-"))
     tmpRoots.push(home)
-    fs.mkdirSync(path.join(home, ".trayambak"), { recursive: true })
+    fs.mkdirSync(path.join(home, ".nemo"), { recursive: true })
     fs.writeFileSync(
-      path.join(home, ".trayambak", "config.json"),
+      path.join(home, ".nemo", "config.json"),
       JSON.stringify({ mcpServers: { puppeteer: stdio("pup.js") } }),
     )
     process.env.USERPROFILE = home
     process.env.HOME = home
-    const explicit = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-explicit-"))
+    const explicit = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-explicit-"))
     tmpRoots.push(explicit)
     const cfgFile = path.join(explicit, "my.json")
     fs.writeFileSync(cfgFile, JSON.stringify({ mcpServers: { solo: stdio("s.js") } }))
-    process.env.TRAYAMBAK_CONFIG = cfgFile
+    process.env.NEMO_CONFIG = cfgFile
     savedCwd = process.cwd()
     process.chdir(explicit)
     expect(Object.keys(loadConfig().mcpServers ?? {})).toEqual(["solo"])

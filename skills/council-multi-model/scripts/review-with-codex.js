@@ -10,8 +10,8 @@ const { spawnSync } = require('child_process');
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_PROMPT_BYTES = 64 * 1024;
-const SUPPORTED_TRAYAMBAK_VERSION = '0.146.0';
-const HOST_PROVIDERS = new Set(['skt-ai-labs', 'openai', 'unknown']);
+const SUPPORTED_NEMO_VERSION = '0.146.0';
+const HOST_PROVIDERS = new Set(['shrijan', 'openai', 'unknown']);
 const REQUIRED_TOOLLESS_FEATURES = Object.freeze([
   'apps',
   'auth_elicitation',
@@ -40,10 +40,10 @@ const REQUIRED_TOOLLESS_FEATURES = Object.freeze([
 
 function usage() {
   return [
-    'Usage: review-with-trayambak.js --consent-to-openai --host-provider <skt-ai-labs|openai|unknown>',
+    'Usage: review-with-nemo.js --consent-to-openai --host-provider <shrijan|openai|unknown>',
     '                              [--timeout-seconds <10-120>]',
     '',
-    'Reads one compact review packet from stdin and prints the labeled Trayambak Code critique.',
+    'Reads one compact review packet from stdin and prints the labeled Nemo Code critique.',
   ].join('\n');
 }
 
@@ -80,18 +80,18 @@ function parseArgs(argv) {
     throw new Error('explicit --consent-to-openai is required');
   }
   if (!HOST_PROVIDERS.has(options.hostProvider)) {
-    throw new Error('--host-provider must be skt-ai-labs, openai, or unknown');
+    throw new Error('--host-provider must be shrijan, openai, or unknown');
   }
   return options;
 }
 
 function providerLabel(hostProvider) {
-  if (hostProvider === 'skt-ai-labs') return 'cross-provider external critique';
+  if (hostProvider === 'shrijan') return 'cross-provider external critique';
   if (hostProvider === 'openai') return 'same-provider external critique';
   return 'provider relationship unverified';
 }
 
-function buildTrayambak CodeArgs(tempDir, outputFile) {
+function buildNemo CodeArgs(tempDir, outputFile) {
   return [
     '--ask-for-approval', 'never',
     ...REQUIRED_TOOLLESS_FEATURES.flatMap((feature) => ['--disable', feature]),
@@ -113,15 +113,15 @@ function buildTrayambak CodeArgs(tempDir, outputFile) {
   ];
 }
 
-function probeTrayambak Code(spawn, args, options, label) {
-  const result = spawn('trayambak', args, options);
+function probeNemo Code(spawn, args, options, label) {
+  const result = spawn('nemo', args, options);
   if (result.error) {
-    if (result.error.code === 'ENOENT') throw new Error('Trayambak Code CLI is not installed');
-    throw new Error(`Trayambak Code ${label} probe failed: ${result.error.message}`);
+    if (result.error.code === 'ENOENT') throw new Error('Nemo Code CLI is not installed');
+    throw new Error(`Nemo Code ${label} probe failed: ${result.error.message}`);
   }
   if (result.status !== 0) {
     const detail = (result.stderr || '').trim().split('\n').slice(-1)[0];
-    throw new Error(`Trayambak Code ${label} probe failed${detail ? `: ${detail}` : ''}`);
+    throw new Error(`Nemo Code ${label} probe failed${detail ? `: ${detail}` : ''}`);
   }
   return (result.stdout || '').trim();
 }
@@ -136,19 +136,19 @@ function verifyToollessSupport(dependencies = {}) {
     maxBuffer: 256 * 1024,
     windowsHide: true,
   };
-  const versionText = probeTrayambak Code(spawn, ['--version'], options, 'version');
-  const versionMatch = versionText.match(/^trayambak-cli\s+([^\s]+)$/m);
+  const versionText = probeNemo Code(spawn, ['--version'], options, 'version');
+  const versionMatch = versionText.match(/^nemo-cli\s+([^\s]+)$/m);
   if (!versionMatch) {
-    throw new Error('Trayambak Code version could not be verified for tool-less review');
+    throw new Error('Nemo Code version could not be verified for tool-less review');
   }
-  if (versionMatch[1] !== SUPPORTED_TRAYAMBAK_VERSION) {
+  if (versionMatch[1] !== SUPPORTED_NEMO_VERSION) {
     throw new Error(
-      `unsupported Trayambak Code version ${versionMatch[1]}; `
-      + `tool-less review requires exactly ${SUPPORTED_TRAYAMBAK_VERSION}`
+      `unsupported Nemo Code version ${versionMatch[1]}; `
+      + `tool-less review requires exactly ${SUPPORTED_NEMO_VERSION}`
     );
   }
 
-  const featuresText = probeTrayambak Code(spawn, ['features', 'list'], options, 'feature');
+  const featuresText = probeNemo Code(spawn, ['features', 'list'], options, 'feature');
   const stages = new Map();
   for (const line of featuresText.split('\n')) {
     const match = line.trim().match(
@@ -161,7 +161,7 @@ function verifyToollessSupport(dependencies = {}) {
   );
   if (unavailable.length > 0) {
     throw new Error(
-      `Trayambak Code ${versionMatch[1]} cannot guarantee tool-less review; `
+      `Nemo Code ${versionMatch[1]} cannot guarantee tool-less review; `
       + `required stable feature toggles unavailable: ${unavailable.join(', ')}`
     );
   }
@@ -170,7 +170,7 @@ function verifyToollessSupport(dependencies = {}) {
 
 function buildEnvironment(sourceEnv = process.env) {
   const allowed = [
-    'PATH', 'HOME', 'USERPROFILE', 'TRAYAMBAK_HOME',
+    'PATH', 'HOME', 'USERPROFILE', 'NEMO_HOME',
     'TMPDIR', 'TMP', 'TEMP', 'SystemRoot', 'ComSpec', 'PATHEXT',
   ];
   return Object.fromEntries(
@@ -199,7 +199,7 @@ function runReview(prompt, options, dependencies = {}) {
   const outputFile = path.join(tempDir, 'last-message.txt');
 
   try {
-    const result = spawn('trayambak', buildTrayambak CodeArgs(tempDir, outputFile), {
+    const result = spawn('nemo', buildNemo CodeArgs(tempDir, outputFile), {
       cwd: tempDir,
       env: environment,
       input: prompt,
@@ -210,22 +210,22 @@ function runReview(prompt, options, dependencies = {}) {
     });
 
     if (result.error) {
-      if (result.error.code === 'ETIMEDOUT') throw new Error('Trayambak Code review timed out');
-      if (result.error.code === 'ENOENT') throw new Error('Trayambak Code CLI is not installed');
-      throw new Error(`Trayambak Code invocation failed: ${result.error.message}`);
+      if (result.error.code === 'ETIMEDOUT') throw new Error('Nemo Code review timed out');
+      if (result.error.code === 'ENOENT') throw new Error('Nemo Code CLI is not installed');
+      throw new Error(`Nemo Code invocation failed: ${result.error.message}`);
     }
     if (result.status !== 0) {
       const detail = (result.stderr || '').trim().split('\n').slice(-1)[0];
-      throw new Error(`Trayambak Code review failed${detail ? `: ${detail}` : ''}`);
+      throw new Error(`Nemo Code review failed${detail ? `: ${detail}` : ''}`);
     }
 
     let text;
     try {
       text = readFile(outputFile, 'utf8').trim();
     } catch (error) {
-      throw new Error(`Trayambak Code returned no final response: ${error.message}`);
+      throw new Error(`Nemo Code returned no final response: ${error.message}`);
     }
-    if (!text) throw new Error('Trayambak Code returned an empty final response');
+    if (!text) throw new Error('Nemo Code returned an empty final response');
     return `${providerLabel(options.hostProvider)}\n${text}`;
   } finally {
     remove(tempDir, { recursive: true, force: true });
@@ -294,8 +294,8 @@ if (require.main === module) {
 module.exports = {
   MAX_PROMPT_BYTES,
   REQUIRED_TOOLLESS_FEATURES,
-  SUPPORTED_TRAYAMBAK_VERSION,
-  buildTrayambak CodeArgs,
+  SUPPORTED_NEMO_VERSION,
+  buildNemo CodeArgs,
   buildEnvironment,
   parseArgs,
   providerLabel,

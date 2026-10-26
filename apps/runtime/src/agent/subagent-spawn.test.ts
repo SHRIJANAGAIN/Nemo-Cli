@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Subagent spawning, end to end: the trayambak__Agent tool call runs a REAL
+ * Subagent spawning, end to end: the nemo__Agent tool call runs a REAL
  * child loop (fresh Session, parent's provider/config/emit, engine-owned
  * depth guard + lifecycle events), the parent session gains only the child's
  * summary result, children never see the spawn tools, and a depth-3 agent is
@@ -19,7 +19,7 @@ import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { Agent } from "./agent.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { AssistantMessage, TaggedAgentEvent } from "../../../../packages/protocol/src/index.js"
 import type { ChatInput, Provider } from "../../../../packages/provider/src/index.js"
 
@@ -45,7 +45,7 @@ afterEach(() => {
   }
 })
 
-function makeConfig(cwd: string): TrayambakConfig {
+function makeConfig(cwd: string): NemoConfig {
   return {
     cwd,
     provider: "custom",
@@ -66,7 +66,7 @@ function makeConfig(cwd: string): TrayambakConfig {
     skillsDir: path.join(cwd, "no-skills"),
     permissions: { mode: "default", rules: [], askByDefault: false },
     toolsets: { defaults: ["core", "agentic", "ops", "tasks", "mcp", "skills"], disabled: [], platform: {} },
-  } as unknown as TrayambakConfig
+  } as unknown as NemoConfig
 }
 
 function firstUserText(input: ChatInput): string {
@@ -109,7 +109,7 @@ const agentCallMsg = (prompt: string, extra: Record<string, unknown> = {}): Assi
       {
         type: "toolCall",
         id: `call-${callSeq}`,
-        name: "trayambak__Agent",
+        name: "nemo__Agent",
         arguments: { description: "spawned task", prompt, ...extra },
       },
     ],
@@ -141,7 +141,7 @@ function toolMessages(agent: Agent): Array<{ content: string; isError: boolean }
     }))
 }
 
-describe("subagent spawn (real child loop via trayambak__Agent)", () => {
+describe("subagent spawn (real child loop via nemo__Agent)", () => {
   it("runs a real child loop and folds only the child's summary into the parent session", async () => {
     const cwd = tempDir()
     fs.writeFileSync(path.join(cwd, "note.txt"), "hello from the workspace")
@@ -171,15 +171,15 @@ describe("subagent spawn (real child loop via trayambak__Agent)", () => {
     expect(childToolResults.some((m) => String(m.content ?? "").includes("hello from the workspace"))).toBe(true)
 
     // Child tools = parent's tools minus the spawn tools (bounded fan-out),
-    // while the parent still offers trayambak__Agent.
+    // while the parent still offers nemo__Agent.
     const parentToolNames = (provider.calls[0]?.tools ?? []).map((d) => d.name)
-    expect(parentToolNames).toContain("trayambak__Agent")
+    expect(parentToolNames).toContain("nemo__Agent")
     const childToolNames = (childCalls[0]?.tools ?? []).map((d) => d.name)
     expect(childToolNames).toContain("bash")
-    expect(childToolNames).not.toContain("trayambak__Agent")
-    expect(childToolNames).not.toContain("trayambak__RunTeam")
-    expect(childToolNames).not.toContain("trayambak__ParallelReview")
-    expect(childToolNames).not.toContain("trayambak__ParallelExecute")
+    expect(childToolNames).not.toContain("nemo__Agent")
+    expect(childToolNames).not.toContain("nemo__RunTeam")
+    expect(childToolNames).not.toContain("nemo__ParallelReview")
+    expect(childToolNames).not.toContain("nemo__ParallelExecute")
 
     // Parent session gains ONLY the child's summary result: user →
     // assistant(toolCall) → tool(result = summary) → assistant(final).
@@ -282,7 +282,7 @@ describe("subagent spawn (real child loop via trayambak__Agent)", () => {
       name: "spawned task",
     })
     expect(agent.listBackgroundJobs()).toHaveLength(1)
-    expect(agent.promoteBackgroundJob(subagentId)).toBe(false)
+    expect(agent.isBackgroundJobRunning(subagentId)).toBe(false)
 
     expect(events.some((e) => e.type === "subagent_background_start")).toBe(true)
     expect(events.some((e) => e.type === "subagent_background_end" && e.result === "bg child result")).toBe(true)

@@ -344,7 +344,7 @@ docker compose -p ecc-plugin-ubuntu-test \
 The dry run executes the current public command contract:
 
 ```bash
-ecc install --profile core --target trayambak-project --dry-run --json
+ecc install --profile core --target nemo-project --dry-run --json
 ```
 
 Before that command runs, the container creates a locally packed npm artifact
@@ -356,8 +356,8 @@ then invokes the extracted `ecc` executable. The runtime stays on
 rely on host `node_modules`; its exact pinned production dependencies are
 already present in the image.
 
-The harness rejects an empty plan, a non-`trayambak-project` target, any operation
-outside `/workspace/project/.trayambak`, or any dry run that creates the target
+The harness rejects an empty plan, a non-`nemo-project` target, any operation
+outside `/workspace/project/.nemo`, or any dry run that creates the target
 directory. `install` performs the isolated apply twice, checks its managed
 install state, lists the installed target, and runs `doctor`.
 

@@ -14,7 +14,7 @@
 #   PROJECT_ID, PROJECT_NAME, PROJECT_ROOT, PROJECT_DIR
 #
 # Detection priority:
-#   1. TRAYAMBAK_PROJECT_DIR env var (if set)
+#   1. NEMO_PROJECT_DIR env var (if set)
 #   2. git remote URL (hashed for uniqueness across machines)
 #   3. git repo root path (fallback, machine-specific)
 #   4. "global" (no project context detected)
@@ -105,20 +105,20 @@ _clv2_detect_project() {
     return 0
   fi
 
-  # 1. Try TRAYAMBAK_PROJECT_DIR env var (explicit override)
-  if [ -n "$TRAYAMBAK_PROJECT_DIR" ] && [ -d "$TRAYAMBAK_PROJECT_DIR" ]; then
+  # 1. Try NEMO_PROJECT_DIR env var (explicit override)
+  if [ -n "$NEMO_PROJECT_DIR" ] && [ -d "$NEMO_PROJECT_DIR" ]; then
     if command -v git &>/dev/null; then
-      project_root=$(git -C "$TRAYAMBAK_PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+      project_root=$(git -C "$NEMO_PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
       if [ -n "$project_root" ]; then
         source_hint="env"
       fi
     fi
-    # Non-git directory explicitly pointed at by TRAYAMBAK_PROJECT_DIR: honor it as
+    # Non-git directory explicitly pointed at by NEMO_PROJECT_DIR: honor it as
     # a project root (path-hash identity) rather than collapsing to the shared
     # `global` bucket. Gated on the explicit env var so an arbitrary non-git cwd
     # never becomes a "project" — priority 2 below stays git-only on purpose.
     if [ -z "$project_root" ]; then
-      project_root=$(cd "$TRAYAMBAK_PROJECT_DIR" 2>/dev/null && pwd -P)
+      project_root=$(cd "$NEMO_PROJECT_DIR" 2>/dev/null && pwd -P)
       if [ -n "$project_root" ]; then
         source_hint="env-nogit"
       fi
@@ -144,7 +144,7 @@ _clv2_detect_project() {
   fi
 
   # Derive project name from directory basename
-  # Normalize Windows backslashes so basename works when TRAYAMBAK_PROJECT_DIR
+  # Normalize Windows backslashes so basename works when NEMO_PROJECT_DIR
   # is passed as e.g. C:\Users\...\project.
   local _norm_root
   _norm_root=$(printf '%s' "$project_root" | sed 's|\\|/|g')

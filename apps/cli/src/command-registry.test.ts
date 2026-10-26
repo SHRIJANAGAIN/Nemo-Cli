@@ -32,9 +32,9 @@ describe("command registry", () => {
   })
   it("every command with usage uses its own name", () => {
     for (const c of COMMANDS) {
-      if (c.usage && c.usage.includes("trayambak")) {
+      if (c.usage && c.usage.includes("nemo")) {
         expect(
-          c.usage.startsWith(`trayambak ${c.name}`) || c.usage.includes(`trayambak ${c.name} `) || c.name === "chat",
+          c.usage.startsWith(`nemo ${c.name}`) || c.usage.includes(`nemo ${c.name} `) || c.name === "chat",
         ).toBe(true)
       }
     }
@@ -57,9 +57,9 @@ describe("command registry", () => {
 })
 
 describe("help rendering", () => {
-  const help = renderRootHelp("trayambak")
-  it("root help carries SKT AI LABS branding, never third-party credit", () => {
-    expect(help).toContain("SKT AI LABS")
+  const help = renderRootHelp("nemo")
+  it("root help carries Shrijan branding, never third-party credit", () => {
+    expect(help).toContain("Shrijan")
     expect(help).not.toContain("NVIDIA")
   })
   it("root help lists every visible command", () => {
@@ -78,29 +78,31 @@ describe("help rendering", () => {
     // Regression: over-long usage strings exceeded the pad width and the
     // summary was glued on ("…[key] [value]Manage configuration values").
     for (const c of COMMANDS.filter((x) => !x.hidden)) {
-      const usage = c.usage ?? `trayambak ${c.name}`
+      const usage = c.usage ?? `nemo ${c.name}`
       const row = help.split("\n").find((l) => l.startsWith(`  ${usage}`))
       expect(row, `missing help row for ${c.name}`).toBeDefined()
       expect(row!.slice(2 + usage.length), `glued summary for ${c.name}`).toMatch(/^ /)
     }
   })
   it("root help is bin-aware: usage rows follow the invoking shim", () => {
-    const sktHelp = renderRootHelp("skt")
+    const nemoCodeHelp = renderRootHelp("nemo-code")
     for (const c of COMMANDS.filter((x) => !x.hidden)) {
-      expect(sktHelp, `row for ${c.name} should use the skt name`).toContain(`  skt ${c.name}`)
+      expect(nemoCodeHelp, `row for ${c.name} should use the nemo-code name`).toContain(
+        `  nemo-code ${c.name}`,
+      )
     }
     // The default bin still renders its own name.
-    expect(help).toContain(`  trayambak config `)
+    expect(help).toContain(`  nemo config `)
   })
   it("command help shows usage and description", () => {
     const spec = findCommand("web")!
-    const h = renderCommandHelp(spec, "skt")
-    expect(h).toContain("skt web")
-    expect(h).toContain(spec.usage!.replace(/trayambak/g, "skt"))
+    const h = renderCommandHelp(spec, "nemo")
+    expect(h).toContain("nemo web")
+    expect(h).toContain(spec.usage!.replace(/nemo/g, "nemo"))
     expect(h).toContain("Global flags:")
   })
   it("command help renders command flags", () => {
-    const h = renderCommandHelp(findCommand("serve")!, "trayambak")
+    const h = renderCommandHelp(findCommand("serve")!, "nemo")
     expect(h).toContain("--port")
     expect(h).toContain("Command flags:")
   })
@@ -136,23 +138,23 @@ describe("shell completion", () => {
     expect(completionShells().sort()).toEqual(["bash", "fish", "powershell", "zsh"])
   })
   it("bash script completes visible commands and registers both binaries", () => {
-    const s = completionScript("bash", "trayambak")
-    expect(s).toContain("complete -F _trayambak_complete trayambak")
+    const s = completionScript("bash", "nemo")
+    expect(s).toContain("complete -F _nemo_complete nemo")
     expect(s).toContain("serve")
     expect(s).not.toContain("\nchat ") // hidden commands stay out of the wordlist
   })
   it("fish script has one completion line per visible command", () => {
-    const s = completionScript("fish", "trayambak")
+    const s = completionScript("fish", "nemo")
     const lines = s.split("\n").filter((l) => l.startsWith("complete -c"))
     expect(lines.length).toBe(COMMANDS.filter((c) => !c.hidden).length)
   })
   it("powershell script registers an argument completer", () => {
-    const s = completionScript("powershell", "trayambak")
+    const s = completionScript("powershell", "nemo")
     expect(s).toContain("Register-ArgumentCompleter")
     expect(s).toContain("'exec'")
   })
   it("throws on unsupported shells", () => {
-    expect(() => completionScript("tcsh", "trayambak")).toThrow(/unsupported shell/)
+    expect(() => completionScript("tcsh", "nemo")).toThrow(/unsupported shell/)
   })
 })
 
@@ -164,12 +166,12 @@ describe("dump-system-prompt lock", () => {
 
   it("refuses the flag AND stores the attempt in the security trail", () => {
     const file = join(mkdtempSync(join(tmpdir(), "dump-lock-")), "security.log")
-    vi.stubEnv("TRAYAMBAK_SECURITY_LOG", file)
+    vi.stubEnv("NEMO_SECURITY_LOG", file)
     const origWrite = process.stderr.write
     process.stderr.write = (() => true) as typeof process.stderr.write
     try {
       const prevExit = process.exitCode
-      expect(refuseSystemPromptDump(["trayambak", "--dump-system-prompt"], "trayambak")).toBe(true)
+      expect(refuseSystemPromptDump(["nemo", "--dump-system-prompt"], "nemo")).toBe(true)
       expect(process.exitCode).toBe(2)
       process.exitCode = prevExit
     } finally {
@@ -184,8 +186,8 @@ describe("dump-system-prompt lock", () => {
 
   it("passes clean invocations through with no trail write", () => {
     const file = join(mkdtempSync(join(tmpdir(), "dump-lock-clean-")), "security.log")
-    vi.stubEnv("TRAYAMBAK_SECURITY_LOG", file)
-    expect(refuseSystemPromptDump(["trayambak", "--version"], "trayambak")).toBe(false)
+    vi.stubEnv("NEMO_SECURITY_LOG", file)
+    expect(refuseSystemPromptDump(["nemo", "--version"], "nemo")).toBe(false)
     expect(existsSync(file)).toBe(false)
   })
 })

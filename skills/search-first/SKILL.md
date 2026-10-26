@@ -74,7 +74,7 @@ that are relevant to the task and project in front of you.
 | Package registry  | `npm --version`, `python -m pip --version`, or project package manager | Use web/docs search and avoid claiming registry coverage |
 | GitHub CLI        | `gh auth status`                                                       | Use public web or local git history only                 |
 | MCP/docs tools    | Available tool list or local MCP config                                | Fall back to official docs/web search                    |
-| Skills directory  | `ls ~/.trayambak/skills ~/.trayambak/skills` where applicable          | Say no local skill catalog was available                 |
+| Skills directory  | `ls ~/.nemo/skills ~/.nemo/skills` where applicable          | Say no local skill catalog was available                 |
 
 ### Quick Mode (inline)
 
@@ -82,8 +82,8 @@ Before writing a utility or adding functionality, mentally run through:
 
 0. Does this already exist in the repo? → `rg` through relevant modules/tests first
 1. Is this a common problem? → Search npm/PyPI
-2. Is there an MCP for this? → Check `~/.trayambak/settings.json` and search
-3. Is there a skill for this? → Check `~/.trayambak/skills/`
+2. Is there an MCP for this? → Check `~/.nemo/settings.json` and search
+3. Is there a skill for this? → Check `~/.nemo/skills/`
 4. Is there a GitHub implementation/template? → Run GitHub code search for maintained OSS before writing net-new code
 
 ### Full Mode (agent)
@@ -96,12 +96,12 @@ Agent(subagent_type="general-purpose", prompt="
   Language/framework: [LANG]
   Constraints: [ANY]
 
-  Search: npm/PyPI, MCP servers, Trayambak Code skills, GitHub
+  Search: npm/PyPI, MCP servers, Nemo Code skills, GitHub
   Return: Structured comparison with recommendation
 ")
 ```
 
-Older Trayambak Code docs may call this `Task(...)`; use the current agent/subagent
+Older Nemo Code docs may call this `Task(...)`; use the current agent/subagent
 tool name exposed by the active harness.
 
 ## Search Shortcuts by Category
@@ -115,7 +115,7 @@ tool name exposed by the active harness.
 
 ### AI/LLM Integration
 
-- Trayambak SDK → Context7 for latest docs
+- Nemo SDK → Context7 for latest docs
 - Prompt management → Check MCP servers
 - Document processing → `unstructured`, `pdfplumber`, `mammoth`
 

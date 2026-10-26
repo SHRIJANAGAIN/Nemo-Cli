@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -9,7 +9,7 @@ import { useHandlePlanClick } from "./use-handle-plan-click.js"
 
 /**
  * The "hook" is a plain dispatcher: clicking a plan in the planner fires a
- * `trayambak:plan` CustomEvent that the host shell listens for. The
+ * `nemo:plan` CustomEvent that the host shell listens for. The
  * `typeof window` guard makes it safe to call during SSR/Node rendering.
  */
 const dispatched: CustomEvent[] = []
@@ -35,10 +35,10 @@ beforeEach(() => {
 afterEach(dropWindow)
 
 describe("useHandlePlanClick", () => {
-  it("dispatches trayambak:plan carrying the clicked plan name", () => {
+  it("dispatches nemo:plan carrying the clicked plan name", () => {
     useHandlePlanClick().handlePlanClick("release-checklist.md")
     expect(dispatched).toHaveLength(1)
-    expect(dispatched[0]!.type).toBe("trayambak:plan")
+    expect(dispatched[0]!.type).toBe("nemo:plan")
     expect(dispatched[0]!.detail).toEqual({ planName: "release-checklist.md" })
   })
 

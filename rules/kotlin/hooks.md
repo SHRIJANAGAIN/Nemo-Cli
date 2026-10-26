@@ -11,7 +11,7 @@ paths:
 
 ## PostToolUse Hooks
 
-Configure in `~/.trayambak/settings.json`:
+Configure in `~/.nemo/settings.json`:
 
 - **ktfmt/ktlint**: Auto-format `.kt` and `.kts` files after edit
 - **detekt**: Run static analysis after editing Kotlin files

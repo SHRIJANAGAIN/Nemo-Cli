@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -18,7 +18,7 @@ describe("summarize and extract byte caps", () => {
 
   beforeEach(() => {
     originalCwd = process.cwd()
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sumz-"))
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-sumz-"))
     process.chdir(tmp)
   })
 
@@ -68,7 +68,7 @@ describe("summarize and extract resolve against the tool context cwd", () => {
     // same relative path meant different files depending on which tool ran it.
     // The project dir is NOT the process cwd here — only the context says where
     // the workspace is.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sumz-ctx-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-sumz-ctx-"))
     try {
       fs.writeFileSync(path.join(dir, "doc.txt"), "Alpha beta gamma delta epsilon. Hello world.", "utf8")
       const ctx = { cwd: dir, config: {}, permissions: {} } as unknown as ToolContext

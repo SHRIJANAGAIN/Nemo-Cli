@@ -10,9 +10,9 @@ const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 describe("zz ellipsis", () => {
   it("reports ellipsis per width", async () => {
     vi.resetModules()
-    process.env.TRAYAMBAK_LOGO_PATH = ANSI
+    process.env.NEMO_LOGO_PATH = ANSI
     const { render, Box } = await import("ink")
-    const { TrayambakLogo } = await import("./TrayambakLogo.js")
+    const { NemoLogo } = await import("./NemoLogo.js")
     for (const columns of [80, 100, 118]) {
       const pass = new PassThrough()
       let sink = ""
@@ -26,7 +26,7 @@ describe("zz ellipsis", () => {
           React.createElement(
             Box,
             { flexDirection: "column", paddingX: 1 },
-            React.createElement(TrayambakLogo, { compact: false, width: frameWidth - 30 }),
+            React.createElement(NemoLogo, { compact: false, width: frameWidth - 30 }),
           ),
         ),
         { stdout, patchConsole: false },

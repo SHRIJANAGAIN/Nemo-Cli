@@ -1,10 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-// Bootstrap helpers for TrayambakApp: env-gated input tracing, bracketed-paste
+// Bootstrap helpers for NemoApp: env-gated input tracing, bracketed-paste
 // enable/disable, agent-config defaults, transcript -> AgentMessage conversion, and
 // the terminal ROWS hook. Split out of App.tsx so they are unit-testable without
 // mounting the component (see app-bootstrap.test.ts).
@@ -13,16 +13,16 @@ import { useStdout } from "ink"
 import { appendFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 import type { AgentMessage } from "../../../protocol/src/index.js"
-import type { PermissionMode, TrayambakMessage } from "./types.js"
+import type { PermissionMode, NemoMessage } from "./types.js"
 
-/** Env-gated input tracer (TRAYAMBAK_DEBUG_INPUT=1): records exact stdin
- * bytes, key flags, and raw/tty state per keystroke to trayambak-input.log. */
+/** Env-gated input tracer (NEMO_DEBUG_INPUT=1): records exact stdin
+ * bytes, key flags, and raw/tty state per keystroke to nemo-input.log. */
 export const debugInputLog = (line: string): void => {
-  if (process.env.TRAYAMBAK_DEBUG_INPUT !== "1") return
+  if (process.env.NEMO_DEBUG_INPUT !== "1") return
   try {
-    appendFileSync(join(tmpdir(), "trayambak-input.log"), `${new Date().toISOString()} ${line}\n`)
+    appendFileSync(join(tmpdir(), "nemo-input.log"), `${new Date().toISOString()} ${line}\n`)
   } catch {
     /* debug only */
   }
@@ -40,18 +40,26 @@ export function enableBracketedPaste(): () => void {
   return () => {}
 }
 
-export interface TrayambakAppProps {
-  config?: Partial<TrayambakConfig>
+export interface NemoAppProps {
+  config?: Partial<NemoConfig>
   modelName?: string
   permissionMode?: PermissionMode
   onExit?: () => void
   initialPrompt?: string
+  /**
+   * Alternate-screen mode (codex-style --alt-screen). Native scrollback is
+   * dead there, so App owns transcript scrolling itself: PageUp/PageDown and
+   * the mouse wheel page a parked window through history (inline mode keeps
+   * native scroll and leaves these keys inert). Pure plumbing — the decision
+   * lives in ink-repl.mjs (flag + env + TTY).
+   */
+  altScreen?: boolean
 }
 
-export function createAgentConfig(partial: Partial<TrayambakConfig>): TrayambakConfig {
+export function createAgentConfig(partial: Partial<NemoConfig>): NemoConfig {
   return {
     baseUrl: partial.baseUrl ?? "http://localhost:8080",
-    model: partial.model ?? "trayambak",
+    model: partial.model ?? "nemo",
     apiKey: partial.apiKey ?? "",
     // Provider must pass through: dropping it silently rebuilds every agent
     // as NVIDIA (Agent defaults provider ?? "nvidia") — observed live as an
@@ -79,6 +87,10 @@ export function createAgentConfig(partial: Partial<TrayambakConfig>): TrayambakC
     retryDelayMs: partial.retryDelayMs ?? 750,
     maxParallelToolCalls: partial.maxParallelToolCalls ?? 4,
     nativeTools: partial.nativeTools ?? true,
+    // Agentic compaction must survive the rebuild like every other flag:
+    // the config type requires it (default true), so omitting it breaks the
+    // build instead of degrading silently.
+    agenticCompaction: partial.agenticCompaction ?? true,
     toolsets: partial?.toolsets?.defaults?.length
       ? partial.toolsets
       : { defaults: ["core", "agentic", "ops", "tasks", "mcp", "skills"], disabled: [], platform: {} },
@@ -106,7 +118,7 @@ export function createAgentConfig(partial: Partial<TrayambakConfig>): TrayambakC
   }
 }
 
-export function convertToAgentMessages(msgs: TrayambakMessage[]): AgentMessage[] {
+export function convertToAgentMessages(msgs: NemoMessage[]): AgentMessage[] {
   const result: AgentMessage[] = []
   for (const msg of msgs) {
     if (msg.role === "system") {
@@ -232,14 +244,45 @@ export interface LiveWindowSize {
   rows: number
 }
 
+/**
+ * Manual geometry override: `NEMO_COLUMNS` / `NEMO_ROWS`.
+ *
+ * Some terminals report a pty size wider than their visible window (seen
+ * live: Termius paints a wider frame than fits — right border walls wrap
+ * away and every repaint stacks clones — while conhost on the same build
+ * stays clean). No in-process call can see the true visible width when the
+ * pty itself lies, so an explicit pin wins over the syscall: set it to the
+ * VISIBLE width and the whole frame (Ink's own layout reads the same
+ * cache) fits. Malformed or sub-floor values are ignored, never applied.
+ */
+export const SIZE_OVERRIDE_COLUMNS_ENV = "NEMO_COLUMNS"
+export const SIZE_OVERRIDE_ROWS_ENV = "NEMO_ROWS"
+
+function readSizeOverride(raw: unknown, floor: number): number | undefined {
+  if (typeof raw !== "string") return undefined
+  const text = raw.trim()
+  if (text.length === 0) return undefined
+  const value = Math.floor(Number(text))
+  if (!Number.isFinite(value) || value < floor) return undefined
+  return value
+}
+
 export function readLiveWindowSize(
   stdout: { getWindowSize?: () => unknown } | undefined | null,
+  env: Readonly<Record<string, string | undefined>> = process.env,
 ): LiveWindowSize | null {
+  const overrideColumns = readSizeOverride(env[SIZE_OVERRIDE_COLUMNS_ENV], MIN_USABLE_COLUMNS)
+  const overrideRows = readSizeOverride(env[SIZE_OVERRIDE_ROWS_ENV], MIN_USABLE_ROWS)
   try {
     const raw = stdout?.getWindowSize?.()
-    if (!Array.isArray(raw)) return null
-    const columns = Math.floor(Number(raw[0]))
-    const rows = Math.floor(Number(raw[1]))
+    const sys = Array.isArray(raw)
+      ? { columns: Math.floor(Number(raw[0])), rows: Math.floor(Number(raw[1])) }
+      : null
+    // Explicit pin wins per axis (the pty is the liar); the syscall fills
+    // whatever the operator did not pin.
+    const columns = overrideColumns ?? sys?.columns
+    const rows = overrideRows ?? sys?.rows
+    if (columns === undefined || rows === undefined) return null
     if (!Number.isFinite(columns) || !Number.isFinite(rows)) return null
     // Zero/negative is dead air, and anything under the usable floor is a
     // transient (minimize reports 0x0; letterbox sizes fit nothing) — refuse
@@ -247,6 +290,11 @@ export function readLiveWindowSize(
     if (columns < MIN_USABLE_COLUMNS || rows < MIN_USABLE_ROWS) return null
     return { columns, rows }
   } catch {
+    // Throwing syscall on a weird pty: pinned axes still stand (both or
+    // nothing — one axis can never be invented for the other).
+    if (overrideColumns !== undefined && overrideRows !== undefined) {
+      return { columns: overrideColumns, rows: overrideRows }
+    }
     return null
   }
 }
@@ -259,12 +307,15 @@ export function readLiveWindowSize(
  * mid-render and emitting there would nest an Ink render inside React's, so
  * the poll loop owns event emission and render paths only ever assign.
  */
-export function syncWindowSizeCache(stdout: {
-  columns?: number
-  rows?: number
-  getWindowSize?: () => unknown
-}): boolean {
-  const live = readLiveWindowSize(stdout)
+export function syncWindowSizeCache(
+  stdout: {
+    columns?: number
+    rows?: number
+    getWindowSize?: () => unknown
+  },
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  const live = readLiveWindowSize(stdout, env)
   if (!live) return false
   if (stdout.columns === live.columns && stdout.rows === live.rows) return false
   stdout.columns = live.columns
@@ -319,22 +370,27 @@ export function useResizingFlag(settleMs = 200): boolean {
  * The price is real: with no scrollback the device scrollbar and wheel go
  * dead for the session, and history that scrolls out of the frame cannot be
  * scrolled back to — there is no in-app scroll window either (rollouts stay
- * listable/resumable, but the terminal transcript is not replayed). That
- * trade was accepted deliberately: clone-free rendering beat scroll-back
- * history, so the alternate buffer is the DEFAULT. Inline mode survives as
- * an explicit opt-out (`--no-alt-screen` / TRAYAMBAK_ALT_SCREEN=0) for
- * users who would rather have terminal scrollback than clone-free frames.
+ * listable/resumable, but the terminal transcript is not replayed). That is
+ * why the alternate buffer stays strictly OPT-IN (`--alt-screen` /
+ * NEMO_ALT_SCREEN=1): the project rule is that scrollback IS the
+ * transcript, so default runs stay inline — and inline clone-freedom is
+ * enforced by the resize guard's never-throttled shrink blank, rehome and
+ * settle-clear+reprint path (scripts/diag-boot-clone.mjs passes inline:
+ * `--prod --shrink` ends with 0 scrollback rows). `--no-alt-screen` /
+ * NEMO_ALT_SCREEN=0 remains accepted and forces inline explicitly.
  */
 export const ALT_SCREEN_ENTER = "[?1049h"
-export const ALT_SCREEN_LEAVE = "[?1049l[?25h"
+export const ALT_SCREEN_LEAVE = "[?1049l[?25h[?1000l[?1006l"
 
 const ALT_TRUTHY = new Set(["1", "true", "yes", "y", "on"])
 
 /**
  * Should this launch use the alternate screen? Explicit CLI flag wins, then
- * the environment, then ON (default-on since the top-clone fix: the alternate
- * buffer is the only surface where reflow cannot strand frames — verified by
- * scripts/diag-boot-clone.mjs --prod --alt --shrink). Pure (unit-tested) —
+ * the environment, then OFF (default-off: inline is the default path because
+ * scrollback IS the transcript; the alternate buffer is the codex-style
+ * opt-in for a structurally clone-free surface — verified by
+ * scripts/diag-boot-clone.mjs --prod --alt --shrink, while the inline path
+ * passes the same probe via the resize guard). Pure (unit-tested) —
  * the flag arrives as the strict parser's "true"/"false"/absent strings,
  * never a real boolean.
  */
@@ -344,8 +400,8 @@ export function resolveAltScreen(input: {
 }): boolean {
   if (typeof input.flag === "boolean") return input.flag
   if (typeof input.flag === "string") return ALT_TRUTHY.has(input.flag.trim().toLowerCase())
-  const raw = input.env?.TRAYAMBAK_ALT_SCREEN
-  if (raw === undefined) return true
+  const raw = input.env?.NEMO_ALT_SCREEN
+  if (raw === undefined) return false
   return ALT_TRUTHY.has(raw.trim().toLowerCase())
 }
 
@@ -360,6 +416,10 @@ export function enterAltScreen(write: (chunk: string) => unknown): void {
  * Write the leave sequence. Restores the main buffer AND the caret: the app
  * hides the hardware caret for its lifetime and process.exit skips React's
  * unmount cleanup, so without the ?25h the shell would come back caret-less.
+ * Also switches mouse reporting off: alt mode is the one place App enables it
+ * (wheel paging), and exit paths skip effect cleanup — without this a killed
+ * alt session would strand the shell eating wheel events as typed garbage.
+ * Off-when-already-off is harmless everywhere else this runs.
  */
 export function leaveAltScreen(write: (chunk: string) => unknown): void {
   write(ALT_SCREEN_LEAVE)
@@ -382,6 +442,16 @@ export function leaveAltScreen(write: (chunk: string) => unknown): void {
  */
 export function liveViewportRows(stdoutRows: number | undefined, stateRows: number): number {
   return stdoutRows || stateRows
+}
+
+/**
+ * The boot cinematic (eye → title sweep → codename) stays OFF by default: it
+ * was disabled by request, and the welcome screen is the home now. Opt back in
+ * per shell with `NEMO_BOOT_CINE=1` — any key still skips it.
+ */
+export function bootCineEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = (env.NEMO_BOOT_CINE ?? "").trim().toLowerCase()
+  return raw === "1" || raw === "true" || raw === "on" || raw === "yes"
 }
 
 /**
@@ -429,4 +499,27 @@ export function registerSettleReprintHandler(handler: (() => void) | undefined):
 
 export function requestSettleReprint(): void {
   settleReprintHandler?.()
+}
+
+/**
+ * Turn-end full re-render slot (the streaming-clone fix).
+ *
+ * Same framework-free bridge as the settle slot, opposite direction of
+ * initiation: the GUARD owns the terminal bytes (viewport blank +
+ * scrollback clear) and registers its implementation at creation; App owns
+ * the turn lifecycle and calls `requestFullRender()` when a grown turn
+ * ends. The guard evaluates its live-owner guards at CALL time, so this
+ * returns whether a wipe+reprint actually happened — App only treats the
+ * screen as rebuilt when true (a remount with no wipe would reprint
+ * history UNDER the stale frames: clones, exactly what this exists to
+ * kill).
+ */
+let fullRenderHandler: (() => boolean) | undefined
+
+export function registerFullRenderHandler(handler: (() => boolean) | undefined): void {
+  fullRenderHandler = handler
+}
+
+export function requestFullRender(): boolean {
+  return fullRenderHandler?.() ?? false
 }

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -12,7 +12,7 @@ import * as path from "node:path"
 /**
  * resume against an empty store: misses are operational failures (exit 1),
  * never silent success. The sessionManager singleton reads
- * TRAYAMBAK_SESSIONS_FILE at module load, so the env is pinned before the
+ * NEMO_SESSIONS_FILE at module load, so the env is pinned before the
  * dynamic import — mirroring doctor.test.ts.
  */
 
@@ -26,9 +26,9 @@ function readExitCode(): number | undefined {
 }
 
 beforeEach(async () => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-resume-"))
-  savedFile = process.env.TRAYAMBAK_SESSIONS_FILE
-  process.env.TRAYAMBAK_SESSIONS_FILE = path.join(tmp, "sessions.json")
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-resume-"))
+  savedFile = process.env.NEMO_SESSIONS_FILE
+  process.env.NEMO_SESSIONS_FILE = path.join(tmp, "sessions.json")
   savedExitCode = readExitCode()
   process.exitCode = undefined
   const mod = await import("./session-resume.js")
@@ -36,8 +36,8 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
-  if (savedFile === undefined) delete process.env.TRAYAMBAK_SESSIONS_FILE
-  else process.env.TRAYAMBAK_SESSIONS_FILE = savedFile
+  if (savedFile === undefined) delete process.env.NEMO_SESSIONS_FILE
+  else process.env.NEMO_SESSIONS_FILE = savedFile
   process.exitCode = savedExitCode
   try {
     fs.rmSync(tmp, { recursive: true, force: true })

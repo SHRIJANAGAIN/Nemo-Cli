@@ -16,8 +16,8 @@
  *   any later request:          plan 3 again → loop always terminates.
  *
  * Oracles (every settle, over scrollback + viewport):
- *   O1: every row containing TRAYAMBAK matches │TRAYAMBAK<spaces>│
- *   O2: no row contains TRAYAMBAK together with a marker
+ *   O1: every row containing NEMO matches │NEMO<spaces>│
+ *   O2: no row contains NEMO together with a marker
  *   O3: no row contains two distinct markers (cross-row merge)
  *   O4: viewport top row is the frame's ┌ border (no off-by-one scroll)
  *   O5: no two adjacent non-empty rows normalize to the same text
@@ -64,8 +64,8 @@ const checkScreen = (screen, label) => {
   const sbLen = screen.scrollbackRows().length
   rows.forEach((r, i) => {
     const where = i < sbLen ? `sb${i}` : `row${i - sbLen}`
-    if (r.includes("TRAYAMBAK")) {
-      if (!/^│TRAYAMBAK\s*│$/.test(r)) {
+    if (r.includes("NEMO")) {
+      if (!/^│NEMO\s*│$/.test(r)) {
         ok = false
         reasons.push(`O1 ${where}: ${JSON.stringify(r)}`)
       }
@@ -264,12 +264,12 @@ stdout.on("data", (chunk) => screen.write(chunk.toString()))
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark",
+      themeName: "nemo-dark",
       baseUrl: `http://127.0.0.1:${port}/api`,
       apiKey: "k",
       model: "test/m",

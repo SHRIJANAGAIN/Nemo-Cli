@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -12,9 +12,9 @@ import * as path from "node:path"
 import type * as TaskModule from "./task.js"
 
 /**
- * tasks.ts pins its store to `path.join(os.homedir(), ".trayambak")` AT MODULE
+ * tasks.ts pins its store to `path.join(os.homedir(), ".nemo")` AT MODULE
  * LOAD, so a throwaway home is installed before the dynamic import below — the
- * real ~/.trayambak/tasks.json is never read or written. `import type` is
+ * real ~/.nemo/tasks.json is never read or written. `import type` is
  * erased at compile time and cannot pull the module in early.
  *
  * Only the two paths taskCommand touches are persisted by hand (the store is a
@@ -26,7 +26,7 @@ let home = ""
 let savedUserprofile: string | undefined
 let savedHome: string | undefined
 
-const tasksFile = (): string => path.join(home, ".trayambak", "tasks.json")
+const tasksFile = (): string => path.join(home, ".nemo", "tasks.json")
 
 interface StoredTask {
   id: string
@@ -47,7 +47,7 @@ function storedTasks(): StoredTask[] {
 }
 
 beforeAll(async () => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-task-home-"))
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-task-home-"))
   savedUserprofile = process.env.USERPROFILE
   savedHome = process.env.HOME
   process.env.USERPROFILE = home
@@ -103,7 +103,7 @@ describe("taskCommand create", () => {
   it("persists the queued task so /task list and the tools can see it", () => {
     expect(task.taskCommand({ action: "create", content: "Ship release" })).toBe("[Task queued] Ship release")
     // "[Task queued]" must be TRUE: the row lands in the same store that
-    // `list`, `reset`, and the trayambak__Task* tools read (it used to
+    // `list`, `reset`, and the nemo__Task* tools read (it used to
     // acknowledge without writing anything).
     const stored = storedTasks()
     expect(stored).toHaveLength(1)

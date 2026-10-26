@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# One-shot migration from the legacy Trayambak config tree into the
+# One-shot migration from the legacy Nemo config tree into the
 # continuous-learning-v2 data directory.
 set -euo pipefail
 
-OLD="${HOME}/.trayambak/homunculus"
+OLD="${HOME}/.nemo/homunculus"
 
 # shellcheck disable=SC1091
 . "$(dirname "$0")/lib/homunculus-dir.sh"
@@ -28,7 +28,7 @@ if command -v pgrep >/dev/null 2>&1; then
   escaped_home="$(printf '%s' "$HOME" | sed 's/[]\.[(){}+*?|^$]/\\&/g')"
   if pgrep -f "${escaped_home}.*observer-loop\\.sh" >/dev/null 2>&1; then
     echo "Refusing to migrate: observer-loop.sh is running." >&2
-    echo "Exit all Trayambak Code sessions, then re-run." >&2
+    echo "Exit all Nemo Code sessions, then re-run." >&2
     exit 1
   fi
 else
@@ -54,12 +54,12 @@ else
   exit 1
 fi
 
-settings="${HOME}/.trayambak/settings.json"
+settings="${HOME}/.nemo/settings.json"
 if [ -f "$settings" ] && grep -q '"CLV2_CONFIG"' "$settings" 2>/dev/null; then
-  if grep -q '\.trayambak/homunculus' "$settings" 2>/dev/null; then
+  if grep -q '\.nemo/homunculus' "$settings" 2>/dev/null; then
     cat >&2 <<WARN
 
-Advisory: ~/.trayambak/settings.json still sets CLV2_CONFIG under the old path.
+Advisory: ~/.nemo/settings.json still sets CLV2_CONFIG under the old path.
 Update it to: ${NEW}/config.json
 (Not editing settings.json automatically.)
 

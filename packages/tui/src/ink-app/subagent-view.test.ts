@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, it, expect } from "vitest"
@@ -16,7 +16,7 @@ import {
   BUILTIN_AGENT_OPTIONS,
   type SubagentRouting,
 } from "./subagent-view.js"
-import type { TrayambakMessage, BackgroundSubagentState } from "./types.js"
+import type { NemoMessage, BackgroundSubagentState } from "./types.js"
 import type { TaggedAgentEvent } from "../../../protocol/src/index.js"
 
 const baseStart = {
@@ -31,7 +31,7 @@ const baseStart = {
 // Glyphs under test render through glyphs.ts, which auto-selects ASCII on
 // plain Windows consoles (this CI/dev box) — assertions below pin Unicode
 // shapes, so force unicode mode here. resetGlyphCache covers shared workers.
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 resetGlyphCache()
 describe("subagentCardId", () => {
   it("prefixes foreground and background cards differently", () => {
@@ -41,7 +41,7 @@ describe("subagentCardId", () => {
 })
 
 describe("createSubagentCard", () => {
-  it("builds a running system card with a SKT AI LABS-format title", () => {
+  it("builds a running system card with a Shrijan-format title", () => {
     const card = createSubagentCard(baseStart, 1000)
     expect(card.id).toBe("subagent-abc-123")
     expect(card.role).toBe("system")
@@ -146,7 +146,7 @@ describe("applyChildToolEvent", () => {
 })
 
 describe("buildSubagentRows", () => {
-  const card = (over: Partial<TrayambakMessage>): TrayambakMessage => ({
+  const card = (over: Partial<NemoMessage>): NemoMessage => ({
     id: "id",
     timestamp: 0,
     role: "system",

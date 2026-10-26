@@ -12,7 +12,7 @@ Use this skill when agents are being managed like a team rather than a single as
 ## When To Activate
 
 - The task spans multiple agents, tools, harnesses, branches, or worktrees.
-- The user mentions team orchestration, agent Kanban, squad, conductor, control pane, manager, desktop app, Zellij, tmux, Hermes, Devin, Trayambak Code, Trayambak Code, or multi-agent work.
+- The user mentions team orchestration, agent Kanban, squad, conductor, control pane, manager, desktop app, Zellij, tmux, Hermes, Devin, Nemo Code, Nemo Code, or multi-agent work.
 - A project needs shared workflow state across people and agents.
 - Existing agent fan-out is producing output but not mergeable product.
 
@@ -46,7 +46,7 @@ Each card should fit this schema:
 {
   "id": "agent-card-001",
   "title": "Build dynamic workflow skill",
-  "owner": "trayambak",
+  "owner": "nemo",
   "state": "running",
   "branch": "product/dynamic-workflow-team-orchestration",
   "worktree": ".",

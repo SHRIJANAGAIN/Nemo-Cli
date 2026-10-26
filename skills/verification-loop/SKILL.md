@@ -1,6 +1,6 @@
 ---
 name: verification-loop
-description: "A comprehensive verification system for Trayambak Code sessions. Use when verifying a Trayambak Code session's work before claiming it is complete."
+description: "A comprehensive verification system for Nemo Code sessions. Use when verifying a Nemo Code session's work before claiming it is complete."
 license: MIT
 metadata:
   origin: ECC
@@ -8,7 +8,7 @@ metadata:
 
 # Verification Loop Skill
 
-A comprehensive verification system for Trayambak Code sessions.
+A comprehensive verification system for Nemo Code sessions.
 
 ## When to Use
 

@@ -2,7 +2,7 @@
 description: Create hooks to prevent unwanted behaviors from conversation analysis or explicit instructions
 ---
 
-Create hook rules to prevent unwanted Trayambak Code behaviors by analyzing conversation patterns or explicit user instructions.
+Create hook rules to prevent unwanted Nemo Code behaviors by analyzing conversation patterns or explicit user instructions.
 
 ## Usage
 
@@ -32,7 +32,7 @@ Show the user:
 
 ### Step 3: Generate Rule Files
 
-For each approved rule, create a file at `.trayambak/hookify.{name}.local.md`:
+For each approved rule, create a file at `.nemo/hookify.{name}.local.md`:
 
 ```yaml
 ---

@@ -1,6 +1,6 @@
 # sin-goal-mode
 
-Goal tracking skill for Trayambak / MCP with checkpoints, rollback, and progress reports.
+Goal tracking skill for Nemo / MCP with checkpoints, rollback, and progress reports.
 
 ## What it does
 
@@ -28,7 +28,7 @@ git clone https://github.com/OpenSIN-Code/SIN-Code-Goal-Mode-Skill.git
 
 ## Usage via MCP
 
-The server exposes 8 tools. In Trayambak or any MCP client:
+The server exposes 8 tools. In Nemo or any MCP client:
 
 ```json
 {

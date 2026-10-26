@@ -1,18 +1,18 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { loadConfig, type TrayambakConfig } from "../../../apps/runtime/src/index.js"
+import { loadConfig, type NemoConfig } from "../../../apps/runtime/src/index.js"
 
 export interface ConfigError {
   field: string
   message: string
 }
 
-/** Validate a trayambak configuration, returning a list of errors (empty when valid). */
-export function validateConfig(config: TrayambakConfig): ConfigError[] {
+/** Validate a nemo configuration, returning a list of errors (empty when valid). */
+export function validateConfig(config: NemoConfig): ConfigError[] {
   const errors: ConfigError[] = []
   if (!config.baseUrl || !/^https?:\/\//.test(config.baseUrl)) {
     errors.push({ field: "baseUrl", message: "baseUrl must be an http(s) URL" })
@@ -29,7 +29,7 @@ export function validateConfig(config: TrayambakConfig): ConfigError[] {
   return errors
 }
 
-export function assertConfig(config: TrayambakConfig): void {
+export function assertConfig(config: NemoConfig): void {
   const errors = validateConfig(config)
   if (errors.length > 0) {
     throw new Error("Invalid configuration: " + errors.map((e) => `${e.field}: ${e.message}`).join("; "))

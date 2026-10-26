@@ -30,7 +30,7 @@ def generate_scenarios(
 ) -> list[Scenario]:
     """Generate 3 scenarios with decreasing prompt strictness.
 
-    Calls trayambak -p with the scenario_generator prompt, parses YAML output.
+    Calls nemo -p with the scenario_generator prompt, parses YAML output.
     """
     skill_content = skill_path.read_text()
     prompt_template = (PROMPTS_DIR / "scenario_generator.md").read_text()
@@ -41,17 +41,17 @@ def generate_scenarios(
     )
 
     result = subprocess.run(
-        ["trayambak", "-p", prompt, "--model", model, "--output-format", "text"],
+        ["nemo", "-p", prompt, "--model", model, "--output-format", "text"],
         capture_output=True,
         text=True,
         timeout=120,
     )
 
     if result.returncode != 0:
-        raise RuntimeError(f"trayambak -p failed: {result.stderr}")
+        raise RuntimeError(f"nemo -p failed: {result.stderr}")
 
     if not result.stdout.strip():
-        raise RuntimeError("trayambak -p returned empty output")
+        raise RuntimeError("nemo -p returned empty output")
 
     raw_yaml = extract_yaml(result.stdout)
     parsed = yaml.safe_load(raw_yaml)

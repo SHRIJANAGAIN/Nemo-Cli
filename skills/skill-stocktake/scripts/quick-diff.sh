@@ -3,11 +3,11 @@
 # Usage: quick-diff.sh RESULTS_JSON [CWD_SKILLS_DIR]
 # Output: JSON array of changed/new files to stdout (empty [] if no changes)
 #
-# When CWD_SKILLS_DIR is omitted, defaults to $PWD/.trayambak/skills so the
+# When CWD_SKILLS_DIR is omitted, defaults to $PWD/.nemo/skills so the
 # script always picks up project-level skills without relying on the caller.
 #
 # Environment:
-#   SKILL_STOCKTAKE_GLOBAL_DIR   Override ~/.trayambak/skills (for testing only;
+#   SKILL_STOCKTAKE_GLOBAL_DIR   Override ~/.nemo/skills (for testing only;
 #                                do not set in production — intended for bats tests)
 #   SKILL_STOCKTAKE_PROJECT_DIR  Override project dir detection (for testing only)
 
@@ -35,18 +35,18 @@ sort_nul_file() {
 }
 
 RESULTS_JSON="${1:-}"
-CWD_SKILLS_DIR="${SKILL_STOCKTAKE_PROJECT_DIR:-${2:-$PWD/.trayambak/skills}}"
-GLOBAL_DIR="${SKILL_STOCKTAKE_GLOBAL_DIR:-$HOME/.trayambak/skills}"
+CWD_SKILLS_DIR="${SKILL_STOCKTAKE_PROJECT_DIR:-${2:-$PWD/.nemo/skills}}"
+GLOBAL_DIR="${SKILL_STOCKTAKE_GLOBAL_DIR:-$HOME/.nemo/skills}"
 
 if [[ -z "$RESULTS_JSON" || ! -f "$RESULTS_JSON" ]]; then
   echo "Error: RESULTS_JSON not found: ${RESULTS_JSON:-<empty>}" >&2
   exit 1
 fi
 
-# Validate CWD_SKILLS_DIR looks like a .trayambak/skills path (defense-in-depth).
+# Validate CWD_SKILLS_DIR looks like a .nemo/skills path (defense-in-depth).
 # Only warn when the path exists — a nonexistent path poses no traversal risk.
-if [[ -n "$CWD_SKILLS_DIR" && -d "$CWD_SKILLS_DIR" && "$CWD_SKILLS_DIR" != */.trayambak/skills* ]]; then
-  echo "Warning: CWD_SKILLS_DIR does not look like a .trayambak/skills path: $CWD_SKILLS_DIR" >&2
+if [[ -n "$CWD_SKILLS_DIR" && -d "$CWD_SKILLS_DIR" && "$CWD_SKILLS_DIR" != */.nemo/skills* ]]; then
+  echo "Warning: CWD_SKILLS_DIR does not look like a .nemo/skills path: $CWD_SKILLS_DIR" >&2
 fi
 
 evaluated_at=$(jq -r '.evaluated_at' "$RESULTS_JSON")

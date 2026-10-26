@@ -1,8 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
- * Trayambak TypeScript SDK (Codex sdk/typescript parity, minimal).
- * Usage: new TrayambakClient().startThread(prompt) / resumeThread(id)
+ * Nemo TypeScript SDK (Codex sdk/typescript parity, minimal).
+ * Usage: new NemoClient().startThread(prompt) / resumeThread(id)
  */
 
 import { createTranscript, appendWire } from "../../session-backends/src/transcript.js"
@@ -16,7 +20,7 @@ async function loadAgent(): Promise<typeof import("../../../apps/runtime/src/ind
   return import("../../../apps/runtime/src/index.js")
 }
 
-export class TrayambakClient {
+export class NemoClient {
   async startThread(prompt: string, opts: { model?: string; workDir?: string } = {}): Promise<ThreadHandle> {
     const { Agent, loadConfig } = await loadAgent()
     const { id } = createTranscript(opts.workDir ?? process.cwd())

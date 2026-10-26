@@ -9,7 +9,7 @@ description: >
   Use when investigating non-conformances, performing root cause analysis,
   managing CAPAs, interpreting SPC data, or handling supplier quality issues.
 license: Apache-2.0
-homepage: https://github.com/affaan-m/trayambak
+homepage: https://github.com/affaan-m/nemo
 metadata:
   version: 1.0.0
   origin: ECC

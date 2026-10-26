@@ -15,13 +15,13 @@ metadata:
 
 ## Original v1 Documentation (archival)
 
-Automatically evaluates Trayambak Code sessions on end to extract reusable patterns that can be saved as learned skills.
+Automatically evaluates Nemo Code sessions on end to extract reusable patterns that can be saved as learned skills.
 
 ## When to Activate
 
-- Setting up automatic pattern extraction from Trayambak Code sessions
+- Setting up automatic pattern extraction from Nemo Code sessions
 - Configuring the Stop hook for session evaluation
-- Reviewing or curating learned skills in `~/.trayambak/skills/learned/`
+- Reviewing or curating learned skills in `~/.nemo/skills/learned/`
 - Adjusting extraction thresholds or pattern categories
 - Comparing v1 (this) vs v2 (instinct-based) approaches
 
@@ -35,7 +35,7 @@ This skill runs as a **Stop hook** at the end of each session:
 
 1. **Session Evaluation**: Checks if session has enough messages (default: 10+)
 2. **Pattern Detection**: Identifies extractable patterns from the session
-3. **Skill Extraction**: Saves useful patterns to `~/.trayambak/skills/learned/`
+3. **Skill Extraction**: Saves useful patterns to `~/.nemo/skills/learned/`
 
 ## Configuration
 
@@ -46,7 +46,7 @@ Edit `config.json` to customize:
   "min_session_length": 10,
   "extraction_threshold": "medium",
   "auto_approve": false,
-  "learned_skills_path": "~/.trayambak/skills/learned/",
+  "learned_skills_path": "~/.nemo/skills/learned/",
   "patterns_to_detect": [
     "error_resolution",
     "user_corrections",
@@ -70,7 +70,7 @@ Edit `config.json` to customize:
 
 ## Hook Setup
 
-Add to your `~/.trayambak/settings.json`:
+Add to your `~/.nemo/settings.json`:
 
 ```json
 {
@@ -81,7 +81,7 @@ Add to your `~/.trayambak/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "~/.trayambak/skills/continuous-learning/evaluate-session.sh"
+            "command": "~/.nemo/skills/continuous-learning/evaluate-session.sh"
           }
         ]
       }

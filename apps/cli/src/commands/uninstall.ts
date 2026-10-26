@@ -1,14 +1,14 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * `trayambak uninstall` — reverse install.sh / install-global.js.
+ * `nemo uninstall` — reverse install.sh / install-global.js.
  *
- * Removes the launcher shims (~/bin/*.cmd + TRAYAMBAK_HOME on Windows,
- * ~/.local/bin/* on POSIX) and nothing else: config (~/.trayambak),
+ * Removes the launcher shims (~/bin/*.cmd + NEMO_HOME on Windows,
+ * ~/.local/bin/* on POSIX) and nothing else: config (~/.nemo),
  * sessions, and state are left untouched on purpose. npm-global installs
  * are reported, not removed (`npm rm -g` stays the owner's call).
  */
@@ -37,14 +37,14 @@ function defaultSetx(args: string[]): number {
   }
 }
 
-/** `trayambak uninstall`: remove launcher shims, keep data. */
+/** `nemo uninstall`: remove launcher shims, keep data. */
 export function uninstallCommand(seams: UninstallSeams = {}): string {
   const home = seams.homeDir ?? homedir()
   const platform = seams.platform ?? process.platform
   const lines: string[] = []
 
   if (platform === "win32") {
-    for (const shim of ["trayambak.cmd", "skt.cmd"]) {
+    for (const shim of ["nemo.cmd", "nemo-code.cmd"]) {
       const file = join(home, "bin", shim)
       if (existsSync(file)) {
         rmSync(file, { force: true })
@@ -56,10 +56,10 @@ export function uninstallCommand(seams: UninstallSeams = {}): string {
     // An empty setx value DELETES the variable.
     const setx = seams.setx ?? defaultSetx
     lines.push(
-      setx(["TRAYAMBAK_HOME", ""]) === 0 ? "cleared TRAYAMBAK_HOME" : "could not clear TRAYAMBAK_HOME (already gone?)",
+      setx(["NEMO_HOME", ""]) === 0 ? "cleared NEMO_HOME" : "could not clear NEMO_HOME (already gone?)",
     )
   } else {
-    for (const name of ["trayambak", "skt"]) {
+    for (const name of ["nemo", "nemo"]) {
       const file = join(home, ".local", "bin", name)
       if (existsSync(file)) {
         rmSync(file, { force: true })
@@ -70,7 +70,7 @@ export function uninstallCommand(seams: UninstallSeams = {}): string {
     }
   }
 
-  lines.push("kept: config, sessions, and state under ~/.trayambak")
-  lines.push("npm-global installs: run `npm rm -g @skt-ai-labs/trayambak-cli` to remove the package itself")
+  lines.push("kept: config, sessions, and state under ~/.nemo")
+  lines.push("npm-global installs: run `npm rm -g @shrijan/nemo-cli` to remove the package itself")
   return lines.join("\n")
 }

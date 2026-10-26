@@ -6,7 +6,7 @@ description: Run a frontend-focused multi-model workflow for components, layouts
 
 Frontend-focused workflow (Research → Ideation → Plan → Execute → Optimize → Review), Antigravity-led.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.trayambak/bin/codeagent-wrapper` and the `~/.trayambak/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.nemo/bin/codeagent-wrapper` and the `~/.nemo/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
 
 ## Usage
 
@@ -17,7 +17,7 @@ Frontend-focused workflow (Research → Ideation → Plan → Execute → Optimi
 ## Context
 
 - Frontend task: $ARGUMENTS
-- Antigravity-led, Trayambak Code for auxiliary reference
+- Antigravity-led, Nemo Code for auxiliary reference
 - Applicable: Component design, responsive layout, UI animations, style optimization
 
 ## Your Role
@@ -27,8 +27,8 @@ You are the **Frontend Orchestrator**, coordinating multi-model collaboration fo
 **Collaborative Models**:
 
 - **Antigravity** – Frontend UI/UX (**Frontend authority, trustworthy**)
-- **Trayambak Code** – Backend perspective (**Frontend opinions for reference only**)
-- **Trayambak (self)** – Orchestration, planning, execution, delivery
+- **Nemo Code** – Backend perspective (**Frontend opinions for reference only**)
+- **Nemo (self)** – Orchestration, planning, execution, delivery
 
 ---
 
@@ -39,7 +39,7 @@ You are the **Frontend Orchestrator**, coordinating multi-model collaboration fo
 ```
 # New session call
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend antigravity - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend antigravity - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -54,7 +54,7 @@ EOF",
 
 # Resume session call
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend antigravity resume <SESSION_ID> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend antigravity resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <enhanced requirement (or $ARGUMENTS if not enhanced)>
@@ -72,9 +72,9 @@ EOF",
 
 | Phase    | Antigravity                                          |
 | -------- | ---------------------------------------------------- |
-| Analysis | `~/.trayambak/.ccg/prompts/antigravity/analyzer.md`  |
-| Planning | `~/.trayambak/.ccg/prompts/antigravity/architect.md` |
-| Review   | `~/.trayambak/.ccg/prompts/antigravity/reviewer.md`  |
+| Analysis | `~/.nemo/.ccg/prompts/antigravity/analyzer.md`  |
+| Planning | `~/.nemo/.ccg/prompts/antigravity/architect.md` |
+| Review   | `~/.nemo/.ccg/prompts/antigravity/reviewer.md`  |
 
 **Session Reuse**: Each call returns `SESSION_ID: xxx`, use `resume xxx` for subsequent phases. Save `ANTIGRAVITY_SESSION` in Phase 2, use `resume` in Phases 3 and 5.
 
@@ -107,7 +107,7 @@ EOF",
 
 **MUST call Antigravity** (follow call specification above):
 
-- ROLE_FILE: `~/.trayambak/.ccg/prompts/antigravity/analyzer.md`
+- ROLE_FILE: `~/.nemo/.ccg/prompts/antigravity/analyzer.md`
 - Requirement: Enhanced requirement (or $ARGUMENTS if not enhanced)
 - Context: Project context from Phase 1
 - OUTPUT: UI feasibility analysis, recommended solutions (at least 2), UX evaluation
@@ -122,12 +122,12 @@ Output solutions (at least 2), wait for user selection.
 
 **MUST call Antigravity** (use `resume <ANTIGRAVITY_SESSION>` to reuse session):
 
-- ROLE_FILE: `~/.trayambak/.ccg/prompts/antigravity/architect.md`
+- ROLE_FILE: `~/.nemo/.ccg/prompts/antigravity/architect.md`
 - Requirement: User's selected solution
 - Context: Analysis results from Phase 2
 - OUTPUT: Component structure, UI flow, styling approach
 
-Trayambak synthesizes plan, save to `.trayambak/plan/task-name.md` after user approval.
+Nemo synthesizes plan, save to `.nemo/plan/task-name.md` after user approval.
 
 ### Phase 4: Implementation
 
@@ -143,7 +143,7 @@ Trayambak synthesizes plan, save to `.trayambak/plan/task-name.md` after user ap
 
 **MUST call Antigravity** (follow call specification above):
 
-- ROLE_FILE: `~/.trayambak/.ccg/prompts/antigravity/reviewer.md`
+- ROLE_FILE: `~/.nemo/.ccg/prompts/antigravity/reviewer.md`
 - Requirement: Review the following frontend code changes
 - Context: git diff or code content
 - OUTPUT: Accessibility, responsiveness, performance, design consistency issues list
@@ -163,6 +163,6 @@ Integrate review feedback, execute optimization after user confirmation.
 ## Key Rules
 
 1. **Antigravity frontend opinions are trustworthy**
-2. **Trayambak Code frontend opinions for reference only**
+2. **Nemo Code frontend opinions for reference only**
 3. External models have **zero filesystem write access**
-4. Trayambak handles all code writes and file operations
+4. Nemo handles all code writes and file operations

@@ -19,7 +19,7 @@ metadata:
 
 # Token Budget Advisor (TBA)
 
-Intercept the response flow to offer the user a choice about response depth **before** Trayambak answers.
+Intercept the response flow to offer the user a choice about response depth **before** Nemo answers.
 
 ## When to Use
 
@@ -131,5 +131,5 @@ This skill uses heuristic estimation — no real tokenizer. Accuracy ~85-90%, va
 
 ## Source
 
-Standalone skill from [TBA — Token Budget Advisor for Trayambak Code](https://github.com/Xabilimon1/Token-Budget-Advisor-Trayambak-Code-).
+Standalone skill from [TBA — Token Budget Advisor for Nemo Code](https://github.com/Xabilimon1/Token-Budget-Advisor-Nemo-Code-).
 Original project also ships a Python estimator script, but this repository keeps the skill self-contained and heuristic-only.

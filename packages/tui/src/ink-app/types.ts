@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import type {
@@ -25,7 +25,7 @@ export interface MessagePart {
   toolCall?: ToolCallPart
 }
 
-export interface TrayambakMessage {
+export interface NemoMessage {
   id: string
   timestamp: number
   role: Role
@@ -98,7 +98,7 @@ export interface PermissionRequest {
   forceAsk?: boolean
 }
 
-export type AppStatus = "idle" | "thinking" | "running" | "error"
+export type AppStatus = "idle" | "thinking" | "running" | "error" | "offline"
 
 export interface BackgroundSubagentState {
   id: string
@@ -138,6 +138,11 @@ export interface StatusBarInfo {
   version?: string
   /** Transient footer hint, e.g. "✓ task finished — Ctrl+B to view". */
   taskHint?: string
+  /** Epoch ms of the `network_lost` that parked the current turn. Set with
+   *  `status: "offline"`; the footer turns it into "reconnecting 42s", which
+   *  keeps counting under `/motion off` because a wait the user cannot measure
+   *  reads as a hang. */
+  networkLostAt?: number
 }
 
 export function formatSubagentTitle(agent: string, description: string, background: boolean): string {
@@ -180,11 +185,14 @@ export const STATUS_LABELS: Record<AppStatus, string> = {
   thinking: "thinking",
   running: "running",
   error: "error",
+  // The parked phase: the loop is waiting on the socket, not the model. The
+  // footer appends the live wait ("reconnecting 42s") so the stall has a
+  // number attached — see connection-events.ts.
+  offline: "reconnecting",
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "help", description: "Show all commands", category: "General" },
-  { name: "about", description: "About Us: SKT AI LABS", category: "General" },
   { name: "keymap", description: "Show all keyboard shortcuts", category: "General" },
   { name: "enhance", description: "Rewrite your draft into a clearer prompt (Ctrl+E)", category: "General" },
   { name: "clear", description: "Reset the session", category: "Session" },
@@ -200,6 +208,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: "theme", description: "Show or switch the color theme", category: "Display" },
   { name: "themes", description: "List available color themes", category: "Display" },
   { name: "bubble", description: "Re-render last reply in a themed bubble", category: "Display" },
+
+  { name: "about", description: "About Us: Shrijan", category: "General" },
+  {
+    name: "motion",
+    description: "Animation level (saved): /motion off|reduced|full, bare toggles",
+    category: "Display",
+  },
+  {
+    name: "spinner",
+    description: "Spinner style (saved): /spinner lists the styles, /spinner <style> switches",
+    category: "Display",
+  },
   { name: "diff", description: "Show unified diff for a file", category: "Display" },
   { name: "code", description: "Render text as a code block", category: "Display" },
   { name: "md", description: "Render text as markdown", category: "Display" },
@@ -297,15 +317,9 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   },
   {
     name: "devmode",
-    description: "Toggle developer mode — turning ON opens the pentest tools enable/disable menu (gate shown there)",
-    category: "Developer",
+    description: "Toggle developer mode — unlocks the full tool catalog and developer prompts",
+    category: "General",
   },
-  {
-    name: "question",
-    description: "Set default question option (1-9) or answer mode (both/choose/type)",
-    category: "Developer",
-  },
-  { name: "commands", description: "List built-in + custom prompt-file commands", category: "Session" },
   {
     name: "retry",
     description: "Re-send the last prompt (Ctrl+R loads it into the composer to edit)",

@@ -48,12 +48,12 @@ Where `{ORCH_CMD}` is determined in Phase 0 (see below). The command string in t
 
 Two install forms determine the prefix on **both** the slash command and every agent name. The two MUST stay in sync — one form per output, never mixed:
 
-Let `<trayambak-home>` denote the Trayambak Code home directory: `~/.trayambak` on macOS/Linux, `%USERPROFILE%\.trayambak` on Windows. Resolve it the way the host platform resolves the user home directory (do not hardcode `~`).
+Let `<nemo-home>` denote the Nemo Code home directory: `~/.nemo` on macOS/Linux, `%USERPROFILE%\.nemo` on Windows. Resolve it the way the host platform resolves the user home directory (do not hardcode `~`).
 
 | Form                    | Detection                                                  | `{ORCH_CMD}`       | Agent name format |
 | ----------------------- | ---------------------------------------------------------- | ------------------ | ----------------- |
-| Plugin install (2.0.0+) | `<trayambak-home>/plugins/marketplaces/ecc/` exists        | `/ecc:orchestrate` | `ecc:<name>`      |
-| Legacy bare install     | Above absent; agent files under `<trayambak-home>/agents/` | `/orchestrate`     | `<name>`          |
+| Plugin install (2.0.0+) | `<nemo-home>/plugins/marketplaces/ecc/` exists        | `/ecc:orchestrate` | `ecc:<name>`      |
+| Legacy bare install     | Above absent; agent files under `<nemo-home>/agents/` | `/orchestrate`     | `<name>`          |
 
 Why this matters: under the plugin install, agents register as `ecc:tdd-guide`. Bare names force fuzzy matching, which fails intermittently under parallel calls. Under legacy, the prefixed forms are not registered and fail outright.
 
@@ -91,8 +91,8 @@ A misspelled agent name fails `/orchestrate`. Cross-check against this list befo
 
 1. Read `<plan-doc-path>`. If missing or empty, report and stop.
 2. Detect ECC install form once and freeze it into `ECC_MODE`. Algorithm (run in order, stop at the first match):
-   1. If `<trayambak-home>/plugins/marketplaces/ecc/` exists → `ECC_MODE=plugin`.
-   2. Else if `<trayambak-home>/agents/` exists and contains at least one ECC agent file (e.g. `tdd-guide.md`, `code-reviewer.md`) → `ECC_MODE=legacy`.
+   1. If `<nemo-home>/plugins/marketplaces/ecc/` exists → `ECC_MODE=plugin`.
+   2. Else if `<nemo-home>/agents/` exists and contains at least one ECC agent file (e.g. `tdd-guide.md`, `code-reviewer.md`) → `ECC_MODE=legacy`.
    3. Else → default to `ECC_MODE=legacy` and emit a one-line warning at the top of the output: `> Warning: could not detect ECC install; defaulting to legacy form. If you use the plugin install, edit the prefixes manually.`
    4. If both markers exist (mixed install), `plugin` wins — the plugin namespace is the only one that resolves agent names without fuzzy matching.
 

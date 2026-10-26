@@ -1,11 +1,15 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { describe, expect, it } from "vitest"
 import { createHmac, createVerify, generateKeyPairSync } from "node:crypto"
 import {
   createAppJwt,
   describeGithubThread,
   extractFinalReply,
-  parseTrayambakCommand,
+  parseNemoCommand,
   routeGithubEvent,
   selectJobReply,
   splitRepo,
@@ -34,31 +38,31 @@ describe("verifyWebhookSignature", () => {
   })
 })
 
-describe("parseTrayambakCommand", () => {
-  it("extracts tasks from /trayambak and @trayambak", () => {
-    expect(parseTrayambakCommand("/trayambak fix the login bug")).toEqual({ task: "fix the login bug" })
-    expect(parseTrayambakCommand("please @trayambak review this PR")).toEqual({ task: "review this PR" })
+describe("parseNemoCommand", () => {
+  it("extracts tasks from /nemo and @nemo", () => {
+    expect(parseNemoCommand("/nemo fix the login bug")).toEqual({ task: "fix the login bug" })
+    expect(parseNemoCommand("please @nemo review this PR")).toEqual({ task: "review this PR" })
   })
 
-  it("accepts the short /skt and @skt forms identically", () => {
-    expect(parseTrayambakCommand("/skt fix the login bug")).toEqual({ task: "fix the login bug" })
-    expect(parseTrayambakCommand("please @skt review this PR")).toEqual({ task: "review this PR" })
-    expect(parseTrayambakCommand("/skt")).toBeNull()
+  it("accepts the short /nemo and @nemo forms identically", () => {
+    expect(parseNemoCommand("/nemo fix the login bug")).toEqual({ task: "fix the login bug" })
+    expect(parseNemoCommand("please @nemo review this PR")).toEqual({ task: "review this PR" })
+    expect(parseNemoCommand("/nemo")).toBeNull()
   })
 
   it("matches prefixes case-insensitively but keeps the task's own case", () => {
-    expect(parseTrayambakCommand("/TRAYAMBAK ADD LINKS OF FOLDER AND VIDEO'S")).toEqual({
+    expect(parseNemoCommand("/NEMO ADD LINKS OF FOLDER AND VIDEO'S")).toEqual({
       task: "ADD LINKS OF FOLDER AND VIDEO'S",
     })
-    expect(parseTrayambakCommand("please @SkT review this PR")).toEqual({ task: "review this PR" })
-    expect(parseTrayambakCommand("/TRAYAMBAK")).toBeNull()
+    expect(parseNemoCommand("please @Nemo review this PR")).toEqual({ task: "review this PR" })
+    expect(parseNemoCommand("/NEMO")).toBeNull()
   })
 
   it("rejects bare mentions, empty tasks, and chatter", () => {
-    expect(parseTrayambakCommand("/trayambak")).toBeNull()
-    expect(parseTrayambakCommand("/trayambak   ")).toBeNull()
-    expect(parseTrayambakCommand("looks good, shipping it")).toBeNull()
-    expect(parseTrayambakCommand("")).toBeNull()
+    expect(parseNemoCommand("/nemo")).toBeNull()
+    expect(parseNemoCommand("/nemo   ")).toBeNull()
+    expect(parseNemoCommand("looks good, shipping it")).toBeNull()
+    expect(parseNemoCommand("")).toBeNull()
   })
 })
 
@@ -73,7 +77,7 @@ describe("routeGithubEvent", () => {
     const out = routeGithubEvent("issue_comment", {
       action: "created",
       repository: repo,
-      comment: { body: "/trayambak add retries", user: { login: "human", type: "User" } },
+      comment: { body: "/nemo add retries", user: { login: "human", type: "User" } },
       issue: { number: 42 },
     })
     expect(out).toEqual({
@@ -83,15 +87,15 @@ describe("routeGithubEvent", () => {
   })
 
   it("never answers bot comments, even when the text carries a trigger", () => {
-    // The agent echoes the triggering "/trayambak …" line in its replies —
+    // The agent echoes the triggering "/nemo …" line in its replies —
     // without this guard every reply re-triggers a full job (live spam loop).
     const ownReply = routeGithubEvent("issue_comment", {
       action: "created",
       repository: repo,
-      sender: { login: "trayambak-cli[bot]", type: "Bot" },
+      sender: { login: "nemo-cli[bot]", type: "Bot" },
       comment: {
-        body: "## Trayambak result\n\nI ran /trayambak add retries and it is done.",
-        user: { login: "trayambak-cli[bot]", type: "Bot" },
+        body: "## Nemo result\n\nI ran /nemo add retries and it is done.",
+        user: { login: "nemo-cli[bot]", type: "Bot" },
       },
       issue: { number: 42 },
     })
@@ -100,8 +104,8 @@ describe("routeGithubEvent", () => {
     const senderOnly = routeGithubEvent("issue_comment", {
       action: "created",
       repository: repo,
-      sender: { login: "trayambak-cli[bot]", type: "Bot" },
-      comment: { body: "/trayambak add retries" },
+      sender: { login: "nemo-cli[bot]", type: "Bot" },
+      comment: { body: "/nemo add retries" },
       issue: { number: 42 },
     })
     expect(senderOnly).toEqual({ kind: "ignored", reason: "bot comment (self-trigger guard)" })
@@ -111,7 +115,7 @@ describe("routeGithubEvent", () => {
     const out = routeGithubEvent("pull_request_review_comment", {
       action: "created",
       repository: repo,
-      comment: { body: "/trayambak explain this hunk" },
+      comment: { body: "/nemo explain this hunk" },
       issue: { number: 7 },
     })
     expect(out.kind).toBe("job")
@@ -122,7 +126,7 @@ describe("routeGithubEvent", () => {
     const edited = routeGithubEvent("issue_comment", {
       action: "edited",
       repository: repo,
-      comment: { body: "/trayambak do it" },
+      comment: { body: "/nemo do it" },
       issue: { number: 1 },
     })
     expect(edited.kind).toBe("ignored")
@@ -211,12 +215,12 @@ describe("describeGithubThread", () => {
   it("hands issue + triggering comment to the prompt, truncated", () => {
     const out = describeGithubThread({
       issue: { number: 1, title: "HELLO", body: "hello body" },
-      comment: { body: "/trayambak hello", user: { login: "boss" } },
+      comment: { body: "/nemo hello", user: { login: "boss" } },
     })
     expect(out).toContain("Issue #1: HELLO")
     expect(out).toContain("hello body")
     expect(out).toContain("Triggering comment by boss")
-    expect(out).toContain("/trayambak hello")
+    expect(out).toContain("/nemo hello")
     expect(describeGithubThread(null)).toBe("")
     expect(describeGithubThread({})).toBe("")
   })

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, it, expect, afterEach, vi } from "vitest"
@@ -22,25 +22,25 @@ function buildAnimatedFrameTitles(): string[] {
 
 describe("buildTerminalTitle", () => {
   it("marks idle with no suffix, under the product name", () => {
-    expect(buildTerminalTitle({ activity: "idle" })).toBe("Trayambak")
+    expect(buildTerminalTitle({ activity: "idle" })).toBe("Nemo")
   })
 
   it("describes working state", () => {
-    expect(buildTerminalTitle({ activity: "working" })).toBe("* Trayambak - working")
+    expect(buildTerminalTitle({ activity: "working" })).toBe("* Nemo - working")
   })
 
   it("describes attention states", () => {
-    expect(buildTerminalTitle({ activity: "approval" })).toBe("! Trayambak - approval needed")
-    expect(buildTerminalTitle({ activity: "input" })).toBe("? Trayambak - input needed")
-    expect(buildTerminalTitle({ activity: "error" })).toBe("! Trayambak - error")
-    expect(buildTerminalTitle({ activity: "task-done" })).toBe("Trayambak - task finished")
+    expect(buildTerminalTitle({ activity: "approval" })).toBe("! Nemo - approval needed")
+    expect(buildTerminalTitle({ activity: "input" })).toBe("? Nemo - input needed")
+    expect(buildTerminalTitle({ activity: "error" })).toBe("! Nemo - error")
+    expect(buildTerminalTitle({ activity: "task-done" })).toBe("Nemo - task finished")
   })
 
   it("appends background task counts with correct pluralization", () => {
-    expect(buildTerminalTitle({ activity: "working", backgroundCount: 1 })).toBe("* Trayambak (1 background) - working")
-    expect(buildTerminalTitle({ activity: "working", backgroundCount: 3 })).toBe("* Trayambak (3 background) - working")
-    expect(buildTerminalTitle({ activity: "idle", backgroundCount: 0 })).toBe("Trayambak")
-    expect(buildTerminalTitle({ activity: "idle", backgroundCount: undefined })).toBe("Trayambak")
+    expect(buildTerminalTitle({ activity: "working", backgroundCount: 1 })).toBe("* Nemo (1 background) - working")
+    expect(buildTerminalTitle({ activity: "working", backgroundCount: 3 })).toBe("* Nemo (3 background) - working")
+    expect(buildTerminalTitle({ activity: "idle", backgroundCount: 0 })).toBe("Nemo")
+    expect(buildTerminalTitle({ activity: "idle", backgroundCount: undefined })).toBe("Nemo")
   })
 
   it("stays pure ASCII so legacy codepage tabs never mojibake", () => {
@@ -61,17 +61,17 @@ describe("buildTerminalTitle", () => {
 
 describe("buildAnimatedTitle", () => {
   it("prefixes the spinner frame and the product name", () => {
-    expect(buildAnimatedTitle("|")).toBe("| Trayambak")
+    expect(buildAnimatedTitle("|")).toBe("| Nemo")
     expect(buildAnimatedFrameTitles()).toHaveLength(4)
   })
 
   it("shows a compact background count and the phase", () => {
-    expect(buildAnimatedTitle("/", { backgroundCount: 2 })).toBe("/ Trayambak (2 bg)")
-    expect(buildAnimatedTitle("-", { phase: "thinking" })).toBe("- Trayambak thinking")
+    expect(buildAnimatedTitle("/", { backgroundCount: 2 })).toBe("/ Nemo (2 bg)")
+    expect(buildAnimatedTitle("-", { phase: "thinking" })).toBe("- Nemo thinking")
   })
 
   it("omits empty optional state instead of printing 'undefined'", () => {
-    expect(buildAnimatedTitle("\\", { backgroundCount: 0, phase: "" })).toBe("\\ Trayambak")
+    expect(buildAnimatedTitle("\\", { backgroundCount: 0, phase: "" })).toBe("\\ Nemo")
   })
 
   it("stays pure ASCII like every other title", () => {
@@ -83,7 +83,7 @@ describe("title animation lifecycle", () => {
   afterEach(() => {
     stopTitleAnimation()
     vi.useRealTimers()
-    delete process.env.TRAYAMBAK_NO_NOTIFY
+    delete process.env.NEMO_NO_NOTIFY
   })
 
   it("arms a timer while running and clears it on stop", () => {
@@ -112,7 +112,7 @@ describe("title animation lifecycle", () => {
     // Vitest pipes stdout, so the isTTY gate is exercised here.
     expect(() => startTitleAnimation()).not.toThrow()
     stopTitleAnimation()
-    process.env.TRAYAMBAK_NO_NOTIFY = "1"
+    process.env.NEMO_NO_NOTIFY = "1"
     expect(() => startTitleAnimation({ backgroundCount: 1 })).not.toThrow()
     expect(() => setTerminalTitle("nope")).not.toThrow()
     stopTitleAnimation()
@@ -126,11 +126,11 @@ describe("title animation lifecycle", () => {
 
 describe("notifyTerminalActivity", () => {
   afterEach(() => {
-    delete process.env.TRAYAMBAK_NO_NOTIFY
+    delete process.env.NEMO_NO_NOTIFY
   })
 
-  it("never throws when disabled via TRAYAMBAK_NO_NOTIFY=1", () => {
-    process.env.TRAYAMBAK_NO_NOTIFY = "1"
+  it("never throws when disabled via NEMO_NO_NOTIFY=1", () => {
+    process.env.NEMO_NO_NOTIFY = "1"
     expect(() => notifyTerminalActivity({ activity: "error", detail: "boom" })).not.toThrow()
     expect(() => notifyTerminalActivity({ activity: "task-done" })).not.toThrow()
   })

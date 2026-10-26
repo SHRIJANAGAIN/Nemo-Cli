@@ -7,7 +7,7 @@ metadata:
 
 # Social Publisher (SocialClaw)
 
-Connects Trayambak Code to [SocialClaw](https://getsocialclaw.com) for agent-driven social media publishing across 13 platforms through a single workspace API key.
+Connects Nemo Code to [SocialClaw](https://getsocialclaw.com) for agent-driven social media publishing across 13 platforms through a single workspace API key.
 
 ## When to Activate
 

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -24,7 +24,7 @@ import React, { useState } from "react"
 import { render, type Instance } from "ink"
 import { describe, expect, it } from "vitest"
 import { MessageList } from "./MessageList.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
 function openStdio(columns = 120, rows = 30) {
   const stdin = Object.assign(new PassThrough(), {
@@ -55,7 +55,7 @@ const waitFor = async (read: () => string, needle: string, ms = 5000): Promise<b
   return false
 }
 
-const manyMessages = (n: number): TrayambakMessage[] =>
+const manyMessages = (n: number): NemoMessage[] =>
   Array.from({ length: n }, (_, i) => ({
     id: `m${i}`,
     timestamp: i,
@@ -98,9 +98,9 @@ describe("MessageList <Static> identity (frame clones)", () => {
   it("still appends newly evicted history to the printed prefix", async () => {
     const { stdin, stdout, sink } = openStdio()
     const first = manyMessages(10)
-    let setMessages: (m: TrayambakMessage[]) => void = () => {}
+    let setMessages: (m: NemoMessage[]) => void = () => {}
     function Harness() {
-      const [msgs, setM] = useState<TrayambakMessage[]>(first)
+      const [msgs, setM] = useState<NemoMessage[]>(first)
       setMessages = setM
       return React.createElement(MessageList, { messages: msgs })
     }

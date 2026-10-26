@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 import React, { type ReactNode, useState } from "react"
 import { Box, Text, useStdout } from "ink"
-import { TrayambakLogo, logoLineCount } from "./TrayambakLogo.js"
+import { NemoLogo, logoLineCount } from "./NemoLogo.js"
 import { isEnter } from "./keys.js"
 import { useAppInput } from "./useAppInput.js"
 import { g } from "./glyphs.js"
@@ -163,12 +163,12 @@ export function ProviderPicker({ providers, currentId, onSelect, onExit }: Provi
     <Box flexDirection="column" height="100%" paddingX={1} paddingY={1}>
       {showLogo ? (
         <Box flexDirection="column" alignItems="center" marginBottom={1}>
-          <TrayambakLogo />
+          <NemoLogo />
         </Box>
       ) : null}
       <Box flexDirection="column" alignItems="center" marginBottom={1}>
         <Text bold color="green">
-          Trayambak — Connect a Provider
+          Nemo — Connect a Provider
         </Text>
         <Text dimColor>Choose a backend, then enter its API key</Text>
       </Box>

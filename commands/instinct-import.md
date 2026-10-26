@@ -11,13 +11,13 @@ command: true
 Run the instinct CLI using the plugin root path:
 
 ```bash
-python3 "${TRAYAMBAK_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" import <file-or-url> [--dry-run] [--force] [--min-confidence 0.7] [--scope project|global]
+python3 "${NEMO_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" import <file-or-url> [--dry-run] [--force] [--min-confidence 0.7] [--scope project|global]
 ```
 
-Or if `TRAYAMBAK_PLUGIN_ROOT` is not set (manual installation):
+Or if `NEMO_PLUGIN_ROOT` is not set (manual installation):
 
 ```bash
-python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py import <file-or-url>
+python3 ~/.nemo/skills/continuous-learning-v2/scripts/instinct-cli.py import <file-or-url>
 ```
 
 Import instincts from local file paths or HTTP(S) URLs.
@@ -38,8 +38,8 @@ Import instincts from local file paths or HTTP(S) URLs.
 3. Check for duplicates with existing instincts
 4. Merge or add new instincts
 5. Save to inherited instincts directory:
-   - Project scope: `~/.trayambak/homunculus/projects/<project-id>/instincts/inherited/`
-   - Global scope: `~/.trayambak/homunculus/instincts/inherited/`
+   - Project scope: `~/.nemo/homunculus/projects/<project-id>/instincts/inherited/`
+   - Global scope: `~/.nemo/homunculus/instincts/inherited/`
 
 ## Import Process
 
@@ -111,7 +111,7 @@ Added: 8 instincts
 Updated: 1 instinct
 Skipped: 3 instincts (equal/higher confidence already exists)
 
-New instincts saved to: ~/.trayambak/homunculus/instincts/inherited/
+New instincts saved to: ~/.nemo/homunculus/instincts/inherited/
 
 Run /instinct-status to see all instincts.
 ```

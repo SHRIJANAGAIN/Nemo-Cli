@@ -1,7 +1,10 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 /**
@@ -144,6 +147,22 @@ export function gridPaint(frame: number, ascii = false): GridCell[][] {
   return rows
 }
 
+/**
+ * The same 3×3 at rest: nine dots, all at the trail shade, none hot.
+ *
+ * This is what `reduced` and `off` show. It is not `gridPaint(0)`, and the
+ * difference is the whole point of a resting frame: frame 0 is one corner of a
+ * travelling group with six cells of empty space — a *moment*, which reads as a
+ * half-drawn indicator. Asking for no movement is not asking for an indicator
+ * that looks broken, so the still gets designed rather than sampled. Same three
+ * cells a row, so the width contract holds either way.
+ */
+export function gridSettled(): GridCell[][] {
+  return Array.from({ length: GRID_ROWS }, () =>
+    Array.from({ length: GRID_COLS }, () => ({ glyph: "·", color: BLUE_RAMP[3] as string })),
+  )
+}
+
 /* ── Footer square: the old 6-dot braille cluster ────────────────────── */
 
 /** Footer square width in cells. Two cells of dense braille read as a small
@@ -162,23 +181,20 @@ export interface OrbitCell {
   readonly color: string
 }
 
-/** Footer square for `frame`: the classic dense braille cluster with a comet
- *  head travelling round it and a cooling tail. Silver family, always. */
-export function orbitPaint(frame: number, ascii = false): OrbitCell[] {
-  const f = Math.floor(frame)
-  const head = f * ORBIT_OMEGA
-  const lit: Array<{ px: number; py: number; level: number }> = []
-  for (let k = 0; k < ORBIT_DOTS; k++) {
-    const ang = (2 * Math.PI * k) / ORBIT_DOTS
-    const px = Math.min(3, Math.max(0, Math.round(1.5 + 1.5 * Math.cos(ang))))
-    const py = Math.min(3, Math.max(0, Math.round(1.5 + 1.5 * Math.sin(ang))))
-    // Angular distance behind the head, 0..1 (0 = the head itself). Floor
-    // at 2: level 1 crushes to black on dark terminals and half the square
-    // would vanish.
-    const behind = ((((head - ang) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI)
-    const level = behind < 0.13 ? SILVER_GLINT : behind < 0.38 ? SILVER_HOT : 2
-    lit.push({ px, py, level })
+/** The k-th of the twelve dots on the ellipse: its cell dot, plus the angle
+ *  the comet head is measured against. */
+function orbitDot(k: number): { px: number; py: number; ang: number } {
+  const ang = (2 * Math.PI * k) / ORBIT_DOTS
+  return {
+    px: Math.min(3, Math.max(0, Math.round(1.5 + 1.5 * Math.cos(ang)))),
+    py: Math.min(3, Math.max(0, Math.round(1.5 + 1.5 * Math.sin(ang)))),
+    ang,
   }
+}
+
+/** Merge the lit dots into the two braille cells, each cell taking its
+ *  brightest dot. Shared by the animated and the resting paint. */
+function packOrbit(lit: ReadonlyArray<{ px: number; py: number; level: number }>, ascii: boolean): OrbitCell[] {
   const cells: Array<{ bits: number; level: number }> = [
     { bits: 0, level: 0 },
     { bits: 0, level: 0 },
@@ -197,6 +213,38 @@ export function orbitPaint(frame: number, ascii = false): OrbitCell[] {
       color: silverShade(cell.level),
     }
   })
+}
+
+/** Footer square for `frame`: the classic dense braille cluster with a comet
+ *  head travelling round it and a cooling tail. Silver family, always. */
+export function orbitPaint(frame: number, ascii = false): OrbitCell[] {
+  const head = Math.floor(frame) * ORBIT_OMEGA
+  return packOrbit(
+    Array.from({ length: ORBIT_DOTS }, (_, k) => {
+      const { px, py, ang } = orbitDot(k)
+      // Angular distance behind the head, 0..1 (0 = the head itself). Floor
+      // at 2: level 1 crushes to black on dark terminals and half the square
+      // would vanish.
+      const behind = ((((head - ang) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI)
+      const level = behind < 0.13 ? SILVER_GLINT : behind < 0.38 ? SILVER_HOT : 2
+      return { px, py, level }
+    }),
+    ascii,
+  )
+}
+
+/** The cluster at rest: every dot the same mid shade, so it reads as one dense
+ *  square instead of a comet caught mid-pass. This is the frame `reduced` and
+ *  `off` show — a still has to be DESIGNED, because any sampled frame of a
+ *  travelling animation is by definition an lopsided one. */
+export function orbitSettled(ascii = false): OrbitCell[] {
+  return packOrbit(
+    Array.from({ length: ORBIT_DOTS }, (_, k) => {
+      const { px, py } = orbitDot(k)
+      return { px, py, level: 2 }
+    }),
+    ascii,
+  )
 }
 
 /** The square as one plain string — what the footer fit measures. */
@@ -263,6 +311,20 @@ export function shimmerPaint(text: string, frame: number): ShimmerChar[] {
     }
     return { ch, color: silverShade(1), bold: false, dim: true }
   })
+}
+
+/**
+ * The label with no band on it: every char at the trail shade, none dimmed.
+ *
+ * `shimmerPaint(label, 0)` is NOT a resting frame — at frame 0 the band sits
+ * ten cells off the left end of the word, so `shimmerLevel` returns 0 for every
+ * char and the whole label renders DIMMED. That is the one piece of text on a
+ * busy screen that has to be readable, and "turn the animation off" must not
+ * cost the user the word "Thinking…". So the still gets designed, the same way
+ * {@link gridSettled} does.
+ */
+export function shimmerSettled(text: string): ShimmerChar[] {
+  return [...text].map((ch) => ({ ch, color: silverShade(SILVER_HOT), bold: false, dim: false }))
 }
 
 /** The activity bullet: brightness breathes on its own slower cycle, like

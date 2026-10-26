@@ -44,7 +44,7 @@ def classify_events(
     )
 
     result = subprocess.run(
-        ["trayambak", "-p", prompt, "--model", model, "--output-format", "text"],
+        ["nemo", "-p", prompt, "--model", model, "--output-format", "text"],
         capture_output=True,
         text=True,
         timeout=60,

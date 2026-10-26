@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * Renderer markdown contract: assistant text renders markdown, model
@@ -13,8 +17,8 @@ import * as path from "node:path"
 import * as vm from "node:vm"
 
 interface MarkdownModule {
-  trayambakEscapeHtml: (value: string) => string
-  trayambakRenderMarkdown: (source: string) => string
+  nemoEscapeHtml: (value: string) => string
+  nemoRenderMarkdown: (source: string) => string
 }
 
 function loadMarkdownModule(): MarkdownModule {
@@ -22,13 +26,13 @@ function loadMarkdownModule(): MarkdownModule {
   const sandbox: { module: { exports: Record<string, unknown> } } = { module: { exports: {} } }
   vm.runInNewContext(fs.readFileSync(file, "utf8"), sandbox, { filename: file })
   const exports = sandbox.module.exports
-  if (typeof exports.trayambakRenderMarkdown !== "function") {
-    throw new Error("renderer/markdown.js did not export trayambakRenderMarkdown")
+  if (typeof exports.nemoRenderMarkdown !== "function") {
+    throw new Error("renderer/markdown.js did not export nemoRenderMarkdown")
   }
   return exports as unknown as MarkdownModule
 }
 
-const { trayambakRenderMarkdown: render, trayambakEscapeHtml: escape } = loadMarkdownModule()
+const { nemoRenderMarkdown: render, nemoEscapeHtml: escape } = loadMarkdownModule()
 
 describe("renderer markdown", () => {
   it("renders the common structural subset", () => {

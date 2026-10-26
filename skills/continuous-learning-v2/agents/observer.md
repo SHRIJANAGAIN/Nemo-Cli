@@ -6,7 +6,7 @@ model: haiku
 
 # Observer Agent
 
-A background agent that analyzes observations from Trayambak Code sessions to detect patterns and create instincts.
+A background agent that analyzes observations from Nemo Code sessions to detect patterns and create instincts.
 
 ## When to Run
 
@@ -34,7 +34,7 @@ Look for these patterns in observations:
 
 ### 1. User Corrections
 
-When a user's follow-up message corrects Trayambak's previous action:
+When a user's follow-up message corrects Nemo's previous action:
 
 - "No, use X instead of Y"
 - "Actually, I meant..."

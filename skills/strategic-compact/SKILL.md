@@ -42,9 +42,9 @@ Tool count alone is a weak proxy for window pressure: a few large file reads or 
 
 ## Hook Setup
 
-**Installed as a plugin?** No setup is needed. The plugin's `hooks/hooks.json` already registers `suggest-compact.js` (hook id `pre:edit-write:suggest-compact`, active in the `standard` and `strict` hook profiles). Do not copy the block below into `~/.trayambak/settings.json` — `~/.trayambak/scripts/` does not exist on plugin installs, and duplicating a plugin hook causes double execution.
+**Installed as a plugin?** No setup is needed. The plugin's `hooks/hooks.json` already registers `suggest-compact.js` (hook id `pre:edit-write:suggest-compact`, active in the `standard` and `strict` hook profiles). Do not copy the block below into `~/.nemo/settings.json` — `~/.nemo/scripts/` does not exist on plugin installs, and duplicating a plugin hook causes double execution.
 
-**If installed manually** (`./install.sh`), add to your `~/.trayambak/settings.json`:
+**If installed manually** (`./install.sh`), add to your `~/.nemo/settings.json`:
 
 ```json
 {
@@ -52,11 +52,11 @@ Tool count alone is a weak proxy for window pressure: a few large file reads or 
     "PreToolUse": [
       {
         "matcher": "Edit",
-        "hooks": [{ "type": "command", "command": "node ~/.trayambak/scripts/hooks/suggest-compact.js" }]
+        "hooks": [{ "type": "command", "command": "node ~/.nemo/scripts/hooks/suggest-compact.js" }]
       },
       {
         "matcher": "Write",
-        "hooks": [{ "type": "command", "command": "node ~/.trayambak/scripts/hooks/suggest-compact.js" }]
+        "hooks": [{ "type": "command", "command": "node ~/.nemo/scripts/hooks/suggest-compact.js" }]
       }
     ]
   }
@@ -72,7 +72,7 @@ Environment variables:
 - `COMPACT_CONTEXT_INTERVAL` — Additional context tokens before the suggestion repeats (default: 60000)
 - `COMPACT_STATE_TTL_DAYS` — Days before stale per-session state files in the temp dir are swept (default: 14)
 - `ECC_CONTEXT_WINDOW_TOKENS` — Explicit context-window size, in tokens, overriding auto-detection. Set this for large-window models whose reported id lacks a `[1m]` marker (e.g. 400k Opus 4.x, or a new 1M-window model family) so the threshold scales to the real window instead of defaulting to 200k and overstating context usage.
-- `TRAYAMBAK_CODE_AUTO_COMPACT_WINDOW` — Trayambak Code's native window-size override, in tokens; honored as a fallback when `ECC_CONTEXT_WINDOW_TOKENS` is unset.
+- `NEMO_CODE_AUTO_COMPACT_WINDOW` — Nemo Code's native window-size override, in tokens; honored as a fallback when `ECC_CONTEXT_WINDOW_TOKENS` is unset.
 
 > The context window is otherwise auto-detected from a `[1m]` model marker or inferred when observed tokens already exceed 200k. On a large-window model that carries neither signal, set one of the overrides above so the `/compact` suggestion fires at the right point.
 
@@ -95,17 +95,17 @@ Understanding what persists helps you compact with confidence:
 
 | Persists                                                        | Lost                                     |
 | --------------------------------------------------------------- | ---------------------------------------- |
-| TRAYAMBAK.md instructions                                       | Intermediate reasoning and analysis      |
+| NEMO.md instructions                                       | Intermediate reasoning and analysis      |
 | Files on disk                                                   | File contents you previously read        |
-| Memory files (`~/.trayambak/memory/`)                           | Multi-step conversation context          |
+| Memory files (`~/.nemo/memory/`)                           | Multi-step conversation context          |
 | Git state (commits, branches)                                   | Tool call history and counts             |
 | The task list — **only if you have the todo tools** (see below) | Nuanced user preferences stated verbally |
 
 > ### Don't rely on the task list surviving — it may not exist
 >
-> Trayambak Code **2.1.233 removed the todo/task tools by default** on Opus 4.8, Sonnet 5,
+> Nemo Code **2.1.233 removed the todo/task tools by default** on Opus 4.8, Sonnet 5,
 > Fable 5, Mythos 5 and newer models (`TodoWrite`, `TaskCreate/Get/Update/List`).
-> `TRAYAMBAK_CODE_ENABLE_TODO_TOOLS=1` brings them back, but that is a per-machine
+> `NEMO_CODE_ENABLE_TODO_TOOLS=1` brings them back, but that is a per-machine
 > environment setting — **it does not travel with this skill**, so you cannot assume the
 > reader has it.
 >
@@ -140,7 +140,7 @@ Instead of loading full skill content at session start, use a trigger table that
 
 Monitor what's consuming your context window:
 
-- **TRAYAMBAK.md files** — Always loaded, keep lean
+- **NEMO.md files** — Always loaded, keep lean
 - **Loaded skills** — Each skill adds 1-5K tokens
 - **Conversation history** — Grows with each exchange
 - **Tool results** — File reads, search results add bulk
@@ -149,8 +149,8 @@ Monitor what's consuming your context window:
 
 Common sources of duplicate context:
 
-- Same rules in both `~/.trayambak/rules/` and project `.trayambak/rules/`
-- Skills that repeat TRAYAMBAK.md instructions
+- Same rules in both `~/.nemo/rules/` and project `.nemo/rules/`
+- Skills that repeat NEMO.md instructions
 - Multiple skills covering overlapping domains
 
 ### Context Optimization Tools

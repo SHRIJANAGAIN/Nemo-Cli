@@ -3,7 +3,7 @@
  * the RAW byte stream for:
  *   - how often Ink does a full clearTerminal (ESC[3J) — i.e. is every frame
  *     a full clear+rewrite (Windows fullscreen path) or the erase-lines path;
- *   - whether any single written LINE contains both "TRAYAMBAK" and the
+ *   - whether any single written LINE contains both "NEMO" and the
  *     user's text (app/Ink-level merge) or not (screen-only artifact).
  */
 import { PassThrough } from "node:stream"
@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import path from "node:path"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const distEsm = "file:///C:/Users/engli/trayambak/dist/packages/tui/src/ink-app-esm"
+const distEsm = "file:///C:/Users/engli/nemo/dist/packages/tui/src/ink-app-esm"
 
 const stdin = new PassThrough()
 stdin.isTTY = true
@@ -33,12 +33,12 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark",
+      themeName: "nemo-dark",
       baseUrl: "http://127.0.0.1:9/api",
       apiKey: "test-key",
       model: "test/model",
@@ -78,8 +78,8 @@ console.log(`after submit: bytes=${sink.length} ESC[3J=${total3J} ESC[2J=${total
 // 1) Does any single written line contain BOTH the logo and the marker?
 const stripped = stripAnsi(sink)
 const lines = stripped.split("\n")
-const merged = lines.filter((l) => l.includes("TRAYAMBAK") && l.includes(MARK))
-console.log(`lines containing both TRAYAMBAK and marker: ${merged.length}`)
+const merged = lines.filter((l) => l.includes("NEMO") && l.includes(MARK))
+console.log(`lines containing both NEMO and marker: ${merged.length}`)
 for (const l of merged.slice(0, 5)) console.log("  MERGED>", JSON.stringify(l.slice(0, 200)))
 
 // 2) Where does the marker appear — print every line containing it (trimmed).
@@ -87,9 +87,9 @@ const markerLines = lines.filter((l) => l.includes(MARK))
 console.log(`lines containing marker: ${markerLines.length}`)
 for (const l of markerLines.slice(0, 8)) console.log("  MARK>", JSON.stringify(l.slice(0, 200)))
 
-// 3) Print all lines containing TRAYAMBAK (the logo rows), trimmed.
-const logoLines = lines.filter((l) => l.includes("TRAYAMBAK"))
-console.log(`lines containing TRAYAMBAK: ${logoLines.length}`)
+// 3) Print all lines containing NEMO (the logo rows), trimmed.
+const logoLines = lines.filter((l) => l.includes("NEMO"))
+console.log(`lines containing NEMO: ${logoLines.length}`)
 for (const l of logoLines.slice(-6)) console.log("  LOGO>", JSON.stringify(l.slice(0, 200)))
 
 // Persist raw + report for offline inspection.

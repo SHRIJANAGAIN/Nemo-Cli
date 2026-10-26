@@ -77,9 +77,9 @@ Categorize changed files: source, tests, docs, config, migrations.
 
 Check for related PRP artifacts:
 
-- `.trayambak/PRPs/reports/` — Implementation reports
-- `.trayambak/PRPs/plans/` — Plans that were executed
-- `.trayambak/PRPs/prds/` — Related PRDs
+- `.nemo/PRPs/reports/` — Implementation reports
+- `.nemo/PRPs/plans/` — Plans that were executed
+- `.nemo/PRPs/prds/` — Related PRDs
 
 Reference these in the PR body if they exist.
 

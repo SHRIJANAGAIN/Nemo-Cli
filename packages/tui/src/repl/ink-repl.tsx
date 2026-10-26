@@ -1,13 +1,13 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 
 export interface InkReplOptions {
-  config: TrayambakConfig
+  config: NemoConfig
   prompt?: string
   sessionFile?: string
   sessionId?: string
@@ -19,10 +19,10 @@ export async function startInkRepl(options: InkReplOptions): Promise<void> {
 
   const { render } = inkMod
   const { createElement } = reactMod
-  const TrayambakApp = appMod.TrayambakApp
+  const NemoApp = appMod.NemoApp
 
   render(
-    createElement(TrayambakApp, {
+    createElement(NemoApp, {
       config: options.config,
       modelName: options.config.model,
       permissionMode: "ask",

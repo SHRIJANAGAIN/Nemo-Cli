@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -16,15 +16,15 @@ let fakeHome: string
 const savedEnv = process.env[COMPANY_DIR_ENV]
 const savedUserProfile = process.env.USERPROFILE
 const savedHomeEnv = process.env.HOME
-const savedConfigEnv = process.env.TRAYAMBAK_CONFIG
+const savedConfigEnv = process.env.NEMO_CONFIG
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-cmd-"))
-  // saveConfig/loadConfig prefer <cwd>/.trayambak when present (the repo
-  // checkout has one) — pin TRAYAMBAK_CONFIG at a temp file so on/off
+  root = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-cmd-"))
+  // saveConfig/loadConfig prefer <cwd>/.nemo when present (the repo
+  // checkout has one) — pin NEMO_CONFIG at a temp file so on/off
   // tests can never touch the real config.
-  fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-cmd-home-"))
-  process.env.TRAYAMBAK_CONFIG = path.join(fakeHome, "config.json")
+  fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-cmd-home-"))
+  process.env.NEMO_CONFIG = path.join(fakeHome, "config.json")
   process.env.USERPROFILE = fakeHome
   process.env.HOME = fakeHome
   const eng = path.join(root, "engineering")
@@ -53,8 +53,8 @@ afterEach(() => {
   else process.env.USERPROFILE = savedUserProfile
   if (savedHomeEnv === undefined) delete process.env.HOME
   else process.env.HOME = savedHomeEnv
-  if (savedConfigEnv === undefined) delete process.env.TRAYAMBAK_CONFIG
-  else process.env.TRAYAMBAK_CONFIG = savedConfigEnv
+  if (savedConfigEnv === undefined) delete process.env.NEMO_CONFIG
+  else process.env.NEMO_CONFIG = savedConfigEnv
   fs.rmSync(root, { recursive: true, force: true })
   fs.rmSync(fakeHome, { recursive: true, force: true })
 })
@@ -113,7 +113,7 @@ describe("companyCommand", () => {
   })
 
   it("reports a missing library with where it looked", () => {
-    const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-company-empty-home-"))
+    const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-company-empty-home-"))
     try {
       process.env[COMPANY_DIR_ENV] = path.join(root, "does-not-exist")
       const out = companyCommand({ action: "divisions", root: path.join(root, "missing"), homeDir: emptyHome })

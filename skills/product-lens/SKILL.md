@@ -44,7 +44,7 @@ If the result is "yes, build this," the next lane is `product-capability`, not m
 Reviews your current project through a founder lens:
 
 ```
-1. Read README, TRAYAMBAK.md, package.json, recent commits
+1. Read README, NEMO.md, package.json, recent commits
 2. Infer: what is this trying to be?
 3. Score: product-market fit signals (0-10)
    - Usage growth trajectory

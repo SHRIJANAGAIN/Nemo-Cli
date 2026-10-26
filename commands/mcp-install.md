@@ -17,5 +17,5 @@ Install and manage MCP servers.
 ## Examples
 
 - /mcp search filesystem - Find filesystem MCP servers
-- /mcp install trayambak-git - Install Trayambak Git MCP server
+- /mcp install nemo-git - Install Nemo Git MCP server
 - /mcp list - Show all available servers

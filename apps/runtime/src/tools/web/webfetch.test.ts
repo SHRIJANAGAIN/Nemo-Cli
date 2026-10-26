@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -326,7 +326,7 @@ describe("web_fetch response handling", () => {
     )
     expect(res.isError).toBe(false)
     expect(net.requestHeaders[0]["X-Test"]).toBe("yes")
-    expect(net.requestHeaders[0]["User-Agent"]).toContain("trayambak")
+    expect(net.requestHeaders[0]["User-Agent"]).toContain("nemo")
   })
 
   it("survives a malformed headers JSON blob", async () => {
@@ -453,7 +453,7 @@ describe("web_fetch redirects, retries, and failures", () => {
     expect(text).toContain("HTTP 200 GET http://cf.test/cfpage")
     expect(text).toContain("finally bypassed")
     expect(net.requests.filter((u) => u.includes("/cfpage"))).toHaveLength(2)
-    expect(net.requestHeaders[1]["User-Agent"]).toBe("trayambak")
+    expect(net.requestHeaders[1]["User-Agent"]).toBe("nemo")
   })
 
   it("clamps timeout to 120 seconds and surfaces the timeout error", async () => {

@@ -11,13 +11,13 @@ command: true
 Run the instinct CLI using the plugin root path:
 
 ```bash
-python3 "${TRAYAMBAK_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" evolve [--generate]
+python3 "${NEMO_PLUGIN_ROOT}/skills/continuous-learning-v2/scripts/instinct-cli.py" evolve [--generate]
 ```
 
-Or if `TRAYAMBAK_PLUGIN_ROOT` is not set (manual installation):
+Or if `NEMO_PLUGIN_ROOT` is not set (manual installation):
 
 ```bash
-python3 ~/.trayambak/skills/continuous-learning-v2/scripts/instinct-cli.py evolve [--generate]
+python3 ~/.nemo/skills/continuous-learning-v2/scripts/instinct-cli.py evolve [--generate]
 ```
 
 Analyzes instincts and clusters related ones into higher-level structures:
@@ -95,8 +95,8 @@ Example:
    - Agent candidates (larger, high-confidence clusters)
 5. Show promotion candidates (project -> global) when applicable
 6. If `--generate` is passed, write files to:
-   - Project scope: `~/.trayambak/homunculus/projects/<project-id>/evolved/`
-   - Global fallback: `~/.trayambak/homunculus/evolved/`
+   - Project scope: `~/.nemo/homunculus/projects/<project-id>/evolved/`
+   - Global fallback: `~/.nemo/homunculus/evolved/`
 
 ## Output Format
 

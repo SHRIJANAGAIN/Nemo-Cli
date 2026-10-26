@@ -227,7 +227,7 @@ Example architecture for an AI-powered SaaS platform:
 - **Backend**: FastAPI or Express (Cloud Run/Railway)
 - **Database**: PostgreSQL (Supabase)
 - **Cache**: Redis (Upstash/Railway)
-- **AI**: Trayambak API with structured output
+- **AI**: Nemo API with structured output
 - **Real-time**: Supabase subscriptions
 
 ### Key Design Decisions

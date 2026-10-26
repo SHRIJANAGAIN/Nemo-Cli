@@ -1,6 +1,6 @@
 ---
 name: eval-harness
-description: Formal evaluation framework for Trayambak Code sessions implementing eval-driven development (EDD) principles. Use when a Trayambak Code workflow needs a formal eval before it is trusted or changed.
+description: Formal evaluation framework for Nemo Code sessions implementing eval-driven development (EDD) principles. Use when a Nemo Code workflow needs a formal eval before it is trusted or changed.
 metadata:
   origin: ECC
 tools: Read, Write, Edit, Bash, Grep, Glob
@@ -8,12 +8,12 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 
 # Eval Harness Skill
 
-A formal evaluation framework for Trayambak Code sessions, implementing eval-driven development (EDD) principles.
+A formal evaluation framework for Nemo Code sessions, implementing eval-driven development (EDD) principles.
 
 ## When to Activate
 
 - Setting up eval-driven development (EDD) for AI-assisted workflows
-- Defining pass/fail criteria for Trayambak Code task completion
+- Defining pass/fail criteria for Nemo Code task completion
 - Measuring agent reliability with pass@k metrics
 - Creating regression test suites for prompt or agent changes
 - Benchmarking agent performance across model versions
@@ -31,11 +31,11 @@ Eval-Driven Development treats evals as the "unit tests of AI development":
 
 ### Capability Evals
 
-Test if Trayambak can do something it couldn't before:
+Test if Nemo can do something it couldn't before:
 
 ```markdown
 [CAPABILITY EVAL: feature-name]
-Task: Description of what Trayambak should accomplish
+Task: Description of what Nemo should accomplish
 Success Criteria:
 
 - [ ] Criterion 1
@@ -78,7 +78,7 @@ npm run build && echo "PASS" || echo "FAIL"
 
 ### 2. Model-Based Grader
 
-Use Trayambak to evaluate open-ended outputs:
+Use Nemo to evaluate open-ended outputs:
 
 ```markdown
 [MODEL GRADER PROMPT]
@@ -196,7 +196,7 @@ Status: READY FOR REVIEW
 /eval define feature-name
 ```
 
-Creates eval definition file at `.trayambak/evals/feature-name.md`
+Creates eval definition file at `.nemo/evals/feature-name.md`
 
 ### During Implementation
 
@@ -219,7 +219,7 @@ Generates full eval report
 Store evals in project:
 
 ```
-.trayambak/
+.nemo/
   evals/
     feature-xyz.md      # Eval definition
     feature-xyz.log     # Eval run history
@@ -306,6 +306,6 @@ Recommended thresholds:
 
 ### Minimal Eval Artifact Layout
 
-- `.trayambak/evals/<feature>.md` definition
-- `.trayambak/evals/<feature>.log` run history
+- `.nemo/evals/<feature>.md` definition
+- `.nemo/evals/<feature>.log` run history
 - `docs/releases/<version>/eval-summary.md` release snapshot

@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -14,7 +14,7 @@
  * and `echo x && rm -rf /` all matched nothing and degraded to a bare "ask".
  * The approval prompt then shows the innocuous wrapper, the user approves, and
  * the hidden payload runs unchecked. Worse, `checkExecPolicy` — the surface
- * `trayambak execpolicy check` reports — actually ALLOWED `cmd /c "del …"`.
+ * `nemo execpolicy check` reports — actually ALLOWED `cmd /c "del …"`.
  *
  * Every segment must therefore be evaluated, and the strictest verdict wins.
  *

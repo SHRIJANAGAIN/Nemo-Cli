@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it } from "vitest"
@@ -18,9 +18,9 @@ import {
   UI_MAX_MESSAGES,
   UI_KEEP_MESSAGES,
 } from "./MessageList.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 
-function msg(id: string, role: TrayambakMessage["role"] = "user", extra?: Partial<TrayambakMessage>): TrayambakMessage {
+function msg(id: string, role: NemoMessage["role"] = "user", extra?: Partial<NemoMessage>): NemoMessage {
   return { id, timestamp: 1, role, content: `body of ${id}`, ...extra }
 }
 
@@ -46,6 +46,22 @@ describe("computeMessageSplit", () => {
     const messages = [msg("u1"), big]
     const { capIdx } = computeMessageSplit(messages, false, false, 10, 100)
     expect(capIdx).toBe(1)
+  })
+
+  it("ends the window at endIdx when parked (rows at/after it stay hidden)", () => {
+    // Alt-screen paging: endIdx below length parks the window on older
+    // history. The window is still the newest budget-fitting run ENDING at
+    // endIdx, and nothing at/after endIdx may render (snap back to see it).
+    const messages = [msg("u1"), msg("a1", "assistant"), msg("u2"), msg("a2", "assistant")]
+    const { capIdx } = computeMessageSplit(messages, false, false, 100, 100, false, 2)
+    expect(capIdx).toBe(0)
+    // Tight budget from the parked end: window slides back, newest excluded.
+    const tight = computeMessageSplit(messages, false, false, 4, 100, false, 3)
+    expect(tight.capIdx).toBeLessThanOrEqual(2)
+    // endIdx clamps into range instead of throwing (caller pre-clamps too —
+    // belt and braces, this function must never index out of bounds).
+    expect(computeMessageSplit(messages, false, false, 100, 100, false, 99).capIdx).toBe(0)
+    expect(computeMessageSplit(messages, false, false, 100, 100, false, -5).capIdx).toBe(0)
   })
 
   it("marks the streaming tail + running tools unstable", () => {
@@ -128,7 +144,7 @@ describe("splitAtRows (bottom-anchored tail for oversized answers)", () => {
 
 describe("messageText (body used for row math and slicing)", () => {
   it("joins text parts when content is empty, else returns content", () => {
-    const withParts: TrayambakMessage = {
+    const withParts: NemoMessage = {
       id: "p1",
       timestamp: 1,
       role: "assistant",
@@ -143,7 +159,7 @@ describe("messageText (body used for row math and slicing)", () => {
 
 describe("in-frame window across height changes", () => {
   it("re-slices cleanly as the budget grows/shrinks (nothing above the box)", () => {
-    const messages: TrayambakMessage[] = []
+    const messages: NemoMessage[] = []
     for (let i = 0; i < 12; i += 1) {
       messages.push(msg(`u${i}`))
       messages.push(msg(`a${i}`, "assistant"))
@@ -170,7 +186,7 @@ describe("buildStaticItems (print-once prefix for <Static>)", () => {
 
   /** The component's split table for an oversized body (same cut
    *  dynamicSlice/eager-cut use: avail = rowBudget - 1). */
-  const splitsFor = (m: TrayambakMessage, avail: number, cols = 100): ReadonlyMap<string, HeadSplit> => {
+  const splitsFor = (m: NemoMessage, avail: number, cols = 100): ReadonlyMap<string, HeadSplit> => {
     const { head, tail } = splitAtRows(messageText(m), avail, cols)
     return new Map([[m.id, { headText: head, tailText: tail }]])
   }
@@ -202,7 +218,7 @@ describe("buildStaticItems (print-once prefix for <Static>)", () => {
   it("appends only: item N stays identical as the turn grows (old must be same)", () => {
     const b = msg("big", "assistant", { content: bigBody })
     const splits = splitsFor(b, 9)
-    const passes: TrayambakMessage[][] = []
+    const passes: NemoMessage[][] = []
     for (const messages of [
       [msg("u1"), b],
       [msg("u1"), b, msg("u2", "assistant")],

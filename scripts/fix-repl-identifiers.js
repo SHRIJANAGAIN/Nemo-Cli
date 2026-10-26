@@ -10,10 +10,10 @@ function fixIdentifiers(dir) {
       fixIdentifiers(full)
     } else if ((entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) && !entry.name.includes(".d.ts")) {
       let content = fs.readFileSync(full, "utf8")
-      if (content.includes("SktAiLabs") || content.includes("sktAiLabs") || content.includes("SKT AI LABS")) {
-        content = content.replace(/SktAiLabs/g, "TrayambakLabs")
-        content = content.replace(/sktAiLabs/g, "trayambakLabs")
-        content = content.replace(/SKT AI LABS(?=[A-Za-z_])/g, "TrayambakLabs")
+      if (content.includes("SktAiLabs") || content.includes("sktAiLabs") || content.includes("Shrijan")) {
+        content = content.replace(/SktAiLabs/g, "NemoLabs")
+        content = content.replace(/sktAiLabs/g, "nemoLabs")
+        content = content.replace(/Shrijan(?=[A-Za-z_])/g, "NemoLabs")
         fs.writeFileSync(full, content)
         console.log("Fixed:", full)
       }

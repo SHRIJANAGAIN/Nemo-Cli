@@ -1,6 +1,6 @@
 /* Full-app Enter E2E — "MY RESPONSE DONT SENT TO AI".
  * smoke-enter-ui.mjs only proves PromptInput → onSubmit. This drives the REAL
- * TrayambakApp (production wiring: createSanitizedStdin → Ink → App.handleInput
+ * NemoApp (production wiring: createSanitizedStdin → Ink → App.handleInput
  * → runAgent) and asserts the typed draft actually lands in the transcript:
  * the Welcome screen renders only while messages.length === 0, so its
  * DISAPPEARANCE after typing "HI" + Enter is the oracle that handleInput ran
@@ -18,19 +18,19 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const distEsm = pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "src", "ink-app-esm")).href
 
 // Session hermeticity: a full-App boot creates real sessions in
-// skt/8-conversations — without isolation, completed runs flip the next
+// nemo/8-conversations — without isolation, completed runs flip the next
 // boot into the SessionPicker (no active session) and boot-state asserts
-// flake. Same TRAYAMBAK_HOME sandbox as smoke-theme-switch; empty store =
+// flake. Same NEMO_HOME sandbox as smoke-theme-switch; empty store =
 // clean Welcome boot, and nothing touches real user sessions.
 {
   const fs = await import("node:fs")
   const os = await import("node:os")
-  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-submit-"))
-  const convDir = path.join(sandbox, "skt", "8-conversations")
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-submit-"))
+  const convDir = path.join(sandbox, "nemo", "8-conversations")
   fs.mkdirSync(convDir, { recursive: true })
   fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "submit-smoke" }))
   fs.writeFileSync(path.join(convDir, "sessions.json"), "[]")
-  process.env.TRAYAMBAK_HOME = sandbox
+  process.env.NEMO_HOME = sandbox
 }
 
 // Raw terminal end: byte-for-byte what a real TTY delivers (isTTY/setRawMode
@@ -57,14 +57,14 @@ stdout.on("data", (chunk) => {
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "")
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark", // skip ThemePicker (showThemePicker = !themeName)
+      themeName: "nemo-dark", // skip ThemePicker (showThemePicker = !themeName)
       baseUrl: "http://127.0.0.1:9/api", // unroutable: fails fast, no real network
       apiKey: "test-key",
       model: "test/model",
@@ -92,7 +92,7 @@ function assert(cond, label) {
 
 // The welcome marker: the status block's "Tue Oct 7 15:32:04" line (weekday +
 // month + day + clock) — rendered ONLY by WelcomeScreen while messages.length
-// === 0. The old grep target "Welcome To Trayambak CLI" stopped existing when
+// === 0. The old grep target "Welcome To Nemo CLI" stopped existing when
 // that banner line was replaced by the live clock, which made this oracle
 // vacuously false at boot and vacuously TRUE after Enter (a swallowed Enter
 // would have passed). Kept as an OR so restoring the banner re-validates.
@@ -100,7 +100,7 @@ const welcomeMarker =
   /(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d{2}:\d{2}:\d{2}/
 const welcomePresent = () => {
   const text = stripAnsi(sink)
-  return text.includes("Welcome To Trayambak CLI") || welcomeMarker.test(text)
+  return text.includes("Welcome To Nemo CLI") || welcomeMarker.test(text)
 }
 
 // Boot the app and confirm the fresh-session state we're about to disturb.

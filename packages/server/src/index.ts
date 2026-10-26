@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as http from "http"
@@ -9,7 +9,6 @@ import { randomBytes, timingSafeEqual } from "crypto"
 import { readFileSync } from "node:fs"
 import { join as pathJoin, resolve as pathResolve, relative as pathRelative, sep as pathSep } from "node:path"
 import { Agent, loadConfig } from "../../../apps/runtime/src/index.js"
-import { createTelemetry } from "../../telemetry/src/index.js"
 import { listTranscripts, sessionsRoot } from "../../session-backends/src/transcript.js"
 import {
   createAppJwt,
@@ -74,20 +73,20 @@ function readJsonBody(req: http.IncomingMessage, res: http.ServerResponse): Prom
   })
 }
 
-/** License generator UI (SKT operators only — POST is bearer-gated by the
+/** License generator UI (Shrijan operators only — POST is bearer-gated by the
  *  global token check above). No external JS/CSS: single file, works
  *  behind Cloudflare with zero build step. */
 function adminPage(): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trayambak — license generator</title>
+<title>Nemo — license generator</title>
 <style>body{font-family:system-ui,sans-serif;max-width:560px;margin:3rem auto;padding:0 1rem;color:#111}label{display:block;margin:1rem 0 .25rem;font-weight:600}input,select,button{font-size:1rem;padding:.5rem;width:100%;box-sizing:border-box}button{margin-top:1.25rem;background:#111;color:#fff;border:0;cursor:pointer}#out{margin-top:1.5rem;padding:1rem;background:#f4f4f4;word-break:break-all;display:none;font-family:monospace;font-size:1.2rem}#err{color:#b00;margin-top:1rem}pre{background:#f4f4f4;padding:1rem;overflow:auto;font-size:.8rem}</style>
 </head><body>
-<h1>Trayambak license generator</h1>
+<h1>Nemo license generator</h1>
 <p>Bearer token is asked once per session and never stored. Minted codes are 16 letters, always <b>1102-…</b>, verified <b>live by this server</b> (registry + 1-machine binding).</p>
-<p>Users self-serve a 7-day trial from the TUI (<b>/devmode trial</b> — 1 live trial per machine, born bound, 5/hour per network). Paid keys come from Mint below. Exploitation? Find the key id in <b>Usage</b>, paste it under <b>Revoke</b> — dead in one click, everywhere.</p>
-<label>Bearer token (TRAYAMBAK_WEB_TOKEN)<input id="token" type="password" autocomplete="off"></label>
-<label>Plan<select id="plan"><option value="pentest">pentest</option><option value="pro">pro</option><option value="enterprise">enterprise</option><option value="basic">basic</option></select></label>
+<p>Users self-serve a 7-day trial from the TUI (<b>/devmode trial</b> — 1 live trial per machine, born bound, 5/hour per network). Paid keys come from Mint below. Exploitation? Find the key id in <b>Licenses</b>, paste it under <b>Revoke</b> — dead in one click, everywhere.</p>
+<label>Bearer token (NEMO_WEB_TOKEN)<input id="token" type="password" autocomplete="off"></label>
+<label>Plan<select id="plan"><option value="pro">pro</option><option value="enterprise">enterprise</option><option value="basic">basic</option></select></label>
 <label>Days valid<input id="days" type="number" value="365" min="1" max="3650"></label>
 <label>Customer id (optional)<input id="cid" type="text" placeholder="acme-corp"></label>
 <button id="go">Mint license</button>
@@ -101,9 +100,6 @@ function adminPage(): string {
 <h2>Licenses</h2>
 <button id="golist">Refresh list</button>
 <pre id="list"></pre>
-<h2>Usage (latest 100)</h2>
-<button id="gouse">Refresh usage</button>
-<pre id="use"></pre>
 <h2>Revoke / unbind by id</h2>
 <label>License id<input id="lid" type="text"></label>
 <button id="gorev">Revoke</button>
@@ -141,10 +137,6 @@ document.getElementById("golist").onclick = async () => {
   const r = await fetch("/admin/licenses", { headers: auth() });
   show("list", await r.json());
 };
-document.getElementById("gouse").onclick = async () => {
-  const r = await fetch("/admin/usage?tail=100", { headers: auth() });
-  show("use", await r.json());
-};
 document.getElementById("gorev").onclick = async () => {
   const r = await fetch("/admin/revoke", { method: "POST", headers: auth(),
     body: JSON.stringify({ id: document.getElementById("lid").value }) });
@@ -166,8 +158,6 @@ export interface ServerOptions {
   lanOnly?: boolean
   /** License registry file (LICENSE_STORE_PATH). Tests point it at tmp. */
   licenseStorePath?: string
-  /** Usage-telemetry JSONL file (LICENSE_USAGE_PATH). */
-  licenseUsagePath?: string
   /** GitHub OAuth store file (GITHUB_OAUTH_PATH). Tests point it at tmp. */
   githubOAuthPath?: string
   /** Static image dir for /img/:name (Img/). Tests point it at tmp. */
@@ -175,7 +165,7 @@ export interface ServerOptions {
   /** Docs dir for /docs/:name (docs/). Tests point it at tmp. */
   docsDir?: string /**
    * Extra browser origins allowed to call the API, comma-separated
-   * (TRAYAMBAK_WEB_ORIGINS). Same-origin plus loopback origins are always
+   * (NEMO_WEB_ORIGINS). Same-origin plus loopback origins are always
    * allowed; "*" restores the pre-hardening wildcard; anything else is
    * refused server-side, not merely stripped of CORS headers.
    */
@@ -183,7 +173,7 @@ export interface ServerOptions {
 }
 
 /** A startServer() handle that also exposes the token actually enforced. */
-export interface TrayambakServer extends http.Server {
+export interface NemoServer extends http.Server {
   /** Caller-provided, env-provided, or generated at startup — never undefined on non-loopback binds. */
   readonly effectiveToken?: string
 }
@@ -196,11 +186,11 @@ const MAX_BODY_BYTES = 1_048_576
  * call never settles holds its socket (and the SSE response) open forever
  * while the server otherwise stays responsive — an unauthenticated
  * connection-exhaustion DoS one curl per socket. Override with
- * TRAYAMBAK_AGENT_TIMEOUT_MS (clamped to 5s..10min); the client-abort path
+ * NEMO_AGENT_TIMEOUT_MS (clamped to 5s..10min); the client-abort path
  * already cancels the run, this covers the run that never settles at all.
  */
 export function agentRunTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = Number(env.TRAYAMBAK_AGENT_TIMEOUT_MS ?? 120_000)
+  const raw = Number(env.NEMO_AGENT_TIMEOUT_MS ?? 120_000)
   if (!Number.isFinite(raw)) return 120_000
   return Math.min(Math.max(Math.floor(raw), 5_000), 600_000)
 }
@@ -219,19 +209,18 @@ export function isAllowedSessionFile(sessionFile: string, root: string = session
 
 export const OPENAPI_SPEC = {
   openapi: "3.0.0",
-  info: { title: "Trayambak Agent API", version: "0.6.3" }, // keep in sync with root package.json
+  info: { title: "Nemo Agent API", version: "0.6.3" }, // keep in sync with root package.json
   paths: {
     "/health": { get: { summary: "Health check" } },
     "/v1/models": { get: { summary: "List models" } },
     "/v1/agent": { post: { summary: "Run agent (SSE)" } },
     "/api/sessions": { get: { summary: "List transcripts" } },
-    "/admin": { get: { summary: "License generator UI (SKT operators)" } },
+    "/admin": { get: { summary: "License generator UI (Shrijan operators)" } },
     "/admin/mint": { post: { summary: "Mint a 16-letter license (bearer-gated)" } },
     "/admin/import": { post: { summary: "Register a pre-existing code (bearer-gated)" } },
     "/admin/revoke": { post: { summary: "Revoke a license by id (bearer-gated)" } },
     "/admin/unbind": { post: { summary: "Free a license's machine binding (bearer-gated)" } },
     "/admin/licenses": { get: { summary: "List licenses, masked (bearer-gated)" } },
-    "/admin/usage": { get: { summary: "Tail pentest usage telemetry (bearer-gated)" } },
     "/admin/jobs": { get: { summary: "Tail GitHub job history (bearer-gated)" } },
     "/license/verify": { post: { summary: "Live license check (public, machine-bound)" } },
     "/license/activate": { post: { summary: "Bind a license to a machine (public)" } },
@@ -250,27 +239,26 @@ export const OPENAPI_SPEC = {
     "/docs/:name": { get: { summary: "Docs pages as markdown (public, .md only)" } },
     "/install.ps1": { get: { summary: "Windows one-line installer (public)" } },
     "/install.sh": { get: { summary: "macOS/Linux one-line installer (public)" } },
-    "/license/usage": { post: { summary: "Record pentest tool usage (public, licensed)" } },
     "/webhooks/github": { post: { summary: "GitHub App webhook (HMAC verified)" } },
     "/openapi.json": { get: { summary: "OpenAPI spec" } },
   },
 } as const
 
 /**
- * A local HTTP server that exposes the trayambak agent over a small JSON/SSE API,
+ * A local HTTP server that exposes the nemo agent over a small JSON/SSE API,
  * mirroring the server packages found in reference agent projects. The agent
  * itself still runs locally against llama.cpp; this just adds a network surface.
  */
-export function startServer(options: ServerOptions = {}): TrayambakServer {
-  const port = options.port ?? Number(process.env.TRAYAMBAK_SERVER_PORT ?? 8787)
+export function startServer(options: ServerOptions = {}): NemoServer {
+  const port = options.port ?? Number(process.env.NEMO_SERVER_PORT ?? 8787)
   const host = options.host ?? "127.0.0.1"
-  let token = options.token ?? process.env.TRAYAMBAK_WEB_TOKEN
+  let token = options.token ?? process.env.NEMO_WEB_TOKEN
   // Browser origins allowed to call the API (see cors.ts for the decision
   // order). Read once at startup so the policy cannot change mid-process.
-  const corsOrigins = options.corsOrigins ?? process.env.TRAYAMBAK_WEB_ORIGINS ?? ""
+  const corsOrigins = options.corsOrigins ?? process.env.NEMO_WEB_ORIGINS ?? ""
   // Fail closed: the server mints bearer auth on EVERY bind, loopback included.
   // Previously only non-loopback binds auto-generated a token, so a default
-  // `skt web` served /v1/agent (full agent execution with tools), /api/sessions,
+  // `nemo web` served /v1/agent (full agent execution with tools), /api/sessions,
   // and the license-admin tooling to ANY local process with no auth at all.
   // If the operator didn't provide a token, generate a strong one for this
   // process and print it once at startup (paste it into the served page's
@@ -282,14 +270,12 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
     generatedToken = true
   }
   const config = loadConfig()
-  const telemetry = createTelemetry(/*enabled*/ false)
   // License registry: minted/imported key ids live here. Forged codes
   // (valid checksum, unknown id) die in checkLicense — the shipped check
   // key alone mints nothing the server honors.
   const licenseDefaults = defaultLicenseStorePaths()
   const licenses = new LicenseStore({
     file: options.licenseStorePath ?? licenseDefaults.file,
-    usageFile: options.licenseUsagePath ?? licenseDefaults.usageFile,
   })
 
   /** Public surface: no bearer token required.
@@ -310,7 +296,6 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
   const PUBLIC_LICENSE_PATHS = new Set([
     "/license/verify",
     "/license/activate",
-    "/license/usage",
     "/license/mint-trial",
     "/webhooks/github",
     "/auth/github/start",
@@ -323,11 +308,11 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
   ])
   // README images live next to the code (Img/); npmjs.com renders
   // tarball-relative image links unreliably, so absolute URLs point here.
-  const imgDir = options.imgDir ?? process.env.TRAYAMBAK_IMG_DIR ?? "./Img"
+  const imgDir = options.imgDir ?? process.env.NEMO_IMG_DIR ?? "./Img"
   // Same story for the README's Documentation table: docs/*.md links would
   // 404 on npm (docs/ isn't even in the tarball), so /docs/:name serves
   // them as markdown text. Whitelist-only, like /img/.
-  const docsDir = options.docsDir ?? process.env.TRAYAMBAK_DOCS_DIR ?? "./docs"
+  const docsDir = options.docsDir ?? process.env.NEMO_DOCS_DIR ?? "./docs"
 
   /** Self-service trial abuse guard: max 5 trial mints per client IP per
    *  hour (in-memory, per process — adequate for trial issuance rates).
@@ -346,7 +331,7 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
   // delayed 2 min (no boot-time model spend), then every interval. Timers
   // unref'd so tests exit cleanly.
   const autofixRepos = parseAutofixRepos(process.env.GITHUB_AUTOFIX_REPOS)
-  const autofixLabel = (process.env.GITHUB_AUTOFIX_LABEL ?? "trayambak").trim() || "trayambak"
+  const autofixLabel = (process.env.GITHUB_AUTOFIX_LABEL ?? "nemo").trim() || "nemo"
   const autofixMinutes = Math.min(Math.max(Number(process.env.GITHUB_AUTOFIX_INTERVAL_MIN ?? 30) || 30, 5), 1440)
   // Triage greeting for every new issue (static text, no model spend).
   // Empty string disables the triage pass (fix flow unaffected).
@@ -507,9 +492,9 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       if (!parsed) return
       const plan = typeof parsed.plan === "string" ? parsed.plan : ""
       const days = typeof parsed.days === "number" ? parsed.days : Number.NaN
-      if (plan !== "basic" && plan !== "pentest" && plan !== "pro" && plan !== "enterprise") {
+      if (plan !== "basic" && plan !== "pro" && plan !== "enterprise") {
         res.writeHead(400, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: "plan must be basic|pentest|pro|enterprise" }))
+        res.end(JSON.stringify({ error: "plan must be basic|pro|enterprise" }))
         return
       }
       if (!Number.isFinite(days) || days < 1 || days > 3650) {
@@ -586,42 +571,11 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       return
     }
 
-    // usage: pentest audit trail. Pentest-plan enforced server-side too —
-    // a basic key never records (and the CLI gate never lets it run).
-    if (req.method === "POST" && pathname === "/license/usage") {
-      const parsed = await readJsonBody(req, res)
-      if (!parsed) return
-      const machine = licenseMachineId(parsed.machineId)
-      const tool = typeof parsed.tool === "string" ? parsed.tool.slice(0, 120) : ""
-      if (!machine || !tool) {
-        res.writeHead(400, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: "missing machineId/tool" }))
-        return
-      }
-      const c = licenses.checkPentestOnly(typeof parsed.key === "string" ? parsed.key : "", machine)
-      if (c.valid !== true) {
-        res.writeHead(403, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: c.reason ?? "license invalid" }))
-        return
-      }
-      licenses.touch(c.record?.id ?? "")
-      licenses.appendUsage({
-        keyId: c.record?.id ?? "",
-        machineId: machine,
-        tool,
-        target: typeof parsed.target === "string" ? parsed.target.slice(0, 300) : "",
-        ok: parsed.ok !== false,
-      })
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ ok: true }))
-      return
-    }
-
     // mint-trial: SELF-SERVICE trial issuance (public). Anyone can mint ONE
-    // short pentest trial per machine, born bound to that machine (so the
+    // short trial per machine, born bound to that machine (so the
     // minter cannot share it — it never works anywhere else). Operator
     // keys still come only from /admin/mint; exploitation dies by
-    // /admin/revoke on the key id (see /admin/usage for the audit trail).
+    // /admin/revoke on the key id.
     if (req.method === "POST" && pathname === "/license/mint-trial") {
       const parsed = await readJsonBody(req, res)
       if (!parsed) return
@@ -643,7 +597,7 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       trialHitsByIp.set(ip, hits)
       if (licenses.activeTrialForMachine(machine)) {
         res.writeHead(409, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ ok: false, reason: "this machine already has a live trial — ask SKT for a full key" }))
+        res.end(JSON.stringify({ ok: false, reason: "this machine already has a live trial — ask Shrijan for a full key" }))
         return
       }
       try {
@@ -652,7 +606,7 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
         const todayDays = Math.floor(Date.now() / 86400000)
         const { activationEpochDays } = await import("../../../apps/runtime/src/license.js")
         const key = mintActivationKey(
-          { plan: "pentest", expDays: todayDays - activationEpochDays() + days },
+          { plan: "pro", expDays: todayDays - activationEpochDays() + days },
           activationCheckKey(),
         )
         const rec = licenses.register(key, "trial", { trial: true })
@@ -746,7 +700,7 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       try {
         const ex = await fetch("https://github.com/login/oauth/access_token", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "trayambak" },
+          headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "nemo" },
           body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
           signal: AbortSignal.timeout(20_000),
         })
@@ -962,7 +916,7 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       const message =
         typeof parsed.message === "string" && parsed.message.trim()
           ? parsed.message.trim().slice(0, 200)
-          : `trayambak: update ${filePath}`
+          : `nemo: update ${filePath}`
       const branch = typeof parsed.branch === "string" && parsed.branch.trim() ? parsed.branch.trim() : undefined
       const refQuery = branch ? `?ref=${encodeURIComponent(branch)}` : ""
       const existing = await githubApi(
@@ -1189,7 +1143,7 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
         {
           method: "PUT",
           body: {
-            message: `trayambak: copy ${sourcePath} -> ${destPath}`,
+            message: `nemo: copy ${sourcePath} -> ${destPath}`,
             content: b64,
             ...(sha ? { sha } : {}),
           },
@@ -1272,13 +1226,6 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
       }))
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(JSON.stringify({ licenses: rows }))
-      return
-    }
-
-    if (req.method === "GET" && pathname === "/admin/usage") {
-      const tail = Number((req.url ?? "").split("tail=")[1] ?? 100)
-      res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ usage: licenses.readUsageTail(Number.isFinite(tail) ? tail : 100) }))
       return
     }
 
@@ -1426,7 +1373,6 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
           .run(
             prompt,
             (event) => {
-              telemetry.capture(event)
               safeWrite(`data: ${JSON.stringify(event)}\n\n`)
             },
             controller.signal,
@@ -1446,15 +1392,15 @@ export function startServer(options: ServerOptions = {}): TrayambakServer {
   })
 
   server.listen(port, host, () => {
-    process.stdout.write(`trayambak server listening on http://${host}:${port}\n`)
+    process.stdout.write(`nemo server listening on http://${host}:${port}\n`)
     if (generatedToken && token) {
       // A token was required but not supplied; the operator needs this value
       // to authenticate. Printed once at startup, never logged elsewhere.
-      process.stdout.write(`generated bearer token (set TRAYAMBAK_WEB_TOKEN to avoid this): ${token}\n`)
+      process.stdout.write(`generated bearer token (set NEMO_WEB_TOKEN to avoid this): ${token}\n`)
     }
   })
   Object.defineProperty(server, "effectiveToken", { value: token ?? "", enumerable: false })
-  return server as TrayambakServer
+  return server as NemoServer
 }
 
 function safeJson(raw: string): Record<string, unknown> {
@@ -1495,7 +1441,7 @@ async function postGithubComment(
       method: "POST",
       headers: {
         Accept: "application/vnd.github+json",
-        "User-Agent": "trayambak",
+        "User-Agent": "nemo",
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -1517,7 +1463,7 @@ async function allInstalledRepos(): Promise<string[]> {
     const res = await fetch("https://api.github.com/app/installations", {
       headers: {
         Accept: "application/vnd.github+json",
-        "User-Agent": "trayambak",
+        "User-Agent": "nemo",
         Authorization: `Bearer ${jwt}`,
         "X-GitHub-Api-Version": "2022-11-28",
       },
@@ -1572,7 +1518,7 @@ async function installationIdForOwner(owner: string): Promise<number> {
     const res = await fetch("https://api.github.com/app/installations", {
       headers: {
         Accept: "application/vnd.github+json",
-        "User-Agent": "trayambak",
+        "User-Agent": "nemo",
         Authorization: `Bearer ${jwt}`,
         "X-GitHub-Api-Version": "2022-11-28",
       },
@@ -1675,7 +1621,7 @@ async function githubApi(
   try {
     const headers: Record<string, string> = {
       Accept: "application/vnd.github+json",
-      "User-Agent": "trayambak",
+      "User-Agent": "nemo",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": "2022-11-28",
     }
@@ -1742,9 +1688,9 @@ async function runGithubJob(job: GithubJob, payload: unknown): Promise<string> {
   const apiBase = process.env.GITHUB_API_BASE ?? "https://api.github.com"
   const started = new Date().toISOString()
   process.stdout.write(`[github-app] job ${job.repoFullName}#${job.issueNumber} started at ${started}\n`)
-  const workspace = process.env.TRAYAMBAK_GITHUB_WORKSPACE ?? loadConfig().cwd
+  const workspace = process.env.NEMO_GITHUB_WORKSPACE ?? loadConfig().cwd
   const baseConfig = loadConfig()
-  // The /trayambak comment IS the user's approval for repo work: allow the
+  // The /nemo comment IS the user's approval for repo work: allow the
   // github API tool outright (it rides the 1-hour installation token, so it
   // cannot reach beyond the installed repos). Everything else keeps the
   // operator's rules — headless runs stay denied-by-default elsewhere.
@@ -1904,7 +1850,7 @@ async function runGithubJob(job: GithubJob, payload: unknown): Promise<string> {
     owner,
     repo,
     job.issueNumber,
-    `## Trayambak result\n\n${capped}`,
+    `## Nemo result\n\n${capped}`,
   )
   process.stdout.write(`[github-app] job ${job.repoFullName}#${job.issueNumber} replied\n`)
   return reply

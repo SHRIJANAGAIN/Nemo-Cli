@@ -31,7 +31,7 @@ Pull these ECC-native skills into the workflow when relevant:
 
 ## Scope Guardrails
 
-- work in the sibling `ECC-Tools` repo, not in `trayambak`
+- work in the sibling `ECC-Tools` repo, not in `nemo`
 - start read-only unless the user clearly asked for a fix
 - do not mutate unrelated billing, checkout, or UI flows while tracing analysis burn
 - treat app-generated branches and app-generated PRs as red-flag recursion paths until proved otherwise
@@ -134,7 +134,7 @@ If usage is checked at the front door but only incremented in the worker, concur
 
 ### 3. Free tier on premium path
 
-If free queued jobs can still route into SKT AI LABS or another premium provider when keys exist, that is real spend leakage even if the user never sees the premium result.
+If free queued jobs can still route into Shrijan or another premium provider when keys exist, that is real spend leakage even if the user never sees the premium result.
 
 ### 4. App-generated branches re-enter the webhook
 

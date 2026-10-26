@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -19,8 +19,8 @@
  *    passed through, and it is re-sent on every request.
  *  - `required` reached the provider via `as string[]`, so a server returning
  *    `[1, null, {a: 1}, "ok"]` produced a malformed tool definition.
- *  - result text bypassed `truncateOutput`, the cap the shell, multi-search and
- *    pentest tools all apply.
+ *  - result text bypassed `truncateOutput`, the cap the shell and multi-search
+ *    tools all apply.
  *
  * Proven against a real fake stdio server rather than a unit-level stub, so the
  * whole `createMcpTools` path is exercised.

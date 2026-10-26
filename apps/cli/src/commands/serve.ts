@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execFileSync, spawn, type ChildProcess } from "child_process"
@@ -11,17 +11,22 @@ import * as os from "os"
 import * as path from "path"
 import { loadConfig } from "../../../runtime/src/index"
 import { ensureLlamaCppBin, locateLlamaCppBin } from "../../../runtime/src/llama-cpp-bin"
+import { envInt, envPathList, envString } from "../../../../packages/core/src/env_read.js"
 
 function logStream(): number | "pipe" {
-  const dir = path.join(os.homedir(), ".trayambak", "logs")
+  const dir = path.join(os.homedir(), ".nemo", "logs")
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, "llama-server.log")
   return fs.openSync(file, "a")
 }
 
 function detectGpuLayers(): number {
-  const configured = process.env.TRAYAMBAK_GPU_LAYERS
-  if (configured !== undefined) return Number(configured)
+  // envInt, not `Number(process.env.X)`: the old spelling returned NaN for a junk
+  // value, and the result went straight onto the llama-server command line as
+  // `--n-gpu-layers NaN` — a value the server cannot parse, so the model never
+  // loaded and the error pointed at the binary rather than at the typo.
+  const configured = envInt("NEMO_GPU_LAYERS", undefined)
+  if (configured !== undefined) return Math.max(0, configured)
   const probes: Array<[string, string[]]> = [
     ["nvidia-smi", ["-L"]],
     ["rocminfo", []],
@@ -107,13 +112,15 @@ export async function launchServer(options: ServeOptions): Promise<ChildProcess 
   const bin = await ensureLlamaCppBin()
   if (!bin) return null
 
-  const model = options.model ?? cfg.modelPath ?? process.env.TRAYAMBAK_MODEL_PATH
+  const model = options.model ?? cfg.modelPath ?? envString("NEMO_MODEL_PATH")
   if (!model) return null
 
   const port = options.port ?? (await getFreePort()) ?? 8080
-  const ctxSize = options.ctxSize ?? Number(process.env.TRAYAMBAK_CTX_SIZE ?? cfg.ctxSize ?? 16384)
-  const batchSize = options.batchSize ?? Number(process.env.TRAYAMBAK_BATCH_SIZE ?? cfg.batchSize ?? 256)
-  const ubatchSize = options.ubatchSize ?? Number(process.env.TRAYAMBAK_UBATCH_SIZE ?? cfg.ubatchSize ?? 128)
+  // Same NaN-to-argv hazard as the GPU layers above: a junk override used to put
+  // a literal "NaN" in --ctx-size / --batch-size / --ubatch-size.
+  const ctxSize = options.ctxSize ?? envInt("NEMO_CTX_SIZE", cfg.ctxSize ?? 16384) ?? 16384
+  const batchSize = options.batchSize ?? envInt("NEMO_BATCH_SIZE", cfg.batchSize ?? 256) ?? 256
+  const ubatchSize = options.ubatchSize ?? envInt("NEMO_UBATCH_SIZE", cfg.ubatchSize ?? 128) ?? 128
   const args = ["--model", model, "--port", String(port)]
   args.push("--ctx-size", String(ctxSize))
   args.push("--parallel", "1")
@@ -129,7 +136,10 @@ export async function launchServer(options: ServeOptions): Promise<ChildProcess 
     stdio: ["ignore", logStream(), logStream()],
     windowsHide: true,
     cwd: binDir,
-    env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}` },
+    // envPathList drops empty segments and joins with the platform separator, so an
+    // unset/blank PATH no longer contributes a trailing empty entry that Windows
+    // resolves against the current directory.
+    env: { ...process.env, PATH: [binDir, ...envPathList("PATH")].join(path.delimiter) },
   })
   return child
 }
@@ -140,12 +150,12 @@ export async function serveCommand(options: ServeOptions): Promise<void> {
     process.stdout.write(
       [
         "No llama.cpp server binary found and it could not be downloaded automatically.",
-        "Set TRAYAMBAK_LLAMACPP_BIN to a prebuilt 'server.exe' / 'llama-server' from llama.cpp, for example:",
-        "  set TRAYAMBAK_LLAMACPP_BIN=C:\\path\\to\\llama-server.exe",
-        "Then run: trayambak serve --model /path/to/model.gguf --port 8080",
+        "Set NEMO_LLAMACPP_BIN to a prebuilt 'server.exe' / 'llama-server' from llama.cpp, for example:",
+        "  set NEMO_LLAMACPP_BIN=C:\\path\\to\\llama-server.exe",
+        "Then run: nemo serve --model /path/to/model.gguf --port 8080",
         "",
-        "Or start llama.cpp yourself and point trayambak at it:",
-        `  trayambak config set baseUrl http://localhost:${options.port ?? 8080}`,
+        "Or start llama.cpp yourself and point nemo at it:",
+        `  nemo config set baseUrl http://localhost:${options.port ?? 8080}`,
       ].join("\n") + "\n",
     )
     return

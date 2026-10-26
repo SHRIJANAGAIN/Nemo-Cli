@@ -1,25 +1,27 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Transcript row for a subagent ("task") card — SKT AI LABS's task part rendered as
+ * Transcript row for a subagent ("task") card — Shrijan's task part rendered as
  * one Ink row: title line with badges, a live status line (spinner while
  * running, toolcall counts, wall time), and the result/error when finished.
  */
 
-import React, { type ReactNode, useEffect, useState } from "react"
+import React, { type ReactNode } from "react"
 import { Box, Text } from "ink"
 import { Spinner } from "./Spinner.js"
-import type { TrayambakMessage } from "./types.js"
+import type { NemoMessage } from "./types.js"
 import { formatSubagentToolcalls, formatCompletedSubagentDetail } from "./types.js"
 import { useThemeColors } from "./themeColors.js"
+import { useTicker } from "./use-animation-clock.js"
+import { sliceByWidth } from "./utils/stringWidth.js"
 import { g } from "./glyphs.js"
 
 export interface SubagentRowProps {
-  message: TrayambakMessage
+  message: NemoMessage
 }
 
 const MAX_DETAIL_CHARS = 2000
@@ -31,15 +33,13 @@ export const SubagentRow = ({ message }: SubagentRowProps): ReactNode => {
   const toolCalls = message.subagentToolCalls ?? 0
 
   // Live wall-time: without a tick `· Ns` froze at the first render while
-  // running (the child Spinner's interval doesn't re-render THIS row), so
-  // the card looked stuck despite spinning. Tick 1s while running only —
-  // finished cards stay still (Static-safe).
-  const [, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (state !== "running") return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [state])
+  // running (the child Spinner's interval doesn't re-render THIS row), so the
+  // card looked stuck despite spinning. Ticks on the SHARED clock, and only
+  // while running — finished cards stay still (Static-safe) and pay for no
+  // timer at all. `useTicker` rather than `useAnimationClock` because `Ns` is
+  // a real duration: `NEMO_MOTION=off` may stop decoration, but it must
+  // not leave a running card stuck at "0s".
+  useTicker(1000, state === "running")
 
   const durationMs = message.subagentDurationMs ?? Math.max(0, Date.now() - message.timestamp)
   const sec = Math.floor(durationMs / 1000)
@@ -48,7 +48,9 @@ export const SubagentRow = ({ message }: SubagentRowProps): ReactNode => {
   const statusIcon = state === "completed" ? g("dot") : state === "error" ? g("fail") : ""
 
   const detail = (message.subagentDetail ?? "").trim()
-  const shownDetail = detail.length > MAX_DETAIL_CHARS ? `${detail.slice(0, MAX_DETAIL_CHARS)}…` : detail
+  // Cells, not UTF-16 units: `.slice` split a combining mark from its base and
+  // an emoji from its ZWJ, leaving a stray glyph at the cut.
+  const shownDetail = detail.length > MAX_DETAIL_CHARS ? `${sliceByWidth(detail, MAX_DETAIL_CHARS)}…` : detail
 
   return (
     <Box flexDirection="column" marginTop={1} marginLeft={1}>

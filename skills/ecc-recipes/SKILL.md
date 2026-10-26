@@ -47,11 +47,11 @@ Resolve the commands directory (first that exists), then list names:
 
 ```bash
 for D in \
-  "$HOME"/.trayambak/plugins/marketplaces/ecc/commands \
-  "$HOME"/.trayambak/plugins/cache/ecc/ecc/*/commands \
+  "$HOME"/.nemo/plugins/marketplaces/ecc/commands \
+  "$HOME"/.nemo/plugins/cache/ecc/ecc/*/commands \
   ./commands \
-  ./.trayambak/commands \
-  "$HOME"/.trayambak/commands; do
+  ./.nemo/commands \
+  "$HOME"/.nemo/commands; do
   [ -d "$D" ] && CMD_DIR="$D" && break
 done
 [ -z "${CMD_DIR:-}" ] && { echo "No ECC commands directory found."; return 1; }

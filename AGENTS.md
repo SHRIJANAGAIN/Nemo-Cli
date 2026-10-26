@@ -1,11 +1,11 @@
-# trayambak - Development Rules
+# nemo - Development Rules
 
 ## Branding
 
-- All source files must begin with the SKT AI LABS copyright header, and the
-  project is licensed under the **Trayambak CLI Proprietary License** (see
+- All source files must begin with the Apache-2.0 header, and the
+  project is licensed under the **Apache License 2.0** (see
   `LICENSE`).
-- Refer to the project as **trayambak**; do not reuse names or strings from third-party agent projects.
+- Refer to the project as **nemo**; do not reuse names or strings from third-party agent projects.
 
 ## Code Style
 
@@ -18,9 +18,9 @@
 
 - `apps/cli` is the CLI entry (subcommands, flags, session commands);
   `apps/runtime` holds the config loader, agent loop, tools, prompts, and
-  auto-update; `apps/trayambak` re-exports the runtime as a library.
+  auto-update; `apps/nemo` re-exports the runtime as a library.
 - `packages/protocol` shared types, `packages/provider` provider adapters
-  (llama.cpp/NVIDIA/NVIDIA NIM/OpenAI/Anthropic/Google/xAI/Hugging Face/Ollama/custom),
+  (NVIDIA/NVIDIA NIM/Ollama/llama.cpp/custom),
   `packages/tui` rendering (the Ink UI lives in `packages/tui/src/ink-app`),
   `packages/session-backends` transcripts, `packages/mcp` + `packages/mcp-server`
   MCP client/server, `packages/acp`, `packages/server`.
@@ -44,14 +44,14 @@
   decision point for whether a run is `policy-only` or `os-sandbox`,
   `spawn.ts` implements the seatbelt/bubblewrap spawners, and
   `execpolicy` implements the deny-first command policy.
-- `skt/` numbered internal subsystems (mistake memory, evals, memory, control,
+- `nemo/` numbered internal subsystems (mistake memory, evals, memory, control,
   healing, hooks).
 - `assets/agents/*`: bundled specialist subagent personas for architecture,
   language-specific code review, build resolution, security auditing, and
   refactoring.
-- Parallel multi-agent workflows: `trayambak__ParallelReview` (multi-dimension
+- Parallel multi-agent workflows: `nemo__ParallelReview` (multi-dimension
   parallel review with evidence deduplication & adversarial verification) and
-  `trayambak__ParallelExecute` (collaborative parallel execution).
+  `nemo__ParallelExecute` (collaborative parallel execution).
 
 ## Security Model
 
@@ -76,7 +76,7 @@
   `prev_hash` kept inside the canonical body so reordering breaks linkage.
   `verifyChain()` reports which link broke and why.
 - **Secrets.** `secrets.ts` centralises redaction before hooks, audit,
-  analytics, and telemetry, and writes credentials `0600` via an atomic
+  and analytics, and writes credentials `0600` via an atomic
   temp-file rename. `logout()` clears without unlinking, so it never becomes
   a path-existence oracle.
 
@@ -88,13 +88,13 @@
 - `npx vitest run` (or `npm test`) runs all tests.
 - Run the CLI from the compiled output: `node dist/apps/cli/src/index.js`
   (e.g. `node dist/apps/cli/src/index.js --help`). With the shims installed
-  (`node scripts/install-global.js`), `trayambak` / `skt` work directly.
+  (`node scripts/install-global.js`), `nemo` / `nemo` work directly.
 
 ## Testing
 
 - **Harness**: tests use real `Agent` construction, fake HTTP provider stubs
   (local `http.createServer`), in-memory transcript backends, and
-  deterministic temp directories. There is no `TestTrayambakBuilder`; use
+  deterministic temp directories. There is no `TestNemoBuilder`; use
   `packages/provider/src/providers.test.ts` patterns (fake server + stub
   responses) for model-free tests.
 - **Coverage**: measured from `npm run test:coverage`. Current ratchets

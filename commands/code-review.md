@@ -102,8 +102,8 @@ If PR not found, stop with error. Store PR metadata for later phases.
 
 Build review context:
 
-1. **Project rules** — Read `TRAYAMBAK.md`, `.trayambak/docs/`, and any contributing guidelines
-2. **Planning artifacts** — Check `.trayambak/prds/`, `.trayambak/plans/`, `.trayambak/reviews/`, and legacy `.trayambak/PRPs/{prds,plans,reports,reviews}/` for context related to this PR
+1. **Project rules** — Read `NEMO.md`, `.nemo/docs/`, and any contributing guidelines
+2. **Planning artifacts** — Check `.nemo/prds/`, `.nemo/plans/`, `.nemo/reviews/`, and legacy `.nemo/PRPs/{prds,plans,reports,reviews}/` for context related to this PR
 3. **PR intent** — Parse PR description for goals, linked issues, test plans
 4. **Changed files** — List all modified files and categorize by type (source, test, config, docs)
 
@@ -198,7 +198,7 @@ Special cases:
 
 ### Phase 6 — REPORT
 
-Create review artifact at `.trayambak/reviews/pr-<NUMBER>-review.md` unless the repo already uses legacy `.trayambak/PRPs/reviews/` for this workstream:
+Create review artifact at `.nemo/reviews/pr-<NUMBER>-review.md` unless the repo already uses legacy `.nemo/PRPs/reviews/` for this workstream:
 
 ```markdown
 # PR Review: #<NUMBER> — <TITLE>
@@ -291,7 +291,7 @@ Issues: <critical_count> critical, <high_count> high, <medium_count> medium, <lo
 Validation: <pass_count>/<total_count> checks passed
 
 Artifacts:
-  Review: .trayambak/reviews/pr-<NUMBER>-review.md
+  Review: .nemo/reviews/pr-<NUMBER>-review.md
   GitHub: <PR URL>
 
 Next steps:

@@ -1,11 +1,11 @@
-/* Theme-switch repaint smoke: boots the REAL TrayambakApp (dist) in a
+/* Theme-switch repaint smoke: boots the REAL NemoApp (dist) in a
  * sandbox, runs `/theme night-sky`, and asserts the frame actually repaints
  * in the new palette. Guards the subscription fix (useSyncExternalStore):
  * before it, setThemeByName() mutated a module global with no re-render,
  * so the "Theme switched" message posted while every color stayed stale.
  *
  * night-sky primary  #82aaff → ANSI 38;2;130;170;255 must appear in frames
- * written AFTER the switch (trayambak-dark primary is 108;182;245).
+ * written AFTER the switch (nemo-dark primary is 108;182;245).
  * Also asserts the /themes marker tracks the LIVE theme, not boot config.
  *
  * FORCE_COLOR=3 is set BEFORE ink/chalk load: on a piped stdout chalk's
@@ -18,7 +18,7 @@
 process.env.FORCE_COLOR = "3"
 // Pin Unicode glyphs: the app auto-selects ASCII on plain Windows consoles,
 // which would render the live-theme dot as `*` instead of `●` here.
-process.env.TRAYAMBAK_GLYPHS = "unicode"
+process.env.NEMO_GLYPHS = "unicode"
 import { PassThrough } from "node:stream"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import fs from "node:fs"
@@ -29,10 +29,10 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.join(here, "..")
 const distEsm = pathToFileURL(path.join(repo, "dist", "packages", "tui", "src", "ink-app-esm")).href
 
-const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-theme-"))
-fs.mkdirSync(path.join(sandbox, "skt", "8-conversations"), { recursive: true })
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-theme-"))
+fs.mkdirSync(path.join(sandbox, "nemo", "8-conversations"), { recursive: true })
 fs.writeFileSync(path.join(sandbox, "package.json"), JSON.stringify({ name: "theme-smoke" }))
-process.env.TRAYAMBAK_HOME = sandbox
+process.env.NEMO_HOME = sandbox
 
 const stdin = new PassThrough()
 stdin.isTTY = true
@@ -54,7 +54,7 @@ const sanitizedStdin = createSanitizedStdin(stdin)
 
 const React = (await import("react")).default
 const { render } = await import("ink")
-const { TrayambakApp } = await import(`${distEsm}/index.js`)
+const { NemoApp } = await import(`${distEsm}/index.js`)
 
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\x1b\][^\x07]*\x07/g, "")
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -70,9 +70,9 @@ const check = (ok, label) => {
 }
 
 const instance = render(
-  React.createElement(TrayambakApp, {
+  React.createElement(NemoApp, {
     config: {
-      themeName: "trayambak-dark", // skip ThemePicker
+      themeName: "nemo-dark", // skip ThemePicker
       baseUrl: "http://127.0.0.1:9/api", // unroutable — no network ever needed
       apiKey: "test-key",
       model: "test/model",

@@ -7,7 +7,7 @@ metadata:
 
 # Open-Source Pipeline Skill
 
-Safely open-source any project through a 3-stage pipeline: **Fork** (strip secrets) → **Sanitize** (verify clean) → **Package** (TRAYAMBAK.md + setup.sh + README).
+Safely open-source any project through a 3-stage pipeline: **Fork** (strip secrets) → **Sanitize** (verify clean) → **Package** (NEMO.md + setup.sh + README).
 
 ## When to Activate
 
@@ -22,7 +22,7 @@ Safely open-source any project through a 3-stage pipeline: **Fork** (strip secre
 | ----------------------------- | ----------------------------------------- |
 | `/opensource fork PROJECT`    | Full pipeline: fork + sanitize + package  |
 | `/opensource verify PROJECT`  | Run sanitizer on existing repo            |
-| `/opensource package PROJECT` | Generate TRAYAMBAK.md + setup.sh + README |
+| `/opensource package PROJECT` | Generate NEMO.md + setup.sh + README |
 | `/opensource list`            | Show all staged projects                  |
 | `/opensource status PROJECT`  | Show reports for a staged project         |
 
@@ -137,7 +137,7 @@ Description: {description}
 GitHub repo: {github_repo}
 
 Generate:
-1. TRAYAMBAK.md (commands, architecture, key files)
+1. NEMO.md (commands, architecture, key files)
 2. setup.sh (one-command bootstrap, make executable)
 3. README.md (or enhance existing)
 4. LICENSE
@@ -157,7 +157,7 @@ Open-Source Fork Ready: {PROJECT_NAME}
 Location: {STAGING_PATH}
 License: {license}
 Files generated:
-  - TRAYAMBAK.md
+  - NEMO.md
   - setup.sh (executable)
   - README.md
   - LICENSE
@@ -215,7 +215,7 @@ Agent(
 ls -d $HOME/opensource-staging/*/
 ```
 
-Show each project with pipeline progress (FORK_REPORT.md, SANITIZATION_REPORT.md, TRAYAMBAK.md presence).
+Show each project with pipeline progress (FORK_REPORT.md, SANITIZATION_REPORT.md, NEMO.md presence).
 
 ---
 
@@ -233,7 +233,7 @@ $HOME/opensource-staging/
   my-project/
     FORK_REPORT.md           # From forker agent
     SANITIZATION_REPORT.md   # From sanitizer agent
-    TRAYAMBAK.md                # From packager agent
+    NEMO.md                # From packager agent
     setup.sh                 # From packager agent
     README.md                # From packager agent
     .env.example             # From forker agent

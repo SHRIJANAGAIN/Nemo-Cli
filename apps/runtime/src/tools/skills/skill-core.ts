@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -36,9 +36,9 @@ export const SKIPPED_SKILL_DIRS = new Set([
 export function defaultSkillsDir(): string {
   const projectSkills = path.join(process.cwd(), "skills")
   if (fs.existsSync(projectSkills)) return projectSkills
-  const local = path.join(process.cwd(), ".trayambak", "skills")
+  const local = path.join(process.cwd(), ".nemo", "skills")
   if (fs.existsSync(local)) return local
-  return path.join(os.homedir(), ".trayambak", "skills")
+  return path.join(os.homedir(), ".nemo", "skills")
 }
 
 /** Bundled skills shipped inside the install (dist/assets/skills in

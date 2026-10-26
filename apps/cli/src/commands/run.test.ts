@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -60,24 +60,21 @@ describe("runCommand headless fallback", () => {
   })
 })
 
-describe("listModelNames google auth (#70)", () => {
-  it("sends the key as x-goog-api-key, never in the query string", async () => {
+describe("listModelNames ollama list", () => {
+  it("uses the Ollama-native /api/tags endpoint instead of /v1/models", async () => {
     let seenUrl = ""
-    let seenKey: string | string[] | undefined
     const server = http.createServer((req, res) => {
       seenUrl = req.url ?? ""
-      seenKey = req.headers["x-goog-api-key"]
       res.writeHead(200, { "Content-Type": "application/json" })
-      res.end(JSON.stringify({ models: [{ name: "models/gemini-2.5-flash" }] }))
+      res.end(JSON.stringify({ models: [{ name: "llama3.1:latest" }, { name: "qwen2.5-coder" }] }))
     })
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r))
     const port = (server.address() as AddressInfo).port
     try {
-      const names = await listModelNames(`http://127.0.0.1:${port}/v1beta`, "sekrit", "google")
-      expect(names).toContain("gemini-2.5-flash")
-      expect(seenKey).toBe("sekrit")
-      expect(seenUrl).toBe("/v1beta/models")
-      expect(seenUrl).not.toContain("key=")
+      const names = await listModelNames(`http://127.0.0.1:${port}`, "", "ollama")
+      expect(names).toContain("llama3.1:latest")
+      expect(names).toContain("qwen2.5-coder")
+      expect(seenUrl).toBe("/api/tags")
     } finally {
       server.close()
     }

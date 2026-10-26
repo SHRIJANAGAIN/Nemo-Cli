@@ -1,15 +1,15 @@
 # Web — local HTTP agent API
 
-`trayambak web` starts a small JSON/SSE server that exposes the agent over
+`nemo web` starts a small JSON/SSE server that exposes the agent over
 HTTP on your machine. Source: `packages/server/src/index.ts`.
 
 ## Starting it
 
 ```sh
-trayambak web                      # http://127.0.0.1:8787
-trayambak web --port 9000          # custom port
-trayambak web --host 127.0.0.1     # default host; loopback only
-trayambak web --token mysecret     # require Authorization: Bearer mysecret
+nemo web                      # http://127.0.0.1:8787
+nemo web --port 9000          # custom port
+nemo web --host 127.0.0.1     # default host; loopback only
+nemo web --token mysecret     # require Authorization: Bearer mysecret
 ```
 
 The process stays in the foreground until you stop it (the CLI keeps the event
@@ -17,17 +17,17 @@ loop alive after `listen`).
 
 | Input   | Where it comes from                                                                                                                |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Port    | `--port` → else **8787** (`TRAYAMBAK_SERVER_PORT` is read by `startServer()` when no port option is passed, e.g. library use)      |
+| Port    | `--port` → else **8787** (`NEMO_SERVER_PORT` is read by `startServer()` when no port option is passed, e.g. library use)      |
 | Host    | `--host` → else `127.0.0.1`                                                                                                        |
-| Token   | `--token` → else `TRAYAMBAK_WEB_TOKEN`                                                                                             |
-| Origins | `TRAYAMBAK_WEB_ORIGINS` (comma-separated extras; `*` re-allows all). Same-origin + loopback are always allowed — see [CORS](#cors) |
+| Token   | `--token` → else `NEMO_WEB_TOKEN`                                                                                             |
+| Origins | `NEMO_WEB_ORIGINS` (comma-separated extras; `*` re-allows all). Same-origin + loopback are always allowed — see [CORS](#cors) |
 
 ## Endpoints
 
 | Method + path       | Behaviour                                                                               |
 | ------------------- | --------------------------------------------------------------------------------------- |
 | `GET /health`       | `{"status":"ok","model":"<configured model>"}` — always `200`, never requires the token |
-| `GET /openapi.json` | OpenAPI 3.0 spec (`{"info":{"title":"Trayambak Agent API","version":"0.6.0"}}`)         |
+| `GET /openapi.json` | OpenAPI 3.0 spec (`{"info":{"title":"Nemo Agent API","version":"0.6.0"}}`)         |
 | `GET /v1/models`    | `{"data":[{"id":"<configured model>"}]}`                                                |
 | `GET /api/sessions` | `{"sessions":[…]}` — the transcript index (see [Sessions](sessions.md))                 |
 | `POST /v1/agent`    | Runs the agent, streams **SSE** events                                                  |
@@ -56,16 +56,16 @@ curl -N http://127.0.0.1:8787/v1/agent \
 ## Authentication
 
 ```sh
-set TRAYAMBAK_WEB_TOKEN=mysecret
-trayambak web
+set NEMO_WEB_TOKEN=mysecret
+nemo web
 curl http://127.0.0.1:8787/v1/models -H "Authorization: Bearer mysecret"
 ```
 
 - **A bearer token always exists.** Pass `--token` (or set
-  `TRAYAMBAK_WEB_TOKEN`); when neither is given the server generates a strong
+  `NEMO_WEB_TOKEN`); when neither is given the server generates a strong
   random token for the process and prints it once at startup
   (`generated bearer token …`) — on loopback binds too. There is no
-  token-less mode: a default `skt web` used to serve the agent API, the
+  token-less mode: a default `nemo web` used to serve the agent API, the
   session index and the license-admin tooling to any local process with no
   auth at all.
 - With that token, **every route except `/health` and the documented public
@@ -75,10 +75,10 @@ curl http://127.0.0.1:8787/v1/models -H "Authorization: Bearer mysecret"
   `401 {"error":"unauthorized"}`. `/github/*` is bearer-gated on top of the
   stored GitHub login (OAuth alone is not enough).
 - `/v1/agent` additionally caps each run with a server-side timeout
-  (`TRAYAMBAK_AGENT_TIMEOUT_MS`, default 120s, clamped 5s–10min) so a model
+  (`NEMO_AGENT_TIMEOUT_MS`, default 120s, clamped 5s–10min) so a model
   call that never settles cannot hold the socket open forever, and only
   accepts a `sessionFile` inside the transcript store
-  (`~/.trayambak/sessions/…`) — anything else is `400`.
+  (`~/.nemo/sessions/…`) — anything else is `400`.
 
 ## CORS
 
@@ -106,23 +106,22 @@ Allowed means **any one** of:
 1. no `Origin` header at all — not a browser (`curl`, the node client, the CLI);
 2. same-origin — the origin's `host:port` equals the request's `Host`;
 3. a loopback origin — `localhost`, `127.0.0.1` or `[::1]` over
-   `http`/`https`, on any port (local dev servers, a second trayambak);
-4. an explicit entry in `TRAYAMBAK_WEB_ORIGINS` (comma-separated, exact
+   `http`/`https`, on any port (local dev servers, a second nemo);
+4. an explicit entry in `NEMO_WEB_ORIGINS` (comma-separated, exact
    origin match — no prefixes, no wildcards within an entry).
 
 Anything else is **refused server-side with `403 {"error":"origin not
 allowed"}`** before routing, and `OPTIONS` preflight answers `403` instead of
-`204`. `TRAYAMBAK_WEB_ORIGINS=*` restores the permissive wildcard if you
+`204`. `NEMO_WEB_ORIGINS=*` restores the permissive wildcard if you
 genuinely need it. `file://`, `chrome-extension://` and other non-http origins
 are always refused.
 
 ## What it runs on
 
 Each `POST /v1/agent` builds an `Agent` from your normal `loadConfig()` — same
-provider, tools, permissions, and sandbox as the CLI — and captures events
-into the telemetry sink created with `createTelemetry(false)`, which is a
-`NullTelemetry` (nothing is recorded by default). See
-[Security](security.md).
+provider, tools, permissions, and sandbox as the CLI — and streams the agent
+events straight back to the caller. There is no telemetry sink: nothing is
+recorded on the way. See [Security](security.md).
 
 ## Example: script against the API
 
@@ -131,12 +130,12 @@ into the telemetry sink created with `createTelemetry(false)`, which is a
 curl http://127.0.0.1:8787/health
 
 # 2. what sessions exist?
-curl http://127.0.0.1:8787/api/sessions -H "Authorization: Bearer $TRAYAMBAK_WEB_TOKEN"
+curl http://127.0.0.1:8787/api/sessions -H "Authorization: Bearer $NEMO_WEB_TOKEN"
 
 # 3. run one prompt, print the SSE stream
 curl -N http://127.0.0.1:8787/v1/agent \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TRAYAMBAK_WEB_TOKEN" \
+  -H "Authorization: Bearer $NEMO_WEB_TOKEN" \
   -d '{"prompt":"run the test suite and summarise failures"}'
 ```
 

@@ -70,25 +70,25 @@ jobs:
       - name: Install ceo-audit skill
         run: |
           # sin-code-bundle does not yet ship the skill scripts.
-          # Clone the SSOT (Infra-SIN-Trayambak-Stack) to get audit.sh + axis scripts.
-          git clone --depth 1 --branch main https://github.com/OpenSIN-Code/Infra-SIN-Trayambak-Stack.git ${{ github.workspace }}/infra
-          mkdir -p ~/.config/trayambak/skills/ceo-audit
-          cp -r ${{ github.workspace }}/infra/skills/ceo-audit/scripts ~/.config/trayambak/skills/ceo-audit/
-          cp -r ${{ github.workspace }}/infra/skills/ceo-audit/lib ~/.config/trayambak/skills/ceo-audit/
-          chmod +x ~/.config/trayambak/skills/ceo-audit/scripts/audit.sh
-          ls ~/.config/trayambak/skills/ceo-audit/scripts/audit.sh
+          # Clone the SSOT (Infra-SIN-Nemo-Stack) to get audit.sh + axis scripts.
+          git clone --depth 1 --branch main https://github.com/OpenSIN-Code/Infra-SIN-Nemo-Stack.git ${{ github.workspace }}/infra
+          mkdir -p ~/.config/nemo/skills/ceo-audit
+          cp -r ${{ github.workspace }}/infra/skills/ceo-audit/scripts ~/.config/nemo/skills/ceo-audit/
+          cp -r ${{ github.workspace }}/infra/skills/ceo-audit/lib ~/.config/nemo/skills/ceo-audit/
+          chmod +x ~/.config/nemo/skills/ceo-audit/scripts/audit.sh
+          ls ~/.config/nemo/skills/ceo-audit/scripts/audit.sh
 
       - name: Locate audit.sh on PATH
         id: locate
         run: |
           # After 'pip install sin-code-bundle[ceo-audit,dev]', audit.sh is
           # shipped at <site-packages>/sin_code_bundle/resources/ceo-audit/scripts/audit.sh.
-          # We also accept a git-clone of the skill to ~/.config/trayambak/skills/.
+          # We also accept a git-clone of the skill to ~/.config/nemo/skills/.
           SITE_PKG_SCRIPT=$(python3 -c "import sin_code_bundle, os; root=os.path.dirname(sin_code_bundle.__file__); p=os.path.join(root,'resources','ceo-audit','scripts','audit.sh'); print(p if os.path.isfile(p) else '')" 2>/dev/null)
           if [ -n "$SITE_PKG_SCRIPT" ] && [ -f "$SITE_PKG_SCRIPT" ]; then
             echo "script=$SITE_PKG_SCRIPT" >> $GITHUB_OUTPUT
-          elif [ -f ~/.config/trayambak/skills/ceo-audit/scripts/audit.sh ]; then
-            echo "script=~/.config/trayambak/skills/ceo-audit/scripts/audit.sh" >> $GITHUB_OUTPUT
+          elif [ -f ~/.config/nemo/skills/ceo-audit/scripts/audit.sh ]; then
+            echo "script=~/.config/nemo/skills/ceo-audit/scripts/audit.sh" >> $GITHUB_OUTPUT
           else
             echo '::error::Could not locate audit.sh (not in site-packages, not on disk)'
             exit 1
@@ -163,7 +163,7 @@ jobs:
             📥 [Download full report (Markdown)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)
             📊 [Download SARIF (for Code Scanning)](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts)
 
-            > Run `${{ env.AUDIT_PROFILE == 'FULL' && '~/.config/trayambak/skills/ceo-audit/scripts/audit.sh . --profile=FULL' || '~/.config/trayambak/skills/ceo-audit/scripts/audit.sh . --profile=QUICK' }}` locally to reproduce.
+            > Run `${{ env.AUDIT_PROFILE == 'FULL' && '~/.config/nemo/skills/ceo-audit/scripts/audit.sh . --profile=FULL' || '~/.config/nemo/skills/ceo-audit/scripts/audit.sh . --profile=QUICK' }}` locally to reproduce.
 
       - name: Post official audit comment (SIN-GitHub-Issues App)
         if: github.event_name == 'pull_request' && always()

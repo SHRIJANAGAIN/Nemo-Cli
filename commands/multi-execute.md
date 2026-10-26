@@ -1,12 +1,12 @@
 ---
-description: Execute a multi-model implementation plan while preserving Trayambak as the only filesystem writer.
+description: Execute a multi-model implementation plan while preserving Nemo as the only filesystem writer.
 ---
 
 # Execute - Multi-Model Collaborative Execution
 
-Multi-model collaborative execution - Get prototype from plan → Trayambak refactors and implements → Multi-model audit and delivery.
+Multi-model collaborative execution - Get prototype from plan → Nemo refactors and implements → Multi-model audit and delivery.
 
-> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.trayambak/bin/codeagent-wrapper` and the `~/.trayambak/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
+> **Prerequisite:** Requires the external `ccg-workflow` runtime, which is **not** part of the base ECC install. Initialize it with `npx ccg-workflow` to provision `~/.nemo/bin/codeagent-wrapper` and the `~/.nemo/.ccg/prompts/*` role files this command depends on. Without that runtime, this command will not run correctly.
 
 $ARGUMENTS
 
@@ -15,8 +15,8 @@ $ARGUMENTS
 ## Core Protocols
 
 - **Language Protocol**: Use **English** when interacting with tools/models, communicate with user in their language
-- **Code Sovereignty**: External models have **zero filesystem write access**, all modifications by Trayambak
-- **Dirty Prototype Refactoring**: Treat Trayambak Code/Antigravity Unified Diff as "dirty prototype", must refactor to production-grade code
+- **Code Sovereignty**: External models have **zero filesystem write access**, all modifications by Nemo
+- **Dirty Prototype Refactoring**: Treat Nemo Code/Antigravity Unified Diff as "dirty prototype", must refactor to production-grade code
 - **Stop-Loss Mechanism**: Do not proceed to next phase until current phase output is validated
 - **Prerequisite**: Only execute after user explicitly replies "Y" to `/ccg:plan` output (if missing, must confirm first)
 
@@ -29,7 +29,7 @@ $ARGUMENTS
 ```
 # Resume session call (recommended) - Implementation Prototype
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <trayambak|antigravity> resume <SESSION_ID> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <nemo|antigravity> resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <task description>
@@ -44,7 +44,7 @@ EOF",
 
 # New session call - Implementation Prototype
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <trayambak|antigravity> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <nemo|antigravity> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Requirement: <task description>
@@ -62,7 +62,7 @@ EOF",
 
 ```
 Bash({
-  command: "~/.trayambak/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <trayambak|antigravity> resume <SESSION_ID> - \"$PWD\" <<'EOF'
+  command: "~/.nemo/bin/codeagent-wrapper {{LITE_MODE_FLAG}}--backend <nemo|antigravity> resume <SESSION_ID> - \"$PWD\" <<'EOF'
 ROLE_FILE: <role prompt path>
 <TASK>
 Scope: Audit the final code changes.
@@ -85,14 +85,14 @@ EOF",
 
 **Model Parameter Notes**:
 
-- No extra model flag is needed for `--backend antigravity` or `--backend trayambak`; `codeagent-wrapper` picks each backend's default model.
+- No extra model flag is needed for `--backend antigravity` or `--backend nemo`; `codeagent-wrapper` picks each backend's default model.
 
 **Role Prompts**:
 
-| Phase          | Trayambak Code                                     | Antigravity                                         |
+| Phase          | Nemo Code                                     | Antigravity                                         |
 | -------------- | -------------------------------------------------- | --------------------------------------------------- |
-| Implementation | `~/.trayambak/.ccg/prompts/trayambak/architect.md` | `~/.trayambak/.ccg/prompts/antigravity/frontend.md` |
-| Review         | `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`  | `~/.trayambak/.ccg/prompts/antigravity/reviewer.md` |
+| Implementation | `~/.nemo/.ccg/prompts/nemo/architect.md` | `~/.nemo/.ccg/prompts/antigravity/frontend.md` |
+| Review         | `~/.nemo/.ccg/prompts/nemo/reviewer.md`  | `~/.nemo/.ccg/prompts/antigravity/reviewer.md` |
 
 **Session Reuse**: If `/ccg:plan` provided SESSION_ID, use `resume <SESSION_ID>` to reuse context.
 
@@ -119,7 +119,7 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
 `[Mode: Prepare]`
 
 1. **Identify Input Type**:
-   - Plan file path (e.g., `.trayambak/plan/xxx.md`)
+   - Plan file path (e.g., `.nemo/plan/xxx.md`)
    - Direct task description
 
 2. **Read Plan Content**:
@@ -135,8 +135,8 @@ TaskOutput({ task_id: "<task_id>", block: true, timeout: 600000 })
    | Task Type     | Detection                                    | Route                                 |
    | ------------- | -------------------------------------------- | ------------------------------------- |
    | **Frontend**  | Pages, components, UI, styles, layout        | Antigravity                           |
-   | **Backend**   | API, interfaces, database, logic, algorithms | Trayambak Code                        |
-   | **Fullstack** | Contains both frontend and backend           | Trayambak Code ∥ Antigravity parallel |
+   | **Backend**   | API, interfaces, database, logic, algorithms | Nemo Code                        |
+   | **Fullstack** | Contains both frontend and backend           | Nemo Code ∥ Antigravity parallel |
 
 ---
 
@@ -161,7 +161,7 @@ mcp__ace-tool__search_context({
 - Build semantic query covering: entry files, dependency modules, related type definitions
 - If results insufficient, add 1-2 recursive retrievals
 
-**If ace-tool MCP is NOT available**, use Trayambak Code built-in tools as fallback:
+**If ace-tool MCP is NOT available**, use Nemo Code built-in tools as fallback:
 
 1. **Glob**: Find target files from plan's "Key Files" table (e.g., `Glob("src/components/**/*.tsx")`)
 2. **Grep**: Search for key symbols, function names, type definitions across the codebase
@@ -186,26 +186,26 @@ mcp__ace-tool__search_context({
 
 **Limit**: Context < 32k tokens
 
-1. Call Antigravity (use `~/.trayambak/.ccg/prompts/antigravity/frontend.md`)
+1. Call Antigravity (use `~/.nemo/.ccg/prompts/antigravity/frontend.md`)
 2. Input: Plan content + retrieved context + target files
 3. OUTPUT: `Unified Diff Patch ONLY. Strictly prohibit any actual modifications.`
 4. **Antigravity is frontend design authority, its CSS/React/Vue prototype is the final visual baseline**
 5. **WARNING**: Ignore Antigravity's backend logic suggestions
 6. If plan contains `ANTIGRAVITY_SESSION`: prefer `resume <ANTIGRAVITY_SESSION>`
 
-#### Route B: Backend/Logic/Algorithms → Trayambak Code
+#### Route B: Backend/Logic/Algorithms → Nemo Code
 
-1. Call Trayambak Code (use `~/.trayambak/.ccg/prompts/trayambak/architect.md`)
+1. Call Nemo Code (use `~/.nemo/.ccg/prompts/nemo/architect.md`)
 2. Input: Plan content + retrieved context + target files
 3. OUTPUT: `Unified Diff Patch ONLY. Strictly prohibit any actual modifications.`
-4. **Trayambak Code is backend logic authority, leverage its logical reasoning and debug capabilities**
-5. If plan contains `TRAYAMBAK_SESSION`: prefer `resume <TRAYAMBAK_SESSION>`
+4. **Nemo Code is backend logic authority, leverage its logical reasoning and debug capabilities**
+5. If plan contains `NEMO_SESSION`: prefer `resume <NEMO_SESSION>`
 
 #### Route C: Fullstack → Parallel Calls
 
 1. **Parallel Calls** (`run_in_background: true`):
    - Antigravity: Handle frontend part
-   - Trayambak Code: Handle backend part
+   - Nemo Code: Handle backend part
 2. Wait for both models' complete results with `TaskOutput`
 3. Each uses corresponding `SESSION_ID` from plan for `resume` (create new session if missing)
 
@@ -217,9 +217,9 @@ mcp__ace-tool__search_context({
 
 `[Mode: Implement]`
 
-**Trayambak as Code Sovereign executes the following steps**:
+**Nemo as Code Sovereign executes the following steps**:
 
-1. **Read Diff**: Parse Unified Diff Patch returned by Trayambak Code/Antigravity
+1. **Read Diff**: Parse Unified Diff Patch returned by Nemo Code/Antigravity
 
 2. **Mental Sandbox**:
    - Simulate applying Diff to target files
@@ -253,15 +253,15 @@ mcp__ace-tool__search_context({
 
 #### 5.1 Automatic Audit
 
-**After changes take effect, MUST immediately parallel call** Trayambak Code and Antigravity for Code Review:
+**After changes take effect, MUST immediately parallel call** Nemo Code and Antigravity for Code Review:
 
-1. **Trayambak Code Review** (`run_in_background: true`):
-   - ROLE_FILE: `~/.trayambak/.ccg/prompts/trayambak/reviewer.md`
+1. **Nemo Code Review** (`run_in_background: true`):
+   - ROLE_FILE: `~/.nemo/.ccg/prompts/nemo/reviewer.md`
    - Input: Changed Diff + target files
    - Focus: Security, performance, error handling, logic correctness
 
 2. **Antigravity Review** (`run_in_background: true`):
-   - ROLE_FILE: `~/.trayambak/.ccg/prompts/antigravity/reviewer.md`
+   - ROLE_FILE: `~/.nemo/.ccg/prompts/antigravity/reviewer.md`
    - Input: Changed Diff + target files
    - Focus: Accessibility, design consistency, user experience
 
@@ -269,8 +269,8 @@ Wait for both models' complete review results with `TaskOutput`. Prefer reusing 
 
 #### 5.2 Integrate and Fix
 
-1. Synthesize Trayambak Code + Antigravity review feedback
-2. Weigh by trust rules: Backend follows Trayambak Code, Frontend follows Antigravity
+1. Synthesize Nemo Code + Antigravity review feedback
+2. Weigh by trust rules: Backend follows Nemo Code, Frontend follows Antigravity
 3. Execute necessary fixes
 4. Repeat Phase 5.1 as needed (until risk is acceptable)
 
@@ -289,7 +289,7 @@ After audit passes, report to user:
 
 ### Audit Results
 
-- Trayambak Code: <Passed/Found N issues>
+- Nemo Code: <Passed/Found N issues>
 - Antigravity: <Passed/Found N issues>
 
 ### Recommendations
@@ -302,9 +302,9 @@ After audit passes, report to user:
 
 ## Key Rules
 
-1. **Code Sovereignty** – All file modifications by Trayambak, external models have zero write access
-2. **Dirty Prototype Refactoring** – Trayambak Code/Antigravity output treated as draft, must refactor
-3. **Trust Rules** – Backend follows Trayambak Code, Frontend follows Antigravity
+1. **Code Sovereignty** – All file modifications by Nemo, external models have zero write access
+2. **Dirty Prototype Refactoring** – Nemo Code/Antigravity output treated as draft, must refactor
+3. **Trust Rules** – Backend follows Nemo Code, Frontend follows Antigravity
 4. **Minimal Changes** – Only modify necessary code, no side effects
 5. **Mandatory Audit** – Must perform multi-model Code Review after changes
 
@@ -314,7 +314,7 @@ After audit passes, report to user:
 
 ```bash
 # Execute plan file
-/ccg:execute .trayambak/plan/feature-name.md
+/ccg:execute .nemo/plan/feature-name.md
 
 # Execute task directly (for plans already discussed in context)
 /ccg:execute implement user authentication based on previous plan

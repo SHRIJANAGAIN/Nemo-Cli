@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -14,8 +14,8 @@
  *    matches package.json. A build that cannot pass this check fails,
  *    so a stale/broken dist can never leave this script green.
  *
- * Deliberately NOT copied: skt/1-errors/mistakes.json — the mistake
- * journal is user state and now lives in ~/.trayambak/ (never in the
+ * Deliberately NOT copied: nemo/1-errors/mistakes.json — the mistake
+ * journal is user state and now lives in ~/.nemo/ (never in the
  * package or the user's project).
  */
 
@@ -72,9 +72,9 @@ function copyTreeAbs(src, dest) {
 }
 
 // --- 1. assets -----------------------------------------------------------
-copyFile("skt/5-eval/EVALR.MD", "skt/5-eval/EVALR.MD")
-copyFile("skt/5-eval/evals.json", "skt/5-eval/evals.json", { required: false })
-copyFile("skt/5-eval/EVALS.MD", "skt/5-eval/EVALS.MD", { required: false })
+copyFile("nemo/5-eval/EVALR.MD", "nemo/5-eval/EVALR.MD")
+copyFile("nemo/5-eval/evals.json", "nemo/5-eval/evals.json", { required: false })
+copyFile("nemo/5-eval/EVALS.MD", "nemo/5-eval/EVALS.MD", { required: false })
 copyFile("packages/tui/src/repl/ink-repl.mjs", "packages/tui/src/repl/ink-repl.mjs", { required: false })
 copyFile("packages/tui/src/ink-app/logo_ansi.txt", "packages/tui/src/ink-app/logo_ansi.txt", { required: false })
 copyFile("packages/tui/src/ink-app/logo_ansi.txt", "packages/tui/src/ink-app-esm/logo_ansi.txt", { required: false })

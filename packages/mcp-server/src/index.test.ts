@@ -1,11 +1,15 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as fs from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { PassThrough } from "node:stream"
 import { dispatchMcpServer, runMcpServer, clampMcpTimeout, type McpServerDeps } from "./index.js"
-import type { TrayambakConfig } from "../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../apps/runtime/src/config.js"
 import type { HookShellExecutor } from "../../../apps/runtime/src/tools/hook-exec.js"
 import { ExecDecision } from "../../../packages/execpolicy/src/policy.js"
 
@@ -82,8 +86,8 @@ function textOf(id: unknown): { text: string; isError: boolean } {
   }
 }
 
-function testConfig(cwd: string, extra?: Record<string, unknown>): TrayambakConfig {
-  return { cwd, ...(extra ?? {}) } as unknown as TrayambakConfig
+function testConfig(cwd: string, extra?: Record<string, unknown>): NemoConfig {
+  return { cwd, ...(extra ?? {}) } as unknown as NemoConfig
 }
 
 function denyExecutor(reason: string): HookShellExecutor {
@@ -122,6 +126,18 @@ describe("mcp-server dispatch", () => {
     const props = (bash?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {}
     expect(props).toHaveProperty("timeoutMs")
   })
+
+  it("marks non-executed tools as refused in their descriptions (no silent no-op)", async () => {
+    listen()
+    await dispatchMcpServer({ id: "schema2", method: "tools/list" }, { config: testConfig(os.tmpdir()) })
+    const parsed = replyFor("schema2")
+    const tools = (parsed.result as { tools?: Array<{ name?: string; description?: string }> })?.tools ?? []
+    for (const name of ["write_file", "grep", "glob"]) {
+      const tool = tools.find((t) => t.name === name)
+      expect(tool?.description).toMatch(/not executed via MCP/i)
+    }
+    expect(tools.find((t) => t.name === "bash")?.description).not.toMatch(/not executed/i)
+  })
 })
 
 describe("clampMcpTimeout", () => {
@@ -138,7 +154,7 @@ describe("clampMcpTimeout", () => {
 describe("bash gate (#32): deny rules are enforced without spawning", () => {
   it("refuses a legacy deny-listed command (audit repro shape)", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-deny-")
+    const cwd = freshDir("nemo-mcp-deny-")
     const cfg = testConfig(cwd, {
       permissions: { uiMode: "ask", rules: [{ tool: "bash", pattern: "rm -rf /", allow: false }] },
     })
@@ -159,7 +175,7 @@ describe("bash gate (#32): deny rules are enforced without spawning", () => {
 describe("bash gate: ask without an approver refuses", () => {
   it("refuses before execpolicy for an ask-gated command", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-ask-")
+    const cwd = freshDir("nemo-mcp-ask-")
     const cfg = testConfig(cwd, { permissions: { uiMode: "ask" } })
     const deps: McpServerDeps = {
       config: cfg,
@@ -176,14 +192,14 @@ describe("bash gate: ask without an approver refuses", () => {
 })
 
 describe("bash gate: execpolicy layer", () => {
-  const allowCfg = (cwd: string): TrayambakConfig =>
+  const allowCfg = (cwd: string): NemoConfig =>
     testConfig(cwd, {
       permissions: { uiMode: "ask", rulesV2: [{ tool: "bash", pattern: "*", action: "allow" }] },
     })
 
   it("refuses on execpolicy Deny after an approval allow", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-pol-")
+    const cwd = freshDir("nemo-mcp-pol-")
     const deps: McpServerDeps = {
       config: allowCfg(cwd),
       policyDecide: () => ExecDecision.Deny,
@@ -202,7 +218,7 @@ describe("bash gate: execpolicy layer", () => {
 
   it("refuses on execpolicy Ask (no interactive approver over MCP)", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-polask-")
+    const cwd = freshDir("nemo-mcp-polask-")
     const deps: McpServerDeps = {
       config: allowCfg(cwd),
       policyDecide: () => ExecDecision.Ask,
@@ -218,7 +234,7 @@ describe("bash gate: execpolicy layer", () => {
 
   it("enforces the timeout it advertises", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-timeout-")
+    const cwd = freshDir("nemo-mcp-timeout-")
     const sleep = process.platform === "win32" ? "timeout /t 3 /nobreak" : "sleep 3"
     const deps: McpServerDeps = {
       config: allowCfg(cwd),
@@ -237,7 +253,7 @@ describe("bash gate: execpolicy layer", () => {
 describe("bash gate: PreToolUse hooks run first", () => {
   it("a hook deny blocks before approval and execpolicy", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-hook-")
+    const cwd = freshDir("nemo-mcp-hook-")
     const cfg = testConfig(cwd, {
       permissions: { uiMode: "ask", rulesV2: [{ tool: "bash", pattern: "*", action: "allow" }] },
       hooks: { preToolUse: [{ hooks: [{ command: "gate.sh" }] }] },
@@ -261,9 +277,9 @@ describe("bash gate: PreToolUse hooks run first", () => {
 describe("bash child env is filtered (#63)", () => {
   it("strips secret-bearing vars from the spawned child but keeps ordinary env", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-env-")
-    process.env.TRAYAMBAK_MCP_ENV_KEEP = "visible-thing"
-    process.env.TRAYAMBAK_MCP_ENV_SECRET = "leaked-credential"
+    const cwd = freshDir("nemo-mcp-env-")
+    process.env.NEMO_MCP_ENV_KEEP = "visible-thing"
+    process.env.NEMO_MCP_ENV_SECRET = "leaked-credential"
     try {
       const deps: McpServerDeps = {
         config: testConfig(cwd, {
@@ -273,8 +289,8 @@ describe("bash child env is filtered (#63)", () => {
       }
       const probe =
         process.platform === "win32"
-          ? "echo %TRAYAMBAK_MCP_ENV_KEEP% %TRAYAMBAK_MCP_ENV_SECRET%"
-          : "echo $TRAYAMBAK_MCP_ENV_KEEP $TRAYAMBAK_MCP_ENV_SECRET"
+          ? "echo %NEMO_MCP_ENV_KEEP% %NEMO_MCP_ENV_SECRET%"
+          : "echo $NEMO_MCP_ENV_KEEP $NEMO_MCP_ENV_SECRET"
       await dispatchMcpServer(
         { id: "e1", method: "tools/call", params: { name: "bash", arguments: { command: probe } } },
         deps,
@@ -287,21 +303,21 @@ describe("bash child env is filtered (#63)", () => {
       // env inherited verbatim — API keys included).
       expect(text).not.toContain("leaked-credential")
     } finally {
-      delete process.env.TRAYAMBAK_MCP_ENV_KEEP
-      delete process.env.TRAYAMBAK_MCP_ENV_SECRET
+      delete process.env.NEMO_MCP_ENV_KEEP
+      delete process.env.NEMO_MCP_ENV_SECRET
     }
   }, 15000)
 })
 
 describe("read_file gate (#35): approval + roots", () => {
-  const readCfg = (cwd: string): TrayambakConfig =>
+  const readCfg = (cwd: string): NemoConfig =>
     testConfig(cwd, {
       permissions: { uiMode: "ask", rulesV2: [{ tool: "read_file", pattern: "*", action: "allow" }] },
     })
 
   it("reads inside the root", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-read-")
+    const cwd = freshDir("nemo-mcp-read-")
     fs.writeFileSync(path.join(cwd, "notes.txt"), "hello-root")
     await dispatchMcpServer(
       { id: "r1", method: "tools/call", params: { name: "read_file", arguments: { path: "notes.txt" } } },
@@ -314,8 +330,8 @@ describe("read_file gate (#35): approval + roots", () => {
 
   it("refuses outside the root without reading", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-readout-")
-    const outside = freshDir("trayambak-mcp-outside-")
+    const cwd = freshDir("nemo-mcp-readout-")
+    const outside = freshDir("nemo-mcp-outside-")
     fs.writeFileSync(path.join(outside, "secret.txt"), "shh")
     await dispatchMcpServer(
       {
@@ -332,7 +348,7 @@ describe("read_file gate (#35): approval + roots", () => {
 
   it("denies by approval rule before reaching the filesystem", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-readdeny-")
+    const cwd = freshDir("nemo-mcp-readdeny-")
     fs.writeFileSync(path.join(cwd, "secret.txt"), "shh")
     const cfg = testConfig(cwd, {
       permissions: { uiMode: "ask", rulesV2: [{ tool: "read_file", pattern: "secret", action: "deny" }] },
@@ -350,7 +366,7 @@ describe("read_file gate (#35): approval + roots", () => {
 describe("refused tools stay refused", () => {
   it("write_file is never executed by mcp-server", async () => {
     listen()
-    const cwd = freshDir("trayambak-mcp-write-")
+    const cwd = freshDir("nemo-mcp-write-")
     // Allowlisted at approval so the refusal comes from the tool contract
     // itself (not the gate): the shape of the refusal is what's pinned.
     const cfg = testConfig(cwd, {
@@ -379,15 +395,13 @@ describe("serverInfo version and stdio liveness", () => {
     // Drift guard: a hardcoded literal went stale at 0.6.0 while the
     // release shipped 0.6.7 — the advertised version must track the root
     // package.json (via apps/cli/src/version.ts, stamped by sync-version).
-    const rootPkg = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8"),
-    ) as {
+    const rootPkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "package.json"), "utf8")) as {
       version: string
     }
     const parsed = replyFor("init") as unknown as {
       result?: { serverInfo?: { name?: string; version?: string } }
     }
-    expect(parsed.result?.serverInfo).toEqual({ name: "trayambak", version: rootPkg.version })
+    expect(parsed.result?.serverInfo).toEqual({ name: "nemo", version: rootPkg.version })
   })
 
   it("pins the event loop until stdin closes, then releases it", async () => {

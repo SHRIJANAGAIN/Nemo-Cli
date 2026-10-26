@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
  * `/mcp` — MCP (Model Context Protocol) server management from the terminal.
@@ -21,7 +25,7 @@
  */
 
 import { createAgentConfig } from "./app-bootstrap.js"
-import { loadConfig, saveConfig, type TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import { loadConfig, saveConfig, type NemoConfig } from "../../../../apps/runtime/src/config.js"
 import { createMcpTools } from "../../../../apps/runtime/src/tools/mcp/mcp.js"
 import {
   installMcpServer,
@@ -34,11 +38,11 @@ export interface McpDeps {
   /** Post a system row into the transcript. */
   addSystemMessage: (content: string, opts?: { persist?: boolean; ttlMs?: number }) => string
   /** Live agent config, patched in place so the next turn sees the change. */
-  agentConfigRef: { current: TrayambakConfig | null }
+  agentConfigRef: { current: NemoConfig | null }
   /** Nulled to force an agent rebuild on the next message. */
   agentRef: { current: unknown }
   /** Config as loaded at boot; used only as the `createAgentConfig` seed. */
-  config: Partial<TrayambakConfig> | null
+  config: Partial<NemoConfig> | null
 }
 
 const USAGE =

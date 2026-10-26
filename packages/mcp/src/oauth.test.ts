@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -271,15 +271,15 @@ function forceNonTty(): () => void {
 let authFile: string
 
 beforeEach(() => {
-  authFile = path.join(os.tmpdir(), `trayambak-mcp-auth-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
-  process.env.TRAYAMBAK_MCP_AUTH_FILE = authFile
+  authFile = path.join(os.tmpdir(), `nemo-mcp-auth-${Date.now()}-${Math.random().toString(36).slice(2)}.json`)
+  process.env.NEMO_MCP_AUTH_FILE = authFile
   clearOAuthCaches()
 })
 
 afterEach(async () => {
   await stop()
   clearOAuthCaches()
-  delete process.env.TRAYAMBAK_MCP_AUTH_FILE
+  delete process.env.NEMO_MCP_AUTH_FILE
   try {
     fs.unlinkSync(authFile)
   } catch {
@@ -343,7 +343,7 @@ describe("auth store", () => {
   it("returns undefined / not_authenticated for a missing file", () => {
     expect(getAuthEntry("nope")).toBeUndefined()
     expect(getMcpAuthStatus("nope", "https://example.com/mcp")).toBe("not_authenticated")
-    expect(authFilePath()).toBe(process.env.TRAYAMBAK_MCP_AUTH_FILE)
+    expect(authFilePath()).toBe(process.env.NEMO_MCP_AUTH_FILE)
   })
 
   it("round-trips entries through the file", () => {
@@ -366,7 +366,7 @@ describe("auth store", () => {
     expect(getAuthEntry("srv")?.tokens?.accessToken).toBe("fresh")
   })
 
-  it("invalidates entries recorded for a different server URL (SKT AI LABS getForUrl)", () => {
+  it("invalidates entries recorded for a different server URL (Shrijan getForUrl)", () => {
     setAuthEntry("srv", { tokens: { accessToken: "at" }, serverUrl: "https://a.example/mcp" })
     expect(getAuthEntryForUrl("srv", "https://a.example/mcp")).toBeDefined()
     expect(getAuthEntryForUrl("srv", "https://b.example/mcp")).toBeUndefined()
@@ -450,7 +450,7 @@ describe("dynamic client registration", () => {
     expect(info.clientSecretExpiresAt).toBe(0)
     const body = as.registerBodies[0]
     expect(body.redirect_uris).toEqual(["http://127.0.0.1:19876/mcp/oauth/callback"])
-    expect(body.client_name).toBe("trayambak")
+    expect(body.client_name).toBe("nemo")
     expect(body.grant_types).toEqual(["authorization_code", "refresh_token"])
     expect(body.response_types).toEqual(["code"])
     expect(body.token_endpoint_auth_method).toBe("none")
@@ -650,7 +650,7 @@ describe("OAuth callback server", () => {
     expect(await res.text()).toContain("Authorization Successful")
     expect(await pending).toBe("the-code")
 
-    // No pending flows -> the server shuts itself down (SKT AI LABS stopIfIdle).
+    // No pending flows -> the server shuts itself down (Shrijan stopIfIdle).
     expect(isRunning()).toBe(false)
   })
 
@@ -808,7 +808,7 @@ describe("authorizeMcpServer", () => {
     expect(tokenForm.get("code")).toBe("authcode-123")
     expect(computeCodeChallenge(tokenForm.get("code_verifier")!)).toBe(authUrl.searchParams.get("code_challenge"))
 
-    // Tokens + client info persisted with the SKT AI LABS-parity entry shape.
+    // Tokens + client info persisted with the Shrijan-parity entry shape.
     const entry = getAuthEntry("flow")
     expect(entry?.tokens?.accessToken).toBe("tok-1")
     expect(entry?.tokens?.refreshToken).toBe("ref-1")
@@ -958,7 +958,7 @@ describe("McpConnection auth integration", () => {
       const authErr = err as McpAuthError
       expect(authErr.kind).toBe("auth-required")
       expect(authErr.message).toMatch(/HTTP 401/)
-      expect(authErr.message).toMatch(/trayambak mcp auth gate401/)
+      expect(authErr.message).toMatch(/nemo mcp auth gate401/)
     } finally {
       restoreTty()
       conn.close()
@@ -977,7 +977,7 @@ describe("McpConnection auth integration", () => {
       expect(err).toBeInstanceOf(McpAuthError)
       const message = (err as Error).message
       expect(message).toMatch(/HTTP 401/)
-      expect(message).not.toMatch(/trayambak mcp auth/)
+      expect(message).not.toMatch(/nemo mcp auth/)
     } finally {
       conn.close()
       await srv.close()

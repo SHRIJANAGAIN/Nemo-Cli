@@ -1,21 +1,25 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 import { describe, expect, it, beforeEach, afterEach } from "vitest"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import { credentialsPath, loginWithApiKey, logout, loginStatus } from "./auth.js"
 
-const savedKey = process.env.TRAYAMBAK_API_KEY
+const savedKey = process.env.NEMO_API_KEY
 
 beforeEach(() => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-auth-"))
-  process.env.TRAYAMBAK_CREDENTIALS_FILE = path.join(dir, "credentials.json")
-  delete process.env.TRAYAMBAK_API_KEY
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-auth-"))
+  process.env.NEMO_CREDENTIALS_FILE = path.join(dir, "credentials.json")
+  delete process.env.NEMO_API_KEY
 })
 
 afterEach(() => {
-  if (savedKey === undefined) delete process.env.TRAYAMBAK_API_KEY
-  else process.env.TRAYAMBAK_API_KEY = savedKey
+  if (savedKey === undefined) delete process.env.NEMO_API_KEY
+  else process.env.NEMO_API_KEY = savedKey
 })
 
 describe("auth", () => {

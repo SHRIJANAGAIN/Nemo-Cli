@@ -1,0 +1,47 @@
+# Nemo Agent API — systemd unit for VPS deployment.
+#
+# Install:
+#   1. Copy this file to /etc/systemd/system/nemo.service
+#   2. Create env file at /etc/nemo/nemo.env (see .env.example),
+#      owned by root with mode 600 — it holds API keys.
+#   3. sudo mkdir -p /opt/nemo && copy the built tree (or `npm i -g
+#      @shrijan/nemo-cli` and point ExecStart at it — see below).
+#   4. sudo systemctl daemon-reload && sudo systemctl enable --now nemo
+#
+# Notes:
+#   - Binds loopback by default. Put nginx/caddy in front for TLS + public
+#     traffic; never expose 8787 directly.
+#   - `nemo web` keeps running in foreground; systemd restarts it.
+#   - Logs: journalctl -u nemo -f
+#
+# Alternative ExecStart when installed globally via npm:
+#   ExecStart=/usr/bin/nemo web --port 8787 --host 127.0.0.1
+
+[Unit]
+Description=Nemo Agent API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nemo
+Group=nemo
+WorkingDirectory=/opt/nemo
+EnvironmentFile=/etc/nemo/nemo.env
+ExecStart=/usr/bin/node /opt/nemo/dist/apps/cli/src/index.js web --port 8787 --host 127.0.0.1
+Restart=on-failure
+RestartSec=5
+# Resource caps: 230MB RAM hard limit, swap allowed up to 3GB.
+# (Swap extends breathing room for spikes; sustained swapping will be slow
+# — if systemd starts OOM-killing (journalctl shows "Killed"), raise
+# MemoryMax rather than swap. Requires cgroup v2, default on modern distros.)
+MemoryMax=230M
+MemorySwapMax=3G
+# Hardening that stays compatible with an agent (it must write state under
+# $HOME/.nemo and work inside the task cwd, so no ProtectSystem=strict
+# or ProtectHome=read-only here — isolate at the user + firewall level).
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

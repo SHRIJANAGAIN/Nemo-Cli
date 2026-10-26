@@ -33,9 +33,9 @@ Prefer the live workspace model:
 - **Use for:** the current operational state of the work
 - **Rule:** if something affects an active engineering plan, roadmap, rollout, or release, prefer putting it here first
 
-### Layer 2: Trayambak Code Memory (Quick Access)
+### Layer 2: Nemo Code Memory (Quick Access)
 
-- **Path:** `~/.trayambak/projects/*/memory/`
+- **Path:** `~/.nemo/projects/*/memory/`
 - **Format:** Markdown files with frontmatter
 - **Types:** user preferences, feedback, project context, reference
 - **Use for:** quick-access context that persists across conversations
@@ -91,7 +91,7 @@ Check if this knowledge already exists:
 
 Write to appropriate layer(s):
 
-- Always update Trayambak Code memory for quick access
+- Always update Nemo Code memory for quick access
 - Use MCP memory for semantic searchability and relationship mapping
 - Update GitHub / Linear first when the information changes live project truth
 - Commit to the knowledge base repo for durable long-form additions
@@ -106,7 +106,7 @@ Update any relevant indexes or summary files.
 
 Periodically sync conversation history into the knowledge base:
 
-- Sources: Trayambak session files, Trayambak Code sessions, other agent sessions
+- Sources: Nemo session files, Nemo Code sessions, other agent sessions
 - Destination: knowledge base repo
 - Generate a session index for quick browsing
 - Commit and push
@@ -132,7 +132,7 @@ When the information affects active execution:
 
 Pull knowledge from multiple sources into one place:
 
-- Trayambak/ChatGPT/Grok conversation exports
+- Nemo/ChatGPT/Grok conversation exports
 - Browser bookmarks
 - GitHub activity events
 - Write status summary, commit and push
@@ -144,7 +144,7 @@ Pull knowledge from multiple sources into one place:
 Use TodoWrite for in-session task tracking
 
 # Medium-term: project memory files
-Write to ~/.trayambak/projects/*/memory/ for cross-session recall
+Write to ~/.nemo/projects/*/memory/ for cross-session recall
 
 # Long-term: GitHub / Linear / KB
 Put active execution truth in GitHub + Linear

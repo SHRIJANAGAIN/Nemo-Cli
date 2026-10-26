@@ -1,7 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 /**
- * `/devmode` — developer-mode and pentest-toolset control.
+ * `/devmode` — developer-mode control.
  *
  * Extracted from `App.tsx` (which exceeded the 4000-line `max-file-size`
  * cap). The handler is deliberately a factory rather than a bare function:
@@ -15,8 +19,8 @@
  *  - Every write persists to config AND patches `agentConfigRef`, then
  *    nulls `agentRef` so the next message rebuilds the agent with the new
  *    toolsets/engine flags. No restart is ever required.
- *  - Enabling pentest needs a LIVE-VALID license checked server-side. The
- *    refusal message reports the reason and leaves existing state untouched —
+ *  - Enabling developer mode needs a LIVE-VALID license checked server-side.
+ *    The refusal message reports the reason and leaves existing state untouched —
  *    a failed attempt never flips anything, so the message reports what IS.
  *  - A failure never mutates state; it reports state-accurately.
  *  - Bare `/devmode` opens an ON/OFF chooser; choosing ON chains straight
@@ -24,23 +28,20 @@
  */
 
 import { createAgentConfig } from "./app-bootstrap.js"
-import type { TrayambakConfig } from "../../../../apps/runtime/src/config.js"
+import type { NemoConfig } from "../../../../apps/runtime/src/config.js"
 import {
   normalizeLicenseKey,
   serverActivateLicenseKey,
-  serverCanUsePentest,
   serverMintTrial,
   serverVerifyLicenseKey,
 } from "../../../../apps/runtime/src/license.js"
 import { loadConfig, saveConfig } from "../../../../apps/runtime/src/config.js"
 import type { QuestionRequest } from "./types.js"
-import { g } from "./glyphs.js"
 
-/** Snapshot of the three developer-mode switches, read from persisted config. */
+/** Snapshot of the two developer-mode switches, read from persisted config. */
 export interface DevmodeSnapshot {
   enabled: boolean
   gate: boolean
-  pentest: boolean
 }
 
 export interface DevmodeDeps {
@@ -51,14 +52,12 @@ export interface DevmodeDeps {
   /** Resolver the composer calls when the user answers the pending question. */
   questionResolverRef: { current: ((answers: string[]) => void) | null }
   /** Live agent config, patched in place so the next turn sees the change. */
-  agentConfigRef: { current: TrayambakConfig | null }
+  agentConfigRef: { current: NemoConfig | null }
   /** Nulled to force an agent rebuild on the next message. */
   agentRef: { current: unknown }
   /** Config as loaded at boot; used only as the `createAgentConfig` seed. */
-  config: Partial<TrayambakConfig> | null
+  config: Partial<NemoConfig> | null
 }
-
-const DEFAULT_TOOLSETS = ["core", "agentic", "ops", "tasks", "mcp", "skills"]
 
 /** `crypto.randomUUID` is the id source; the fallback keeps older runtimes working. */
 function newQuestionId(prefix: string): string {
@@ -66,13 +65,12 @@ function newQuestionId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** Read the three switches from persisted config (never from a stale ref). */
+/** Read the two switches from persisted config (never from a stale ref). */
 export function devSnapshot(): DevmodeSnapshot {
   const c = loadConfig()
   return {
     enabled: c.developerMode?.enabled === true,
     gate: c.developerMode?.gateEnabled === true,
-    pentest: !(c.toolsets?.disabled ?? []).includes("pentest"),
   }
 }
 
@@ -84,7 +82,7 @@ export function runDevmode(rawArgs: string, deps: DevmodeDeps): void {
   const { addSystemMessage, setPendingQuestion, questionResolverRef, agentConfigRef, agentRef, config } = deps
 
   /** Persist a config patch AND arm the agent rebuild that makes it live. */
-  const syncAgentConfig = (patch: Partial<TrayambakConfig>): void => {
+  const syncAgentConfig = (patch: Partial<NemoConfig>): void => {
     agentConfigRef.current = { ...(agentConfigRef.current ?? createAgentConfig(config ?? {})), ...patch }
     agentRef.current = null // rebuild on the next run (same pattern as a model switch)
   }
@@ -93,71 +91,6 @@ export function runDevmode(rawArgs: string, deps: DevmodeDeps): void {
     const developerMode = { ...loadConfig().developerMode, enabled }
     saveConfig({ developerMode })
     syncAgentConfig({ developerMode })
-  }
-
-  const applyPentest = async (wantOn: boolean): Promise<void> => {
-    // License gate (server-side): enabling pentest needs a LIVE-valid license
-    // on this machine. Disabling always works. The tool assembly
-    // (createDefaultTools) enforces the same gate per execution, so this menu
-    // can never promise what the loop withholds.
-    if (wantOn) {
-      const cfg = loadConfig()
-      const v = await serverCanUsePentest(cfg.licenseKey, { serverUrl: cfg.licenseServerUrl })
-      if (v.valid !== true) {
-        addSystemMessage(
-          `Pentest tools stay DISABLED — ${v.reason ?? "no valid license"}. Bind a key: /devmode on 1102-XXXX-XXXX-XXXX.`,
-        )
-        return
-      }
-    }
-    const c = loadConfig()
-    const defaults = c.toolsets?.defaults?.length ? c.toolsets.defaults : DEFAULT_TOOLSETS
-    const cur = c.toolsets?.disabled ?? []
-    const disabled = wantOn ? cur.filter((t) => t !== "pentest") : cur.includes("pentest") ? cur : [...cur, "pentest"]
-    const toolsets = {
-      defaults,
-      disabled,
-      ...(c.toolsets?.platform ? { platform: c.toolsets.platform } : {}),
-    }
-    saveConfig({ toolsets })
-    syncAgentConfig({ toolsets })
-    addSystemMessage(
-      wantOn
-        ? `${g("ok")} Pentest tools ENABLED — the model gets trayambak__Pentest* + the 83-tool catalog from its next message (defensive guard for infrastructure, never exploitation).`
-        : `${g("ok")} Pentest tools DISABLED — the pentest toolset no longer reaches the model.`,
-      { ttlMs: 10_000 },
-    )
-  }
-
-  const openPentestMenu = (): void => {
-    const s = devSnapshot()
-    const request: QuestionRequest = {
-      id: newQuestionId("devmode"),
-      header: "Devmode · Pentest",
-      question:
-        `Pentest tools: ${s.pentest ? "ENABLED" : "DISABLED"} · Gate: ${s.gate ? "ON" : "OFF"} (/gate on|off). ` +
-        "Defensive guard for infrastructure only — never exploitation. Enable or disable the pentest suite?",
-      options: [
-        { label: "Enable pentest tools", description: "Model sees trayambak__Pentest* (83-tool security catalog)" },
-        { label: "Disable pentest tools", description: "Hide the pentest toolset from the model" },
-        { label: "Cancel", description: "Keep the current setting" },
-      ],
-      multiSelect: false,
-    }
-    questionResolverRef.current = (answers: string[]): void => {
-      const choice = (answers[0] ?? "").trim().toLowerCase()
-      if (choice === "1" || choice.startsWith("enable")) {
-        void applyPentest(/*wantOn*/ true)
-      } else if (choice === "2" || choice.startsWith("disable")) {
-        void applyPentest(/*wantOn*/ false)
-      } else {
-        addSystemMessage(
-          `Pentest menu closed — pentest tools remain ${devSnapshot().pentest ? "ENABLED" : "DISABLED"}.`,
-          { ttlMs: 10_000 },
-        )
-      }
-    }
-    setPendingQuestion(request)
   }
 
   // License-key unlock: `/devmode on 1102-XXXX-XXXX-XXXX` ACTIVATES the code
@@ -202,8 +135,7 @@ export function runDevmode(rawArgs: string, deps: DevmodeDeps): void {
   }
 
   const devmodeOnSuccess = (): void => {
-    addSystemMessage(`Developer mode: ON — pentest menu open below (1 enable · 2 disable · Esc cancels).`)
-    openPentestMenu()
+    addSystemMessage(`Developer mode: ON — the full tool catalog and developer prompts are live from your next message.`)
   }
 
   // Subcommand dispatch is case-insensitive, but the ARGUMENT is not: a pasted
@@ -283,14 +215,12 @@ export function runDevmode(rawArgs: string, deps: DevmodeDeps): void {
 
   if (darg === "off" || (darg === "" && s.enabled)) {
     if (s.enabled) setDevEnabled(/*enabled*/ false)
-    addSystemMessage(
-      `Developer mode: OFF — pentest tools stay ${s.pentest ? "ENABLED" : "DISABLED"} (manage via /devmode on).`,
-    )
+    addSystemMessage(`Developer mode: OFF.`)
     return
   }
 
   if (darg === "trial") {
-    // Self-service trial: the server mints a short pentest key BORN BOUND to
+    // Self-service trial: the server mints a short key BORN BOUND to
     // this machine (1 live trial per machine). No paste, no reseller — key
     // saves straight into config like a typed one.
     const cfgTrial = loadConfig()
@@ -309,9 +239,8 @@ export function runDevmode(rawArgs: string, deps: DevmodeDeps): void {
       saveConfig({ developerMode, licenseKey: trialKey })
       syncAgentConfig({ developerMode, licenseKey: trialKey })
       addSystemMessage(
-        `Trial license active (${t.days ?? "?"} days, this machine only, key ${trialKey}) — pentest menu open below (1 enable · 2 disable · Esc cancels).`,
+        `Trial license active (${t.days ?? "?"} days, this machine only, key ${trialKey}) — developer mode is ON.`,
       )
-      openPentestMenu()
     })
     return
   }
@@ -326,20 +255,14 @@ export function runDevmode(rawArgs: string, deps: DevmodeDeps): void {
           ? `live-valid (${lic.plan}, exp ${lic.exp ? new Date(lic.exp * 1000).toISOString().slice(0, 10) : "?"})`
           : `invalid (${lic.reason ?? "no license"})`
       addSystemMessage(
-        `Developer mode: ${st.enabled ? "ON" : "OFF"} · Pentest tools: ${st.pentest ? "ENABLED" : "DISABLED"} · Gate: ${st.gate ? "ON" : "OFF"} (/gate on|off) · License: ${licText}`,
+        `Developer mode: ${st.enabled ? "ON" : "OFF"} · Gate: ${st.gate ? "ON" : "OFF"} (/gate on|off) · License: ${licText}`,
         { persist: false },
       )
     })
     return
   }
 
-  if (darg === "pentest") {
-    if (s.enabled) openPentestMenu()
-    else addSystemMessage("Developer mode is OFF — /devmode on to open the pentest tools menu.")
-    return
-  }
-
   addSystemMessage(
-    "Usage: /devmode [on 1102-XXXX-XXXX-XXXX|trial|off|status|pentest] — bare /devmode opens the ON/OFF chooser (ON asks for the license key); trial self-serves a short key for this machine.",
+    "Usage: /devmode [on 1102-XXXX-XXXX-XXXX|trial|off|status] — bare /devmode opens the ON/OFF chooser (ON asks for the license key); trial self-serves a short key for this machine.",
   )
 }

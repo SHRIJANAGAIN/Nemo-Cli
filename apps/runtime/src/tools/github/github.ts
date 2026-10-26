@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import https from "https"
@@ -51,7 +51,7 @@ function ghRequest(path: string, token?: string, method?: string, payload?: stri
     const url = new URL(GH_API + path)
     const lib = url.protocol === "https:" ? https : http
     const headers: Record<string, string> = {
-      "User-Agent": "trayambak",
+      "User-Agent": "nemo",
       Accept: "application/vnd.github+json",
     }
     if (token) headers["Authorization"] = `Bearer ${token}`
@@ -224,7 +224,7 @@ async function githubWriteFile(
     return `github: failed to check ${filePath}: ${describeFailure(filePath, existing)}`
   }
   const putBody = JSON.stringify({
-    message: message || `trayambak: update ${filePath}`,
+    message: message || `nemo: update ${filePath}`,
     content: Buffer.from(content, "utf8").toString("base64"),
     ...(sha ? { sha } : {}),
     ...(branch ? { branch } : {}),
@@ -243,7 +243,7 @@ async function githubWriteFile(
 }
 
 /** Create a branch off the base (default branch when omitted). The autofix
- *  loop's first step: every fix lands on `trayambak/issue-N`, never main. */
+ *  loop's first step: every fix lands on `nemo/issue-N`, never main. */
 async function githubCreateBranch(
   owner: string,
   repo: string,
@@ -349,7 +349,7 @@ async function githubCopyFiles(
   }
 
   const putBody = JSON.stringify({
-    message: `trayambak: copy ${sourcePath} -> ${destPath}`,
+    message: `nemo: copy ${sourcePath} -> ${destPath}`,
     content: b64,
     ...(sha ? { sha } : {}),
   })

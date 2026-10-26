@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { execFile } from "node:child_process"
@@ -26,7 +26,7 @@ const defaultRunner: GhRunner = async (args, cwd) => {
 }
 
 function linkFile(cwd: string): string {
-  return join(cwd, ".trayambak", "pr.json")
+  return join(cwd, ".nemo", "pr.json")
 }
 
 export interface PrLink {
@@ -47,7 +47,7 @@ export function readPrLink(cwd: string): PrLink | null {
   }
 }
 
-/** `trayambak pr checkout <number>`: check out a PR branch via gh. */
+/** `nemo pr checkout <number>`: check out a PR branch via gh. */
 export async function prCheckout(number: string, cwd: string, run: GhRunner = defaultRunner): Promise<string> {
   if (!/^\d+$/.test(number.trim())) return failOutput(`Error: PR number must be numeric, got '${number}'`)
   try {
@@ -58,16 +58,16 @@ export async function prCheckout(number: string, cwd: string, run: GhRunner = de
   }
 }
 
-/** `trayambak pr link <url>`: attach a PR to this project. */
+/** `nemo pr link <url>`: attach a PR to this project. */
 export function prLink(url: string, cwd: string): string {
   const clean = url.trim()
   if (!clean) return failOutput("Error: PR URL must not be empty")
-  mkdirSync(join(cwd, ".trayambak"), { recursive: true })
+  mkdirSync(join(cwd, ".nemo"), { recursive: true })
   writeFileSync(linkFile(cwd), JSON.stringify({ url: clean, linkedAt: new Date().toISOString() }, null, 2), "utf8")
   return `Linked ${clean}`
 }
 
-/** `trayambak pr unlink`: detach the project PR. */
+/** `nemo pr unlink`: detach the project PR. */
 export function prUnlink(cwd: string): string {
   const file = linkFile(cwd)
   if (!existsSync(file)) return "No PR linked"
@@ -75,7 +75,7 @@ export function prUnlink(cwd: string): string {
   return "Unlinked PR"
 }
 
-/** `trayambak pr status`: linked PR (if any) plus `gh pr status`. */
+/** `nemo pr status`: linked PR (if any) plus `gh pr status`. */
 export async function prStatus(cwd: string, run: GhRunner = defaultRunner): Promise<string> {
   const link = readPrLink(cwd)
   const lines = [`Linked PR: ${link ? link.url : "none"}`]
@@ -92,7 +92,7 @@ export async function prStatus(cwd: string, run: GhRunner = defaultRunner): Prom
 
 export type PrAction = "checkout" | "link" | "unlink" | "status"
 
-/** `trayambak pr <checkout|link|unlink|status>`: pull-request helpers via gh. */
+/** `nemo pr <checkout|link|unlink|status>`: pull-request helpers via gh. */
 export async function prCommand(
   action: string,
   arg: string | undefined,
@@ -102,10 +102,10 @@ export async function prCommand(
   const normalized = action.trim().toLowerCase() as PrAction | ""
   switch (normalized) {
     case "checkout":
-      if (!arg) return usageOutput("Usage: trayambak pr checkout <number>")
+      if (!arg) return usageOutput("Usage: nemo pr checkout <number>")
       return prCheckout(arg, cwd, run)
     case "link":
-      if (!arg) return usageOutput("Usage: trayambak pr link <url>")
+      if (!arg) return usageOutput("Usage: nemo pr link <url>")
       return prLink(arg, cwd)
     case "unlink":
       return prUnlink(cwd)

@@ -1,14 +1,14 @@
 # Gitleaks config — secret scanning for CI (.github/workflows/secret-scan.yml).
-# Complements the in-repo lint rule `trayambak/no-hardcoded-secrets` (ESLint)
+# Complements the in-repo lint rule `nemo/no-hardcoded-secrets` (ESLint)
 # and the publish-time scan in scripts/verify-pack.mjs: those cover working
 # files; gitleaks additionally sweeps the full git history.
-title = "Trayambak secret scan"
+title = "Nemo secret scan"
 
 [[rules]]
-description = "SKT AI LABS license key (1102-XXXX-XXXX-XXXX) — live credential, never commit"
-id = "skt-license-key"
+description = "Shrijan license key (1102-XXXX-XXXX-XXXX) — live credential, never commit"
+id = "nemo-license-key"
 regex = '''1102-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}'''
-tags = ["key", "skt", "license"]
+tags = ["key", "nemo", "license"]
 [[rules.allowlist]]
 description = "literal placeholder format used in messages/docs, not a live key"
 regexes = ['''1102-XXXX-XXXX-XXXX''']

@@ -29,7 +29,7 @@ Install the `mcp-atlassian` MCP server. This exposes Jira tools directly to your
 - Python 3.10+
 - `uvx` (from `uv`), installed via your package manager or the official `uv` installation documentation
 
-**Add to your MCP config** (e.g., `~/.trayambak.json` → `mcpServers`):
+**Add to your MCP config** (e.g., `~/.nemo.json` → `mcpServers`):
 
 ```json
 {

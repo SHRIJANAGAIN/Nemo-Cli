@@ -1,10 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { useEffect, useState } from "react"
+import { cycleIndex, paletteAt } from "./animations.js"
+import { useAnimationClock, useTravel } from "./use-animation-clock.js"
 
 /**
  * Edge-chase border animation for LIVE tool-call boxes ("animation bada
@@ -16,14 +17,16 @@ import { useEffect, useState } from "react"
  * bigger). The palette advances per step too, so the light also changes
  * hue each edge.
  *
- * Finished/pending boxes pass active=false and stay put — and the timer
- * is torn down with the box, so it can never keep a completed frame
- * churning.
+ * The tick comes from the shared frame clock, so N running boxes chase in
+ * phase off one timer instead of one 160ms interval each. It also means the
+ * palette array no longer has to be compared by contents: callers build it
+ * inline from the theme every render, and there is no interval left to
+ * restart when its identity changes — a `/theme` switch takes effect on the
+ * very next step.
  *
- * The palette is passed as an array but compared by CONTENTS, not
- * identity or length — callers build it inline from the theme each render,
- * and re-creating the array must neither restart the interval nor miss a
- * theme switch that keeps the same length (stale border until next tick).
+ * `active=false` (finished/pending boxes) costs no subscription, and reduced
+ * motion falls back to the whole-box colour change: the box still reads as
+ * live, nothing travels.
  */
 const PULSE_MS = 160
 
@@ -37,24 +40,16 @@ export interface PulseEdges {
   left: string
 }
 
+function flat(color: string): PulseEdges {
+  return { color, top: color, right: color, bottom: color, left: color }
+}
+
 export function useBorderPulse(active: boolean, palette: string[], dim: string): PulseEdges {
-  const [tick, setTick] = useState(0)
-  const key = palette.join("|")
-
-  useEffect(() => {
-    if (!active) return
-    const timer = setInterval(() => {
-      setTick((t) => t + 1)
-    }, PULSE_MS)
-    return () => clearInterval(timer)
-  }, [active, key])
-
-  if (!active || palette.length === 0) {
-    const color = palette[0] ?? dim
-    return { color, top: color, right: color, bottom: color, left: color }
-  }
-  const lit = tick % 4 // 0 = top, 1 = right, 2 = bottom, 3 = left
-  const color = palette[tick % palette.length]
+  const travel = useTravel(active)
+  const tick = useAnimationClock(PULSE_MS, active)
+  const color = paletteAt(palette, tick, dim)
+  if (!active || palette.length === 0 || !travel) return flat(color)
+  const lit = cycleIndex(tick, 4) // 0 = top, 1 = right, 2 = bottom, 3 = left
   return {
     color,
     top: lit === 0 ? color : dim,

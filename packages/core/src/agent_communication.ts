@@ -1,4 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
+ */
 
 /**
  * Agent Communication — inter-agent messaging system.
@@ -24,7 +31,26 @@ export interface InterAgentCommunication {
   kind: AgentCommunicationKind
   senderThreadId: string
   receiverThreadId: string
-  encryptedContent: string
+  /**
+   * The message body, IN PLAINTEXT.
+   *
+   * This field was `encryptedContent`, and it was never encrypted: `send()`
+   * assigned the caller's `content` straight into it. Nothing here encrypts,
+   * decrypts, or holds a key, and the whole record lives in an in-memory Map.
+   *
+   * The name was the defect. A field called `encryptedContent` tells a reviewer
+   * the value is ciphertext and there is nothing to look at, so the one thing a
+   * reviewer WOULD scrutinise is the one thing the name makes them skip. The
+   * manager has no production caller today, so nothing is exposed yet — which is
+   * exactly what makes the name worth fixing now rather than later: the day
+   * something wires this up and logs the record, the name has already suppressed
+   * the question.
+   *
+   * Renamed rather than implemented. Real encryption here would need key
+   * management, a key store, and a decision about where the plaintext lives while
+   * encrypted — none of which a field rename can fake.
+   */
+  content: string
   timestamp: number
   id: string
 }
@@ -71,7 +97,7 @@ export class AgentCommunicationManager {
       kind,
       senderThreadId,
       receiverThreadId,
-      encryptedContent: content,
+      content,
       timestamp: Date.now(),
       id: uuid(),
     }

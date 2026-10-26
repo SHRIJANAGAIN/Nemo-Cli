@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -13,7 +13,7 @@
  * `toFiveWords` re-caps the reply client-side because models obey "five
  * words" only approximately.
  *
- * Trayambak surface: App auto-titles a fresh session after its first real
+ * Nemo surface: App auto-titles a fresh session after its first real
  * reply (renameSession → sidebar, /resume list, resume banner), falling
  * back to the prompt's own first words when this call fails — a title can
  * never break a turn.

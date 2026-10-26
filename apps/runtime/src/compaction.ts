@@ -1,26 +1,26 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
- * Context compaction engine (ported from SKT AI LABS Code's SessionCompaction
+ * Context compaction engine (ported from Shrijan Code's SessionCompaction
  * design: https://github.com/…/packages/opencode/src/session/compaction.ts).
  *
  * Strategy, applied in escalating stages until the session fits inside the
  * model's usable context window:
  *
- *   1. PRUNE    — SKT AI LABS's walk-backwards rule: keep the newest
+ *   1. PRUNE    — Shrijan's walk-backwards rule: keep the newest
  *      `pruneProtectTokens` (40k) worth of tool outputs verbatim, then mark
  *      older ones as pruned — but only when that frees more than
  *      `pruneMinimumTokens` (20k). Runs before truncation so it sees the
- *      original output sizes, like SKT AI LABS.
+ *      original output sizes, like Shrijan.
  *   2. TRUNCATE — cut whatever oversized tool outputs remain in the head
  *      (outside the preserved tail) down to `toolOutputMaxChars`, keeping
  *      head+tail of each output.
  *   3. DROP     — fold everything before a USER-message boundary (keeps
- *      assistant↔tool pairing intact, like SKT AI LABS's turn-based split) into a
+ *      assistant↔tool pairing intact, like Shrijan's turn-based split) into a
  *      single compacting marker message that preserves the original ask and
  *      intermediate questions.
  *   4. LAST RESORT — strip leading blocks, then shrink the largest message
@@ -44,13 +44,13 @@ export interface CompactionPolicy {
   triggerRatio: number
   /** Newest messages that stages 1–2 never touch. */
   preserveRecentMessages: number
-  /** Per-tool-output hard cap in chars when truncating (SKT AI LABS: 2_000). */
+  /** Per-tool-output hard cap in chars when truncating (Shrijan: 2_000). */
   toolOutputMaxChars: number
-  /** Newest tool-output tokens kept verbatim by prune (SKT AI LABS: 40_000). */
+  /** Newest tool-output tokens kept verbatim by prune (Shrijan: 40_000). */
   pruneProtectTokens: number
-  /** Prune only fires when it frees more than this (SKT AI LABS: 20_000). */
+  /** Prune only fires when it frees more than this (Shrijan: 20_000). */
   pruneMinimumTokens: number
-  /** Tool names whose outputs are never pruned (SKT AI LABS: ["skill"]). */
+  /** Tool names whose outputs are never pruned (Shrijan: ["skill"]). */
   protectedTools: string[]
 }
 
@@ -262,7 +262,7 @@ export function compactMessages(
   let out: AgentMessage[] = [...messages]
   const tailStart = Math.max(0, out.length - policy.preserveRecentMessages)
 
-  // Stage 1 — SKT AI LABS prune: walk backwards, protect the newest
+  // Stage 1 — Shrijan prune: walk backwards, protect the newest
   // pruneProtectTokens of tool outputs, mark older candidates as pruned.
   {
     let cumulative = 0
@@ -303,7 +303,7 @@ export function compactMessages(
   }
 
   // Stage 3 — fold the head into a marker, splitting on a USER boundary so
-  // assistant/tool pairing survives (SKT AI LABS splits on turn starts too).
+  // assistant/tool pairing survives (Shrijan splits on turn starts too).
   const afterStages12 = estimateMessages(out, systemPrompt)
   if (afterStages12 > usable) {
     const userBoundaries: number[] = []

@@ -1,12 +1,12 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import fs from "node:fs"
 
-import { requestSettleReprint, syncWindowSizeCache } from "./app-bootstrap.js"
+import { registerFullRenderHandler, requestSettleReprint, syncWindowSizeCache } from "./app-bootstrap.js"
 
 /**
  * Resize guard for Ink apps: blank the viewport and reset Ink's line
@@ -109,22 +109,34 @@ const SIZE_POLL_MS = 250
  *  faster than a human can read; without this the screen strobes. */
 const ANCHOR_MIN_INTERVAL_MS = 250
 
+/**
+ * Single-jump growth that latches scrollback damage (maximise / snap-off /
+ * super-fast stretch — see the latch comment in the listener). Slow drags
+ * move a few cells per event and repaint inside a tracking window; a
+ * maximise jumps dozens at once while the repaint outruns the window
+ * manager. Ordinary drags (and coalesced bursts) stay well under these, and
+ * restores after minimise read as small deltas (minimise sizes are refused),
+ * so only genuine jumps trip the settle rebuild.
+ */
+const BIG_GROWTH_COLUMNS = 32
+const BIG_GROWTH_ROWS = 16
+
 /** Home the cursor without erasing anything. Cheap and strobe-free, unlike a
  *  blank: the next paint simply overwrites rows in place. */
 const HOME = "[H"
 
 /**
- * Resize-event forensics, OFF unless asked. With TRAYAMBAK_RESIZE_DEBUG=1 the
+ * Resize-event forensics, OFF unless asked. With NEMO_RESIZE_DEBUG=1 the
  * guard appends one line per resize event (timestamp, reported geometry, last
- * known geometry, decision) to TRAYAMBAK_RESIZE_LOG, or ./trayambak-resize.log
+ * known geometry, decision) to NEMO_RESIZE_LOG, or ./nemo-resize.log
  * when that is unset. This is the instrument that finally separates "the app
  * never saw the resize" from "the app saw it and painted wrong" — the byte
  * trace alone cannot show the events. Never throws; never runs otherwise.
  */
 function traceResizeEvent(line: string): void {
   try {
-    if (process.env.TRAYAMBAK_RESIZE_DEBUG !== "1") return
-    const file = process.env.TRAYAMBAK_RESIZE_LOG ?? "trayambak-resize.log"
+    if (process.env.NEMO_RESIZE_DEBUG !== "1") return
+    const file = process.env.NEMO_RESIZE_LOG ?? "nemo-resize.log"
     fs.appendFileSync(file, `${new Date().toISOString()} ${line}\n`)
   } catch {
     /* diagnostics must never break the UI */
@@ -195,6 +207,28 @@ export function createResizeRedrawGuard(stdout: ResizeGuardStdout): ResizeRedraw
     }
   }
 
+  /**
+   * Turn-end full re-render (streaming-clone fix): viewport blank + home,
+   * scrollback clear, then the transcript reprint from item 0 — the same
+   * byte sequence as the shrink-settle rebuild, on demand at turn end.
+   * Streaming stacks intermediate live frames terminal-side (each repaint
+   * grows the frame; anything past the viewport scrolls and stays), so a
+   * grown turn ALWAYS ends with stale copies above the live frame. The
+   * reprint restores the whole transcript clean; order is load-bearing
+   * (wipes first, reprint after — same as settle). Returns whether it ran:
+   * no live owner (tests, pipes, torn-down renders) means no bytes and no
+   * reprint, never a remount without a wipe.
+   */
+  registerFullRenderHandler(() => {
+    if (!instance || instance.interactive === false) return false
+    if (instance.isUnmounted || instance.isUnmounting) return false
+    traceResizeEvent("fullRender: turn-end viewport + scrollback wipe + transcript reprint")
+    anchor()
+    stdout.write("[3J")
+    requestSettleReprint()
+    return true
+  })
+
   stdout.on("resize", () => {
     const columns = stdout.columns
     const rows = stdout.rows
@@ -230,6 +264,16 @@ export function createResizeRedrawGuard(stdout: ResizeGuardStdout): ResizeRedraw
     // next to widthChanged=true). Traces below use prev*, never last*.
     const prevColumns = lastColumns
     const prevRows = lastRows
+    // Big single-jump growth (maximise, snap-off, super-fast stretch) must
+    // NOT take the quiet growth path below: the repaint outruns the window
+    // manager, paints for the new size into the still-old window, and the
+    // overflow scrolls into scrollback before the window finishes growing.
+    // Deltas measure here, before any baseline moves. Slow drags move a few
+    // cells per event and repaint inside a tracking window; a maximise jumps
+    // dozens at once. (Thresholds live beside ANCHOR_MIN_INTERVAL_MS.)
+    const widthGrewBy = typeof lastColumns === "number" ? columns - lastColumns : 0
+    const rowsGrewBy = typeof lastRows === "number" ? rows - lastRows : 0
+    const bigGrowthJump = widthGrewBy >= BIG_GROWTH_COLUMNS || rowsGrewBy >= BIG_GROWTH_ROWS
     // Pure growth (or a same-size echo): the frame keeps its top row and grows
     // downward inside the taller/wider window — no re-flow splits, no scroll —
     // so no blank (a vertical drag would strobe on every event otherwise).
@@ -237,12 +281,26 @@ export function createResizeRedrawGuard(stdout: ResizeGuardStdout): ResizeRedraw
     // geometry behind, and the shrink back to the original size then reads as
     // "unchanged" — no blank, and the outlives-window leak it was built to
     // stop walks straight through (caught by smoke-resize-guard 3b).
-    if (!widthChanged && !heightShrank) {
+    if (!widthChanged && !heightShrank && !bigGrowthJump) {
       traceResizeEvent(
         `resize cols=${columns} rows=${rows} last=${lastColumns}x${lastRows} SKIP unchanged-geometry`,
       )
       lastColumns = columns
       lastRows = rows
+      return
+    }
+    if (!widthChanged && !heightShrank) {
+      // Rows-only big jump (vertical maximise): no immediate blank — nothing
+      // re-flowed, and the quiet-growth contract stands — but the tall repaint
+      // may outrun the window manager, so latch damage and let the settle
+      // rebuild wipe + reprint once quiet.
+      lastColumns = columns
+      lastRows = rows
+      traceResizeEvent(
+        `resize cols=${columns} rows=${rows} BIG-GROWTH latch (Δ+${widthGrewBy}x+${rowsGrewBy}, paint may outrun window)`,
+      )
+      damageSinceSettle = true
+      armSettle()
       return
     }
     // A narrower window re-flows the rows already on screen: every full-width
@@ -259,32 +317,57 @@ export function createResizeRedrawGuard(stdout: ResizeGuardStdout): ResizeRedraw
     // must compare against the latest geometry, not the last blank.
     lastColumns = columns
     lastRows = rows
-    // Damage latch for the settle below: any shrink (width re-flows rows into
-    // scrollback terminal-side; height can outlive one stale paint) means the
-    // scrollback may hold clone rows no viewport blank can reach. The settle
-    // then clears scrollback AND reprints the transcript from item 0 (pi's
-    // fullRender(true), ported: 2J+H+3J + full reprint), so history survives
-    // clean instead of cloned. Growth alone never sets it.
-    if (widthShrank || heightShrank) damageSinceSettle = true
-    const armSettle = (): void => {
+    // Damage latch for the settle below. Reaching here means the width moved
+    // or the height shrank, so bigGrowthJump here is always a WIDER window
+    // (rows-only jumps return through the branch above): the wide repaint may
+    // outrun the window manager exactly like a shrink re-flow, leaving clone
+    // rows no viewport blank can reach — so it earns the same scrollback
+    // clear + full transcript reprint (2J+H+3J + reprint).
+    if (widthShrank || bigGrowthJump) {
+      if (!widthShrank) {
+        traceResizeEvent(
+          `resize cols=${columns} rows=${rows} BIG-GROWTH latch (Δ+${widthGrewBy}x+${rowsGrewBy}, paint may outrun window)`,
+        )
+      }
+      damageSinceSettle = true
+    }
+    function armSettle(): void {
       if (settleTimer) clearTimeout(settleTimer)
       settleTimer = setTimeout(() => {
         settleTimer = undefined
-        anchor()
-        // Viewport is blank and the cursor home; now rebuild scrollback iff a
-        // shrink may have soiled it. 3J first (scrollback gone), THEN the
-        // reprint request — App bumps staticEpoch, Ink remounts Static and
-        // prints history from 0, dynamic frame follows. Order is load-bearing:
-        // paint before 3J would be wiped, 3J with no reprint would eat history.
-        // Same usability guards as anchor (no live owner → neither write).
-        if (damageSinceSettle) {
-          damageSinceSettle = false
-          if (instance && instance.interactive !== false && !instance.isUnmounted && !instance.isUnmounting) {
-            traceResizeEvent("settle: scrollback clear + full transcript reprint")
-            stdout.write("[3J")
-            requestSettleReprint()
-          }
+        // The settle blank is DAMAGE-GATED, not unconditional.
+        //
+        // It used to run `anchor()` first and gate only the scrollback wipe on
+        // `damageSinceSettle`. That pairing is incoherent the moment the latch is
+        // unset on any path that reaches armSettle: the viewport gets wiped and
+        // nothing is scheduled to paint it back.
+        //
+        // That is exactly what a HEIGHT-ONLY shrink hit, and it is the reported
+        // symptom — shorten the window and the screen goes fully black until some
+        // unrelated later repaint happens to fire. Reproduced in
+        // `resize-black-probe.test.ts`: a height-only shrink emits the blank and
+        // issues ZERO reprint requests, while a width shrink issues one.
+        //
+        // Gating the blank on the SAME condition that gates the rebuild makes the
+        // two halves atomic: either a shrink may have soiled the viewport and we
+        // wipe + reprint, or nothing did and we touch nothing. It also keeps the
+        // scrollback intact on a height-only resize — which is precisely why the
+        // latch was narrowed to `widthShrank` in the first place. The narrowing
+        // was right; the unconditional anchor was the half that broke it.
+        if (!damageSinceSettle) {
+          traceResizeEvent("settle: no damage latched, viewport left untouched")
+          return
         }
+        damageSinceSettle = false
+        if (!instance || instance.interactive === false || instance.isUnmounted || instance.isUnmounting) return
+        anchor()
+        // 3J first (scrollback gone), THEN the reprint request — App bumps
+        // staticEpoch, Ink remounts Static and prints history from 0. Order is
+        // load-bearing: paint before 3J would be wiped, 3J with no reprint would
+        // eat the history.
+          traceResizeEvent("settle: scrollback clear + full transcript reprint")
+          stdout.write("[3J")
+          requestSettleReprint()
       }, SETTLE_ANCHOR_MS)
       settleTimer.unref?.()
     }

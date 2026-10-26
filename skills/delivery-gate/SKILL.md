@@ -1,14 +1,14 @@
 ---
 name: delivery-gate
-description: Stop hook that blocks Trayambak from finishing until quality checks pass. Detects rationalization patterns (surface text heuristics), stale learning logs (filesystem mtime), and low disk space. Complements self-audit by mechanically enforcing learning capture habits. Use when Trayambak should be mechanically blocked from declaring work finished before quality checks and learning capture actually pass.
+description: Stop hook that blocks Nemo from finishing until quality checks pass. Detects rationalization patterns (surface text heuristics), stale learning logs (filesystem mtime), and low disk space. Complements self-audit by mechanically enforcing learning capture habits. Use when Nemo should be mechanically blocked from declaring work finished before quality checks and learning capture actually pass.
 metadata:
   version: 1.1.1
   origin: ECC
 ---
 
-# Delivery Gate — Mechanical Quality Gate for Trayambak Code
+# Delivery Gate — Mechanical Quality Gate for Nemo Code
 
-A **Stop hook** that checks three things before Trayambak can finish a session, using only **deterministic checks** — file modification timestamps, disk usage, and regex patterns on the transcript text. No AI inference.
+A **Stop hook** that checks three things before Nemo can finish a session, using only **deterministic checks** — file modification timestamps, disk usage, and regex patterns on the transcript text. No AI inference.
 
 This is distinct from reasoning gates (like `self-audit`): delivery-gate checks machine-verifiable facts; self-audit checks output quality across four reasoning dimensions. Together they form defense in depth:
 
@@ -30,17 +30,17 @@ Rationalization detection warns about patterns like "skip tests for now" and "pr
 
 ## Why
 
-Trayambak Code's built-in checks cover code quality (build → type → lint → test). But there's a different failure mode: the agent produces working code while the **session hygiene was neglected** — learning not captured, rationalized shortcuts, disk running out silently.
+Nemo Code's built-in checks cover code quality (build → type → lint → test). But there's a different failure mode: the agent produces working code while the **session hygiene was neglected** — learning not captured, rationalized shortcuts, disk running out silently.
 
 Over many sessions of "ship and forget," the human hasn't grown. This hook enforces the habit: complex task → must touch learning libraries.
 
 ## Install
 
 ```bash
-cp quality-gate.py ~/.trayambak/scripts/
+cp quality-gate.py ~/.nemo/scripts/
 ```
 
-Add to `~/.trayambak/settings.json`:
+Add to `~/.nemo/settings.json`:
 
 ```json
 {
@@ -50,7 +50,7 @@ Add to `~/.trayambak/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.trayambak/scripts/quality-gate.py",
+            "command": "python3 ~/.nemo/scripts/quality-gate.py",
             "timeout": 5000
           }
         ]

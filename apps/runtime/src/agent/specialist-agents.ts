@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as fs from "fs"
@@ -26,10 +26,10 @@ export interface AgentProfile {
 }
 
 const standardAgentDirectories = [
-  [".trayambak", "agents"],
-  [".trayambak", "agents"],
-  [".trayambak", "agents"],
-  [".trayambak", "prompts", "agents"],
+  [".nemo", "agents"],
+  [".nemo", "agents"],
+  [".nemo", "agents"],
+  [".nemo", "prompts", "agents"],
   [".kiro", "agents"],
 ] as const
 
@@ -96,7 +96,7 @@ function parseAgentFile(filePath: string, source: string): AgentProfile | null {
 }
 
 /**
- * Locate the bundled agents folder inside the trayambak repository or dist structure.
+ * Locate the bundled agents folder inside the nemo repository or dist structure.
  */
 function findBundledAgentsDir(cwd: string): string | null {
   const candidates = [
@@ -182,7 +182,7 @@ export function getAgentProfile(
   const normalized = name
     .toLowerCase()
     .trim()
-    .replace(/^trayambak:/, "")
+    .replace(/^nemo:/, "")
   const all = discoverAgentProfiles(cwd, additionalDirectories)
   return all.find((p) => p.name.toLowerCase() === normalized)
 }

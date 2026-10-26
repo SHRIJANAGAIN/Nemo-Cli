@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { fuzzyMatchScore } from "./fuzzy.js"
@@ -12,9 +12,9 @@ export interface PaletteEntry {
   title: string
   description?: string
   category: string
-  /** Keybinding hint rendered beside the title (SKT AI LABS's DialogSelect footer). */
+  /** Keybinding hint rendered beside the title (Shrijan's DialogSelect footer). */
   keybinding?: string
-  /** Pinned into a "Suggested" section when the query is empty (SKT AI LABS). */
+  /** Pinned into a "Suggested" section when the query is empty (Shrijan). */
   suggested?: boolean
   run: () => void
 }
@@ -27,7 +27,7 @@ export interface PaletteRow {
   rowId: string
 }
 
-/** SKT AI LABS DialogSelect scoring: the title outranks the description (title × 2). */
+/** Shrijan DialogSelect scoring: the title outranks the description (title × 2). */
 export function scorePaletteEntry(entry: PaletteEntry, query: string): number {
   return fuzzyMatchScore(entry.title, query) * 2 + (entry.description ? fuzzyMatchScore(entry.description, query) : 0)
 }
@@ -44,7 +44,7 @@ export function filterPaletteEntries(entries: PaletteEntry[], query: string): Pa
     .map((row) => row.entry)
 }
 
-/** SKT AI LABS's CommandPalette list(): with an empty query, suggested entries are
+/** Shrijan's CommandPalette list(): with an empty query, suggested entries are
  * pinned to the top under a "Suggested" category AND keep their normal slot;
  * while filtering, the pinning is dropped so results stay ranked. */
 export function buildPaletteRows(entries: PaletteEntry[], query: string): PaletteRow[] {

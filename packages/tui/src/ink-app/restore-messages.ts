@@ -1,11 +1,11 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type { ConversationEntry } from "../../../../skt/9-session/session.js"
-import type { TrayambakMessage } from "./types.js"
+import type { ConversationEntry } from "../../../../nemo/9-session/session.js"
+import type { NemoMessage } from "./types.js"
 
 /**
  * Rebuild the live message list from a persisted conversation.
@@ -49,7 +49,7 @@ const isArgsShaped = (content: string): boolean => {
   }
 }
 
-export function restoreMessages(sessionId: string, history: ConversationEntry[]): TrayambakMessage[] {
+export function restoreMessages(sessionId: string, history: ConversationEntry[]): NemoMessage[] {
   const rendersNothing = (h: ConversationEntry): boolean =>
     h.role === "assistant" &&
     !h.toolCallId &&
@@ -110,13 +110,13 @@ export function restoreMessages(sessionId: string, history: ConversationEntry[])
     skipRows.add(i)
   })
 
-  const out: TrayambakMessage[] = []
+  const out: NemoMessage[] = []
   entries.forEach((h, i) => {
     if (skipRows.has(i)) return
     const tool = argsTool.get(i)
-    const status = (s: ConversationEntry["toolStatus"]): TrayambakMessage["toolStatus"] =>
+    const status = (s: ConversationEntry["toolStatus"]): NemoMessage["toolStatus"] =>
       s === "running" ? "completed" : s // never restore a stale running row
-    const row: TrayambakMessage = {
+    const row: NemoMessage = {
       id: `restored-${sessionId}-${i}`,
       timestamp: new Date(h.ts).getTime(),
       role: h.role,

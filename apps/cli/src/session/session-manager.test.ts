@@ -7,8 +7,8 @@ import { SessionManager } from "./session-manager.js"
 let dir: string
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-sessions-"))
-  process.env.TRAYAMBAK_SESSIONS_FILE = path.join(dir, "sessions.json")
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-sessions-"))
+  process.env.NEMO_SESSIONS_FILE = path.join(dir, "sessions.json")
 })
 
 describe("SessionManager persistence", () => {

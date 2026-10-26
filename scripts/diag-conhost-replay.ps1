@@ -12,7 +12,7 @@
 # Run inside a REAL conhost:
 #   conhost.exe powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\diag-conhost-replay.ps1 [chunkRows]
 $ErrorActionPreference = "Stop"
-$bytesPath = Join-Path $env:TEMP "trayambak-boot-bytes.bin"
+$bytesPath = Join-Path $env:TEMP "nemo-boot-bytes.bin"
 $log = Join-Path $env:TEMP "conhost-replay.log"
 Remove-Item $log -ErrorAction SilentlyContinue
 function W($m) { Add-Content -Path $log -Value $m }

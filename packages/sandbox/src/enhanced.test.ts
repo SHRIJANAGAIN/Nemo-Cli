@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 /**
  * Enhanced sandbox tests — policy decisions, exec rule matching, environment
  * filtering, and filesystem/network violation detection.
@@ -52,7 +56,7 @@ describe("sandbox file policy", () => {
 
 describe("sandbox honesty", () => {
   it("reports os-sandbox only for backends that actually have an isolator", () => {
-    for (const b of ["seatbelt", "landlock", "bwrap", "windows-restricted"] as const) {
+    for (const b of ["seatbelt", "bwrap", "windows-restricted"] as const) {
       expect(enforcementFor(b)).toBe("os-sandbox")
     }
     expect(enforcementFor("fallback")).toBe("policy-only")
@@ -138,15 +142,15 @@ describe("environment filtering", () => {
     expect(filtered.USERNAME).toBe("dev")
     expect(filtered.random_thing).toBeUndefined()
   })
-  it("includes CODEX_SANDBOX metadata", () => {
+  it("includes NEMO_SANDBOX metadata", () => {
     const env = { PATH: "/usr/bin" }
     const filtered = filterEnv(env, { __sandboxType: "seatbelt" })
-    expect(filtered.CODEX_SANDBOX).toBe("seatbelt")
+    expect(filtered.NEMO_SANDBOX).toBe("seatbelt")
   })
-  it("includes CODEX_SANDBOX_NETWORK_DISABLED when network blocked", () => {
+  it("includes NEMO_SANDBOX_NETWORK_DISABLED when network blocked", () => {
     const env = { PATH: "/usr/bin" }
     const filtered = filterEnv(env, { __networkPolicy: { disableNetwork: true } })
-    expect(filtered.CODEX_SANDBOX_NETWORK_DISABLED).toBe("true")
+    expect(filtered.NEMO_SANDBOX_NETWORK_DISABLED).toBe("true")
   })
   it("BLOCKED_ENV_PATTERNS covers common secret prefixes", () => {
     expect(BLOCKED_ENV_PATTERNS.some((p) => "API_KEY".includes(p))).toBe(true)
@@ -167,8 +171,8 @@ describe("validateEnv", () => {
 describe("getSafeEnv", () => {
   it("creates filtered env with sandbox metadata", () => {
     const safe = getSafeEnv({ PATH: "/usr/bin", SECRET_KEY: "x" }, "seatbelt", true)
-    expect(safe.CODEX_SANDBOX).toBe("seatbelt")
-    expect(safe.CODEX_SANDBOX_NETWORK_DISABLED).toBe("true")
+    expect(safe.NEMO_SANDBOX).toBe("seatbelt")
+    expect(safe.NEMO_SANDBOX_NETWORK_DISABLED).toBe("true")
     expect(safe.SECRET_KEY).toBeUndefined()
   })
 })
@@ -177,7 +181,7 @@ describe("createMinimalEnv", () => {
   it("returns minimal safe environment", () => {
     const env = createMinimalEnv()
     expect(env.PATH).toBeDefined()
-    expect(env.CODEX_SANDBOX).toBe("policy-only")
+    expect(env.NEMO_SANDBOX).toBe("policy-only")
     expect(env.SECRET_KEY).toBeUndefined()
   })
 })

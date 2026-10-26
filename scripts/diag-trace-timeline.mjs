@@ -23,7 +23,7 @@ const MARKS = [
   { name: "CLEAR-3J", re: /\x1b\[3J/g },
   { name: "HOME-H", re: /\x1b\[H/g },
   { name: "LOGO-TOP", re: /████████/g },
-  { name: "COMPOSER", re: /Ask Trayambak to do anything/g },
+  { name: "COMPOSER", re: /Ask Nemo to do anything/g },
   { name: "CLOCK", re: /\d\d:\d\d:\d\d/g },
   { name: "FOOTER", re: /opencode\/space-bunny-free/g },
 ]

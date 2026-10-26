@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 /**
@@ -91,11 +91,11 @@ describe("mixRgb", () => {
 
 describe("logoGradient", () => {
   it("returns one colour per line", () => {
-    expect(logoGradient(snapshotFor("trayambak-dark"), 10)).toHaveLength(10)
+    expect(logoGradient(snapshotFor("nemo-dark"), 10)).toHaveLength(10)
   })
 
   it("starts at the accent and fades toward the body text", () => {
-    const theme = snapshotFor("trayambak-dark")
+    const theme = snapshotFor("nemo-dark")
     const gradient = logoGradient(theme, 5)
     expect(gradient[0]).toBe(theme.accent)
 
@@ -103,27 +103,27 @@ describe("logoGradient", () => {
       const { r, g, b } = parseHex(hex)!
       return 0.299 * r + 0.587 * g + 0.114 * b
     }
-    // trayambak-dark: accent is dim violet, text is near-white — the fade
+    // nemo-dark: accent is dim violet, text is near-white — the fade
     // must get brighter downward or the bottom of the art disappears.
     expect(luminance(gradient[4]!)).toBeGreaterThan(luminance(gradient[0]!))
   })
 
   it("keeps a single-line banner at the accent instead of dividing by zero", () => {
-    const theme = snapshotFor("trayambak-dark")
+    const theme = snapshotFor("nemo-dark")
     expect(logoGradient(theme, 1)).toEqual([theme.accent])
   })
 
   it("produces no colours for an empty banner", () => {
-    expect(logoGradient(snapshotFor("trayambak-dark"), 0)).toEqual([])
+    expect(logoGradient(snapshotFor("nemo-dark"), 0)).toEqual([])
   })
 
   it("falls back to a flat accent when a token will not parse", () => {
-    const broken = { ...snapshotFor("trayambak-dark"), accent: "not-a-colour" }
+    const broken = { ...snapshotFor("nemo-dark"), accent: "not-a-colour" }
     expect(logoGradient(broken, 3)).toEqual(["not-a-colour", "not-a-colour", "not-a-colour"])
   })
 
   it("differs between a light and a dark palette", () => {
-    const dark = logoGradient(snapshotFor("trayambak-dark"), 4)
+    const dark = logoGradient(snapshotFor("nemo-dark"), 4)
     const light = logoGradient(snapshotFor("paper-white"), 4)
     expect(dark).not.toEqual(light)
   })
@@ -143,7 +143,7 @@ describe("cinePalette", () => {
   })
 
   it("never emits a hardcoded literal — it tracks whatever theme is active", () => {
-    const a = cinePalette(snapshotFor("trayambak-dark"))
+    const a = cinePalette(snapshotFor("nemo-dark"))
     const b = cinePalette(snapshotFor("sakura-light"))
     expect(a).not.toEqual(b)
   })

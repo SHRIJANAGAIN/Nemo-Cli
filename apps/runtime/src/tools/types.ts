@@ -1,25 +1,28 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Portions derived from OpenAI Codex CLI (codex-rs), Copyright 2025 OpenAI,
+ * licensed under the Apache License, Version 2.0. See THIRD_PARTY_NOTICES.md.
  */
 
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import type { ToolDefinition, ToolResult } from "../../../../packages/protocol/src/index.js"
-import type { TrayambakConfig } from "../config.js"
+import type { NemoConfig } from "../config.js"
 import type { PermissionConfig } from "../../../../packages/protocol/src/permissions.js"
 import type { Provider } from "../../../../packages/provider/src/index.js"
 
 export type { ToolResult, ToolDefinition } from "../../../../packages/protocol/src/index.js"
 
-const TRUNCATION_DIR = path.join(os.homedir(), ".trayambak", "storage", "truncation")
+const TRUNCATION_DIR = path.join(os.homedir(), ".nemo", "storage", "truncation")
 const TRUNCATION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 export interface ToolContext {
   cwd: string
-  config: TrayambakConfig
+  config: NemoConfig
   permissions: PermissionConfig
   sessionId?: string
   requestPermission?: (tool: string, command: string, reason: string) => Promise<boolean>
@@ -52,12 +55,12 @@ export interface TruncationResult {
 /**
  * Truncate output to fit within limits. If the text exceeds limits, the full
  * content is written to a file in the truncation directory (7-day retention)
- * and a preview with a reference to the file is returned — mirroring SKT AI LABS's
+ * and a preview with a reference to the file is returned — mirroring Shrijan's
  * truncate.ts behavior.
  */
 export function truncateOutput(
   text: string,
-  config: TrayambakConfig,
+  config: NemoConfig,
   options?: { maxLines?: number; maxBytes?: number },
 ): TruncationResult {
   const maxLines = options?.maxLines ?? config.maxOutputLines
@@ -130,7 +133,7 @@ function takeTailBytes(text: string, maxBytes: number): string {
   return chars.slice(start).join("")
 }
 
-/** Remove truncation files older than 7 days (SKT AI LABS truncate.ts pattern). */
+/** Remove truncation files older than 7 days (Shrijan truncate.ts pattern). */
 function cleanupOldTruncationFiles(): void {
   try {
     if (!fs.existsSync(TRUNCATION_DIR)) return
@@ -152,7 +155,7 @@ export { TRUNCATION_DIR }
 /**
  * Workspace metadata that file tools may read but never write (create,
  * modify, or delete). `.git` is the repository's trust anchor — `git/hooks`
- * executes arbitrary code on commit — and `.trayambak` holds the agent's own
+ * executes arbitrary code on commit — and `.nemo` holds the agent's own
  * state (sessions, commands, plans, credentials). Ported from Codex's
  * protected metadata (`.git` / `.codex` / `.agents`), with one deliberate
  * hardening: the segment must match *anywhere* in the path, not only as the
@@ -161,7 +164,8 @@ export { TRUNCATION_DIR }
  * `.GIT` cannot slip past on a case-sensitive host; `.github/`, `.gitkeep`
  * and `sub/.gitignore` are segment-distinct and stay writable.
  */
-const PROTECTED_METADATA_DIRS = [".git", ".trayambak"]
+const PROTECTED_METADATA_DIRS = [".git", ".nemo", ".trayambak"]
+const LEGACY_AGENT_MANAGER_DIRS = [".kilo", ".skt ai labs", ".trayambak"]
 
 /**
  * Write-side gate: throws for paths the file tools may never mutate.
@@ -172,17 +176,16 @@ export function assertMutablePath(filepath: string): void {
   const parts = filepath.split(/[\\/]/)
   const file = parts.at(-1)
   const dir = parts.at(-2)
-  // Legacy state dirs from pre-rebrand installs: their agent-manager.json
-  // must stay tool-protected (`.trayambak` is covered by
-  // PROTECTED_METADATA_DIRS below with the generic message). Folded like the
-  // metadata check, so `.KILO/agent-manager.json` cannot slip past on a
+  // Agent Manager state dirs from pre-rebrand installs: their
+  // agent-manager.json must stay tool-protected. Folded like the metadata
+  // check, so `.KILO/agent-manager.json` cannot slip past on a
   // case-sensitive host while `.kilo/…` is protected.
-  if (file === "agent-manager.json" && [".kilo", ".skt ai labs"].includes((dir ?? "").toLowerCase())) {
+  if (file === "agent-manager.json" && LEGACY_AGENT_MANAGER_DIRS.includes((dir ?? "").toLowerCase())) {
     throw new Error("Do not edit Agent Manager state directly. Use the agent_manager tool.")
   }
   const folded = parts.map((seg) => seg.toLowerCase())
   if (folded.some((seg) => PROTECTED_METADATA_DIRS.includes(seg))) {
-    throw new Error(`protected metadata: ${filepath} (.git and .trayambak are read-only to tools)`)
+    throw new Error(`protected metadata: ${filepath} (.git, .nemo and legacy state dirs are read-only to tools)`)
   }
 }
 
@@ -226,7 +229,13 @@ function within(base: string, target: string): boolean {
 const PROTECTED_HOME_DIRS = [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".azure"]
 
 /** Single files under home that hold credentials. */
-const PROTECTED_HOME_FILES = [".netrc", ".npmrc", ".git-credentials", path.join(".trayambak", "credentials.json")]
+const PROTECTED_HOME_FILES = [
+  ".netrc",
+  ".npmrc",
+  ".git-credentials",
+  path.join(".nemo", "credentials.json"),
+  path.join(".trayambak", "credentials.json"),
+]
 
 /**
  * True for paths the file tools may never open. Deny wins over the `~`

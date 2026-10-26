@@ -216,10 +216,10 @@ Run through edge cases from the plan's Testing Strategy checklist.
 ### Create Implementation Report
 
 ```bash
-mkdir -p .trayambak/PRPs/reports
+mkdir -p .nemo/PRPs/reports
 ```
 
-Write report to `.trayambak/PRPs/reports/{plan-name}-report.md`:
+Write report to `.nemo/PRPs/reports/{plan-name}-report.md`:
 
 ```markdown
 # Implementation Report: [Feature Name]
@@ -290,8 +290,8 @@ If this implementation was for a PRD phase:
 ### Archive Plan
 
 ```bash
-mkdir -p .trayambak/PRPs/plans/completed
-mv "$ARGUMENTS" .trayambak/PRPs/plans/completed/
+mkdir -p .nemo/PRPs/plans/completed
+mv "$ARGUMENTS" .nemo/PRPs/plans/completed/
 ```
 
 **CHECKPOINT**: Report created. PRD updated. Plan archived.
@@ -326,8 +326,8 @@ Report to user:
 [Summary or "None — implemented exactly as planned"]
 
 ### Artifacts
-- Report: `.trayambak/PRPs/reports/{name}-report.md`
-- Archived Plan: `.trayambak/PRPs/plans/completed/{name}.plan.md`
+- Report: `.nemo/PRPs/reports/{name}-report.md`
+- Archived Plan: `.nemo/PRPs/plans/completed/{name}.plan.md`
 
 ### PRD Progress (if applicable)
 | Phase | Status |

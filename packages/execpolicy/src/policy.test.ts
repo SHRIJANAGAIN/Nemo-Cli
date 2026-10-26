@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest"
@@ -70,7 +70,7 @@ describe("PolicyManager", () => {
   })
 
   it("loads and round-trips a policy file", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-execpolicy-"))
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-execpolicy-"))
     try {
       const file = path.join(dir, "test.rules")
       fs.writeFileSync(file, "npm * allow\n", "utf8")
@@ -127,12 +127,12 @@ describe("domainMatches", () => {
 // afterEach can remove them even when a test fails midway.
 let tempRoots: string[] = []
 const mkRoot = (): string => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "trayambak-rules-"))
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-rules-"))
   tempRoots.push(root)
   return root
 }
 const writeRules = (root: string, body: string): string => {
-  const dir = path.join(root, ".trayambak")
+  const dir = path.join(root, ".nemo")
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, "policy.rules")
   fs.writeFileSync(file, body, "utf8")
@@ -149,14 +149,14 @@ describe("user .rules discovery", () => {
 
   it("lists the project copy before the home copy", () => {
     expect(userPolicyCandidates("P", "H")).toEqual([
-      path.join("P", ".trayambak", "policy.rules"),
-      path.join("H", ".trayambak", "policy.rules"),
+      path.join("P", ".nemo", "policy.rules"),
+      path.join("H", ".nemo", "policy.rules"),
     ])
-    expect(userPolicyCandidates("", "H")).toEqual([path.join("H", ".trayambak", "policy.rules")])
-    expect(userPolicyCandidates("P", "")).toEqual([path.join("P", ".trayambak", "policy.rules")])
+    expect(userPolicyCandidates("", "H")).toEqual([path.join("H", ".nemo", "policy.rules")])
+    expect(userPolicyCandidates("P", "")).toEqual([path.join("P", ".nemo", "policy.rules")])
   })
 
-  it("prefers <cwd>/.trayambak/policy.rules over the home copy", () => {
+  it("prefers <cwd>/.nemo/policy.rules over the home copy", () => {
     const project = mkRoot()
     const home = mkRoot()
     const projectFile = writeRules(project, "npm * allow\n")
@@ -164,7 +164,7 @@ describe("user .rules discovery", () => {
     expect(discoverUserPolicyFile(project, home)).toBe(projectFile)
   })
 
-  it("falls back to ~/.trayambak/policy.rules when the project has none", () => {
+  it("falls back to ~/.nemo/policy.rules when the project has none", () => {
     const home = mkRoot()
     const homeFile = writeRules(home, "npm * allow\n")
     expect(discoverUserPolicyFile(mkRoot(), home)).toBe(homeFile)

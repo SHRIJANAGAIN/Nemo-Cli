@@ -1,4 +1,8 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved. */
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
 
 import { BLOCKED_ENV_PATTERNS as SANDBOX_BLOCKED_ENV_PATTERNS } from "../../sandbox/src/types.js"
 
@@ -81,10 +85,10 @@ export function getSafeEnv(
   const filtered = filterEnv(clean)
 
   if (networkDisabled) {
-    filtered["CODEX_SANDBOX_NETWORK_DISABLED"] = "true"
+    filtered["NEMO_SANDBOX_NETWORK_DISABLED"] = "true"
   }
 
-  filtered["CODEX_SANDBOX"] = sandboxType
+  filtered["NEMO_SANDBOX"] = sandboxType
 
   return filtered
 }
@@ -114,6 +118,6 @@ export function createMinimalEnv(): Record<string, string> {
     LANG: process.env.LANG ?? "C.UTF-8",
     TMPDIR: process.env.TMPDIR ?? "/tmp",
     TERM: process.env.TERM ?? "dumb",
-    CODEX_SANDBOX: "policy-only",
+    NEMO_SANDBOX: "policy-only",
   }
 }

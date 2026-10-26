@@ -1,7 +1,7 @@
-/* Copyright 2026 SKT AI LABS PRIVATE LIMITED. All rights reserved.
- * Trayambak CLI Proprietary License - use, copying, modification, and
- * distribution require a written license agreement with SKT AI LABS
- * PRIVATE LIMITED. See LICENSE for the full terms.
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
 import * as child from "child_process"
@@ -74,7 +74,7 @@ export class StreamingGate {
 
   constructor(rootDir: string, scriptPath?: string) {
     this.cwd = rootDir
-    this.scriptPath = scriptPath ?? path.join(rootDir, "skt", "12-control", "streaming_gate.py")
+    this.scriptPath = scriptPath ?? path.join(rootDir, "nemo", "12-control", "streaming_gate.py")
   }
 
   setEnabled(enabled: boolean): void {
