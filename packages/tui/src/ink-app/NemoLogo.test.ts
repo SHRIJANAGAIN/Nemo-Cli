@@ -374,7 +374,7 @@ describe("baked banner asset", () => {
     // Find the wordmark band: the rows with the widest runs of full blocks.
     const fullBlockRows = rows.filter((l) => l.includes("\u2588\u2588"))
     expect(fullBlockRows.length).toBeGreaterThanOrEqual(3)
-    // Every letter of NEMO CLI is 4 columns wide with a 2-column gap, so
+    // Every letter of NEMO CLI is 6 columns wide with a 2-column gap, so
     // the widest unbroken run of ink is the T's crossbar (4) — no run may be a
     // single stray pixel.
     const widestRun = Math.max(

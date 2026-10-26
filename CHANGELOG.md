@@ -5,6 +5,19 @@ All notable changes to nemo are documented here. The format is based on keeping 
 
 ## [Unreleased]
 
+- **The welcome banner now reads NEMO CLI.** The rebrand switched the
+  generator's wordmark but left the baked asset on the old TRAYAMBAK art, so
+  the welcome screen painted mangled letters. `scripts/make-logo-hex.mjs`
+  now sets a hand-drawn 6x5 NEMO CLI font under the seeded starfield, and
+  `logo_ansi.txt` is regenerated from it.
+
+- **A bare `.nemo/` directory no longer hijacks config scope.** The app
+  creates one for harness/inbox state, so the loader treated any `.nemo/` as
+  "this project has a config" and ignored `~/.nemo/config.json` — empty key,
+  default model, and a 401 "authorization header missing" even though the key
+  was saved. Only a real `.nemo/config.json` takes over now, and
+  `nemo config path` prints the file in use.
+
 - **The CLI is now `nemo`, not Trayambak.** Every package, binary, env var,
   on-disk path (`~/.nemo/`), slash command, docs page and help string uses the
   nemo name. The published npm tarball is `@shrijan/nemo-cli`; the source

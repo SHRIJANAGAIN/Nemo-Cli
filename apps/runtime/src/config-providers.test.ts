@@ -150,8 +150,10 @@ describe("config provider ids", () => {
     const { saveConfig } = await import("./config.js")
     const prevCwd = process.cwd()
     const prevEnv = process.env.NEMO_API_KEY
+    const prevConfig = process.env.NEMO_CONFIG
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-cfg-"))
     fs.mkdirSync(path.join(dir, ".nemo"), { recursive: true })
+    process.env.NEMO_CONFIG = path.join(dir, ".nemo", "config.json")
     process.chdir(dir)
     try {
       // A key persisted before the user switched to env mode. (The `test`
@@ -174,6 +176,8 @@ describe("config provider ids", () => {
     } finally {
       if (prevEnv === undefined) delete process.env.NEMO_API_KEY
       else process.env.NEMO_API_KEY = prevEnv
+      if (prevConfig === undefined) delete process.env.NEMO_CONFIG
+      else process.env.NEMO_CONFIG = prevConfig
       process.chdir(prevCwd)
       fs.rmSync(dir, { recursive: true, force: true })
     }
@@ -185,9 +189,10 @@ describe("config provider ids", () => {
     const path = await import("node:path")
     const { saveConfig, loadConfig: reload } = await import("./config.js")
     const prevCwd = process.cwd()
+    const prevConfig = process.env.NEMO_CONFIG
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-cfg-"))
-    // Pre-create the local dir so configDir() picks it (never $HOME).
     fs.mkdirSync(path.join(dir, ".nemo"), { recursive: true })
+    process.env.NEMO_CONFIG = path.join(dir, ".nemo", "config.json")
     process.chdir(dir)
     try {
       saveConfig({ provider: "nvidia", model: "m1" } as never)
@@ -202,6 +207,8 @@ describe("config provider ids", () => {
       expect(reload().themeName).toBe("candy-pop")
       expect(fs.existsSync(file + ".tmp-" + process.pid)).toBe(false)
     } finally {
+      if (prevConfig === undefined) delete process.env.NEMO_CONFIG
+      else process.env.NEMO_CONFIG = prevConfig
       process.chdir(prevCwd)
       fs.rmSync(dir, { recursive: true, force: true })
     }

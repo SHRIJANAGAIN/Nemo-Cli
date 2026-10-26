@@ -52,26 +52,20 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
 // --- the wordmark ---------------------------------------------------------------
 
 /**
- * A 5-row bitmap font. Each glyph is 4 columns wide; `#` is ink.
+ * A 5-row bitmap font. Each glyph is 6 columns wide; `#` is ink.
  *
- * Hand-set rather than derived: a 4x5 cell font has no mechanical derivation,
+ * Hand-set rather than derived: a 6x5 cell font has no mechanical derivation,
  * and the letterforms are the single most-looked-at thing on the welcome
  * screen. Every glyph was drawn by eye and checked by rendering the banner.
  */
 const FONT = {
-  T: ["####", ".#..", ".#..", ".#..", ".#.."],
-  R: ["####", "#..#", "####", "#.#.", "#..#"],
-  A: [".##.", "#..#", "####", "#..#", "#..#"],
-  Y: ["#..#", "#..#", ".##.", ".#..", ".#.."],
-  M: ["#..#", "####", "####", "#..#", "#..#"],
-  B: ["###.", "#..#", "###.", "#..#", "###."],
-  K: ["#..#", "#.#.", "##..", "#.#.", "#..#"],
-  C: [".###", "#...", "#...", "#...", ".###"],
-  L: ["#...", "#...", "#...", "#...", "####"],
-  I: ["####", ".#..", ".#..", ".#..", "####"],
-  N: ["#..#", "##.#", "#.##", "#..#", "#..#"],
-  E: ["####", "#...", "###.", "#...", "####"],
-  O: [".##.", "#..#", "#..#", "#..#", ".##."],
+  N: ["##..##", "###.##", "######", "##.###", "##..##"],
+  E: ["######", "##....", "#####.", "##....", "####.."],
+  M: ["##..##", "######", "######", "##..##", "##..##"],
+  O: [".####.", "##..##", "##..##", "##..##", ".####."],
+  C: [".#####", "##....", "##....", "##....", "..####"],
+  L: ["##....", "##....", "##....", "##....", "####.."],
+  I: ["######", ".####.", "..##..", "..##..", ".####."],
 }
 
 const WORDMARK = "NEMO CLI"
@@ -79,7 +73,7 @@ const WORDMARK_ROWS = 5
 /** Blank columns between letters. */
 const LETTER_GAP = 2
 /** Blank columns before the wordmark. */
-const LEFT_MARGIN = 2
+const LEFT_MARGIN = 6
 
 /** Cell columns the wordmark occupies, including trailing gaps. */
 const WORDMARK_WIDTH = [...WORDMARK].reduce(
@@ -149,9 +143,8 @@ function pickTier(rand) {
 }
 
 /**
- * Where the stars live: the band above the wordmark, plus a sparse drift
- * through its blank columns (never on a letter — wordmarkAt guards that).
- * Above is denser than the sides, so the eye reads "sky over name".
+ * Where the stars live: the band above the wordmark, and nothing else, so the
+ * letter rows stay deterministic (the asset tests pin their ink per row).
  */
 const STAR_ROWS_TOP = WORDMARK_TOP
 const rand = mulberry32(0x51a17)
@@ -159,10 +152,8 @@ const stars = new Map()
 for (let cy = 0; cy < ROWS; cy++) {
   for (let cx = 0; cx < COLS; cx++) {
     if (wordmarkAt(cx, cy) !== null) continue
-    const above = cy < STAR_ROWS_TOP
-    // Density: the sky band reads starry, the margins only suggest it.
-    const density = above ? 0.1 : 0.02
-    if (rand() > density) continue
+    if (cy >= STAR_ROWS_TOP) continue
+    if (rand() > 0.1) continue
     stars.set(`${cx},${cy}`, pickTier(rand))
   }
 }
