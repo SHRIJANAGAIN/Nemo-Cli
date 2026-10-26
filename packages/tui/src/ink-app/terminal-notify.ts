@@ -47,7 +47,7 @@ const ACTIVITY_SUFFIX: Record<TerminalActivity, string> = {
 
 /**
  * Product name as it appears in the tab/window title. The terminal tab
- * otherwise shows the shell's cwd (a bare folder name like "engli"), which
+ * otherwise shows the shell's cwd (a bare folder name like "user"), which
  * tells the user nothing about what is running.
  */
 export const APP_TITLE_NAME = "Nemo"

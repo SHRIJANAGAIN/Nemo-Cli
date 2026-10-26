@@ -11,14 +11,15 @@ import { orbitRowText } from "./thinking-ribbon.js"
 /**
  * Footer version chip text.
  *
- * npm only accepts semver, so the S-series codename rides as the prerelease
- * tag: "1.0.0-S1-TITANIUM". Printing that raw costs 18 columns and reads like
- * a beta, so the chip shows the codename alone ("S1-TITANIUM") whenever a tag
- * exists, and keeps the historic `v0.6.7` shape for a plain semver build.
+ * npm only accepts semver, so a build codename can ride as the prerelease
+ * tag ("1.2.0-SOMETHING"); the chip then shows the tag alone. A plain semver
+ * build shows the brand label ("NV 1.2") instead of the raw patch number.
  */
 export const versionChipText = (version: string): string => {
   const tag = /^\d+\.\d+\.\d+-(.+)$/.exec(version)?.[1]
-  return tag ? tag : `v${version}`
+  if (tag) return tag
+  const release = /^v?(\d+)\.(\d+)\.\d+/.exec(version)
+  return release ? `NV ${release[1]}.${release[2]}` : `v${version}`
 }
 
 /**

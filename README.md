@@ -272,7 +272,7 @@ as `@shrijan/nemo-cli` (bins `nemo` and `nemo`):
 - **`apps/cli`** — the CLI entry: subcommands, flags, session commands.
 - **`apps/runtime`** — the agent: config loader, agent loop, tools, prompts,
   auto-update.
-- **`packages/*`** — protocol types, provider adapters (22 backends), the Ink
+- **`packages/*`** — protocol types, provider adapters (5 backends), the Ink
   TUI, MCP client/server, ACP, HTTP server, SDK, sandbox, session backends.
 - **`nemo/`** — internal numbered subsystems: mistake memory, eval loop,
   memory, control, healing, hooks.
@@ -330,7 +330,7 @@ reproduction beats a description-only report.
 | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | [Getting started](https://skt.sktailabs.in/docs/getting-started.md) | Install, first session, subcommands, flags, config, env vars     |
 | [Sessions](https://skt.sktailabs.in/docs/sessions.md)               | Transcript storage, resume/fork/archive, compaction, checkpoints |
-| [Providers](https://skt.sktailabs.in/docs/providers.md)             | All 22 backends, key handling, local models                      |
+| [Providers](https://skt.sktailabs.in/docs/providers.md)             | The 5 backends, key handling, local models                       |
 | [MCP](https://skt.sktailabs.in/docs/mcp.md)                         | MCP servers, OAuth, connector registry, `mcp-server`             |
 | [ACP](https://skt.sktailabs.in/docs/acp.md)                         | Editor integration over stdio JSON-RPC                           |
 | [Web](https://skt.sktailabs.in/docs/web.md)                         | Local HTTP agent API, SSE, token auth                            |

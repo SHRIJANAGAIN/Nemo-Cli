@@ -1,6 +1,6 @@
 {
   "name": "nemo-code",
-  "version": "1.0.0-S1.1-TITANIUM",
+  "version": "1.2.0",
   "private": true,
   "type": "commonjs",
   "description": "Nemo Code is a CLI coding agent designed for autonomous software development. It is developed and maintained by **Shrijan** and licensed under the **Apache License 2.0**.",

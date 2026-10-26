@@ -19,7 +19,7 @@ import { useAnimationClock } from "./use-animation-clock.js"
  *
  * When ON: a slow (~0.9s) silver breathe — footer border + status dot drift
  * through steel-to-bright-silver, the composer's prompt star twinkles beside
- * the placeholder. Same S1-TITANIUM metal as the logo starfield, never hue.
+ * the placeholder. Same NV silver as the logo starfield, never hue.
  */
 
 export const IDLE_ANIM_ENV = "NEMO_IDLE_ANIM"

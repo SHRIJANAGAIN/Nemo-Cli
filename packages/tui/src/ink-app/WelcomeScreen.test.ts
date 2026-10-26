@@ -45,9 +45,9 @@ describe("formatDate", () => {
 
 describe("shortPath", () => {
   it("reduces a path to its folder name", () => {
-    expect(shortPath("C:/Users/engli/nemo")).toBe("nemo")
-    expect(shortPath("C:\\Users\\engli\\Default Project")).toBe("Default Project")
-    expect(shortPath("/home/engli/app")).toBe("app")
+    expect(shortPath("C:/Users/dev/nemo")).toBe("nemo")
+    expect(shortPath("C:\\Users\\dev\\Default Project")).toBe("Default Project")
+    expect(shortPath("/home/dev/app")).toBe("app")
   })
 
   it("trims a trailing separator before taking the last segment", () => {

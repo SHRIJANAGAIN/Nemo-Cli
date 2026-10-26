@@ -9,7 +9,7 @@
  * silver, under a twinkling starfield.
  *
  * The hexagon ring and T monogram are gone on request — the wordmark alone
- * carries the brand, and the S1-TITANIUM identity lives in metal + stars
+ * carries the brand, and the NV identity lives in metal + stars
  * instead of geometry. What remains is exact by construction: a hand-set
  * bitmap font emitted as full blocks (no sampling, no threshold, no noise),
  * and a SEEDED star scatter, so the same inputs always produce the same

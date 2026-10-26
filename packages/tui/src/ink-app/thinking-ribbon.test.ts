@@ -275,12 +275,14 @@ describe("resting frames", () => {
 })
 
 describe("boot codename", () => {
-  it("prints the S-series tag alone, never the raw semver", () => {
+  it("prints a prerelease tag alone, never the raw semver", () => {
     expect(bootCodename("1.0.0-S1-TITANIUM")).toBe("S1-TITANIUM")
   })
 
-  it("falls back to a v-prefix for a plain semver build", () => {
-    expect(bootCodename("0.6.7")).toBe("v0.6.7")
-    expect(bootCodename("v0.6.7")).toBe("v0.6.7")
+  it("falls back to the NV label for a plain semver build", () => {
+    expect(bootCodename("0.6.7")).toBe("NV 0.6")
+    expect(bootCodename("v0.6.7")).toBe("NV 0.6")
+    expect(bootCodename("1.2.0")).toBe("NV 1.2")
+    expect(bootCodename("weird-build")).toBe("vweird-build")
   })
 })

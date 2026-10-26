@@ -3,8 +3,8 @@
 
 import { render, Box, Text, useInput } from "ink"
 import { createElement, useState, useEffect } from "react"
-import { Agent } from "file:///C:/Users/engli/nemo/dist/apps/runtime/src/agent/agent.js"
-import { loadConfig } from "file:///C:/Users/engli/nemo/dist/apps/runtime/src/config.js"
+import { Agent } from "../../../../dist/apps/runtime/src/agent/agent.js"
+import { loadConfig } from "../../../../dist/apps/runtime/src/config.js"
 
 function loadConfigFromEnv() {
   const raw = process.env.NEMO_CONFIG_JSON

@@ -2,7 +2,8 @@
 /* convert-nemo-themes.mjs — one-shot port of Shrijan Code's TUI theme JSONs
  * (opencode theme schema) into nemo PaletteSpec definitions.
  *
- * Reads : Shrijan-main/packages/tui/src/theme/assets/*.json (36 files)
+ * Reads : <source>/packages/tui/src/theme/assets/*.json (36 files), where
+ *         <source> is argv[2] or NEMO_THEME_SRC (the Shrijan Code checkout).
  * Writes: packages/tui/src/ui/nemo-themes.ts
  *
  * Mirrors Shrijan's resolveTheme() with mode pinned to "dark":
@@ -15,7 +16,14 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-const SRC = "C:/Users/engli/OneDrive/Documents/tool/Shrijan-main/packages/tui/src/theme/assets"
+const SRC =
+  process.argv[2] ??
+  process.env.NEMO_THEME_SRC ??
+  path.join(process.cwd(), "..", "Shrijan-main", "packages", "tui", "src", "theme", "assets")
+if (!fs.existsSync(SRC)) {
+  console.error(`convert-nemo-themes: source not found: ${SRC}\nPass the Shrijan Code checkout root as argv[2] or NEMO_THEME_SRC.`)
+  process.exit(1)
+}
 const OUT = fileURLToPath(new URL("../packages/tui/src/ui/nemo-themes.ts", import.meta.url))
 
 const warnings = []

@@ -92,9 +92,9 @@ export function cineCodenameRow(frame: number, name: string): string[] {
   return chars.map((ch, i) => (i < shown ? ch : " "))
 }
 
-const TITLE = "T R A Y A M B A K"
+const TITLE = "N E M O"
 
-/** Build codename shown under the title, e.g. "S1-TITANIUM". Falls back to
+/** Build codename shown under the title, e.g. "NV 1.2". Falls back to
  *  the bare version when the stamp is missing (a dev run without a build). */
 const CODENAME = bootCodename(VERSION || "dev")
 
@@ -158,10 +158,10 @@ export function BootCine({ onDone, durationMs = 2600 }: BootCineProps): ReactNod
       <Box marginTop={1} height={1}>
         {eye.showTagline ? <Text dimColor>three eyes of Shiva is coming</Text> : <Text> </Text>}
       </Box>
-      {/* Build identity: the S-series codename rides in from the left as the
+      {/* Build identity: the codename rides in from the left as the
           eye finishes opening, so every launch states which build it is
-          without stealing a line from the title. `versionChipText` already
-          turns "1.0.0-S1-TITANIUM" into "S1-TITANIUM". */}
+          without stealing a line from the title. `bootCodename` prints a
+          prerelease tag as-is, otherwise the "NV 1.2" label. */}
       <Box marginTop={1} height={1}>
         {codenameChars.map((ch, i) => (
           <Text

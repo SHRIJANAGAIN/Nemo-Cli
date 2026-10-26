@@ -16,14 +16,14 @@
  *
  *   S-1-5-21-...-3854284612:(I)(M)      <- Modify, another principal
  *   S-1-15-2-...-4006411858:(I)(F)      <- Full control, AppContainer SID
- *   SKT\CodexSandboxUsers:(I)(M)        <- Modify, sandbox user group
+ *   SANDBOX\CodexSandboxUsers:(I)(M)        <- Modify, sandbox user group
  *   NT AUTHORITY\SYSTEM:(I)(F)
  *   BUILTIN\Administrators:(I)(F)
- *   SKT\engli:(I)(F)                    <- the owner
+ *   SANDBOX\user:(I)(F)                    <- the owner
  *
  * So the mode bits said "owner only" while the ACL said "anyone in that sandbox
  * group can modify this, and an AppContainer SID has full control of it". After
- * `/inheritance:r /grant:r <user>:(R,W)` only `SKT\engli` remained. That is the
+ * `/inheritance:r /grant:r <user>:(R,W)` only `SANDBOX\user` remained. That is the
  * whole finding: the protection the code claimed and the protection the platform
  * actually applied were different things.
  *

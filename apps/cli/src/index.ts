@@ -57,6 +57,13 @@ import { runMcpServer } from "../../../packages/mcp-server/src/index.js"
 // NEMO_BIN_NAME=nemo-code, otherwise this is nemo.
 const BIN_NAME = process.env.NEMO_BIN_NAME === "nemo-code" ? "nemo-code" : "nemo"
 
+// Brand label ("NV 1.2") alongside the raw semver, so scripts that parse
+// --version still see the exact package version.
+const versionLabel = ((): string => {
+  const release = /^(\d+)\.(\d+)\./.exec(VERSION)
+  return release ? `NV ${release[1]}.${release[2]}` : VERSION
+})()
+
 // Root help is generated from the command registry so it can never drift from the dispatcher.
 const HELP = renderRootHelp(BIN_NAME)
 import { parseFlags, portValue, type ParseResult } from "./flags.js"
@@ -222,7 +229,7 @@ async function main(): Promise<void> {
     return
   }
   if (rawCommand === "--version" || rawCommand === "-v" || rawCommand === "version") {
-    process.stdout.write(`${BIN_NAME} ${VERSION}\n`)
+    process.stdout.write(`${BIN_NAME} ${versionLabel} (${VERSION})\n`)
     return
   }
   // `<command> --help` for any registered command (including ones that

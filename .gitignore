@@ -61,6 +61,18 @@ bin/*.pdb
 .idea/
 .DS_Store
 
+# Generated smoke-run captures
+scripts/*.result.txt
+
+# Harness runtime state written into the repo tree (recorded runs, memory)
+nemo/0-points/points.json
+nemo/4-mem/MEMORY.MD.archive
+nemo/5-eval/cot.json
+nemo/5-eval/evalr-*.md
+nemo/6-u/improvements.json
+nemo/6-u/rewards.json
+nemo/11-ui/last-response.txt
+
 # Secrets / local env (never commit)
 .env
 .env.*

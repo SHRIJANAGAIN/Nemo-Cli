@@ -487,7 +487,7 @@ export const NemoApp = ({
   useEffect(() => {
     const cleanup = enableBracketedPaste()
     // Claim the tab/window title on mount. The shell (PowerShell/cmd) keeps
-    // reporting its cwd as the title, so without this the tab reads "engli" (or
+    // reporting its cwd as the title, so without this the tab reads "user" (or
     // whatever folder) and gives no hint that Nemo is the thing running.
     setTerminalTitle(buildTerminalTitle({ activity: "idle" }))
     const themeName = config?.themeName

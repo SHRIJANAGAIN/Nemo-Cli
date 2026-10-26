@@ -62,7 +62,7 @@ function Install-NodeLTS {
 }
 
 # Full-page clear, then the banner shimmers in: a silver-white wave sweeps
-# across the name (steel shadows, bright silver crest — the S1-TITANIUM metal;
+# across the name (steel shadows, bright silver crest — the NV metal;
 # plain consoles still show the text uncoloured).
 Clear-Host
 $banner = "T R A Y A M B A K"

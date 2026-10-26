@@ -254,11 +254,12 @@ export function orbitRowText(frame: number, ascii = false): string {
     .join("")
 }
 
-/** Build codename line for the boot screen, e.g. "S1-TITANIUM". */
+/** Build codename line for the boot screen, e.g. "NV 1.2". */
 export function bootCodename(version: string): string {
   const tag = /^\d+\.\d+\.\d+-(.+)$/.exec(version)?.[1]
   if (tag) return tag
-  return version.startsWith("v") ? version : `v${version}`
+  const release = /^v?(\d+)\.(\d+)\.\d+/.exec(version)
+  return release ? `NV ${release[1]}.${release[2]}` : `v${version}`
 }
 
 /* ── Codex-style shimmer label (thinking indicator) ─────────────────── */

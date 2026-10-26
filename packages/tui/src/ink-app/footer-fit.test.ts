@@ -169,13 +169,12 @@ describe("fitFooter", () => {
     expect(fit.model.length).toBeGreaterThanOrEqual(12)
   })
 
-  it("chip shows the S-series codename, not the raw semver prerelease", () => {
-    // npm forces semver, so "1.0.0-S1-TITANIUM" is the real version string;
-    // the chip prints the codename (18 cols of prerelease noise dropped).
+  it("chip shows a prerelease tag alone, and the NV label for a plain semver build", () => {
+    // npm forces semver, so a build codename can ride as the prerelease tag;
+    // the chip prints the tag, never the raw `x.y.z-tag` string.
     expect(versionChipText("1.0.0-S1-TITANIUM")).toBe("S1-TITANIUM")
-    // A plain semver build keeps the historic shape.
-    expect(versionChipText("0.6.7")).toBe("v0.6.7")
-    expect(versionChipText("1.0.0")).toBe("v1.0.0")
+    expect(versionChipText("0.6.7")).toBe("NV 0.6")
+    expect(versionChipText("1.2.0")).toBe("NV 1.2")
     // A non-semver string is never mistaken for a codename.
     expect(versionChipText("weird-build")).toBe("vweird-build")
   })

@@ -5,6 +5,12 @@ All notable changes to nemo are documented here. The format is based on keeping 
 
 ## [Unreleased]
 
+- **Version is NV 1.2 (`1.2.0`).** The `S1.1-TITANIUM` codename is retired.
+  A plain semver build now renders the brand label `NV 1.2` in the footer
+  chip and the boot row; a prerelease-tagged build still prints its tag
+  alone. The boot cinematic title is `N E M O` (it still spelled the old
+  name).
+
 - **The welcome banner now reads NEMO CLI.** The rebrand switched the
   generator's wordmark but left the baked asset on the old TRAYAMBAK art, so
   the welcome screen painted mangled letters. `scripts/make-logo-hex.mjs`

@@ -48,7 +48,7 @@ function loadCorpus(): string {
 }
 
 /**
- * Context provided to [buildSystemPrompt](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts)
+ * Context provided to `buildSystemPrompt`
  * to construct the agent system prompt. Every field except the optional
  * block fields is required for a valid prompt.
  */
@@ -135,7 +135,7 @@ function getToday(): string {
  * validated for presence but are checked for type correctness when provided.
  *
  * @param ctx - The context object to validate.
- * @returns A [ValidationResult](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts) indicating whether validation passed and any error messages.
+ * @returns A `ValidationResult` indicating whether validation passed and any error messages.
  */
 function validateContext(ctx: SystemPromptContext): ValidationResult {
   const errors: string[] = []
@@ -170,11 +170,11 @@ function validateContext(ctx: SystemPromptContext): ValidationResult {
  * Generates a formatted description of all available tools.
  *
  * Each tool is listed with its name, a brief description (truncated to
- * [TOOL_BRIEF_MAX_LENGTH](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts)),
+ * `TOOL_BRIEF_MAX_LENGTH`),
  * and its parameters if any. Parameters are displayed as a comma-separated
  * list of `name:type(required/optional)` pairs on an indented line.
  *
- * @param tools - Array of [ToolDefinition](file:///C:/Users/engli/nemo/packages/protocol/src/index.ts) objects to describe.
+ * @param tools - Array of `ToolDefinition` objects to describe.
  * @returns A formatted string listing all tools and their parameters, or an empty string if no tools are provided.
  * @example
  * ```typescript
@@ -202,7 +202,7 @@ function describeTools(tools: ToolDefinition[]): string {
  * Generates a formatted parameter description string from a ToolDefinition
  * parameters object. Each parameter is rendered as `name:type(required|optional)`.
  *
- * @param params - The parameters object from a [ToolDefinition](file:///C:/Users/engli/nemo/packages/protocol/src/index.ts).
+ * @param params - The parameters object from a `ToolDefinition`.
  * @returns A comma-separated string of parameter descriptions, or an empty string if no parameters exist.
  */
 function describeParams(params: ToolDefinition["parameters"]): string {
@@ -369,7 +369,7 @@ function buildWebFetchGuidance(): string {
  * This section covers general tool usage principles and the specific
  * tool guidance (native vs. fenced block format).
  *
- * @param toolGuidance - The tool guidance string from [buildToolGuidance](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts).
+ * @param toolGuidance - The tool guidance string from `buildToolGuidance`.
  * @returns A formatted string with tool usage instructions.
  */
 function buildToolUsageSection(toolGuidance: string): string {
@@ -385,7 +385,7 @@ function buildToolUsageSection(toolGuidance: string): string {
 /**
  * Builds the available tools section of the system prompt.
  *
- * Uses [describeTools](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts) to generate
+ * Uses `describeTools` to generate
  * a formatted list of all tools and their parameters.
  *
  * @param tools - The tool definitions to describe.
@@ -817,8 +817,8 @@ function buildResponseFormattingSection(): string {
  * they are provided.
  *
  * The prompt structure is as follows:
- * 1. Header with date, working directory, and model information ([buildHeaderSection](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts))
- * 2. Agent identity and core behavioral instructions ([buildIdentitySection](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts))
+ * 1. Header with date, working directory, and model information (`buildHeaderSection`)
+ * 2. Agent identity and core behavioral instructions (`buildIdentitySection`)
  * 3. Instruction hierarchy, senior protocol, inversion directive, web note
  * 4. Tool usage instructions and available tools list
  * 5. Core features (file operations, shell, web, subagents, planning, etc.)
@@ -827,7 +827,7 @@ function buildResponseFormattingSection(): string {
  * 8. Error handling and response formatting
  * 9. Optional context blocks (memory, operator, skills, rules, harness, Nemo-specific, etc.)
  *
- * @param ctx - The [SystemPromptContext](file:///C:/Users/engli/nemo/apps/runtime/src/prompt/power-prompt.ts) containing session configuration and optional blocks.
+ * @param ctx - The `SystemPromptContext` containing session configuration and optional blocks.
  * @returns The complete system prompt string for the agent.
  * Logs validation warnings to the console when the context fails validation, but still returns the prompt.
  * @example

@@ -115,17 +115,17 @@ describe("boot codename row", () => {
   })
 
   it("resolves the codename from the real stamped version", () => {
-    // Derived from VERSION, not a pinned literal: the codename IS the stamped
-    // prerelease tag, so hardcoding it made this test fail on every version bump
-    // (`1.0.0-S1-TITANIUM` -> `1.0.0-S1.1-TITANIUM`) with no code change. The
-    // assertions that matter are structural: an `x.y.z-tag` prerelease yields the
-    // tag, and a plain version keeps its `v` prefix.
+    // Derived from VERSION, not a pinned literal: the codename comes from the
+    // stamped version, so hardcoding it made this test fail on every version
+    // bump with no code change. The assertions that matter are structural: an
+    // `x.y.z-tag` prerelease yields the tag, and a plain version yields the
+    // NV label.
     expect(bootCodename(VERSION)).not.toContain("1.0.0")
     const tag = /^\d+\.\d+\.\d+-(.+)$/.exec(VERSION)?.[1]
     if (tag !== undefined) {
       expect(bootCodename(VERSION)).toBe(tag)
     } else {
-      expect(bootCodename(VERSION)).toBe(VERSION.startsWith("v") ? VERSION : `v${VERSION}`)
+      expect(bootCodename(VERSION)).toMatch(/^NV \d+\.\d+$/)
     }
   })
 

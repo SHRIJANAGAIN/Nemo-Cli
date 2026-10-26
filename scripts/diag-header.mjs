@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import path from "node:path"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const distEsm = "file:///C:/Users/engli/nemo/dist/packages/tui/src/ink-app-esm"
+const distEsm = pathToFileURL(path.join(here, "..", "dist", "packages", "tui", "src", "ink-app-esm")).href
 
 const stdin = new PassThrough()
 stdin.isTTY = true
