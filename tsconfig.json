@@ -1,0 +1,135 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    // ink@7 ships an `exports`-only package.json: no "main", no "types", and no
+    // root index.d.ts (`node_modules/ink/` is just build/ license/ package.json
+    // readme.md). Node10 ("node") resolution predates the exports map, so it
+    // cannot see ink's entry at all and `import type { Key } from "ink"` failed
+    // to resolve — Key collapsed to a stub without `home`/`end`/`pageUp`, and
+    // keymap.ts reported 6 bogus errors (TS2339/TS2353) that had nothing to do
+    // with the source. Mapping ink straight at its declared types entry keeps the
+    // CommonJS/Node10 emit for every OTHER package (the main tree's relative
+    // imports depend on it) while giving the one exports-only dependency a real
+    // resolution. Bumping the whole program to NodeNext would reformat every
+    // relative import in the main tree.
+    "paths": {
+      "ink": ["./node_modules/ink/build/index.d.ts"],
+      "ink/*": ["./node_modules/ink/build/*"]
+    },
+    "lib": ["ES2022"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    // Fast compile: no .d.ts emit — nothing consumes it (package.json has
+    // no `types`/`main`, make-publish.mjs adds none, no tsconfig imports
+    // from dist/), and declaration emit was a real slice of every build.
+    "declaration": false,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "jsx": "react"
+    // NOTE: NO `incremental` in this EMITTING config — incremental skips
+    // re-emitting "up-to-date" outputs, so any file deleted from dist/
+    // (fix-esm-imports rm -rf, manual clean) silently never came back.
+    // Fast typechecking lives in tsconfig.check.json (extends this,
+    // noEmit + incremental) used by `npm run typecheck`.
+  },
+  "include": [
+    "packages/cli/**/*.ts",
+    "packages/cli/**/*.tsx",
+    "packages/acp/**/*.ts",
+    "packages/sandbox/**/*.ts",
+    "packages/eslint-plugin-nemo/**/*.ts",
+    // evals was previously listed nowhere, so `npm run typecheck` never saw it
+    // and its 2KB stub stayed unchecked while importing the dead
+    // packages/coding-agent wrapper. The harness is now product code (it drives
+    // the real loop), so it joins the program and the suite cannot rot silently.
+    "packages/evals/**/*.ts",
+    "packages/mcp-server/**/*.ts",
+    "packages/sdk/**/*.ts",
+    "packages/modes/**/*.ts",
+    "packages/approval/**/*.ts",
+    "packages/checkpoints/**/*.ts",
+    "packages/core/**/*.ts",
+    "packages/core/**/*.tsx",
+    "packages/coding-agent/**/*.ts",
+    "packages/coding-agent/**/*.tsx",
+    "packages/function/**/*.ts",
+    "packages/function/**/*.tsx",
+    "packages/mcp/**/*.ts",
+    "packages/mcp/**/*.tsx",
+    "packages/protocol/**/*.ts",
+    "packages/protocol/**/*.tsx",
+    "packages/provider/**/*.ts",
+    "packages/provider/**/*.tsx",
+    "packages/schema/**/*.ts",
+    "packages/schema/**/*.tsx",
+    "packages/server/**/*.ts",
+    "packages/server/**/*.tsx",
+    "packages/session-backends/**/*.ts",
+    "packages/session-backends/**/*.tsx",
+    "packages/tui/src/index.ts",
+    "packages/tui/src/dialogs.ts",
+    "packages/tui/src/*.ts",
+    "packages/tui/src/tui.test.ts",
+    // This ink test is typechecked HERE (classic node resolution) rather
+    // than by tsconfig.ink-check.json: it imports ../../dialogs.js, which
+    // reaches the ESM ui barrel (packages/tui/src/ui/index.ts) whose
+    // extensionless relative imports are TS2835 errors under NodeNext.
+    // Every dep below is already part of this program, so this adds no
+    // new source surface — it only gets the test file itself checked.
+    "packages/tui/src/ink-app/utils/stringWidth.test.ts",
+    "packages/tui/src/notifications.ts",
+    "packages/tui/src/approval-notification.ts",
+    // Legacy (pre-ink) TUI trees — revived: first-class members of this
+    // program (barrel-wired in packages/tui/src/index.ts), so their tests
+    // typecheck with everything else too.
+    "packages/tui/src/app/**/*.ts",
+    "packages/tui/src/bottom_pane/**/*.ts",
+    "packages/tui/src/chatwidget/**/*.ts",
+    "packages/tui/src/tui/**/*.ts",
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "nemo/**/*.ts",
+    "nemo/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist/**/*",
+    "packages/tui/src/legacy-reference-tui/**/*",
+    "packages/tui/src/ui-legacy-main/**/*",
+    "packages/tui/src/components/**/*",
+    // logic/ has its OWN DOM-aware program (tsconfig.logic.json →
+    // `npm run typecheck:logic`): import.meta.env/window/HTMLElement must
+    // never enter this Node program (lib is ES2022, no DOM, on purpose).
+    "packages/tui/src/logic/**/*",
+    // NOTE: app/ bottom_pane/ chatwidget/ tui/ used to be excluded here —
+    // they are now INCLUDED above and barrel-exported from index.ts.
+    "packages/tui.bak/**/*",
+    "apps/vscode-extension/src/extension.ts",
+    // NOTE: `**/*.test.ts` / `**/*.spec.ts` used to be excluded here.
+    // Tests are now typechecked (and emitted) with everything else —
+    // `npm run typecheck` must stay green over the test suite too.
+    "packages/tui/src/commands/**/*",
+    "packages/tui/src/slash-commands/**/*",
+    "packages/tui/src/notifications/**/*",
+    "packages/tui/src/streaming/**/*",
+    "packages/tui/src/exec_cell/**/*",
+    "packages/tui/src/history_cell/**/*",
+    "packages/tui/src/markdown_render/**/*",
+    "packages/tui/src/diff_render/**/*",
+    "packages/tui/src/render/**/*",
+    "packages/tui/src/repl/**/*",
+    "packages/tui/src/ink-app/**/*",
+    "packages/tui/src/ink-app-esm/**/*",
+    "**/*.spec.ts"
+  ]
+}

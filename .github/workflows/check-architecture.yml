@@ -1,0 +1,75 @@
+name: check-architecture
+
+on:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "nemo/**"
+      - "eslint.config.mjs"
+      - "packages/eslint-plugin-nemo/**"
+      # Every workflow, not just this one. The SHA-pin check below reads all of
+      # them, so a new or edited workflow that adds an unpinned action has to be
+      # able to fail the build — scoping this to the single filename would let an
+      # unpinned action land unreviewed.
+      - ".github/workflows/**"
+      - "scripts/pin-actions.mjs"
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  boundaries:
+    name: Package boundaries + duplication ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: packages/core must NOT depend on apps/*
+        run: |
+          VIOLATIONS=$(grep -rn "from [\"'].*apps/" --include="*.ts" --include="*.tsx" packages/core/src 2>/dev/null || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::packages/core imports from apps/*:"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "core boundary ok"
+      - name: packages/execpolicy must NOT depend on packages/core
+        run: |
+          VIOLATIONS=$(grep -rn "packages/core\|from [\"'].*core/" --include="*.ts" packages/execpolicy/src 2>/dev/null || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::error::packages/execpolicy imports from packages/core:"
+            echo "$VIOLATIONS"
+            exit 1
+          fi
+          echo "execpolicy boundary ok"
+      - name: Custom lint rules pass (16 nemo/* rules)
+        run: npm run lint
+      - name: GitHub Actions must be SHA-pinned
+        run: node scripts/pin-actions.mjs --check
+      - name: Workflow allowlist (no unknown workflow files)
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const dir = '.github/workflows';
+            const known = new Set(fs.readdirSync(dir).filter(f => f.endsWith('.yml') || f.endsWith('.yaml')));
+            const expect = ['ci.yml','core-modules.yml','release.yml','secret-scan.yml','session-analytics.yml','codeql.yml','check-forbidden-strings.yml','check-md-tables.yml','docs-links.yml','containers.yml','smoke.yml','typecheck.yml','test-sharded.yml','beta.yml','check-generated.yml','check-architecture.yml','docs-build.yml','test-vscode-extension.yml','auto-close.yml','publish-gate.yml','check-skills.yml','dependency-review.yml','e2e-matrix.yml','pr-standards.yml','triage.yml'];
+            const unknown = [...known].filter(f => !expect.includes(f));
+            if (unknown.length) { console.error('::error::unknown workflow files: ' + unknown.join(', ')); process.exit(1); }
+            console.log('workflows ok: ' + known.size);
+          "

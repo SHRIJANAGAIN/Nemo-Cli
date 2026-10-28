@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "outDir": "../../../../dist/packages/tui/src/ink-app",
+    "rootDir": ".",
+    "declaration": true,
+    "sourceMap": true,
+    "resolveJsonModule": true
+  },
+  "include": ["../ink-app/**/*.tsx", "../ink-app/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

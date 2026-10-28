@@ -1,0 +1,26 @@
+# codespell configuration — single source of truth for spelling checks.
+#
+# CI:    .github/workflows/ci.yml passes `config: .codespellrc` to
+#        codespell-project/actions-codespell@v2. codespell appends config-file
+#        lists to CLI lists, so the action's own `skip` input merges with —
+#        never overrides — the skip list below.
+# Local: `pip install codespell`, then run `codespell` from the repo root;
+#        .codespellrc is auto-discovered, no flags needed.
+#
+# skip = content that must never gate a build:
+#   dist, node_modules, publish, coverage  -> install/build output
+#   package-lock.json                      -> generated; base64 hashes trip the dictionary
+#   corpus.txt, power-prompt.ts            -> user-authored power prompt, embedded verbatim
+#                                              and asserted by power-prompt.test.ts (never edit)
+#   *.jsonl, MEMORY.MD.archive             -> machine-generated session/state journals
+#
+# ignore-words-list = false positives ONLY: identifiers (afterAll, onText, amountIn),
+#   APIs/enums (AtMost, InstallIn), libraries (ratatui, iTerm), domain abbreviations
+#   (EHR, MAPE, BRIN, SOM, COO, OT), personal names (Skelton), non-English words
+#   (responde = Spanish, fulfilment = British English, tha = Hindi
+#   transliteration in an App.tsx comment), and correct words codespell
+#   mis-flagged (trough, Tread, followings, statics).
+#   Genuine typos are fixed in the source, never added here.
+[codespell]
+skip = dist, node_modules, publish, coverage, package-lock.json, corpus.txt, power-prompt.ts, MEMORY.MD.archive, *.jsonl, ./.git
+ignore-words-list = afterall, amountin, atmost, awsome, bloc, blocs, brin, caf, coo, countin, currenty, datas, dne, donot, ehr, endcodes, followings, fulfilment, hel, homestate, installin, inout, isnt, iterm, loadin, mape, nd, oll, ontext, ot, pre-empt, ratatui, responde, rightt, shouldbe, skelton, som, statics, tha, tread, trough, unparseable

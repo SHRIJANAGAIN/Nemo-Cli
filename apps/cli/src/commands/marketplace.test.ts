@@ -1,0 +1,92 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { marketplaceCommand } from "./marketplace.js"
+
+let shelf = ""
+let project = ""
+let savedExitCode: number | undefined
+
+function readExitCode(): number | undefined {
+  return (process as { exitCode?: number }).exitCode
+}
+
+function writeExitCode(value: number | undefined): void {
+  ;(process as { exitCode?: number }).exitCode = value
+}
+
+beforeEach(() => {
+  savedExitCode = readExitCode()
+  writeExitCode(undefined)
+})
+
+afterEach(() => {
+  for (const dir of [shelf, project]) {
+    if (dir) rmSync(dir, { recursive: true, force: true })
+  }
+  shelf = ""
+  project = ""
+  writeExitCode(savedExitCode)
+})
+
+function makeShelf(): string {
+  shelf = mkdtempSync(join(tmpdir(), "nemo-mkt-"))
+  mkdirSync(join(shelf, "skills", "reviewer"), { recursive: true })
+  writeFileSync(join(shelf, "skills", "reviewer", "SKILL.md"), "---\nname: reviewer\ndescription: Reviews\n---\n\nB\n")
+  return shelf
+}
+
+describe("marketplaceCommand", () => {
+  it("lists and searches the shelf", () => {
+    const dir = makeShelf()
+
+    expect(marketplaceCommand({ action: "list", source: dir })).toContain("[skill] reviewer")
+    expect(marketplaceCommand({ action: "search", nameOrQuery: "review", source: dir })).toContain("reviewer")
+    expect(marketplaceCommand({ action: "search", nameOrQuery: "zzz", source: dir })).toContain(
+      "No marketplace entries",
+    )
+    expect(marketplaceCommand({ action: "search", source: dir })).toContain("Usage:")
+  })
+
+  it("installs and removes through the CLI", () => {
+    const dir = makeShelf()
+    project = mkdtempSync(join(tmpdir(), "nemo-mktproj-"))
+
+    expect(
+      marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "reviewer", source: dir, cwd: project }),
+    ).toContain("Installed skill")
+    expect(existsSync(join(project, ".nemo", "skills", "reviewer", "SKILL.md"))).toBe(true)
+    expect(marketplaceCommand({ action: "remove", kind: "skill", nameOrQuery: "reviewer", cwd: project })).toContain(
+      "Removed",
+    )
+    expect(marketplaceCommand({ action: "install", kind: "nope", nameOrQuery: "x", source: dir })).toContain("Usage:")
+  })
+
+  it("rejects unknown actions", () => {
+    expect(marketplaceCommand({ action: "buy" })).toContain("Unknown marketplace action")
+    expect(process.exitCode).toBe(2)
+  })
+
+  it("exits 1 on a missing install and 0 on success", () => {
+    const dir = makeShelf()
+    project = mkdtempSync(join(tmpdir(), "nemo-mktproj-"))
+
+    expect(
+      marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "ghost", source: dir, cwd: project }),
+    ).toContain("Error:")
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = undefined
+    expect(
+      marketplaceCommand({ action: "install", kind: "skill", nameOrQuery: "reviewer", source: dir, cwd: project }),
+    ).toContain("Installed skill")
+    expect(process.exitCode).toBeUndefined()
+  })
+})

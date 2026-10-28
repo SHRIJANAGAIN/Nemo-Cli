@@ -1,0 +1,25 @@
+{
+  // Dedicated program for the web-targeted logic/ tree (Vite/browser code:
+  // import.meta.env, window, HTMLElement). The root tsconfig is CommonJS
+  // with lib ES2022 — deliberately DOM-free so Node code can never lean on
+  // `window` — so logic/ gets ITS OWN environment here instead of leaking
+  // DOM globals into the CLI program. Run: npm run typecheck:logic
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": [],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.cache/tsbuild/logic.check.tsbuildinfo"
+  },
+  "include": ["packages/tui/src/logic/**/*.ts", "packages/tui/src/logic/**/*.tsx"]
+}

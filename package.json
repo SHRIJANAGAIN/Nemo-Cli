@@ -1,0 +1,76 @@
+{
+  "name": "nemo-code",
+  "version": "1.2.1",
+  "private": true,
+  "type": "commonjs",
+  "description": "Nemo Code is a CLI coding agent designed for autonomous software development. It is developed and maintained by **Shrijan** and licensed under the **Apache License 2.0**.",
+  "license": "Apache-2.0",
+  "author": "Shrijan",
+  "bin": {
+    "nemo": "dist/apps/cli/src/index.js",
+    "nemo-code": "dist/apps/cli/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run sync-version && node scripts/clean-dist.mjs && tsc -p tsconfig.json --noEmitOnError && npm run build:ink && node scripts/postbuild.mjs",
+    "build:loose": "npm run sync-version && node scripts/clean-dist.mjs && tsc -p tsconfig.json --noEmitOnError false --noCheck && npm run build:ink:loose && node scripts/postbuild.mjs",
+    "build:ink": "tsc -p tsconfig.ink.json --noEmitOnError",
+    "build:ink:loose": "tsc -p tsconfig.ink.json --noEmitOnError false --noCheck",
+    "sync-version": "node scripts/sync-version.mjs",
+    "check:dist": "node scripts/check-dist.mjs",
+    "check:links": "node scripts/check-docs-links.mjs",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "start": "node dist/apps/cli/src/index.js",
+    "desktop": "npm run build && electron dist/apps/desktop/src/main.js",
+    "desktop:quick": "electron dist/apps/desktop/src/main.js",
+    "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck:ink": "tsc -p tsconfig.ink-check.json",
+    "typecheck:logic": "tsc -p tsconfig.logic.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "node scripts/e2e.mjs",
+    "smoke": "node scripts/run-smokes.mjs",
+    "lint": "eslint apps packages nemo",
+    "lint:fix": "eslint apps packages nemo --fix",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,json,md}\" \"packages/**/*.{ts,tsx,json,md}\" \"nemo/**/*.{ts,md}\" \"*.{json,md}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,json,md}\" \"packages/**/*.{ts,tsx,json,md}\" \"nemo/**/*.{ts,md}\" \"*.{json,md}\"",
+    "sbom": "npm sbom --sbom-format=cyclonedx --omit=dev > sbom.cyclonedx.json",
+    "install-global": "node scripts/install-global.js",
+    "publish:build": "npm run build && node scripts/make-publish.mjs",
+    "publish:build:debug": "npm run build && node scripts/make-publish.mjs --skip-obfuscation",
+    "publish:npm": "npm run publish:build && npm publish ./publish --access public --provenance"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "19.2.18",
+    "@vitest/coverage-v8": "2.1.9",
+    "clsx": "2.1.1",
+    "electron": "44.6.0",
+    "eslint": "^9.18.0",
+    "javascript-obfuscator": "5.8.0",
+    "playwright": "1.64.1",
+    "prettier": "^3.4.2",
+    "tailwind-merge": "3.7.0",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "2.1.9"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "bidi-js": "1.1.0",
+    "figures": "6.1.0",
+    "glob": "13.0.6",
+    "ink": "7.1.1",
+    "lodash-es": "4.18.1",
+    "react": "19.2.8",
+    "string-width": "8.2.2",
+    "supports-hyperlinks": "4.5.0",
+    "usehooks-ts": "3.1.1"
+  }
+}

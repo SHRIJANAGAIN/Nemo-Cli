@@ -1,0 +1,27 @@
+{
+  // Check-only twin of tsconfig.ink.json (same include/exclude via
+  // extends): `npm run typecheck:ink` points here for a warm cached check
+  // (~3s cold → ~1s warm) while build:ink keeps emitting every run (no
+  // incremental — fix-esm-imports deletes the deep emit tree after
+  // flattening; a skipped re-emit would break the flat output).
+  "extends": "./tsconfig.ink.json",
+  // Override the inherited exclude so the ink TEST files are typechecked
+  // here, while tsconfig.ink.json (the emitting build) keeps skipping
+  // them — tests must typecheck, but they must not ship in build:ink's
+  // flattened dist output.
+  "exclude": [
+    "node_modules",
+    "dist",
+    // Typechecked by tsconfig.check.json instead — see the note there.
+    // Reason: it imports ../../dialogs.js → packages/tui/src/index.ts →
+    // packages/tui/src/ui/index.ts, and that ESM barrel (plus ui/
+    // tool-display.ts, ui/tool-palette.ts) uses extensionless relative
+    // imports, which are TS2835 errors under this NodeNext config.
+    "packages/tui/src/ink-app/utils/stringWidth.test.ts"
+  ],
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.cache/tsbuild/ink.check.tsbuildinfo"
+  }
+}

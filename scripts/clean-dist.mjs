@@ -1,0 +1,34 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+/**
+ * Remove dist/ and stray tsbuildinfo files BEFORE a build.
+ *
+ * Why: tsc never deletes outputs for sources that were deleted/renamed,
+ * so a dirty dist/ keeps serving months-old commands (this actually
+ * happened: dist shipped 0.3.0 while src was 0.5.0). Every build now
+ * starts from a clean slate, making "stale dist" structurally impossible
+ * after a successful build.
+ */
+
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+
+const dist = path.join(ROOT, "dist")
+if (fs.existsSync(dist)) {
+  fs.rmSync(dist, { recursive: true, force: true })
+  console.log("clean-dist: removed dist/")
+}
+
+for (const entry of fs.readdirSync(ROOT)) {
+  if (entry.endsWith(".tsbuildinfo")) {
+    fs.rmSync(path.join(ROOT, entry), { force: true })
+    console.log(`clean-dist: removed ${entry}`)
+  }
+}

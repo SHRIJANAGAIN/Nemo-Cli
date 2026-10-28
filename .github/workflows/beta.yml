@@ -1,0 +1,63 @@
+name: beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump major, minor, or patch"
+        required: false
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+      version:
+        description: "Override version (optional, e.g. 0.7.0-beta.1)"
+        required: false
+        type: string
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version || inputs.bump }}
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Resolve beta version
+        id: ver
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            CURRENT=$(node -e "console.log(require('./package.json').version)")
+            echo "version=${CURRENT%-*}-beta.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+          echo "resolved=$(grep version $GITHUB_OUTPUT)"
+      - run: npm run build
+      - run: node dist/apps/cli/src/index.js --version
+      - name: Stage publish tree (obfuscation skipped for speed)
+        run: npm run publish:build:debug
+        env:
+          NEMO_SKIP_OBFUSCATION: "1"
+      - run: npm run verify:pack
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nemo-beta-${{ steps.ver.outputs.version }}
+          path: |
+            dist/
+            publish/
+          retention-days: 14
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.ver.outputs.version }}" --prerelease --title "Nemo v${{ steps.ver.outputs.version }} (beta)" --generate-notes \
+            || echo "release exists, skipping create"

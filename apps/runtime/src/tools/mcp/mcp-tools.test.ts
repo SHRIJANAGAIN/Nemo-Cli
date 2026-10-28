@@ -1,0 +1,387 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { describe, expect, it } from "vitest"
+import * as fs from "node:fs"
+import * as os from "node:os"
+import * as path from "node:path"
+import * as http from "node:http"
+import { createMcpConnection, MCP_MAX_BUFFER_BYTES } from "../../../../../packages/mcp/src/index.js"
+import { ExecDecision } from "../../../../../packages/execpolicy/src/policy.js"
+import { createMcpTools, resetMcpRegistry, slugify, toToolProperty } from "./mcp.js"
+import { createMcpRunnerTool } from "./mcp-runner-tool.js"
+import type { NemoConfig } from "../../config.js"
+import type { ToolContext } from "../types.js"
+import {
+  createMcpInstallTool,
+  execAsync,
+  resolveExecutable,
+  resolveInstalledEntry,
+  resolveNpmCliJs,
+} from "./mcp-install.js"
+
+/**
+ * MCP client + tool-exposure fixes, proven against a fake stdio server:
+ * initialized notification, cursor pagination, flat prompts/get shape,
+ * unique resource/prompt tool names, full schema passthrough.
+ */
+
+const SERVER_SCRIPT = `
+const readline = require("readline");
+const fs = require("fs");
+const log = process.env.MCP_TEST_LOG;
+const rl = readline.createInterface({ input: process.stdin });
+rl.on("line", (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.id === undefined) {
+    if (msg.method && log) fs.appendFileSync(log, msg.method + "\\n");
+    return;
+  }
+  const respond = (result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\\n");
+  if (msg.method === "initialize") return respond({ protocolVersion: "2024-11-05", capabilities: {}, serverInfo: { name: "fake", version: "0" } });
+  if (msg.method === "tools/list") {
+    if (!msg.params || !msg.params.cursor) return respond({ tools: [{ name: "alpha", description: "first", inputSchema: { type: "object", properties: { q: { type: "string", description: "query", enum: ["a", "b"] } }, required: ["q"] } }], nextCursor: "c1" });
+    return respond({ tools: [{ name: "beta", description: "second", inputSchema: { type: "object", properties: {} } }] });
+  }
+  if (msg.method === "resources/list") return respond({ resources: [{ uri: "file:///a.txt", name: "a" }, { uri: "file:///b.txt", name: "b" }] });
+  if (msg.method === "prompts/list") return respond({ prompts: [{ name: "p1" }, { name: "p2" }] });
+  if (msg.method === "prompts/get") return respond({ messages: [{ role: "user", content: "hello" }] });
+  if (msg.method === "tools/call") return respond({ content: [{ type: "text", text: "called:" + msg.params.name }] });
+  return respond({});
+});
+`
+
+function startFakeServer() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-"))
+  const script = path.join(dir, "server.cjs")
+  fs.writeFileSync(script, SERVER_SCRIPT)
+  const log = path.join(dir, "notes.log")
+  return { dir, script, log }
+}
+
+describe("McpConnection protocol fixes", () => {
+  it("sends notifications/initialized and paginates tools/list", async () => {
+    const { dir, script, log } = startFakeServer()
+    try {
+      const conn = createMcpConnection("fake", { command: [process.execPath, script], env: { MCP_TEST_LOG: log } })
+      const tools = await conn.listTools(0)
+      expect(tools.map((t) => t.name)).toEqual(["alpha", "beta"])
+      await new Promise((r) => setTimeout(r, 200))
+      const notes = fs.existsSync(log) ? fs.readFileSync(log, "utf8") : ""
+      expect(notes).toContain("notifications/initialized")
+      conn.close()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("parses the flat prompts/get shape", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const conn = createMcpConnection("fake", { command: [process.execPath, script] })
+      const prompt = await conn.getPrompt("p1")
+      expect(prompt?.messages).toHaveLength(1)
+      conn.close()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("reports disconnected for a dead child", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const conn = createMcpConnection("fake", { command: [process.execPath, script] })
+      await conn.connect()
+      ;(conn as unknown as { child: { kill: (s: string) => void } }).child?.kill("SIGKILL")
+      await new Promise((r) => setTimeout(r, 500))
+      const status = await conn.status()
+      expect(status.connected).toBe(false)
+      conn.close()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+})
+
+describe("createMcpTools exposure fixes", () => {
+  it("emits unique names per resource/prompt and keeps full schemas", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const tools = await createMcpTools({ fake: { command: [process.execPath, script] } }, 0)
+      const names = tools.map((t) => t.definition.name)
+      expect(new Set(names).size).toBe(names.length)
+      expect(names).toContain("mcp__fake__read_resource_file_a_txt")
+      expect(names).toContain("mcp__fake__get_prompt_p1")
+      const alpha = tools.find((t) => t.definition.name === "mcp__fake__alpha")
+      const q = alpha?.definition.parameters.properties.q
+      expect(q?.type).toBe("string")
+      expect(q?.enum).toEqual(["a", "b"])
+      resetMcpRegistry()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("skips a server whose declared command the exec policy denies (#62)", async () => {
+    // Default policy: `sudo *` = Deny. No spawn is attempted — the server
+    // surfaces as its error tool carrying the policy verdict instead.
+    const tools = await createMcpTools({ evil: { command: ["sudo", "rm", "-rf", "/"] } }, 0)
+    expect(tools).toHaveLength(1)
+    expect(tools[0]?.definition.name).toBe("mcp__evil__error")
+    expect(tools[0]?.definition.description).toContain("exec policy denies")
+    resetMcpRegistry()
+  })
+
+  it("treats policy Ask as config-trusted standing approval — the server still connects (#62)", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const tools = await createMcpTools({ fake: { command: [process.execPath, script] } }, 0, () => ExecDecision.Ask)
+      expect(tools.map((t) => t.definition.name)).toContain("mcp__fake__alpha")
+      resetMcpRegistry()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("a deny verdict evicts a previously-connected server (#62)", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const first = await createMcpTools({ flip: { command: [process.execPath, script] } }, 0, () => ExecDecision.Allow)
+      expect(first.map((t) => t.definition.name)).toContain("mcp__flip__alpha")
+      // Same server, now denied (e.g. a stricter policy reload): the stale
+      // tools must disappear and the child must be closed, not linger.
+      const second = await createMcpTools({ flip: { command: [process.execPath, script] } }, 0, () => ExecDecision.Deny)
+      expect(second).toHaveLength(1)
+      expect(second[0]?.definition.name).toBe("mcp__flip__error")
+      resetMcpRegistry()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("slugify/toToolProperty helpers behave", () => {
+    expect(slugify("file:///a.txt")).toBe("file_a_txt")
+    expect(slugify("")).toBe("item")
+    expect(toToolProperty({ type: "integer", description: "n", enum: ["x", 1] }).enum).toEqual(["x"])
+    expect(toToolProperty(undefined).type).toBe("string")
+  })
+
+  it("resolveInstalledEntry finds dist/index.js payloads", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-inst-"))
+    try {
+      const dist = path.join(dir, "node_modules", "some-pkg", "dist")
+      fs.mkdirSync(dist, { recursive: true })
+      fs.writeFileSync(path.join(dist, "index.js"), "x")
+      expect(resolveInstalledEntry(dir, "some-pkg")).toEqual({
+        command: ["node", path.join(dist, "index.js")],
+      })
+      expect(resolveInstalledEntry(dir, "missing-pkg")).toBeUndefined()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("resolveExecutable finds node and rejects ghost binaries", () => {
+    // node runs this very test, so it must resolve (absolute path back).
+    const nodeBin = resolveExecutable("node")
+    expect(nodeBin).toBeDefined()
+    expect(path.isAbsolute(nodeBin as string)).toBe(true)
+    if (process.platform === "win32" && nodeBin) {
+      // Regression: returning the extensionless POSIX shim (...\nodejs\npm)
+      // makes spawn() throw ENOENT. Only PATHEXT executables are spawnable.
+      expect(/\.(exe|cmd|bat|com)$/i.test(nodeBin)).toBe(true)
+    }
+    expect(resolveExecutable("definitely-not-a-binary-xyz-123")).toBeUndefined()
+  })
+
+  it("resolveNpmCliJs finds the npm entry point next to node", () => {
+    const cli = resolveNpmCliJs()
+    // Wherever node itself was installed, its npm payload ships alongside.
+    expect(cli).toBeDefined()
+    expect((cli as string).endsWith("npm-cli.js")).toBe(true)
+  })
+})
+
+describe("mcp__install execution", () => {
+  it("execAsync resolves on exit 0 and carries the exit code in rejections", async () => {
+    await expect(execAsync(process.execPath, ["-e", "process.exit(0)"], process.cwd())).resolves.toBeUndefined()
+    await expect(execAsync(process.execPath, ["-e", "process.exit(3)"], process.cwd())).rejects.toThrow(/\(3\)/)
+  })
+
+  it("execAsync rejects instead of hanging when the command cannot spawn", async () => {
+    await expect(execAsync("definitely-not-a-binary-xyz-123", [], process.cwd())).rejects.toThrow(
+      /definitely-not-a-binary-xyz-123|ENOENT/,
+    )
+  })
+
+  it("execAsync strips secret-bearing env from installer children (#75)", async () => {
+    // Installers run arbitrary package code (postinstall scripts) — they get
+    // the same filtered env as bash, never raw process.env. PATH must survive
+    // so npm/pip keep working.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-env-"))
+    const outFile = path.join(dir, "child-env.json")
+    process.env.ZZ_NEMO_INSTALL_PROBE_SECRET = "s3cr3t-probe"
+    try {
+      await execAsync(
+        process.execPath,
+        ["-e", `require("fs").writeFileSync(${JSON.stringify(outFile)}, JSON.stringify(process.env))`],
+        process.cwd(),
+      )
+      const childEnv = JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<string, string>
+      expect(childEnv.ZZ_NEMO_INSTALL_PROBE_SECRET).toBeUndefined()
+      expect(childEnv.PATH).toBeTruthy()
+    } finally {
+      delete process.env.ZZ_NEMO_INSTALL_PROBE_SECRET
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("install reports registry misses as errors without spawning anything", async () => {
+    const tool = createMcpInstallTool()
+    const res = await tool.execute("t", { action: "install", query: "no-such-server-xyz" }, undefined, undefined)
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("not found in registry")
+  })
+
+  it("list/info/unknown actions route to the right responses", async () => {
+    const tool = createMcpInstallTool()
+    const list = await tool.execute("t", { action: "list" }, undefined, undefined)
+    expect(list.isError).toBe(false)
+    expect(list.content[0].text).toContain("Available MCP servers")
+    const info = await tool.execute("t", { action: "info", query: "puppeteer" }, undefined, undefined)
+    expect(info.isError).toBe(false)
+    expect(info.content[0].text).toContain("@modelcontextprotocol/server-puppeteer")
+    const unknown = await tool.execute("t", { action: "definitely-unknown" }, undefined, undefined)
+    expect(unknown.isError).toBe(true)
+  })
+})
+
+describe("MCP transport buffer cap (#82a)", () => {
+  it("kills a stdio server that floods stdout past 256KB with no frame boundary", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-mcp-flood-"))
+    const script = path.join(dir, "flood.cjs")
+    // Never frames a newline and never exits: readline used to buffer this
+    // unboundedly (OOM class); the capped framer must reject instead. The
+    // interval keeps the child alive so its exit can't race the flood reject.
+    fs.writeFileSync(
+      script,
+      `setInterval(() => process.stdout.write("x".repeat(64 * 1024)), 10)`,
+    )
+    try {
+      const conn = createMcpConnection("flood", { command: [process.execPath, script], timeoutMs: 5000 })
+      await expect(conn.connect()).rejects.toThrow(/without a frame boundary/)
+      conn.close()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("caps an unbounded HTTP response body instead of buffering it", async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" })
+      res.write("x".repeat(MCP_MAX_BUFFER_BYTES + 4096))
+      // Never complete the response: pre-fix this hung until test timeout.
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const port = (server.address() as { port: number }).port
+    try {
+      const conn = createMcpConnection("http-flood", {
+        url: `http://127.0.0.1:${port}/mcp`,
+        oauth: false,
+        timeoutMs: 5000,
+      })
+      await expect(conn.connect()).rejects.toThrow(/byte transport cap/)
+      conn.close()
+    } finally {
+      server.close()
+    }
+  }, 15000)
+})
+
+describe("MCP tools stay usable when the model guesses wrong", () => {
+  function contextWith(servers: Record<string, { command: string[] }>): ToolContext {
+    return {
+      cwd: process.cwd(),
+      config: { mcpServers: servers } as unknown as NemoConfig,
+      permissions: {} as ToolContext["permissions"],
+    }
+  }
+
+  it("matches a prose search query against the catalog", async () => {
+    const tool = createMcpInstallTool()
+    const res = await tool.execute(
+      "t",
+      { action: "search", query: "node server http serve localhost command execution" },
+      undefined,
+      undefined,
+    )
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toMatch(/Found \d+ MCP servers/)
+  })
+
+  it("falls back to the whole catalog when nothing matches the query", async () => {
+    const tool = createMcpInstallTool()
+    const res = await tool.execute(
+      "t",
+      { action: "search", query: "zzzqqq-nothing-matches-this" },
+      undefined,
+      undefined,
+    )
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toContain("Showing all")
+    expect(res.content[0].text).toContain("github")
+  })
+
+  it("names the available servers when the requested one is unknown", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute(
+      "t",
+      { action: "list_tools", server: "definitely-not-a-server" },
+      undefined,
+      undefined,
+      contextWith({}),
+    )
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("Available MCP servers")
+  })
+
+  it("answers a bare list with the server catalog instead of an error", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute("t", { action: "list_tools" }, undefined, undefined, contextWith({}))
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toContain("Available MCP servers")
+  })
+
+  it("answers a bare status with every known server", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute("t", { action: "status" }, undefined, undefined, contextWith({}))
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toContain("MCP server status:")
+    expect(res.content[0].text).toContain("not running")
+  })
+
+  it("runs a config-declared server through the 'list' alias", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const tool = createMcpRunnerTool()
+      const ctx = contextWith({ fake: { command: [process.execPath, script] } })
+      const res = await tool.execute("t", { action: "list", server: "fake" }, undefined, undefined, ctx)
+      expect(res.isError).toBe(false)
+      expect(res.content[0].text).toContain("alpha")
+      await tool.execute("t", { action: "disconnect", server: "fake" }, undefined, undefined, ctx)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("rejects an unknown action but lists the valid ones", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute("t", { action: "frobnicate" }, undefined, undefined, contextWith({}))
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("list_tools")
+  })
+})

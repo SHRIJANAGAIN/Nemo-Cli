@@ -1,0 +1,354 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import * as fs from "fs"
+import * as os from "os"
+import * as path from "path"
+import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
+import { textResult, type Tool } from "../types.js"
+
+/**
+ * Resolved per call rather than captured at module load: `os.homedir()` is
+ * ambient, and a frozen constant both bakes in whatever HOME happened to be at
+ * import time and makes the traversal below impossible to test in isolation.
+ * Matches `sessionsDir()` in `nemo/9-session/session.ts`.
+ */
+function todoDir(): string {
+  return path.join(os.homedir(), ".nemo", "todos")
+}
+
+/**
+ * Session ids name a FILE under the todos directory, so they must be a single
+ * path segment. `../../../../.ssh/id_rsa` used to resolve straight out of it:
+ * `todo_read` parsed whatever it landed on and rendered it to the model, and the
+ * `todo` write path created or truncated the target. `sessionId` reaches here
+ * from `ToolContext`, which an embedding host or MCP server sets — so it is
+ * outside the trust boundary even though the local CLI never supplies anything
+ * hostile. Mirrors the CLI guard in `apps/cli/src/commands/todo.ts` and core's
+ * `assertSessionId`.
+ */
+const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+/**
+ * The file name a session id maps to, or null when the id is not a single path
+ * segment. Blank means the documented global-list fallback, matching what
+ * `todoFile` has always done.
+ */
+function normalizeTodoSessionId(sessionId?: string): string | null {
+  const id = sessionId && sessionId.trim() ? sessionId.trim() : "global"
+  return SESSION_ID_RE.test(id) ? id : null
+}
+
+function todoFile(sessionId?: string): string {
+  const id = normalizeTodoSessionId(sessionId)
+  if (id === null) {
+    throw new Error(`invalid session id: ${JSON.stringify(sessionId ?? "")}`)
+  }
+  return path.join(todoDir(), `${id}.json`)
+}
+
+interface TodoItem {
+  id: number
+  content: string
+  status: "pending" | "in_progress" | "completed"
+  priority?: "low" | "medium" | "high"
+  dependsOn?: number[]
+  createdAt: number
+  updatedAt: number
+}
+
+interface TodoList {
+  items: TodoItem[]
+  /** Snapshot of items before the last update, for diff rendering. */
+  before?: TodoItem[]
+}
+
+function load(sessionId?: string): TodoList {
+  try {
+    const file = todoFile(sessionId)
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8")) as TodoList
+  } catch {
+    /* fall through */
+  }
+  return { items: [] }
+}
+
+function save(list: TodoList, sessionId?: string): void {
+  const file = todoFile(sessionId)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(list, null, 2), "utf8")
+}
+
+function nextId(list: TodoList): number {
+  return list.items.length === 0 ? 1 : Math.max(...list.items.map((i) => i.id)) + 1
+}
+
+/** Render a TodoList, showing only changes since the last snapshot (Shrijan TodoView diff). */
+function renderTodoDiff(list: TodoList): string {
+  const before = list.before ?? []
+  const after = list.items
+
+  if (after.length === 0) return "(no todos)"
+
+  // If no snapshot, show full list
+  if (!list.before) {
+    return renderFull(after)
+  }
+
+  // Check if structural change (different length or content)
+  const structural =
+    before.length !== after.length || after.some((todo, index) => before[index]?.content !== todo.content)
+
+  // Check if terminal (all completed/cancelled) - show full list
+  const terminal = after.every((todo) => todo.status === "completed")
+
+  // Find changed items
+  const changes = after
+    .map((todo, index) => ({
+      index,
+      changed: !sameTodo(before[index], todo),
+    }))
+    .filter((item) => item.changed)
+
+  // If no structural change and no terminal and no changes, show nothing new
+  if (!structural && !terminal && changes.length === 0) {
+    return "(no changes)"
+  }
+
+  // Wide view: structural change, terminal, or no diff items
+  if (structural || terminal || changes.length === 0) {
+    return renderFull(after)
+  }
+
+  // Compact view: show only changed items with context
+  const firstChanged = Math.max(0, Math.min(...changes.map((item) => item.index)) - 1)
+  const lastChanged = Math.min(after.length - 1, Math.max(...changes.map((item) => item.index)) + 1)
+
+  const lines = []
+  for (let i = firstChanged; i <= lastChanged; i++) {
+    const todo = after[i]
+    if (!todo) continue
+    const changed = changes.some((c) => c.index === i)
+    const marker = changed ? ">" : " "
+    lines.push(formatTodo(todo, marker))
+  }
+
+  const hiddenBefore = firstChanged
+  const hiddenAfter = after.length - lastChanged - 1
+  if (hiddenBefore > 0 || hiddenAfter > 0) {
+    lines.unshift(`... ${hiddenBefore} hidden before, ${hiddenAfter} hidden after ...`)
+  }
+
+  return lines.join("\n")
+}
+
+function sameTodo(before: TodoItem | undefined, after: TodoItem): boolean {
+  if (!before) return false
+  return (
+    before.content === after.content &&
+    before.status === after.status &&
+    JSON.stringify(before.priority) === JSON.stringify(after.priority)
+  )
+}
+
+function renderFull(items: TodoItem[]): string {
+  if (items.length === 0) return "(no todos)"
+  return items.map((i) => formatTodo(i, " ")).join("\n")
+}
+
+function formatTodo(i: TodoItem, marker: string): string {
+  const statusIcon = i.status === "completed" ? "x" : i.status === "in_progress" ? "*" : " "
+  const priority = i.priority ? ` (${i.priority})` : ""
+  return `${marker}[${statusIcon}] #${i.id}${priority} ${i.content}`
+}
+
+export function createTodoTool(): Tool {
+  const definition: ToolDefinition = {
+    timeoutMs: 30_000,
+    name: "todo",
+    description:
+      "Maintain a small session-scoped to-do list. Use to plan multi-step work: write, read, or update items. write accepts one item via 'content' or a batch via 'items'. Uses diff rendering to show only changes since last update.",
+    parameters: {
+      type: "object",
+      required: ["action"],
+      properties: {
+        action: {
+          type: "string",
+          enum: ["read", "write", "update", "clear"],
+          description: "The operation to perform on the to-do list.",
+        },
+        id: { type: "integer", description: "Item id (for update)." },
+        content: { type: "string", description: "Item text for a single write." },
+        items: {
+          type: "array",
+          description:
+            "Batch of items for write: [{ content, status?, priority?, dependsOn? }]. Preferred over repeated single writes.",
+          items: { type: "object", description: "One todo: content (required), status?, priority?, dependsOn?." },
+        },
+        status: {
+          type: "string",
+          enum: ["pending", "in_progress", "completed"],
+          description: "New status for the item (for update, or the initial status of a written item).",
+        },
+        priority: {
+          type: "string",
+          enum: ["low", "medium", "high"],
+          description: "Priority for the item (for write/update).",
+        },
+        dependsOn: {
+          type: "array",
+          items: { type: "integer", description: "ID of a todo this one depends on" },
+          description: "IDs of items this one depends on (for write/update).",
+        },
+      },
+    },
+  }
+
+  return {
+    definition,
+    async execute(_id, args, signal, _update, context) {
+      if (signal?.aborted) return textResult("aborted", /*isError*/ true)
+      const sessionId = context?.sessionId
+      // An unusable session id is a tool error, not a thrown exception: every
+      // other failure on this path returns an error result, and letting the
+      // throw escape would report it differently to the model.
+      if (normalizeTodoSessionId(sessionId) === null) {
+        return textResult(`Invalid session id: ${String(sessionId)}`, /*isError*/ true)
+      }
+      const action = String(args.action ?? "")
+      const list = load(sessionId)
+
+      if (action === "read") {
+        return textResult(renderFull(list.items))
+      }
+      if (action === "write") {
+        const additions = collectNewItems(args)
+        if (typeof additions === "string") return textResult(additions, /*isError*/ true)
+
+        // Snapshot before mutation for diff
+        list.before = [...list.items]
+
+        for (const addition of additions) {
+          list.items.push({
+            id: nextId(list),
+            content: addition.content,
+            status: addition.status ?? "pending",
+            priority: addition.priority,
+            dependsOn: addition.dependsOn,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          })
+        }
+        save(list, sessionId)
+        return textResult(renderTodoDiff(list))
+      }
+      if (action === "update") {
+        const id = Number(args.id)
+        const status = String(args.status ?? "")
+        if (!Number.isInteger(id) || !status) return textResult("Need numeric 'id' and 'status'.", /*isError*/ true)
+        const item = list.items.find((i) => i.id === id)
+        if (!item) return textResult(`No todo with id ${id}.`, /*isError*/ true)
+        if (status !== "pending" && status !== "in_progress" && status !== "completed")
+          return textResult("status must be pending|in_progress|completed", /*isError*/ true)
+
+        // Snapshot before mutation for diff
+        list.before = [...list.items]
+
+        item.status = status
+        item.updatedAt = Date.now()
+        if (args.priority !== undefined) item.priority = isPriority(args.priority)
+        if (args.dependsOn !== undefined)
+          item.dependsOn = Array.isArray(args.dependsOn) ? (args.dependsOn as number[]) : undefined
+        save(list, sessionId)
+        return textResult(renderTodoDiff(list))
+      }
+      if (action === "clear") {
+        list.before = [...list.items]
+        list.items = []
+        save(list, sessionId)
+        return textResult("(todos cleared)")
+      }
+      return textResult("action must be read|write|update|clear", /*isError*/ true)
+    },
+  }
+}
+
+function isPriority(value: unknown): "low" | "medium" | "high" | undefined {
+  if (value === "low" || value === "medium" || value === "high") return value
+  return undefined
+}
+
+function isStatus(value: unknown): TodoItem["status"] | undefined {
+  if (value === "pending" || value === "in_progress" || value === "completed") return value
+  return undefined
+}
+
+function idList(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const ids = value.map(Number).filter((n) => Number.isInteger(n))
+  return ids.length > 0 ? ids : undefined
+}
+
+interface NewTodo {
+  content: string
+  status?: TodoItem["status"]
+  priority?: TodoItem["priority"]
+  dependsOn?: number[]
+}
+
+/**
+ * Models write plans as a batch (`items: [{content, status}]`, or `todos:`) far
+ * more often than as repeated single-item writes — that shape used to fail with
+ * a bare "Missing 'content'." because only a top-level `content` was read. One
+ * item via `content` still works, and the error now names the accepted shapes.
+ */
+function collectNewItems(args: Record<string, unknown>): NewTodo[] | string {
+  const batch = Array.isArray(args.items) ? args.items : Array.isArray(args.todos) ? args.todos : undefined
+  if (batch !== undefined) {
+    if (batch.length === 0) return "items must not be empty."
+    const out: NewTodo[] = []
+    for (const [index, raw] of batch.entries()) {
+      if (typeof raw === "string") {
+        const text = raw.trim()
+        if (text) out.push({ content: text })
+        continue
+      }
+      if (raw === null || typeof raw !== "object") {
+        return `items[${index}] must be a string or an object with 'content'.`
+      }
+      const entry = raw as Record<string, unknown>
+      const text = String(entry.content ?? entry.text ?? entry.title ?? "").trim()
+      if (!text) return `items[${index}] is missing 'content'.`
+      out.push({
+        content: text,
+        status: isStatus(entry.status),
+        priority: isPriority(entry.priority),
+        dependsOn: idList(entry.dependsOn),
+      })
+    }
+    if (out.length === 0) return "items must contain at least one non-empty item."
+    return out
+  }
+
+  const content = String(args.content ?? "").trim()
+  if (!content) {
+    return "Missing 'content'. Send content for one item, or items: [{ content, status? }] for a batch."
+  }
+  return [
+    {
+      content,
+      status: isStatus(args.status),
+      priority: isPriority(args.priority),
+      dependsOn: idList(args.dependsOn),
+    },
+  ]
+}
+
+export function loadTodoList(sessionId?: string): TodoList {
+  return load(sessionId)
+}
+
+export { renderTodoDiff, renderFull }

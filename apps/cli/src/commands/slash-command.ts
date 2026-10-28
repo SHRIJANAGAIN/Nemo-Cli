@@ -1,0 +1,36 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+import { SlashCommandRegistry } from "./registry.js"
+import { buildNemoSlashRegistry, formatHelp, dispatchSlashCommandAsync } from "./command-dispatch.js"
+import { loadConfig } from "../../../runtime/src/index.js"
+
+export interface SlashCommandInterface {
+  readonly registry: SlashCommandRegistry
+  readonly dispatch: (input: string, options?: { sessionId?: string }) => Promise<string>
+  readonly help: () => string
+}
+
+export class SlashCommandService implements SlashCommandInterface {
+  readonly registry: SlashCommandRegistry
+
+  constructor() {
+    this.registry = buildNemoSlashRegistry()
+  }
+
+  dispatch(input: string, options?: { sessionId?: string }): Promise<string> {
+    const config = loadConfig()
+    return dispatchSlashCommandAsync(this.registry, input, config, { sessionId: options?.sessionId }).then(
+      (r) => r.output,
+    )
+  }
+
+  help(): string {
+    return formatHelp(this.registry)
+  }
+}
+
+export const slashCommandService = new SlashCommandService()

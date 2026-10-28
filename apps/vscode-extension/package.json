@@ -1,0 +1,124 @@
+{
+  "name": "nemo-vscode",
+  "displayName": "Nemo",
+  "description": "Nemo terminal agent in VS Code (sidebar webview + commands).",
+  "version": "0.7.0",
+  "publisher": "shrijan",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nemo",
+          "title": "Nemo",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "nemo": [
+        {
+          "id": "nemo.sidebar",
+          "name": "Nemo"
+        },
+        {
+          "id": "nemo.sessions",
+          "name": "Sessions"
+        },
+        {
+          "id": "nemo.models",
+          "name": "Models"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "nemo.run",
+        "title": "Nemo: Run prompt"
+      },
+      {
+        "command": "nemo.openWeb",
+        "title": "Nemo: Open web UI"
+      },
+      {
+        "command": "nemo.switchModel",
+        "title": "Nemo: Switch model"
+      },
+      {
+        "command": "nemo.switchProvider",
+        "title": "Nemo: Switch provider"
+      },
+      {
+        "command": "nemo.compact",
+        "title": "Nemo: Compact session"
+      },
+      {
+        "command": "nemo.review",
+        "title": "Nemo: Review selection"
+      },
+      {
+        "command": "nemo.newSession",
+        "title": "Nemo: New session"
+      },
+      {
+        "command": "nemo.openSessions",
+        "title": "Nemo: Open sessions"
+      }
+    ],
+    "configuration": {
+      "title": "Nemo",
+      "properties": {
+        "nemo.provider": {
+          "type": "string",
+          "default": "nvidia",
+          "description": "Model provider backend (22 backends: llamacpp/nvidia/openai/anthropic/google/ollama/groq/mistral/openrouter/...)."
+        },
+        "nemo.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model id for the active provider. Empty = provider default."
+        },
+        "nemo.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Provider base URL override. Empty = provider default."
+        },
+        "nemo.inlineCompletion": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ghost-text inline completion from local context (no network by default)."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "nemo.run",
+        "key": "ctrl+shift+t",
+        "title": "Nemo: Run prompt"
+      },
+      {
+        "command": "nemo.switchModel",
+        "key": "ctrl+shift+m",
+        "title": "Nemo: Switch model"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.84.0",
+    "typescript": "^5.4.0",
+    "vitest": "2.1.9"
+  }
+}

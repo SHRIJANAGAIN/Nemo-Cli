@@ -1,0 +1,92 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ */
+
+/**
+ * Load smoke test for the flattened ink build.
+ *
+ * `fix-esm-imports.js` verifies that every relative specifier in the emitted
+ * .js files points at a file that exists on disk. That check passes on a
+ * build which still cannot be imported: a file can exist, be the right
+ * format on paper, and still throw on load. The concrete case this exists to
+ * catch — under `module: NodeNext` the emit format is decided PER FILE by the
+ * nearest package.json to the SOURCE, so a .ts outside
+ * packages/tui/src/ink-app/ compiled to CommonJS while every file inside
+ * ink-app compiled to ESM. The flattened dir is `type: module`, so those CJS
+ * files threw "exports is not defined in ES module scope" the moment the REPL
+ * imported them — with a green path-existence check and a green build.
+ *
+ * So: actually import each entry point and confirm its exports are real.
+ *
+ * Run standalone or via postbuild (which runs it as build step 4). Resolves
+ * ROOT from its own location, so cwd does not matter.
+ */
+
+import fs from "node:fs"
+import path from "node:path"
+import { pathToFileURL, fileURLToPath } from "node:url"
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)))
+const distDir = path.join(ROOT, "dist", "packages", "tui", "src", "ink-app-esm")
+
+/** Each entry must expose every named export; the names prove the shape. */
+const ENTRY_POINTS = [
+  { file: "keymap.js", expect: ["Keymap", "setKeymap", "formatEffectiveKeymapMessage"] },
+  { file: "keybindings.js", expect: ["DEFAULT_KEYBINDINGS", "GLOBAL_SHORTCUTS"] },
+  { file: "approvalKeys.js", expect: ["approvalDecisionFor", "approvalNavigationFor"] },
+  // The module the REPL actually boots. Heavier (pulls react + ink), so it is
+  // the one that proves the flattened layout holds together end to end.
+  { file: "App.js", expect: ["default"] },
+]
+
+if (!fs.existsSync(distDir)) {
+  console.error(`ink ESM smoke test: ${distDir} does not exist — run \`npm run build\` first.`)
+  process.exit(1)
+}
+
+const failures = []
+
+for (const { file, expect } of ENTRY_POINTS) {
+  const full = path.join(distDir, file)
+  if (!fs.existsSync(full)) {
+    failures.push(`${file}: not present in the flattened output`)
+    continue
+  }
+  let mod
+  try {
+    mod = await import(pathToFileURL(full).href)
+  } catch (err) {
+    failures.push(`${file}: threw on import — ${err.code ?? err.name}: ` + String(err.message).split("\n")[0])
+    continue
+  }
+  const missing = expect.filter((name) => !(name in mod))
+  if (missing.length > 0) {
+    failures.push(`${file}: imported but missing export(s) ${missing.join(", ")}`)
+  } else {
+    console.log(`  ok   ${file} (${expect.length} export(s) verified)`)
+  }
+}
+
+/**
+ * NOTE: there is deliberately no "no specifier may escape this root" check here.
+ * App.js legitimately reaches ../../../../apps/runtime/* and ../../nemo/*, which
+ * land on the CommonJS build and are served fine by Node's CJS-ESM interop.
+ * Failing those would be a false alarm — an earlier version of this file did
+ * exactly that and had to be backed out.
+ *
+ * What that means is that a static rule CANNOT catch the flattened-module bug:
+ * the broken specifier and the working ones look identical until the code is
+ * run. The obfuscated publish build is where they diverge, because
+ * cjs-module-lexer stops recognising the CJS named exports once they are
+ * obfuscated, so an ESM import of a flattened module's CJS twin dies with
+ * "does not provide an export named ...". The real backstop for that is
+ * scripts/verify-pack.mjs, which loads the PUBLISHED entry points.
+ */
+
+if (failures.length > 0) {
+  console.error(`\nink ESM smoke test FAILED:\n  ${failures.join("\n  ")}`)
+  process.exit(1)
+}
+console.log(`\nink ESM smoke test passed (${ENTRY_POINTS.length} entry points)`)

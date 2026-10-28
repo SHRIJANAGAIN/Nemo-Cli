@@ -1,0 +1,195 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: Typecheck + version sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run typecheck:ink
+      - name: Version is single-sourced from package.json
+        run: |
+          npm run sync-version
+          git diff --exit-code -- apps/cli/src/version.ts \
+            || { echo "::error::apps/cli/src/version.ts out of sync with package.json — run npm run sync-version"; exit 1; }
+
+  lint:
+    name: Lint + Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+
+  test:
+    name: Tests (Node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node: [18, 20, 22]
+        include:
+          # Windows leg: the primary dev platform (bin/*.cmd shims, paths).
+          - os: windows-latest
+            node: 20
+          # macOS leg: install.sh + ~/.local/bin shims must work here too.
+          - os: macos-latest
+            node: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test -- --reporter=basic
+
+  coverage:
+    name: Coverage thresholds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: warn
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    needs: [typecheck, lint, test]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Smoke test built CLI
+        run: node dist/apps/cli/src/index.js --version
+      - name: E2E smoke (version/modes/sandbox/execpolicy)
+        run: npm run test:e2e
+      - name: Smoke test cmd shims (stale-dist detection path)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          bin\nemo.cmd --version
+          if errorlevel 1 exit /b 1
+          bin\nemo-code.cmd --version
+          if errorlevel 1 exit /b 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: dist/
+          retention-days: 7
+
+  pack:
+    name: Publish tarball audit (verify:pack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Stage publish/ (obfuscation skipped for CI speed)
+        run: npm run publish:build
+        env:
+          NEMO_SKIP_OBFUSCATION: "1"
+      - name: Assert tarball contents (no tests/journals/maps, personas shipped)
+        run: npm run verify:pack
+
+  audit:
+    name: npm audit (blocking) + SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Audit runtime dependencies (fails on high+)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Generate SBOM
+        run: npm run sbom
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom
+          path: sbom.cyclonedx.json
+          retention-days: 90
+
+  schema:
+    name: Config schema + docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: test -f config.schema.json
+      - run: test -f docs/README.md
+      - run: test -f LICENSE
+      - run: node -e "JSON.parse(require('fs').readFileSync('config.schema.json','utf8')); console.log('schema ok')"
+      - name: Internal docs links + anchors resolve
+        run: npm run check:links
+
+  codespell:
+    name: Codespell
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: codespell-project/actions-codespell@8f01853be192eb0f849a5c7d721450e7a467c579 # v2
+        with:
+          # .codespellrc is the single source of truth for skip + ignore words.
+          # codespell unions config-file lists with CLI lists (never replaces),
+          # so this skip input and the action's './.git' default only add to it.
+          config: .codespellrc
+          skip: ./node_modules,./dist,./.git

@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Nemo Config",
+  "type": "object",
+  "properties": {
+    "baseUrl": { "type": "string" },
+    "model": { "type": "string" },
+    "small_model": { "type": "string" },
+    "subagent_model": { "type": "string" },
+    "judge_model": { "type": "string" },
+    "apiKey": { "type": "string" },
+    "provider": {
+      "type": "string",
+      "enum": ["llamacpp", "nvidia", "nvidia-nim", "ollama", "custom"]
+    },
+    "cwd": { "type": "string" },
+    "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+    "maxTokens": { "type": "number" },
+    "timeoutMs": { "type": "number" },
+    "maxTurns": { "type": "integer", "minimum": 1, "maximum": 10000 },
+    "maxToolCalls": { "type": "number" },
+    "harnessAuto": { "type": "boolean" }
+  }
+}

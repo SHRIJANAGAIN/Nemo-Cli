@@ -1,0 +1,45 @@
+# Gitleaks config — secret scanning for CI (.github/workflows/secret-scan.yml).
+# Complements the in-repo lint rule `nemo/no-hardcoded-secrets` (ESLint)
+# and the publish-time scan in scripts/verify-pack.mjs: those cover working
+# files; gitleaks additionally sweeps the full git history.
+title = "Nemo secret scan"
+
+[[rules]]
+description = "Shrijan license key (1102-XXXX-XXXX-XXXX) — live credential, never commit"
+id = "nemo-license-key"
+regex = '''1102-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}'''
+tags = ["key", "nemo", "license"]
+[[rules.allowlist]]
+description = "literal placeholder format used in messages/docs, not a live key"
+regexes = ['''1102-XXXX-XXXX-XXXX''']
+
+[extend]
+# Start from gitleaks' default rule set (AWS/GitHub/Slack/OpenAI/… patterns).
+useDefault = true
+
+[allowlist]
+description = """
+Generated artifacts, local runtime state, and documentation surfaces where
+key-shaped strings are fixtures or illustrative examples rather than live
+credentials. Source code, configs, workflows, and manifests stay fully scanned.
+"""
+paths = [
+  '''\.env\.example$''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)publish/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\.smoke-tmp/''',
+  '''(^|/)\.smoke-cov/''',
+  '''(^|/)backups/''',
+  '''sbom\.cyclonedx\.json$''',
+  '''(^|/)[^/]*\.test\.[tj]sx?$''',
+  '''(^|/)__tests__/''',
+  # Prose/spec surfaces that document integrations with examples by nature:
+  # skills/, rules/, commands/, docs/, and agent prompt assets.
+  '''(^|/)skills/''',
+  '''(^|/)rules/''',
+  '''(^|/)commands/''',
+  '''(^|/)docs/''',
+  '''(^|/)assets/''',
+]
