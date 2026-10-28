@@ -58,7 +58,7 @@
     "prettier": "^3.9.10",
     "tailwind-merge": "3.7.0",
     "typescript": "^5.4.0",
-    "typescript-eslint": "^8.20.0",
+    "typescript-eslint": "^8.72.0",
     "vitest": "2.1.9"
   },
   "dependencies": {
