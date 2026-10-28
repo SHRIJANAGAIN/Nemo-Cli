@@ -262,23 +262,6 @@ export function resolveApiBase(raw: string | undefined): string {
  * to the literal public API host. The host check on the final URL (not on the
  * inputs) is what keeps a tainted path from steering the request elsewhere.
  */
-/**
- * Build a GitHub API URL from a path. Both the literal prefix and the parsed
- * hostname are checked on the final string — the value handed to `fetch` never
- * leaves api.github.com, whatever the path contains.
- */
-function githubUrl(path: string): string {
-  const url = `${GITHUB_API_ORIGIN}${path}`
-  if (!url.startsWith(`${GITHUB_API_ORIGIN}/`)) {
-    throw new Error(`refusing non-GitHub API URL: ${url}`)
-  }
-  const parsed = new URL(url)
-  if (parsed.protocol !== "https:" || parsed.hostname !== "api.github.com" || parsed.port) {
-    throw new Error(`refusing non-GitHub API URL: ${url}`)
-  }
-  return url
-}
-
 function apiHeaders(client: ApiClient): Record<string, string> {
   return {
     Accept: "application/vnd.github+json",
@@ -304,7 +287,12 @@ export async function postIssueComment(
     throw new Error(`bad issue number: ${issueNumber}`)
   }
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`
-  const res = await fetch(githubUrl(path), {
+  const url = `${GITHUB_API_ORIGIN}${path}`
+  const parsed = new URL(url)
+  if (!url.startsWith(`${GITHUB_API_ORIGIN}/`) || parsed.origin !== GITHUB_API_ORIGIN) {
+    throw new Error(`refusing non-GitHub API URL: ${url}`)
+  }
+  const res = await fetch(url, {
     method: "POST",
     headers: apiHeaders(client),
     body: JSON.stringify({ body }),
@@ -338,7 +326,13 @@ export async function createInstallationToken(apiBase: string, jwt: string, inst
   if (!Number.isInteger(installationId) || installationId <= 0) {
     throw new Error(`bad installation id: ${installationId}`)
   }
-  const res = await fetch(githubUrl(`/app/installations/${installationId}/access_tokens`), {
+  const path = `/app/installations/${installationId}/access_tokens`
+  const url = `${GITHUB_API_ORIGIN}${path}`
+  const parsed = new URL(url)
+  if (!url.startsWith(`${GITHUB_API_ORIGIN}/`) || parsed.origin !== GITHUB_API_ORIGIN) {
+    throw new Error(`refusing non-GitHub API URL: ${url}`)
+  }
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",
