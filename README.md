@@ -10,10 +10,9 @@ Licensed under the **Apache License 2.0**. Open source, developed and maintained
 
 Watch the short animated walkthrough of nemo in action:
 
-<video controls width="100%" src="https://https://www.youtube.com/watch?v=XqzXESMbUKg">
-  Your browser does not support the video tag.
-</video>
+[![Nemo CLI Demo](https://img.youtube.com/vi/XqzXESMbUKg/0.jpg)](https://www.youtube.com/watch?v=XqzXESMbUKg)
 
+---
 View or download the video on GitHub:
 https://www.youtube.com/watch?v=XqzXESMbUKg
 
@@ -255,3 +254,10 @@ The agent has a single tool-approval decision point, a deny-first exec policy, O
 ## License
 
 nemo Code is open source software developed and maintained by Shrijan, licensed under the Apache License 2.0 — see [LICENSE](LICENSE) for the full terms. You may use, copy, modify, merge, publish, distribute, sublicense, and sell copies of it, including for commercial purposes, under the terms of that licence.
+
+
+---
+<div align="center">
+  <p><b>Built with ❤️ in India and 2 months of hard work.</b></p>
+</div>
+                                                  
