@@ -1,6 +1,6 @@
 # Nemo CLI
 
-**nemo** is an AI coding agent that runs on your computer. Built by **Shrijan Kumar Tiwari**, it lives in your terminal and helps you carry out software development tasks: reading and modifying code, running shell commands, searching files, fetching web pages, and autonomously planning and adjusting its next steps based on feedback as it works.
+**NEMO** is an AI coding agent that runs on your computer. Built by **Shrijan Kumar Tiwari**, it lives in your terminal and helps you carry out software development tasks: reading and modifying code, running shell commands, searching files, fetching web pages, and autonomously planning and adjusting its next steps based on feedback as it works.
 
 Licensed under the **Apache License 2.0**. Open source, developed and maintained by Shrijan.
 
@@ -10,12 +10,12 @@ Licensed under the **Apache License 2.0**. Open source, developed and maintained
 
 Watch the short animated walkthrough of nemo in action:
 
-<video controls width="100%" src="https://raw.githubusercontent.com/SHRIJANAGAIN/Nemo-Cli/main/demo-video/NEMO-promo.mp4">
+<video controls width="100%" src="https://https://www.youtube.com/watch?v=XqzXESMbUKg">
   Your browser does not support the video tag.
 </video>
 
 View or download the video on GitHub:
-https://github.com/SHRIJANAGAIN/Nemo-Cli/blob/main/demo-video/NEMO-promo.mp4
+https://www.youtube.com/watch?v=XqzXESMbUKg
 
 
 
@@ -23,7 +23,7 @@ https://github.com/SHRIJANAGAIN/Nemo-Cli/blob/main/demo-video/NEMO-promo.mp4
 
 ## What is nemo?
 
-nemo is a terminal-based AI agent for autonomous software development. It fits scenarios such as:
+NEMO is a terminal-based AI agent for autonomous software development. It fits scenarios such as:
 
 - Writing and modifying code — implementing features, fixing bugs, completing refactors
 - Understanding a project — exploring an unfamiliar codebase and answering questions about architecture and implementation
