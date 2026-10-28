@@ -75,7 +75,7 @@ export function deriveMentionState(
   const atIndex = m.index + rel
   const rawQuery = m[1] ?? ""
   if (token && token.atIndex === atIndex && mentionSettled(rawQuery, token.token, known)) return null
-  return { query: rawQuery.replace(/\s+$/, ""), atIndex }
+  return { query: rawQuery.trimEnd(), atIndex }
 }
 
 /**

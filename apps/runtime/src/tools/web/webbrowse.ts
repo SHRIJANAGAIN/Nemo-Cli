@@ -9,6 +9,7 @@ import * as http from "http"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
 import { guardedLookup, urlBlockReason } from "./net-guard.js"
+import { htmlToText, stripTags } from "./html-text.js"
 
 const TRUSTED_HOSTS = new Set<string>([
   "localhost",
@@ -60,66 +61,11 @@ function createSession(): BrowserSession {
   }
 }
 
-const NAMED_ENTITIES: Record<string, string> = {
-  nbsp: " ",
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  cent: "¢",
-  pound: "£",
-  yen: "¥",
-  euro: "€",
-  copy: "©",
-  reg: "®",
-}
-
-const NUMERIC_ENTITIES: Record<number, string> = {
-  39: "'",
-  96: "`",
-  160: " ",
-  8211: "-",
-  8212: "--",
-  8216: "'",
-  8217: "'",
-  8220: '"',
-  8221: '"',
-  8230: "...",
-}
-
-/** One left-to-right pass, so "&amp;lt;" decodes to "&lt;" and never to "<". */
-function decodeHtmlEntities(text: string): string {
-  return text.replace(/&(?:#x([0-9a-f]+)|#([0-9]+)|([a-z][a-z0-9]*));/gi, (match, hex, dec, name) => {
-    if (name) return NAMED_ENTITIES[(name as string).toLowerCase()] ?? match
-    const code = hex ? parseInt(hex as string, 16) : parseInt(dec as string, 10)
-    if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match
-    return NUMERIC_ENTITIES[code] ?? String.fromCodePoint(code)
-  })
-}
-
 function sanitizeHtml(html: string): string {
-  const stripped = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
-    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
-    .replace(/<object[\s\S]*?<\/object>/gi, " ")
-    .replace(/<embed[\s\S]*?<\/embed>/gi, " ")
-    .replace(/<form[\s\S]*?<\/form>/gi, " ")
-    .replace(/<input[\s\S]*?>/gi, " ")
-    .replace(/<button[\s\S]*?<\/button>/gi, " ")
-    .replace(/<textarea[\s\S]*?<\/textarea>/gi, " ")
-    .replace(/<select[\s\S]*?<\/select>/gi, " ")
-    .replace(/<option[\s\S]*?<\/option>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  return htmlToText(html)
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n+/g, "\n")
     .trim()
-
-  return decodeHtmlEntities(stripped).trim()
 }
 
 function extractLinks(html: string, base: URL): Array<{ text: string; href: string }> {
@@ -130,10 +76,7 @@ function extractLinks(html: string, base: URL): Array<{ text: string; href: stri
   while ((m = re.exec(html)) !== null) {
     const raw = m[1].replace(/^["']|["']$/g, "")
     if (!raw || raw.startsWith("#") || /^(javascript|mailto|tel|data):/i.test(raw)) continue
-    const inner = m[2]
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
+    const inner = stripTags(m[2]).replace(/\s+/g, " ").trim()
     let resolved: string
     try {
       resolved = new URL(raw, base).toString()
@@ -239,7 +182,7 @@ function finishSession(
 function extractTitle(html: string): string {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
   if (!match) return ""
-  return match[1].replace(/<[^>]+>/g, "").trim()
+  return stripTags(match[1]).trim()
 }
 
 const definition: ToolDefinition = {

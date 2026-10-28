@@ -6,6 +6,7 @@
 
 import { NvidiaProvider } from "./nvidia.js"
 import type { Provider, ProviderOptions } from "./types.js"
+import { trimSuffix, trimTrailingSlashes } from "./base-url.js"
 
 /**
  * Bring-your-own OpenAI-compatible endpoint, VS Code BYOK custom-provider
@@ -37,9 +38,9 @@ export class CustomProvider extends NvidiaProvider {
 
 /** Fold a pasted chat URL back to its API base (unit-tested). */
 export function normalizeCustomBaseUrl(raw: string): string {
-  let base = raw.replace(/\/+$/, "")
-  base = base.replace(/\/chat\/completions$/, "")
-  base = base.replace(/\/responses$/, "")
+  let base = trimTrailingSlashes(raw)
+  base = trimSuffix(base, "/chat/completions")
+  base = trimSuffix(base, "/responses")
   return base.length > 0 ? base : "http://localhost:8080"
 }
 

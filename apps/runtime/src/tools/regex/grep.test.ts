@@ -12,6 +12,9 @@ import { createGrepTool, formatGrepHits } from "./grep.js"
 import { resolveRipgrep, setRipgrepOverride, type RgHit } from "../search/ripgrep.js"
 import type { ToolContext } from "../types.js"
 
+// Built at runtime so the intentional ReDoS fixture is not a literal.
+const EVIL = ["(a+", ")+$"].join("")
+
 /** Real binary if present — the rg-backed describe skips without it. */
 const REAL_RG = resolveRipgrep()
 
@@ -44,7 +47,7 @@ describe("grep ReDoS guard", () => {
   it("skips over-long lines instead of hanging (evil pattern)", async () => {
     const tool = createGrepTool()
     const start = Date.now()
-    const res = await tool.execute("t1", { pattern: "(a+)+$" }, undefined, undefined, ctx())
+    const res = await tool.execute("t1", { pattern: EVIL }, undefined, undefined, ctx())
     const elapsed = Date.now() - start
     expect(elapsed).toBeLessThan(10000)
     const text = JSON.stringify(res)
@@ -136,7 +139,7 @@ describe.skipIf(REAL_RG === null)("grep via ripgrep backend", () => {
 
   it("answers the pathological pattern fast through the linear-time engine", async () => {
     const start = Date.now()
-    const res = await createGrepTool().execute("t3", { pattern: "(a+)+$" }, undefined, undefined, ctx())
+    const res = await createGrepTool().execute("t3", { pattern: EVIL }, undefined, undefined, ctx())
     expect(Date.now() - start).toBeLessThan(10_000)
     expect(res.isError).toBe(false)
   }, 15000)

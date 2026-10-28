@@ -8,6 +8,7 @@ import https from "https"
 import http from "http"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolContext, truncateOutput } from "../types.js"
+import { decodeEntities, stripTags } from "./html-text.js"
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
@@ -108,32 +109,8 @@ function postJson(
   })
 }
 
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-}
-
-/** Single left-to-right pass, so "&amp;lt;" decodes once to "&lt;", never to "<". */
-function decodeEntities(text: string): string {
-  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (match, body: string) => {
-    if (body[0] === "#") {
-      const code = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
-      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match
-      return String.fromCodePoint(code)
-    }
-    return NAMED_ENTITIES[body.toLowerCase()] ?? match
-  })
-}
-
 function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
+  return stripTags(html).replace(/\s+/g, " ").trim()
 }
 
 /** True only when the URL's host is `domain` or a subdomain of it. */
@@ -501,9 +478,7 @@ async function searchWikipedia(query: string, maxResults: number): Promise<Searc
     return search.map((r) => ({
       title: String(r.title ?? "(untitled)"),
       url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(r.title ?? ""))}`,
-      snippet: String(r.snippet ?? "")
-        .replace(/<[^>]+>/g, "")
-        .slice(0, 220),
+      snippet: stripHtml(String(r.snippet ?? "")).slice(0, 220),
       source: "wikipedia",
     }))
   } catch {

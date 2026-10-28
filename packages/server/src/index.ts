@@ -1176,8 +1176,10 @@ export function startServer(options: ServerOptions = {}): NemoServer {
         res.writeHead(200, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ id: rec.id, plan: rec.plan }))
       } catch (err) {
+        process.stderr.write(`[license] register failed: ${err instanceof Error ? err.message : String(err)}
+`)
         res.writeHead(400, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }))
+        res.end(JSON.stringify({ error: "invalid license key" }))
       }
       return
     }

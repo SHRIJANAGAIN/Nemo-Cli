@@ -27,8 +27,6 @@ GITHUB_WEBHOOK_SECRET=<hex from step 3>
 GITHUB_APP_ID=123456
 GITHUB_PRIVATE_KEY=/etc/nemo/github-app.pem   # path OR pasted PEM text
 NEMO_GITHUB_WORKSPACE=/srv/nemo-work      # where the agent works
-# Optional: GitHub Enterprise
-# GITHUB_API_BASE=https://ghe.example.com/api/v3
 ```
 
 Put them in `/etc/nemo/nemo.env` (mode 600) — see `.env.example`.

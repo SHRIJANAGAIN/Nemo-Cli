@@ -18,6 +18,7 @@ import type {
 import { stopReasonFromWire } from "../../protocol/src/index.js"
 import type { ChatInput, Provider, ProviderOptions, WireMessage } from "./types.js"
 import { clampTemperature } from "./types.js"
+import { trimSuffix, trimTrailingSlashes } from "./base-url.js"
 import { expandWireMessages } from "./vision.js"
 
 interface NemoTool {
@@ -57,7 +58,7 @@ export class LlamaCppProvider implements Provider {
   readonly id = "llama.cpp"
 
   constructor(private readonly options: ProviderOptions) {
-    const normalized = options.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")
+    const normalized = trimSuffix(trimTrailingSlashes(options.baseUrl), "/v1")
     this.options = { ...options, baseUrl: normalized }
   }
 

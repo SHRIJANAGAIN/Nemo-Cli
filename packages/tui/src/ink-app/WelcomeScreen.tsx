@@ -78,9 +78,10 @@ export function formatDate(date: Date): string {
 export function shortPath(cwd: string | undefined, homeDir?: string): string {
   if (!cwd) return ""
   if (isHomeDir(cwd, homeDir)) return ""
-  const trimmed = cwd.replace(/[\\/]+$/, "")
+  let trimmed = cwd
+  while (trimmed.endsWith("\\") || trimmed.endsWith("/")) trimmed = trimmed.slice(0, -1)
   if (!trimmed) return ""
-  const parts = trimmed.split(/[\\/]+/).filter(Boolean)
+  const parts = trimmed.split(/[\\/]/).filter(Boolean)
   return parts.length > 0 ? parts[parts.length - 1]! : trimmed
 }
 
@@ -94,7 +95,11 @@ export function shortPath(cwd: string | undefined, homeDir?: string): string {
 export function isHomeDir(cwd: string, homeDir?: string): boolean {
   // Normalize separators first: "c:/users/engli" and "c:\users\engli" are the
   // same folder, and without this the comparison below misses mixed inputs.
-  const norm = (p: string): string => p.replace(/\//g, "\\").replace(/[\\]+$/, "").toLowerCase()
+  const norm = (p: string): string => {
+    let out = p.replace(/\//g, "\\")
+    while (out.endsWith("\\")) out = out.slice(0, -1)
+    return out.toLowerCase()
+  }
   const trimmed = norm(cwd)
   // An all-separator input normalizes to "" — that IS the filesystem root,
   // while a truly empty input is not.

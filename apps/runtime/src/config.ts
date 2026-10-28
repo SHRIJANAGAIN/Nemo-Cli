@@ -10,6 +10,7 @@ import * as path from "path"
 import type { McpOAuthConfig } from "../../../packages/mcp/src/oauth.js"
 import { parseTokenBudget } from "../../../packages/core/src/token_budget.js"
 import { isRemoteUncPath } from "../../../packages/core/src/validate.js"
+import { stripWrappingQuotes } from "../../../packages/provider/src/base-url.js"
 
 /** Canonical UNC guard lives in core/validate.ts (shared choke point);
  *  re-exported here so existing importers (session.ts, session-manager.ts,
@@ -928,9 +929,14 @@ export function cleanApiKey(raw: string): string {
   for (const prefix of ["NVAPI_KEY ", "Bearer ", "bearer "]) {
     if (t.startsWith(prefix)) return t.slice(prefix.length).trim()
   }
-  const eq = t.match(/^(?:NVAPI_KEY|API_KEY|HF_TOKEN)\s*=\s*(.+)$/i)
-  if (eq && eq[1]) return eq[1].trim().replace(/^["']|["']$/g, "")
-  return t.replace(/^["']|["']$/g, "")
+  const eq = t.indexOf("=")
+  if (eq > 0) {
+    const name = t.slice(0, eq).trim().toUpperCase()
+    if (name === "NVAPI_KEY" || name === "API_KEY" || name === "HF_TOKEN") {
+      return stripWrappingQuotes(t.slice(eq + 1).trim()).trim()
+    }
+  }
+  return stripWrappingQuotes(t)
 }
 
 /**

@@ -1,5 +1,8 @@
 name: session-store
 on: [push, pull_request]
+
+permissions:
+  contents: read
 jobs:
   session-store-test:
     runs-on: ubuntu-latest

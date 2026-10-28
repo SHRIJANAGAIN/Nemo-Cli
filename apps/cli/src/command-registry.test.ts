@@ -98,7 +98,7 @@ describe("help rendering", () => {
     const spec = findCommand("web")!
     const h = renderCommandHelp(spec, "nemo")
     expect(h).toContain("nemo web")
-    expect(h).toContain(spec.usage!.replace(/nemo/g, "nemo"))
+    expect(h).toContain(spec.usage!)
     expect(h).toContain("Global flags:")
   })
   it("command help renders command flags", () => {

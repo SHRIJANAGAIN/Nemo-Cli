@@ -229,29 +229,32 @@ export interface ApiClient {
 const GITHUB_API_ORIGIN = "https://api.github.com"
 
 /**
- * Validate an operator-supplied API base: https only, no credentials or query,
- * and either api.github.com or an Enterprise host under /api/v3. Returns the
- * normalised origin+path so fetches below can never be aimed anywhere else.
+ * GitHub API origin. GITHUB_API_BASE may only name the public API — the value
+ * is never used to build a request URL, so a misconfigured (or hostile) env var
+ * cannot redirect the installation token to another host.
  */
 export function resolveApiBase(raw: string | undefined): string {
-  const candidate = (raw ?? "").trim() || GITHUB_API_ORIGIN
+  const candidate = (raw ?? "").trim()
+  if (!candidate) return GITHUB_API_ORIGIN
   let parsed: URL
   try {
     parsed = new URL(candidate)
   } catch {
     throw new Error(`invalid GITHUB_API_BASE: ${candidate}`)
   }
-  if (parsed.protocol !== "https:") throw new Error("GITHUB_API_BASE must use https")
-  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-    throw new Error("GITHUB_API_BASE must be a plain https URL")
+  const isPublic =
+    parsed.protocol === "https:" &&
+    parsed.hostname === "api.github.com" &&
+    !parsed.port &&
+    !parsed.username &&
+    !parsed.password &&
+    parsed.pathname.replace(/\/+$/, "") === "" &&
+    !parsed.search &&
+    !parsed.hash
+  if (!isPublic) {
+    throw new Error("GITHUB_API_BASE must be https://api.github.com (GitHub Enterprise is not supported)")
   }
-  const path = parsed.pathname.replace(/\/+$/, "")
-  const isPublic = parsed.hostname === "api.github.com" && path === ""
-  const isEnterprise = parsed.hostname !== "api.github.com" && /^\/api\/v3(\/|$)/.test(path)
-  if (!isPublic && !isEnterprise) {
-    throw new Error("GITHUB_API_BASE must be https://api.github.com or https://<host>/api/v3")
-  }
-  return `${parsed.origin}${path}`
+  return GITHUB_API_ORIGIN
 }
 
 function apiHeaders(client: ApiClient): Record<string, string> {
@@ -271,7 +274,7 @@ export async function postIssueComment(
   issueNumber: number,
   body: string,
 ): Promise<void> {
-  const apiBase = resolveApiBase(client.apiBase)
+  resolveApiBase(client.apiBase)
   if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
     throw new Error(`bad repo slug: ${owner}/${repo}`)
   }
@@ -279,7 +282,7 @@ export async function postIssueComment(
     throw new Error(`bad issue number: ${issueNumber}`)
   }
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`
-  const res = await fetch(`${apiBase}${path}`, {
+  const res = await fetch(`${GITHUB_API_ORIGIN}${path}`, {
     method: "POST",
     headers: apiHeaders(client),
     body: JSON.stringify({ body }),
@@ -309,11 +312,11 @@ export function createAppJwt(appId: string, privateKeyPem: string, nowSec = Math
 
 /** Exchange an App JWT for an installation access token. */
 export async function createInstallationToken(apiBase: string, jwt: string, installationId: number): Promise<string> {
-  const base = resolveApiBase(apiBase)
+  resolveApiBase(apiBase)
   if (!Number.isInteger(installationId) || installationId <= 0) {
     throw new Error(`bad installation id: ${installationId}`)
   }
-  const res = await fetch(`${base}/app/installations/${installationId}/access_tokens`, {
+  const res = await fetch(`${GITHUB_API_ORIGIN}/app/installations/${installationId}/access_tokens`, {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",

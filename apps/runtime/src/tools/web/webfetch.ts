@@ -10,6 +10,7 @@ import * as url from "url"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { textResult, type Tool, type ToolResult } from "../types.js"
 import { guardedLookup, urlBlockReason } from "./net-guard.js"
+import { decodeEntities as decodeHtmlEntities, htmlToText, stripRegions, stripTags } from "./html-text.js"
 
 type CacheEntry = { status: number; body: string; headers: Record<string, string>; timestamp: number }
 
@@ -20,66 +21,11 @@ const MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT = 15_000
 const MAX_REDIRECTS = 5
 
-const NAMED_ENTITIES: Record<string, string> = {
-  nbsp: " ",
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  cent: "\u00a2",
-  pound: "\u00a3",
-  yen: "\u00a5",
-  euro: "\u20ac",
-  copy: "\u00a9",
-  reg: "\u00ae",
-}
-
-const NUMERIC_ENTITIES: Record<number, string> = {
-  39: "'",
-  96: "`",
-  160: " ",
-  8211: "-",
-  8212: "--",
-  8216: "'",
-  8217: "'",
-  8220: '"',
-  8221: '"',
-  8230: "...",
-}
-
-/** One left-to-right pass, so "&amp;lt;" decodes to "&lt;" and never to "<". */
-export function decodeHtmlEntities(text: string): string {
-  return text.replace(/&(?:#x([0-9a-f]+)|#([0-9]+)|([a-z][a-z0-9]*));/gi, (match, hex, dec, name) => {
-    if (name) return NAMED_ENTITIES[(name as string).toLowerCase()] ?? match
-    const code = hex ? parseInt(hex as string, 16) : parseInt(dec as string, 10)
-    if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match
-    return NUMERIC_ENTITIES[code] ?? String.fromCodePoint(code)
-  })
-}
-
 function sanitizeHtml(html: string): string {
-  const stripped = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, " ")
-    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
-    .replace(/<object[\s\S]*?<\/object>/gi, " ")
-    .replace(/<embed[\s\S]*?<\/embed>/gi, " ")
-    .replace(/<form[\s\S]*?<\/form>/gi, " ")
-    .replace(/<input[\s\S]*?>/gi, " ")
-    .replace(/<button[\s\S]*?<\/button>/gi, " ")
-    .replace(/<textarea[\s\S]*?<\/textarea>/gi, " ")
-    .replace(/<select[\s\S]*?<\/select>/gi, " ")
-    .replace(/<option[\s\S]*?<\/option>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  return htmlToText(html)
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n+/g, "\n")
     .trim()
-
-  return decodeHtmlEntities(stripped).trim()
 }
 
 const definition: ToolDefinition = {
@@ -272,10 +218,7 @@ export function createWebFetchTool(): Tool {
 
 /** Convert HTML to markdown-friendly text (simplified turndown). */
 export function sanitizeHtmlToMarkdown(html: string): string {
-  let text = html
-  text = text.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, "")
-  text = text.replace(/<\s*style[^>]*>[\s\S]*?<\s*\/\s*style\s*>/gi, "")
-  text = text.replace(/<!--[\s\S]*?-->/g, "")
+  let text = stripRegions(html)
   text = text.replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n\n")
   text = text.replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n\n")
   text = text.replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n\n")
@@ -286,7 +229,7 @@ export function sanitizeHtmlToMarkdown(html: string): string {
   text = text.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "- $1\n")
   text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, "$1\n\n")
   text = text.replace(/<br\s*\/?>/gi, "\n")
-  text = text.replace(/<[^>]+>/g, "")
+  text = stripTags(text)
   text = decodeHtmlEntities(text)
   text = text.replace(/[ \t]+/g, " ")
   text = text.replace(/\n{3,}/g, "\n\n")

@@ -7,6 +7,7 @@
 import * as http from "http"
 import * as https from "https"
 import * as url from "url"
+import { trimTrailingSlashes } from "./base-url.js"
 
 export type ProviderId = "llamacpp" | "nvidia" | "nvidia-nim" | "ollama" | "custom"
 
@@ -201,14 +202,14 @@ export async function fetchModelsDetailed(
     if (id === "ollama") {
       // Ollama-native list (VS Code ollamaProvider: GET {url}/api/tags).
       // No key; a stopped server falls through to statics via fail().
-      const base = (baseUrl || "http://localhost:11434").replace(/\/+$/, "")
+      const base = trimTrailingSlashes(baseUrl || "http://localhost:11434")
       const json = (await getJson(`${base}/api/tags`, {})) as {
         models?: Array<{ name?: string; model?: string }>
       }
       const ids = (json.models ?? []).map((m) => m.name ?? m.model ?? "").filter((v) => v.length > 0)
       return ids.length > 0 ? { models: ids, source: "live" } : fail("empty")
     }
-    const base = (baseUrl || entry?.defaultBaseUrl || "").replace(/\/+$/, "")
+    const base = trimTrailingSlashes(baseUrl || entry?.defaultBaseUrl || "")
     if (!base) return fail("empty")
     let parsed: url.URL
     try {
@@ -267,7 +268,7 @@ export async function verifyProviderKey(
 ): Promise<KeyCheck> {
   const id = providerId.toLowerCase()
   try {
-    const base = (baseUrl || getCatalogEntry(id)?.defaultBaseUrl || "").replace(/\/+$/, "")
+    const base = trimTrailingSlashes(baseUrl || getCatalogEntry(id)?.defaultBaseUrl || "")
     if (!base) return { ok: false, hint: "No endpoint configured." }
     const r = await postRaw(
       `${base}/v1/chat/completions`,

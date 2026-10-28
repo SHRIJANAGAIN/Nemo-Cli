@@ -59,6 +59,15 @@ function sendJson(res: http.ServerResponse, status: number, obj: unknown): void 
   res.end(JSON.stringify(obj))
 }
 
+function isLoopbackUrl(raw: string): boolean {
+  try {
+    const { hostname } = new URL(raw)
+    return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]"
+  } catch {
+    return false
+  }
+}
+
 function startServer(
   handler: (req: http.IncomingMessage, res: http.ServerResponse, body: string) => void,
 ): Promise<TestServer> {
@@ -72,9 +81,9 @@ function startServer(
         requests.push({ url: req.url || "/", method: req.method || "GET", headers: req.headers, body })
         try {
           handler(req, res, body)
-        } catch (err) {
+        } catch {
           res.writeHead(500, { "Content-Type": "text/plain" })
-          res.end(err instanceof Error ? err.message : String(err))
+          res.end("internal error")
         }
       })
     })
@@ -154,7 +163,7 @@ function startFakeAuthServer(opts: { registration?: boolean; autoRedirect?: bool
       }
       const redirectUri = requestUrl.searchParams.get("redirect_uri")
       const state = requestUrl.searchParams.get("state")
-      if (!redirectUri || !state) {
+      if (!redirectUri || !state || !isLoopbackUrl(redirectUri)) {
         res.writeHead(400)
         res.end("missing redirect_uri/state")
         return

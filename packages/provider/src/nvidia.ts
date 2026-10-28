@@ -12,6 +12,7 @@ import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition
 import { stopReasonFromWire } from "../../protocol/src/index.js"
 import type { ChatInput, FimInput, FimResult, Provider, ProviderOptions, WireMessage } from "./types.js"
 import { clampTemperature } from "./types.js"
+import { trimSuffix, trimTrailingSlashes } from "./base-url.js"
 import { expandWireMessages } from "./vision.js"
 import { buildPromptCacheKey, withPromptCacheKey } from "./prompt-cache.js"
 
@@ -101,7 +102,7 @@ export class NvidiaProvider implements Provider {
   private reasoningUnsupportedModels = new Set<string>()
 
   constructor(protected readonly options: ProviderOptions) {
-    const normalized = options.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")
+    const normalized = trimSuffix(trimTrailingSlashes(options.baseUrl), "/v1")
     this.options = { ...options, baseUrl: normalized }
   }
 
