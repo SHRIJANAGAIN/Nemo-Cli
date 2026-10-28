@@ -51,7 +51,7 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}/${{ matrix.total }} --reporter=junit --outputFile=junit-${{ matrix.os }}-${{ matrix.shard }}.xml --reporter=basic
       - name: Publish unit report
         if: always()
-        uses: mikepenz/action-junit-report@3585e9575db828022551b4231f165eb59a0e74e3 # v5
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
         with:
           report_paths: "junit-*.xml"
           annotate_only: true
