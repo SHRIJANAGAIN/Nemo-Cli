@@ -608,12 +608,33 @@ const EXTRACT_PATTERNS: Array<{ re: RegExp; category: string }> = [
  *  unless the user explicitly said remember/note/decided. */
 const TRANSIENT_RE = /\b(broken|error|fail|wrong|bug|stuck|crash|not working)\b/i
 
+function collapseWhitespace(raw: string): string {
+  let out = ""
+  let pendingSpace = false
+  for (const ch of raw) {
+    if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
+      pendingSpace = true
+      continue
+    }
+    if (pendingSpace && out.length > 0) out += " "
+    pendingSpace = false
+    out += ch
+  }
+  return out
+}
+
+function trimEdgePunctuation(value: string): string {
+  const LEADING = `"'({\[`
+  const TRAILING = `"')}\].;:,`
+  let start = 0
+  let end = value.length
+  while (start < end && LEADING.includes(value[start]!)) start++
+  while (end > start && TRAILING.includes(value[end - 1]!)) end--
+  return value.slice(start, end)
+}
+
 function cleanCandidate(raw: string): string {
-  return raw
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^["'({\[]+|["')}\].;:,]+$/g, "")
-    .trim()
+  return trimEdgePunctuation(collapseWhitespace(raw))
 }
 
 /** Scan turn text for keeper facts. Pure (no fs) — capped, deduped,
