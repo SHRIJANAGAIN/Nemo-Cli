@@ -108,27 +108,43 @@ function postJson(
   })
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+}
+
+/** Single left-to-right pass, so "&amp;lt;" decodes once to "&lt;", never to "<". */
+function decodeEntities(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (match, body: string) => {
+    if (body[0] === "#") {
+      const code = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)
+      if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match
+      return String.fromCodePoint(code)
+    }
+    return NAMED_ENTITIES[body.toLowerCase()] ?? match
+  })
+}
+
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim()
 }
 
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&([a-zA-Z]+);/g, (_, name) => (name === "nbsp" ? " " : `&${name};`))
+/** True only when the URL's host is `domain` or a subdomain of it. */
+function hostMatches(rawUrl: string, domain: string): boolean {
+  let host: string
+  try {
+    host = new URL(rawUrl).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  return host === domain || host.endsWith(`.${domain}`)
 }
 
 async function searchHsearch(query: string, maxResults: number): Promise<SearchResult[]> {
@@ -252,7 +268,7 @@ async function searchBing(query: string, maxResults: number): Promise<SearchResu
       while ((sm = simpleRe.exec(html)) !== null && results.length < maxResults) {
         const href = decodeEntities(sm[1])
         const title = decodeEntities(stripHtml(sm[2]))
-        if (title.length > 10 && !href.includes("bing.com"))
+        if (title.length > 10 && !hostMatches(href, "bing.com"))
           results.push({ title, url: href, snippet: "", source: "bing" })
       }
     }
@@ -334,7 +350,7 @@ async function searchQwant(query: string, maxResults: number): Promise<SearchRes
       while ((gm = genericRe.exec(html)) !== null && results.length < maxResults) {
         const href = decodeEntities(gm[1])
         const title = decodeEntities(stripHtml(gm[2]))
-        if (title.length > 5 && !href.includes("qwant.com"))
+        if (title.length > 5 && !hostMatches(href, "qwant.com"))
           results.push({ title, url: href, snippet: "", source: "qwant" })
       }
     }
@@ -361,7 +377,7 @@ async function searchGoogle(query: string, maxResults: number): Promise<SearchRe
     while ((m = re.exec(html)) !== null && results.length < maxResults) {
       const href = decodeEntities(decodeURIComponent(m[1]))
       const title = decodeEntities(stripHtml(m[2]))
-      if (!href.includes("google.com") && title.length > 3) {
+      if (!hostMatches(href, "google.com") && title.length > 3) {
         const snippet = i < snipMatches.length ? decodeEntities(stripHtml(snipMatches[i][1])) : ""
         results.push({ title, url: href, snippet: snippet.slice(0, 220), source: "google" })
         i++
@@ -412,7 +428,7 @@ async function searchBaidu(query: string, maxResults: number): Promise<SearchRes
       const href = decodeEntities(m[1])
       const title = decodeEntities(stripHtml(m[2]))
       const snippet = i < snipMatches.length ? decodeEntities(stripHtml(snipMatches[i][1])) : ""
-      if (href.includes("baidu.com")) continue
+      if (hostMatches(href, "baidu.com")) continue
       results.push({ title, url: href, snippet: snippet.slice(0, 220), source: "baidu" })
       i++
     }
@@ -437,7 +453,7 @@ async function searchYandex(query: string, maxResults: number): Promise<SearchRe
       const href = decodeEntities(m[1])
       const title = decodeEntities(stripHtml(m[2]))
       const snippet = i < snipMatches.length ? decodeEntities(stripHtml(snipMatches[i][1])) : ""
-      if (href.includes("yandex.com")) continue
+      if (hostMatches(href, "yandex.com")) continue
       results.push({ title, url: href, snippet: snippet.slice(0, 220), source: "yandex" })
       i++
     }
@@ -462,7 +478,7 @@ async function searchNaver(query: string, maxResults: number): Promise<SearchRes
       const href = decodeEntities(m[1])
       const title = decodeEntities(stripHtml(m[2]))
       const snippet = i < snipMatches.length ? decodeEntities(stripHtml(snipMatches[i][1])) : ""
-      if (href.includes("naver.com")) continue
+      if (hostMatches(href, "naver.com")) continue
       results.push({ title, url: href, snippet: snippet.slice(0, 220), source: "naver" })
       i++
     }

@@ -20,29 +20,54 @@ export const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
   onAgentEnd: false,
 }
 
+const NOTIFY_TITLE_ENV = "NEMO_NOTIFY_TITLE"
+const NOTIFY_BODY_ENV = "NEMO_NOTIFY_BODY"
+
+/** Notification text reaches two shells, so it may not carry control bytes. */
+function printableLine(input: string, max = 400): string {
+  return input
+    .replace(/[\x00-\x1f\x7f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max)
+}
+
+/** Payload goes through the environment so PowerShell never parses it as code. */
+function notifyEnv(title: string, body: string): NodeJS.ProcessEnv {
+  return { ...process.env, [NOTIFY_TITLE_ENV]: printableLine(title, 120), [NOTIFY_BODY_ENV]: printableLine(body) }
+}
+
 function osNotify(title: string, body: string): void {
   try {
     if (process.platform === "win32") {
-      const safeTitle = title.replace(/"/g, "'").replace(/\n/g, " ")
-      const safeBody = body.replace(/"/g, "'").replace(/\n/g, " ").slice(0, 400)
       execFileSync(
         "powershell.exe",
         [
           "-NoProfile",
           "-NonInteractive",
           "-Command",
-          `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show("${safeBody}", "${safeTitle}", "OK", "Information")`,
+          `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show($env:${NOTIFY_BODY_ENV}, $env:${NOTIFY_TITLE_ENV}, "OK", "Information")`,
         ],
-        { encoding: "utf8", timeout: 1500, stdio: ["ignore", "pipe", "ignore"] },
+        {
+          env: notifyEnv(title, body),
+          encoding: "utf8",
+          timeout: 1500,
+          stdio: ["ignore", "pipe", "ignore"],
+        },
       )
     } else if (process.platform === "darwin") {
       execFileSync(
         "osascript",
-        ["-e", `display notification "${body.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`],
+        [
+          "-e",
+          "on run argv\n  display notification (item 2 of argv) with title (item 1 of argv)\nend run",
+          printableLine(title, 120),
+          printableLine(body),
+        ],
         { encoding: "utf8", timeout: 1500, stdio: ["ignore", "pipe", "ignore"] },
       )
     } else {
-      execFileSync("notify-send", [title, body], {
+      execFileSync("notify-send", ["--", printableLine(title, 120), printableLine(body)], {
         encoding: "utf8",
         timeout: 1500,
         stdio: ["ignore", "pipe", "ignore"],

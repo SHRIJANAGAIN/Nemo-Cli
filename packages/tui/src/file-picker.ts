@@ -29,7 +29,9 @@ export interface MentionToken {
 
 /** How a path has to be written to survive a round trip through a shell. */
 export function quotePath(candidate: string): string {
-  return /[\s"'\\$`;&|<>()*?[\]#~=%]/.test(candidate) ? `"${candidate.replace(/"/g, '\\"')}"` : candidate
+  if (!/[\s"'\\$`;&|<>()*?[\]#~=%]/.test(candidate)) return candidate
+  const escaped = candidate.replace(/([\\"$`])/g, "\\$1")
+  return `"${escaped}"`
 }
 
 /**

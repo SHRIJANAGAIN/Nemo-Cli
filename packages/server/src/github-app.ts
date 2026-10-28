@@ -226,6 +226,34 @@ export interface ApiClient {
   token: string
 }
 
+const GITHUB_API_ORIGIN = "https://api.github.com"
+
+/**
+ * Validate an operator-supplied API base: https only, no credentials or query,
+ * and either api.github.com or an Enterprise host under /api/v3. Returns the
+ * normalised origin+path so fetches below can never be aimed anywhere else.
+ */
+export function resolveApiBase(raw: string | undefined): string {
+  const candidate = (raw ?? "").trim() || GITHUB_API_ORIGIN
+  let parsed: URL
+  try {
+    parsed = new URL(candidate)
+  } catch {
+    throw new Error(`invalid GITHUB_API_BASE: ${candidate}`)
+  }
+  if (parsed.protocol !== "https:") throw new Error("GITHUB_API_BASE must use https")
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error("GITHUB_API_BASE must be a plain https URL")
+  }
+  const path = parsed.pathname.replace(/\/+$/, "")
+  const isPublic = parsed.hostname === "api.github.com" && path === ""
+  const isEnterprise = parsed.hostname !== "api.github.com" && /^\/api\/v3(\/|$)/.test(path)
+  if (!isPublic && !isEnterprise) {
+    throw new Error("GITHUB_API_BASE must be https://api.github.com or https://<host>/api/v3")
+  }
+  return `${parsed.origin}${path}`
+}
+
 function apiHeaders(client: ApiClient): Record<string, string> {
   return {
     Accept: "application/vnd.github+json",
@@ -243,7 +271,15 @@ export async function postIssueComment(
   issueNumber: number,
   body: string,
 ): Promise<void> {
-  const res = await fetch(`${client.apiBase}/repos/${owner}/${repo}/issues/${issueNumber}/comments`, {
+  const apiBase = resolveApiBase(client.apiBase)
+  if (!/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
+    throw new Error(`bad repo slug: ${owner}/${repo}`)
+  }
+  if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+    throw new Error(`bad issue number: ${issueNumber}`)
+  }
+  const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`
+  const res = await fetch(`${apiBase}${path}`, {
     method: "POST",
     headers: apiHeaders(client),
     body: JSON.stringify({ body }),
@@ -273,7 +309,11 @@ export function createAppJwt(appId: string, privateKeyPem: string, nowSec = Math
 
 /** Exchange an App JWT for an installation access token. */
 export async function createInstallationToken(apiBase: string, jwt: string, installationId: number): Promise<string> {
-  const res = await fetch(`${apiBase}/app/installations/${installationId}/access_tokens`, {
+  const base = resolveApiBase(apiBase)
+  if (!Number.isInteger(installationId) || installationId <= 0) {
+    throw new Error(`bad installation id: ${installationId}`)
+  }
+  const res = await fetch(`${base}/app/installations/${installationId}/access_tokens`, {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",

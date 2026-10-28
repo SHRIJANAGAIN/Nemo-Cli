@@ -108,7 +108,9 @@ describe("quotePath", () => {
 
   it("quotes shell metacharacters that would otherwise be operators", () => {
     expect(quotePath("a&b.ts")).toBe('"a&b.ts"')
-    expect(quotePath("$HOME/x.ts")).toBe('"$HOME/x.ts"')
+    expect(quotePath("$HOME/x.ts")).toBe('"\\$HOME/x.ts"')
+    expect(quotePath("a`id`b.ts")).toBe('"a\\`id\\`b.ts"')
+    expect(quotePath("a\\b.ts")).toBe('"a\\\\b.ts"')
   })
 })
 

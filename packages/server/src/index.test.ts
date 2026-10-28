@@ -673,7 +673,11 @@ describe("VPS-routed GitHub writes", () => {
     )
     vi.stubGlobal("fetch", async (url: unknown, init?: RequestInit) => {
       const u = String(url)
-      if (!u.startsWith("https://api.github.com")) return REAL_FETCH(u, init)
+      let host = ""
+      try {
+        host = new URL(u).hostname
+      } catch {}
+      if (host !== "api.github.com") return REAL_FETCH(u, init)
       const { status, json } = gh(u, (init?.method ?? "GET").toUpperCase())
       return { status, json: async () => json } as unknown as Response
     })

@@ -20,8 +20,46 @@ const MAX_RESPONSE_SIZE = 5 * 1024 * 1024
 const DEFAULT_TIMEOUT = 15_000
 const MAX_REDIRECTS = 5
 
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  cent: "\u00a2",
+  pound: "\u00a3",
+  yen: "\u00a5",
+  euro: "\u20ac",
+  copy: "\u00a9",
+  reg: "\u00ae",
+}
+
+const NUMERIC_ENTITIES: Record<number, string> = {
+  39: "'",
+  96: "`",
+  160: " ",
+  8211: "-",
+  8212: "--",
+  8216: "'",
+  8217: "'",
+  8220: '"',
+  8221: '"',
+  8230: "...",
+}
+
+/** One left-to-right pass, so "&amp;lt;" decodes to "&lt;" and never to "<". */
+export function decodeHtmlEntities(text: string): string {
+  return text.replace(/&(?:#x([0-9a-f]+)|#([0-9]+)|([a-z][a-z0-9]*));/gi, (match, hex, dec, name) => {
+    if (name) return NAMED_ENTITIES[(name as string).toLowerCase()] ?? match
+    const code = hex ? parseInt(hex as string, 16) : parseInt(dec as string, 10)
+    if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return match
+    return NUMERIC_ENTITIES[code] ?? String.fromCodePoint(code)
+  })
+}
+
 function sanitizeHtml(html: string): string {
-  return html
+  const stripped = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ")
@@ -37,33 +75,11 @@ function sanitizeHtml(html: string): string {
     .replace(/<select[\s\S]*?<\/select>/gi, " ")
     .replace(/<option[\s\S]*?<\/option>/gi, " ")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/&#x60;/gi, "`")
-    .replace(/&#96;/gi, "`")
-    .replace(/&#8216;/gi, "'")
-    .replace(/&#8217;/gi, "'")
-    .replace(/&#8220;/gi, '"')
-    .replace(/&#8221;/gi, '"')
-    .replace(/&#8230;/g, "...")
-    .replace(/&#8211;/g, "-")
-    .replace(/&#8212;/g, "--")
-    .replace(/&#039;/gi, "'")
-    .replace(/&apos;/gi, "'")
-    .replace(/&cent;/gi, "¢")
-    .replace(/&pound;/gi, "£")
-    .replace(/&yen;/gi, "¥")
-    .replace(/&euro;/gi, "€")
-    .replace(/&copy;/gi, "©")
-    .replace(/&reg;/gi, "®")
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n+/g, "\n")
     .trim()
+
+  return decodeHtmlEntities(stripped).trim()
 }
 
 const definition: ToolDefinition = {
@@ -271,13 +287,7 @@ export function sanitizeHtmlToMarkdown(html: string): string {
   text = text.replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, "$1\n\n")
   text = text.replace(/<br\s*\/?>/gi, "\n")
   text = text.replace(/<[^>]+>/g, "")
-  text = text.replace(/&nbsp;/gi, " ")
-  text = text.replace(/&amp;/gi, "&")
-  text = text.replace(/&lt;/gi, "<")
-  text = text.replace(/&gt;/gi, ">")
-  text = text.replace(/&quot;/gi, '"')
-  text = text.replace(/&#39;/gi, "'")
-  text = text.replace(/&apos;/gi, "'")
+  text = decodeHtmlEntities(text)
   text = text.replace(/[ \t]+/g, " ")
   text = text.replace(/\n{3,}/g, "\n\n")
   return text.trim()

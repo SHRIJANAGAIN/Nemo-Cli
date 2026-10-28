@@ -83,8 +83,8 @@ async function main() {
   // lines but keeps real warnings/errors visible.
   const realLog = console.log.bind(console)
   const realError = console.error.bind(console)
-  const isPromo = (args) =>
-    args.some((a) => typeof a === "string" && (a.includes("Obfuscator Pro") || a.includes("obfuscator.io")))
+  const PROMO_LINE = /Obfuscator Pro|obfuscator\.io/i
+  const isPromo = (args) => args.some((a) => typeof a === "string" && PROMO_LINE.test(a))
   console.log = (...args) => {
     if (!isPromo(args)) realLog(...args)
   }

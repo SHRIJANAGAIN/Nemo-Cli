@@ -46,10 +46,59 @@ function escapeTmuxPayload(message: string): string {
   return message.replace(/\x1b/g, "\x1b\x1b")
 }
 
+/** Notification text reaches a terminal escape sequence and two shells, so it
+ *  may not carry control bytes. */
+function printableLine(input: string, max = 400): string {
+  return input
+    .replace(/[\x00-\x1f\x7f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max)
+}
+
+const NOTIFY_TITLE_ENV = "NEMO_NOTIFY_TITLE"
+const NOTIFY_BODY_ENV = "NEMO_NOTIFY_BODY"
+
+/** Payload goes through the environment so PowerShell never parses it as code. */
+function notifyEnv(title: string, body: string): NodeJS.ProcessEnv {
+  return { ...process.env, [NOTIFY_TITLE_ENV]: printableLine(title, 120), [NOTIFY_BODY_ENV]: printableLine(body) }
+}
+
+function powershellScript(body: string): string {
+  return `Add-Type -AssemblyName System.Windows.Forms; ${body}`
+}
+
+function balloonScript(durationMs: number, sleepClause: string): string {
+  return powershellScript(
+    [
+      "Add-Type -AssemblyName System.Drawing;",
+      "$n = New-Object System.Windows.Forms.NotifyIcon;",
+      "$n.Icon = [System.Drawing.SystemIcons]::Information;",
+      `$n.BalloonTipTitle = $env:${NOTIFY_TITLE_ENV};`,
+      `$n.BalloonTipText = $env:${NOTIFY_BODY_ENV};`,
+      "$n.Visible = $true;",
+      "[System.Media.SystemSounds]::Exclamation.Play();",
+      `$n.ShowBalloonTip(${durationMs});`,
+      sleepClause,
+      "$n.Dispose();",
+    ].join(" "),
+  )
+}
+
+/** osascript receives the strings as argv — no string interpolation to escape. */
+function osascriptArgs(title: string, body: string): string[] {
+  return [
+    "-e",
+    "on run argv\n  display notification (item 2 of argv) with title (item 1 of argv)\nend run",
+    printableLine(title, 120),
+    printableLine(body),
+  ]
+}
+
 export function osc9Notify(title: string, body: string): boolean {
   if (!process.stdout.isTTY) return false
   try {
-    const message = `${title}: ${body}`
+    const message = printableLine(`${title}: ${body}`)
     let seq: string
     if (isTmux()) {
       const escaped = escapeTmuxPayload(message)
@@ -70,33 +119,26 @@ export function osNotify(title: string, body: string): void {
   }
   try {
     if (process.platform === "win32") {
-      const safeTitle = title.replace(/"/g, "'").replace(/\n/g, " ")
-      const safeBody = body.replace(/"/g, "'").replace(/\n/g, " ").slice(0, 400)
       execFileSync(
         "powershell.exe",
         [
           "-NoProfile",
           "-NonInteractive",
           "-Command",
-          'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show("' +
-            safeBody +
-            '", "' +
-            safeTitle +
-            '", "OK", "Information")',
+          powershellScript(
+            `[System.Windows.Forms.MessageBox]::Show($env:${NOTIFY_BODY_ENV}, $env:${NOTIFY_TITLE_ENV}, "OK", "Information")`,
+          ),
         ],
-        { encoding: "utf8", timeout: 1500, stdio: ["ignore", "pipe", "ignore"] },
+        { env: notifyEnv(title, body), encoding: "utf8", timeout: 1500, stdio: ["ignore", "pipe", "ignore"] },
       )
     } else if (process.platform === "darwin") {
-      execFileSync(
-        "osascript",
-        [
-          "-e",
-          'display notification "' + body.replace(/"/g, '\\"') + '" with title "' + title.replace(/"/g, '\\"') + '"',
-        ],
-        { encoding: "utf8", timeout: 1500, stdio: ["ignore", "pipe", "ignore"] },
-      )
+      execFileSync("osascript", osascriptArgs(title, body), {
+        encoding: "utf8",
+        timeout: 1500,
+        stdio: ["ignore", "pipe", "ignore"],
+      })
     } else {
-      execFileSync("notify-send", [title, body], {
+      execFileSync("notify-send", ["--", printableLine(title, 120), printableLine(body)], {
         encoding: "utf8",
         timeout: 1500,
         stdio: ["ignore", "pipe", "ignore"],
@@ -108,24 +150,13 @@ export function osNotify(title: string, body: string): void {
 export function notifyPermissionRequest(tool: string, body: string): void {
   const title = "NEMO – Approval Required"
   if (process.platform === "win32") {
-    const safeTitle = title.replace(/'/g, "''")
-    const safeBody = `${tool} needs approval: ${body}`.replace(/'/g, "''").replace(/\r?\n/g, " ").slice(0, 400)
-    const command = [
-      "Add-Type -AssemblyName System.Windows.Forms;",
-      "$n = New-Object System.Windows.Forms.NotifyIcon;",
-      "$n.Icon = [System.Drawing.SystemIcons]::Information;",
-      `$n.BalloonTipTitle = '${safeTitle}';`,
-      `$n.BalloonTipText = '${safeBody}';`,
-      "$n.Visible = $true;",
-      "[System.Media.SystemSounds]::Exclamation.Play();",
-      "$n.ShowBalloonTip(2000);",
-      "Start-Sleep -Milliseconds 2000;",
-      "$n.Dispose();",
-    ].join(" ")
+    const text = `${tool} needs approval: ${body}`
+    const command = balloonScript(2000, "Start-Sleep -Milliseconds 2000;")
     const child = execFile(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", command],
       {
+        env: notifyEnv(title, text),
         windowsHide: true,
       },
       () => {},
@@ -156,25 +187,12 @@ export function notifyBalloon(key: string, title: string, body: string, minGapMs
   lastBalloonAt.set(key, now)
   try {
     if (process.platform === "win32") {
-      const safeTitle = title.replace(/'/g, "''")
-      const safeBody = body.replace(/'/g, "''").replace(/\r?\n/g, " ").slice(0, 400)
-      const script = [
-        "Add-Type -AssemblyName System.Windows.Forms;",
-        "Add-Type -AssemblyName System.Drawing;",
-        "$n = New-Object System.Windows.Forms.NotifyIcon;",
-        "$n.Icon = [System.Drawing.SystemIcons]::Information;",
-        `$n.BalloonTipTitle = '${safeTitle}';`,
-        `$n.BalloonTipText = '${safeBody}';`,
-        "$n.Visible = $true;",
-        "[System.Media.SystemSounds]::Exclamation.Play();",
-        "$n.ShowBalloonTip(3000);",
-        "Start-Sleep -Seconds 3;",
-        "$n.Dispose();",
-      ].join(" ")
+      const script = balloonScript(3000, "Start-Sleep -Seconds 3;")
       const child = execFile(
         "powershell.exe",
         ["-NoProfile", "-NonInteractive", "-Command", script],
         {
+          env: notifyEnv(title, body),
           windowsHide: true,
         },
         () => {},
@@ -183,18 +201,11 @@ export function notifyBalloon(key: string, title: string, body: string, minGapMs
       return true
     }
     if (process.platform === "darwin") {
-      const child = execFile(
-        "osascript",
-        [
-          "-e",
-          'display notification "' + body.replace(/"/g, '\\"') + '" with title "' + title.replace(/"/g, '\\"') + '"',
-        ],
-        () => {},
-      )
+      const child = execFile("osascript", osascriptArgs(title, body), () => {})
       child.on("error", () => {})
       return true
     }
-    const child = execFile("notify-send", [title, body], () => {})
+    const child = execFile("notify-send", ["--", printableLine(title, 120), printableLine(body)], () => {})
     child.on("error", () => {})
     return true
   } catch {

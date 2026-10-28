@@ -50,10 +50,14 @@ function previewBudget(expandOutput: boolean, maxLines: number): OutputPreviewOp
   return { headLines, tailLines: total - headLines }
 }
 
+function escapeInline(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/`/g, "\\`")
+}
+
 function formatUnifiedExecInteraction(command: string[], input?: string): string {
-  const commandDisplay = command.join(" ")
+  const commandDisplay = escapeInline(command.join(" "))
   if (input && input.length > 0) {
-    const preview = input.replace(/\n/g, "\\n").replace(/`/g, "\\`").slice(0, 80)
+    const preview = escapeInline(input).slice(0, 80)
     return `Interacted with \`${commandDisplay}\`, sent \`${preview}\``
   }
   return `Waited for \`${commandDisplay}\``
