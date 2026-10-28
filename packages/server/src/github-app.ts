@@ -287,12 +287,11 @@ export async function postIssueComment(
     throw new Error(`bad issue number: ${issueNumber}`)
   }
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`
-  const url = `${GITHUB_API_ORIGIN}${path}`
-  const parsed = new URL(url)
-  if (!url.startsWith(`${GITHUB_API_ORIGIN}/`) || parsed.origin !== GITHUB_API_ORIGIN) {
-    throw new Error(`refusing non-GitHub API URL: ${url}`)
+  const target = new URL(`${GITHUB_API_ORIGIN}${path}`)
+  if (target.protocol !== "https:" || target.hostname !== "api.github.com" || target.origin !== GITHUB_API_ORIGIN) {
+    throw new Error(`refusing non-GitHub API URL: ${target.href}`)
   }
-  const res = await fetch(url, {
+  const res = await fetch(target, {
     method: "POST",
     headers: apiHeaders(client),
     body: JSON.stringify({ body }),
@@ -327,12 +326,11 @@ export async function createInstallationToken(apiBase: string, jwt: string, inst
     throw new Error(`bad installation id: ${installationId}`)
   }
   const path = `/app/installations/${installationId}/access_tokens`
-  const url = `${GITHUB_API_ORIGIN}${path}`
-  const parsed = new URL(url)
-  if (!url.startsWith(`${GITHUB_API_ORIGIN}/`) || parsed.origin !== GITHUB_API_ORIGIN) {
-    throw new Error(`refusing non-GitHub API URL: ${url}`)
+  const target = new URL(`${GITHUB_API_ORIGIN}${path}`)
+  if (target.protocol !== "https:" || target.hostname !== "api.github.com" || target.origin !== GITHUB_API_ORIGIN) {
+    throw new Error(`refusing non-GitHub API URL: ${target.href}`)
   }
-  const res = await fetch(url, {
+  const res = await fetch(target, {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",
