@@ -7,9 +7,17 @@
 import * as fs from "fs"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
+import {
+  textResult,
+  type Tool,
+  type ToolContext,
+  resolveConstrainedPath,
+  assertExternalDirectory,
+  accessDeniedMessage,
+} from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
 import { searchRipgrep, type RgHit } from "../search/ripgrep.js"
+import { resolveSearchRoot } from "../search/search-root.js"
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
@@ -90,7 +98,7 @@ export function createGrepTool(): Tool {
           base = resolveConstrainedPath(path.resolve(ctx.cwd, rawBase), ctx.cwd)
         } catch (error) {
           return textResult(
-            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            accessDeniedMessage(error),
             /*isError*/ true,
           )
         }
@@ -115,9 +123,11 @@ export function createGrepTool(): Tool {
         // ── ripgrep fast path: gitignore-aware, 10-50x the Node walk.
         //    Any failure (missing binary, rejected pattern, timeout) keeps
         //    the pure-Node walk below as the fallback. ──
+        const root = resolveSearchRoot(base)
         const rg = await searchRipgrep(
           {
-            cwd: base,
+            cwd: root.cwd,
+            target: root.target,
             pattern,
             fixedStrings: literal,
             ignoreCase: Boolean(args.ignore_case),
@@ -140,7 +150,7 @@ export function createGrepTool(): Tool {
         let total = 0
         let skippedLong = 0
         const abort = () => signal?.aborted ?? false
-        walkFiles(base, (abs, rel) => {
+        const scanFile = (abs: string, rel: string): void => {
           if (total >= maxResults) return
           if (abort()) return
           if (!matchGlob(glob, rel)) return
@@ -180,7 +190,14 @@ export function createGrepTool(): Tool {
               }
             }
           }
-        })
+        }
+        // A file target is scanned directly — the walker only ever yields
+        // files inside a directory.
+        if (root.isFile && root.file) {
+          scanFile(root.file, path.basename(root.file))
+        } else {
+          walkFiles(base, (abs, rel) => scanFile(abs, rel))
+        }
 
         if (signal?.aborted) return textResult("aborted", /*isError*/ true)
         if (results.length === 0) {

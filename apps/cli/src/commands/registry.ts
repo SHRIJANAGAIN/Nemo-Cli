@@ -9,6 +9,15 @@ import type { NemoConfig } from "../../../runtime/src/index.js"
 export type CommandCategory =
   "Session" | "Configuration" | "Tools & Skills" | "Info" | "Exit" | "Agent" | "Task" | "Plan" | "Worktree"
 
+/**
+ * Ambient facts about the calling session that a handler cannot get from
+ * `config`. Today that is only the session id: `/todo` without it read and
+ * wrote the shared `global` list, so one chat saw another chat's checklist.
+ */
+export interface SlashCommandContext {
+  readonly sessionId?: string
+}
+
 export interface SlashCommandDef {
   name: string
   description: string
@@ -18,7 +27,7 @@ export interface SlashCommandDef {
   cliOnly?: boolean
   gatewayOnly?: boolean
   busyPolicy?: "dispatch" | "reject" | "interrupt_then_dispatch"
-  handler?: (args: string[], config: NemoConfig) => string | Promise<string>
+  handler?: (args: string[], config: NemoConfig, ctx: SlashCommandContext) => string | Promise<string>
 }
 
 export interface SlashCommand extends SlashCommandDef {

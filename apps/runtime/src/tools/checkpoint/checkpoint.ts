@@ -27,6 +27,7 @@ import * as path from "path"
 import {
   assertExternalDirectory,
   resolveConstrainedPath,
+  accessDeniedMessage,
   textResult,
   type Tool,
   type ToolContext,
@@ -165,7 +166,7 @@ function probePath(rawPath: string, cwd: string): { ok: true; target: string; re
     target = resolveWorkspacePath(rawPath, cwd)
     assertNoSymlinkEscape(target, cwd)
   } catch (error) {
-    return { ok: false, message: `Access denied: ${error instanceof Error ? error.message : String(error)}` }
+    return { ok: false, message: accessDeniedMessage(error) }
   }
   if (within(checkpointsRoot(cwd), target)) {
     return { ok: false, message: `Refusing to touch checkpoint storage: ${rawPath}` }

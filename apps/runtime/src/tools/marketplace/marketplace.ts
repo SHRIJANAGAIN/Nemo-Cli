@@ -181,7 +181,7 @@ const definition: ToolDefinition = {
     type: "object",
     required: ["action"],
     properties: {
-      action: { type: "string", description: "One of: list, search, install, remove." },
+      action: { type: "string", enum: ["list", "search", "install", "remove"], description: "One of: list, search, install, remove." },
       query: { type: "string", description: "Search text for the search action." },
       kind: { type: "string", description: "Asset kind for install/remove: skill or agent." },
       name: { type: "string", description: "Asset name for install/remove." },

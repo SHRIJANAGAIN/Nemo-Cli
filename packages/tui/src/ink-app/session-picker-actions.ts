@@ -36,6 +36,12 @@ export interface SessionPickerState {
   setMessages: (messages: NemoMessage[]) => void
   setStaticEpoch: (update: (epoch: number) => number) => void
   addSystemMessage: (content: string, opts?: { persist?: boolean; ttlMs?: number }) => string
+  /** Hand the resumed transcript to the agent: it seeds the agent session and
+   *  refreshes the system prompt, so the resumed chat carries its history and
+   *  the current long-term memory instead of starting blank. */
+  onSessionResumed?: (restored: NemoMessage[]) => void
+  /** How many long-term memories the store holds — shown in the banner. */
+  memoryCount?: () => number
 }
 
 export const createSessionPickerActions = (state: SessionPickerState) => ({
@@ -68,14 +74,24 @@ export const createSessionPickerActions = (state: SessionPickerState) => ({
     // (`{"command":…}` text + a `✓ tool — {…}` one-liner with the
     // result invisible) instead of the live "Called bash(…) ✓" box.
     // Blank legacy filler is dropped in there too (see the module).
-    state.setMessages(restoreMessages(session.sessionId, history))
+    const restored = restoreMessages(session.sessionId, history)
+    state.setMessages(restored)
+    // The agent only sees what is handed to it: without this the model
+    // kept answering from the PREVIOUS conversation while the screen showed
+    // the resumed one, and its system prompt kept the memory block it was
+    // built with at launch.
+    state.onSessionResumed?.(restored)
     // Wholesale replace → remount <Static> so the restored history
     // prints from item 0 (Ink's static index can't rewind).
     state.setStaticEpoch((e) => e + 1)
     // Transcript-only: persisting this banner would replay it as
     // history on the next resume, stacking a duplicate per resume.
+    // The counts say what came back: the conversation rows handed to the
+    // agent, and the long-term memories now in its context.
+    const memories = state.memoryCount?.() ?? 0
+    const detail = ` (${restored.length} earlier message${restored.length === 1 ? "" : "s"}, ${memories} long-term memor${memories === 1 ? "y" : "ies"})`
     state.addSystemMessage(
-      `Resumed session: ${session.sessionName}${session.sessionDescription ? ` - ${session.sessionDescription}` : ""}`,
+      `Resumed session: ${session.sessionName}${session.sessionDescription ? ` - ${session.sessionDescription}` : ""}${detail}`,
       { persist: false },
     )
   },

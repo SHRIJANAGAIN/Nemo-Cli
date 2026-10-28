@@ -297,10 +297,11 @@ function buildToolGuidance(nativeTools: boolean): string {
   }
 
   return [
-    "Tools: emit exactly one fenced block per response:",
+    "Tools: emit one or more fenced blocks per response:",
     "```",
-    "<tool_call:6124c78e>",
+    "<tool_call>",
     '{ "name": "<tool>", "arguments": {...} }',
+    "</tool_call>",
     "```",
   ].join("\n")
 }
@@ -366,8 +367,13 @@ function buildWebFetchGuidance(): string {
 /**
  * Builds the tool usage section of the system prompt.
  *
- * This section covers general tool usage principles and the specific
- * tool guidance (native vs. fenced block format).
+ * This section covers general tool usage principles, the call format, and
+ * worked examples per tool family. The examples exist because the model
+ * repeatedly sent shapes the tools reject — `todos` arrays the todo tool did
+ * not read, `"background": "True"` where a boolean was declared, XML
+ * `<function=bash>` blocks, `nemo__run_mcp` with an invented action — and each
+ * cost a whole turn to discover. A correct example in the prompt is cheaper
+ * than a rejection the model has to interpret.
  *
  * @param toolGuidance - The tool guidance string from `buildToolGuidance`.
  * @returns A formatted string with tool usage instructions.
@@ -378,6 +384,75 @@ function buildToolUsageSection(toolGuidance: string): string {
     "Batch independent tool calls in one response. When multiple tools have no dependencies, call them together.",
     "Always read files before editing. Verify changes with tests.",
     toolGuidance,
+    "",
+    buildToolExamplesSection(),
+    "",
+  ].join("\n")
+}
+
+/**
+ * Worked examples for the tool families the model gets wrong most often.
+ * Every example is a real call validated against the tool's declared schema —
+ * if a schema changes, these must change with it.
+ */
+function buildToolExamplesSection(): string {
+  return [
+    "## Tool Call Examples (copy these shapes)",
+    "",
+    "### Call shape",
+    "Native mode: one JSON function call per tool, arguments as an object.",
+    '<good-example>{"name": "read_file", "arguments": {"path": "src/app.ts", "offset": 1, "limit": 80}}</good-example>',
+    '<bad-example><function=read_file path="src/app.ts"></function></bad-example>',
+    '<bad-example>read_file --path src/app.ts</bad-example>',
+    "Argument types are the declared JSON types: booleans unquoted (`true`, not \"True\"/\"yes\"), numbers unquoted (`30`, not \"30\").",
+    "",
+    "### Parallel vs sequential",
+    '<good-example>Independent: grep({"pattern": "TODO", "path": "src"}) and read_file({"path": "package.json"}) in the SAME response.</good-example>',
+    '<good-example>Dependent: edit_file, then — in the next response, after seeing the result — bash({"command": "npm test"}).</good-example>',
+    "",
+    "### Explore → read → edit → verify",
+    "1. `glob({\"pattern\": \"src/**/*.ts\"})` or `grep({\"pattern\": \"createServer\", \"path\": \"src\"})` to find the file.",
+    "2. `read_file({\"path\": \"src/server.ts\"})` — never edit a file you have not read.",
+    "3. `edit_file({\"path\": \"src/server.ts\", \"old_string\": \"const port = 3000\", \"new_string\": \"const port = 8080\"})` with a snippet unique in the file, or `write_file({\"path\": \"src/new.ts\", \"content\": \"...\"})` for a new file.",
+    "4. Verify: `bash({\"command\": \"npm test\"})` (or the repo's own typecheck/lint). Report only what the command actually printed.",
+    "",
+    "### Planning with todo",
+    "Write the whole plan in ONE batch call (not one call per item):",
+    '<good-example>{"name": "todo", "arguments": {"action": "write", "items": [{"content": "add parser", "status": "in_progress", "priority": "high"}, {"content": "write tests", "priority": "medium"}]}}</good-example>',
+    '<good-example>{"name": "todo", "arguments": {"action": "update", "id": 1, "status": "completed"}}</good-example>',
+    '<bad-example>{"name": "todo", "arguments": {"action": "write"}}  — write needs content or items; every item needs content</bad-example>',
+    "Single-item write is `{\"action\": \"write\", \"content\": \"add parser\"}`. Read with `{\"action\": \"read\"}`; clear with `{\"action\": \"clear\"}`.",
+    "",
+    "### Shell",
+    "Use bash for running programs, git, and builds — not for what a dedicated tool does better.",
+    '<good-example>{"name": "bash", "arguments": {"command": "cd \\"C:/my project\\" && npm run build"}}</good-example>',
+    '<good-example>{"name": "bash", "arguments": {"command": "npm run dev", "background": true}}</good-example>',
+    "Follow-up on a background job: `{\"job_id\": \"<id>\", \"action\": \"status\"}` or `{\"job_id\": \"<id>\", \"action\": \"kill\"}`. There is no workdir parameter — chain `cd <dir> &&`.",
+    '<bad-example>bash({"command": "grep -rn TODO src"})  — use the grep tool instead</bad-example>',
+    "",
+    "### Subagents",
+    "Spawn with a self-contained prompt; the child cannot see this conversation.",
+    '<good-example>{"name": "nemo__Agent", "arguments": {"description": "Map auth flow", "prompt": "Read src/auth/*.ts and report every endpoint, its guards, and where tokens are stored. Do not edit files.", "subagent_type": "resolver", "background": false}}</good-example>',
+    'Use `background: true` only when you will do other work before reading the result. Then collect it with nemo__TaskList / nemo__TaskOutput.',
+    "",
+    "### MCP",
+    "List what exists before calling anything; a server must be connected first.",
+    '1. `{"name": "nemo__run_mcp", "arguments": {"action": "list_tools"}}` — no server needed.',
+    '2. `{"name": "nemo__run_mcp", "arguments": {"action": "call_tool", "server": "puppeteer", "tool": "puppeteer_navigate", "args": {"url": "https://example.com"}}}` — server + tool required.',
+    '3. `{"name": "nemo__run_mcp", "arguments": {"action": "status"}}` to see connections; `{"action": "connect", "server": "..."}` to connect.',
+    'Install a catalog server with `{"name": "mcp__install", "arguments": {"action": "install", "query": "puppeteer"}}` — install needs the exact server id from `list`, not a description.',
+    "Use only the documented action names; an invented action is rejected.",
+    "",
+    "### Memory and tasks",
+    '<good-example>{"name": "memory", "arguments": {"action": "save", "title": "Build command", "content": "npm run build && npm test"}}</good-example>',
+    '<good-example>{"name": "nemo__TaskCreate", "arguments": {"content": "port the parser", "priority": "high"}}</good-example>',
+    "`nemo__TaskUpdate` requires both `id` and `status`.",
+    "",
+    "### When a call is rejected",
+    "Read the rejection text — it names the field and the expected type. Errors like",
+    "`todo rejected the call. Invalid arguments: content must be a string` or `Missing 'server' parameter.`",
+    "mean the call shape was wrong, not that the tool is broken. Fix the arguments and retry once;",
+    "do not retry the identical call, and do not switch tools to work around a type error.",
     "",
   ].join("\n")
 }

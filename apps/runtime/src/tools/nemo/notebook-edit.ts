@@ -13,6 +13,7 @@ import {
   resolveConstrainedPath,
   assertExternalDirectory,
   assertMutablePath,
+  accessDeniedMessage,
 } from "../types.js"
 
 const definition: ToolDefinition = {
@@ -46,7 +47,7 @@ export function createNotebookEditTool(): Tool {
         assertExternalDirectory(target, ctx.cwd)
         assertMutablePath(target)
       } catch (err) {
-        return textResult(`Access denied: ${err instanceof Error ? err.message : String(err)}`, /*isError*/ true)
+        return textResult(accessDeniedMessage(err), /*isError*/ true)
       }
       if (!fs.existsSync(target)) return textResult(`Notebook not found: ${rawPath}`, /*isError*/ true)
       let notebook: {

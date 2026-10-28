@@ -53,6 +53,13 @@ export interface DispatchOptions {
    * and is the right default for a caller that dispatches between turns.
    */
   readonly busy?: BusyState
+  /**
+   * The calling session, passed through to handlers as `SlashCommandContext`.
+   * Session-scoped commands (`/todo`) need it to read the same store the
+   * agent's todo tool writes; without it they fell back to the shared `global`
+   * list and displayed another chat's items.
+   */
+  readonly sessionId?: string
 }
 
 function makeDef(def: Omit<SlashCommandDef, "handler"> & { handler: SlashCommandDef["handler"] }): SlashCommandDef {
@@ -183,18 +190,25 @@ export function buildNemoSlashRegistry(): SlashCommandRegistry {
       category: "Task",
       aliases: ["td"],
       argsHint: "[list|add|update|clear]",
-      handler: async (args: string[]) => {
+      handler: async (args: string[], _config, ctx) => {
         const { todoCommand } = await import("./todo.js")
         const action = (args[0] ?? "list") as "list" | "add" | "update" | "clear" | "read"
+        // Session-scoped: the agent's todo tool writes
+        // ~/.nemo/todos/<sessionId>.json, so the slash command must read the
+        // same file. Omitting it landed every chat on the shared global list.
+        const sessionId = ctx?.sessionId
         if (action === "add") {
-          return todoCommand({ action, content: args.slice(1).join(" ") })
+          return todoCommand({ action, content: args.slice(1).join(" "), sessionId })
         }
         if (action === "update") {
           const id = parseInt(args[1] ?? "", 10)
           const status = args[2] as "pending" | "in_progress" | "completed" | undefined
-          return todoCommand({ action: "update", id, status })
+          return todoCommand({ action: "update", id, status, sessionId })
         }
-        return todoCommand({ action })
+        if (action === "clear") {
+          return todoCommand({ action, sessionId })
+        }
+        return todoCommand({ action, sessionId })
       },
     }),
   )
@@ -487,7 +501,7 @@ export async function dispatchSlashCommandAsync(
   }
 
   try {
-    const output = await resolved.handler(rest, config)
+    const output = await resolved.handler(rest, config, { sessionId: options.sessionId })
     return {
       matched: true,
       command: resolved.canonical,

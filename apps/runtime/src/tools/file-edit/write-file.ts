@@ -14,6 +14,7 @@ import {
   resolveConstrainedPath,
   assertMutablePath,
   assertExternalDirectory,
+  accessDeniedMessage,
 } from "../types.js"
 import { syntaxNote } from "../diagnostics/tsc-diagnostics.js"
 
@@ -50,7 +51,7 @@ export function createWriteFileTool(): Tool {
           assertMutablePath(target)
         } catch (error) {
           return textResult(
-            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            accessDeniedMessage(error),
             /*isError*/ true,
           )
         }

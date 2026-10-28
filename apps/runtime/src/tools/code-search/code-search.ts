@@ -10,6 +10,7 @@ import type { ToolDefinition } from "../../../../../packages/protocol/src/index.
 import { resolveConstrainedPath, textResult, type Tool, type ToolContext } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
 import { searchRipgrep, type RgHit } from "../search/ripgrep.js"
+import { resolveSearchRoot } from "../search/search-root.js"
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
@@ -96,9 +97,11 @@ export function createCodeSearchTool(): Tool {
       }
 
       // ── ripgrep fast path; failure falls back to the Node walk below. ──
+      const root = resolveSearchRoot(base)
       const rg = await searchRipgrep(
         {
-          cwd: base,
+          cwd: root.cwd,
+          target: root.target,
           pattern: `\\b${escaped}\\b`,
           ignoreCase: Boolean(args.ignore_case),
           glob,
@@ -114,7 +117,7 @@ export function createCodeSearchTool(): Tool {
       const results: string[] = []
       const perFile: Array<{ file: string; lines: string[] }> = []
       const seen = new Map<string, number>()
-      walkFiles(base, (abs, rel) => {
+      const scanFile = (abs: string, rel: string): void => {
         if (!matchGlob(glob, rel)) return
         if (results.length >= maxResults) return
         let stat: fs.Stats
@@ -123,7 +126,7 @@ export function createCodeSearchTool(): Tool {
         } catch {
           return
         }
-        if (stat.size > ctx.config.maxOutputBytes) return // skip huge/binary files
+        if (stat.size > (ctx.config?.maxOutputBytes ?? 256 * 1024)) return // skip huge/binary files
         let content: string
         try {
           content = fs.readFileSync(abs, "utf8")
@@ -143,7 +146,14 @@ export function createCodeSearchTool(): Tool {
             results.push(`${rel}:${i + 1}: ${lines[i].trim()}`)
           }
         }
-      })
+      }
+      // A file target is scanned directly — the walker only ever yields
+      // files inside a directory.
+      if (root.isFile && root.file) {
+        scanFile(root.file, path.basename(root.file))
+      } else {
+        walkFiles(base, (abs, rel) => scanFile(abs, rel))
+      }
 
       if (results.length === 0) return textResult(`No identifiers matched '${query}' in ${base}`)
       const grouped = perFile

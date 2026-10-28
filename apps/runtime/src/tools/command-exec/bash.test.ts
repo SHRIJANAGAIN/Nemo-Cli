@@ -35,9 +35,19 @@ describe("bash tool", () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bash-"))
   })
 
-  afterEach(() => {
-    resetBackgroundJobsForTests()
+  afterEach(async () => {
+    await resetBackgroundJobsForTests()
     vi.unstubAllEnvs()
+    // A job that is still tearing down keeps its cwd open on Windows, so the
+    // first removal can fail with EPERM. Retry briefly before giving up.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true })
+        return
+      } catch {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+    }
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
@@ -97,10 +107,11 @@ describe("bash tool", () => {
     expect(textOf(res)).toContain("q-ok")
   })
 
-  it("rejects a missing command", async () => {
+  it("rejects a missing command and names the accepted shapes", async () => {
     const res = await run({})
     expect(res.isError).toBe(true)
-    expect(textOf(res)).toBe("Missing 'command'.")
+    expect(textOf(res)).toContain("Missing 'command'.")
+    expect(textOf(res)).toContain("job_id")
   })
 
   it("starts a background job, returns its id, and yields output when done", async () => {

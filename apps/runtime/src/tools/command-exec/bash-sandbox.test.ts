@@ -24,11 +24,13 @@ import {
   createBashTool,
   isReadOnlyMode,
   osSpawnRequest,
+  parseShellCommand,
   resetBackgroundJobsForTests,
   resetShellProbeForTests,
   runForegroundOsSandboxed,
   seedShellProbeForTests,
 } from "./bash.js"
+import { persistNegativeVerdict, probeKey } from "./shell-probe-cache.js"
 
 /**
  * OS-sandbox engagement (sandboxSpawn flag) without needing seatbelt/bwrap
@@ -454,10 +456,10 @@ describe("runForegroundOsSandboxed", () => {
 })
 
 describe("bash OS path engagement", () => {
-  afterEach(() => {
+  afterEach(async () => {
     if (savedFlag === undefined) delete process.env[FLAG]
     else process.env[FLAG] = savedFlag
-    resetBackgroundJobsForTests()
+    await resetBackgroundJobsForTests()
     resetShellProbeForTests()
   })
 
@@ -529,9 +531,12 @@ describe("bash OS path engagement", () => {
       expect(textOf(first)).toContain("[sandbox: policy-only — shell cannot run under windows-restricted isolation]")
       expect(textOf(first)).not.toContain("[sandbox: os")
 
+      // The note is claimed once: repeating it on every command buried the
+      // one thing it says ("not OS-isolated") in noise.
       const second = await tool.execute("t1", { command: "echo again" }, undefined, undefined, ctxFor(dir))
       expect(spawnFn).toHaveBeenCalledTimes(1) // cached — no second probe
-      expect(textOf(second)).toContain("[sandbox: policy-only —")
+      expect(textOf(second)).toContain("again")
+      expect(textOf(second)).not.toContain("[sandbox: policy-only")
     } finally {
       if (original) Object.defineProperty(process, "platform", original)
       setWindowsAcProbeForTests(null)
@@ -539,6 +544,45 @@ describe("bash OS path engagement", () => {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  /**
+   * The probe costs ~14 s on Windows (the AppContainer shim compiles its
+   * helper on first use) and its verdict is a property of the machine, not
+   * of the session. A persisted negative verdict must short-circuit it —
+   * otherwise every new process re-pays the probe before its first command.
+   */
+  it("a persisted machine verdict skips the probe entirely", async () => {
+    process.env[FLAG] = "1"
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-bashos-"))
+    const original = Object.getOwnPropertyDescriptor(process, "platform")
+    setWindowsAcProbeForTests(() => true)
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true })
+    const savedCache = process.env.NEMO_SHELL_PROBE_CACHE
+    process.env.NEMO_SHELL_PROBE_CACHE = path.join(dir, "shell-probe.json")
+    resetShellProbeForTests()
+    try {
+      const { shell, shellArgs } = parseShellCommand(SHELL)
+      persistNegativeVerdict(probeKey(shell, shellArgs), shell, "persisted-verdict-marker")
+
+      const tool = createBashTool() // REAL spawner — no test double
+      const started = Date.now()
+      const result = await tool.execute("t1", { command: "echo persisted-path" }, undefined, undefined, ctxFor(dir))
+      const text = textOf(result)
+
+      // The marker can only come from the persisted verdict: a live probe
+      // would have produced its own reason, never this string.
+      expect(text).toContain("persisted-path")
+      expect(text).toContain("persisted-verdict-marker")
+      expect(Date.now() - started).toBeLessThan(10_000)
+    } finally {
+      if (savedCache === undefined) delete process.env.NEMO_SHELL_PROBE_CACHE
+      else process.env.NEMO_SHELL_PROBE_CACHE = savedCache
+      if (original) Object.defineProperty(process, "platform", original)
+      setWindowsAcProbeForTests(null)
+      resetShellProbeForTests()
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 30_000)
 
   it("a passing probe is cached and the real run keeps its OS marker", async () => {
     process.env[FLAG] = "1"
@@ -628,10 +672,10 @@ describe("bash OS path engagement", () => {
 describe.runIf(process.platform === "win32" && fs.existsSync("C:\\Program Files\\Git\\bin\\bash.exe"))(
   "bash session probe vs Git's dispatcher stub",
   () => {
-    afterEach(() => {
+    afterEach(async () => {
       if (savedFlag === undefined) delete process.env[FLAG]
       else process.env[FLAG] = savedFlag
-      resetBackgroundJobsForTests()
+      await resetBackgroundJobsForTests()
       resetShellProbeForTests()
       setWindowsAcProbeForTests(null)
     })

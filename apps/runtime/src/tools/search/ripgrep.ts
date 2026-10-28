@@ -187,6 +187,12 @@ function editorBundles(): string[] {
 export interface RgQuery {
   /** Directory ripgrep runs in; results are relative to it. */
   cwd: string
+  /**
+   * What ripgrep searches, relative to `cwd`. Defaults to the whole tree
+   * ("."). A file name restricts the search to that single file — passing a
+   * FILE as `cwd` instead makes ripgrep fail with ENOTDIR.
+   */
+  target?: string
   /** Regex (or literal with `fixedStrings`) to search for. */
   pattern?: string
   fixedStrings?: boolean
@@ -221,7 +227,7 @@ export function buildSearchArgs(query: RgQuery): string[] {
     }
   }
   if (query.glob && query.glob !== "*") args.push("-g", query.glob)
-  args.push(".")
+  args.push(query.target ?? ".")
   return args
 }
 

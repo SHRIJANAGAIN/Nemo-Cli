@@ -61,6 +61,40 @@ function effective(config: { permissions?: unknown }): PermissionConfig {
   return { ...DEFAULT_PERMISSIONS, ...(config.permissions as object) } as PermissionConfig
 }
 
+describe("stale stock write denies are dropped on load", () => {
+  it("upgrades a config persisted with the old blanket write_file/edit_file denies", () => {
+    enterRepoWithConfig({
+      permissions: {
+        mode: "default",
+        askByDefault: true,
+        rules: [
+          { tool: "bash", pattern: "rm -rf /", allow: false },
+          { tool: "write_file", pattern: "*", allow: false },
+          { tool: "edit_file", pattern: "*", allow: false },
+        ],
+      },
+    })
+    const config = loadConfig()
+    // These denies sat in the default layer, which beats the approval ladder
+    // outright — the agent could not create or edit a single file.
+    expect(evaluatePermission("write_file", { path: "a.ts" }, effective(config)).action).toBe("ask")
+    expect(evaluatePermission("edit_file", { path: "a.ts" }, effective(config)).action).toBe("ask")
+    expect(evaluatePermission("bash", { command: "rm -rf /" }, effective(config)).action).toBe("deny")
+  })
+
+  it("keeps scoped and v2 denies intact", () => {
+    enterRepoWithConfig({
+      permissions: {
+        rules: [{ tool: "write_file", pattern: "**/secrets/**", allow: false }],
+        rulesV2: [{ tool: "write_file", pattern: "**/.env", action: "deny" }],
+      },
+    })
+    const config = loadConfig()
+    expect(evaluatePermission("write_file", { path: "/proj/secrets/key.pem" }, effective(config)).action).toBe("deny")
+    expect(evaluatePermission("write_file", { path: "/proj/app/.env" }, effective(config)).action).toBe("deny")
+  })
+})
+
 describe("a repo-committed config cannot grant blanket approval (#93)", () => {
   it("ignores uiMode full-access, so nothing runs unguarded", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})

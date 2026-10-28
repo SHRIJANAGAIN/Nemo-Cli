@@ -54,6 +54,15 @@ export interface NemoAppProps {
    * lives in ink-repl.mjs (flag + env + TTY).
    */
   altScreen?: boolean
+  /**
+   * Transcript file to open with (`nemo resume <id>`). The agent loads it as
+   * its session, so a resumed chat starts with the earlier turns AND the
+   * current long-term memory block instead of a blank context.
+   */
+  initialSessionFile?: string
+  /** Session id of the transcript above, so a resumed chat keeps writing its
+   *  todo list to the same per-session file instead of `global`. */
+  initialSessionId?: string
 }
 
 export function createAgentConfig(partial: Partial<NemoConfig>): NemoConfig {
@@ -181,6 +190,108 @@ export function convertToAgentMessages(msgs: NemoMessage[]): AgentMessage[] {
     }
   }
   return result
+}
+
+/**
+ * What a resumed conversation is ABOUT — the text the long-term memories are
+ * ranked against when the resumed session's prompt is rebuilt. The tail of the
+ * transcript carries the topic; the head is old news by then.
+ */
+export function resumeQuery(msgs: NemoMessage[]): string {
+  return msgs
+    .slice(-8)
+    .map((m) => (m.content ?? "").replace(/\s+/g, " ").slice(0, 200))
+    .join(" ")
+    .trim()
+    .slice(0, 600)
+}
+
+/** Render a persisted transcript as live-shaped rows.
+ *
+ *  The inverse of `convertToAgentMessages`, and the two have to agree: live
+ *  state holds ONE assistant row per tool call (its args as the content, the
+ *  outcome on `result`), while a transcript stores an assistant message whose
+ *  parts mix prose, thinking and `toolCall`s, plus a separate `tool` row per
+ *  result. The parts are therefore split out and each tool row is folded back
+ *  into its own call by id — otherwise a resumed transcript renders the raw
+ *  JSON of every call with its result nowhere.
+ */
+export function agentMessagesToRows(msgs: AgentMessage[], sessionId = "resumed"): NemoMessage[] {
+  const rows: NemoMessage[] = []
+  const callRowById = new Map<string, NemoMessage>()
+  /* Transcripts store no timestamp, so the rows are spread backwards from now
+   * in fixed steps — ordering and relative gaps are what the UI reads. */
+  let stamp = Date.now() - Math.max(msgs.length, 1) * 1000
+  for (const msg of msgs) {
+    stamp += 1000
+    if (msg.role === "user") {
+      rows.push({ id: `${sessionId}-${rows.length}`, timestamp: stamp, role: "user", content: msg.content ?? "" })
+      continue
+    }
+    if (msg.role === "system") continue
+    if (msg.role === "assistant") {
+      const parts = msg.content ?? []
+      const text = parts.filter((p) => p.type === "text").map((p) => p.text ?? "").join("")
+      const thinking = parts.filter((p) => p.type === "thinking").map((p) => p.text ?? "").join("")
+      if (text || thinking) {
+        rows.push({
+          id: `${sessionId}-${rows.length}`,
+          timestamp: stamp,
+          role: "assistant",
+          content: text,
+          ...(thinking ? { thinking } : {}),
+        })
+      }
+      for (const call of parts) {
+        if (call.type !== "toolCall") continue
+        const row: NemoMessage = {
+          id: `${sessionId}-${rows.length}`,
+          timestamp: stamp,
+          role: "assistant",
+          content: safeArgs(call.arguments),
+          toolCallId: call.id,
+          toolName: call.name,
+          toolStatus: "running",
+        }
+        rows.push(row)
+        if (call.id) callRowById.set(call.id, row)
+      }
+      continue
+    }
+    if (msg.role === "tool") {
+      const text = (msg.content ?? []).map((p) => p.text ?? "").join("")
+      const row = msg.toolCallId ? callRowById.get(msg.toolCallId) : undefined
+      if (row) {
+        row.result = text
+        row.isError = msg.isError ?? false
+        row.toolStatus = msg.isError ? "error" : "completed"
+        continue
+      }
+      rows.push({
+        id: `${sessionId}-${rows.length}`,
+        timestamp: stamp,
+        role: "tool",
+        content: text,
+        toolCallId: msg.toolCallId,
+        toolName: msg.toolName,
+        isError: msg.isError,
+        toolStatus: msg.isError ? "error" : "completed",
+      })
+    }
+  }
+  // A call whose result never landed must not spin forever on restore.
+  for (const row of callRowById.values()) {
+    if (row.toolStatus === "running") row.toolStatus = "completed"
+  }
+  return rows
+}
+
+function safeArgs(args: unknown): string {
+  try {
+    return JSON.stringify(args ?? {})
+  } catch {
+    return "{}"
+  }
 }
 
 /**

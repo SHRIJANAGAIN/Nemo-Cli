@@ -14,7 +14,9 @@
  */
 
 import { spawn } from "child_process"
+import { createHash } from "crypto"
 import * as fs from "fs"
+import * as os from "os"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
@@ -28,7 +30,12 @@ import {
   type Diagnostic,
 } from "./tsc-diagnostics.js"
 
-const TSC_TIMEOUT_MS = 25_000
+/**
+ * Cold budget for one tsc pass. A full monorepo check is tens of seconds,
+ * and a budget below that turned the tool into a no-op that reported
+ * "Diagnostics unavailable" while the compiler was still working.
+ */
+const TSC_TIMEOUT_MS = 90_000
 export { TSC_TIMEOUT_MS }
 const CACHE_TTL_MS = 10_000
 const MAX_TSC_OUTPUT_BYTES = 20 * 1024 * 1024
@@ -40,6 +47,9 @@ export interface DiagnosticsSnapshot {
   diagnostics: Record<string, Diagnostic[]>
   unlocated: string[]
   generatedAt: number
+  /** How long the tsc pass took — a cold check is slow, and saying so
+   *  stops "no errors" from reading as "nothing happened". */
+  durationMs: number
 }
 
 export type CollectResult = { ok: true; snapshot: DiagnosticsSnapshot } | { ok: false; reason: string }
@@ -50,6 +60,7 @@ interface TscRun {
   stderr: string
   timedOut: boolean
   aborted: boolean
+  durationMs: number
 }
 
 let cache: { tsconfigPath: string; at: number; snapshot: DiagnosticsSnapshot } | undefined
@@ -57,6 +68,26 @@ let cache: { tsconfigPath: string; at: number; snapshot: DiagnosticsSnapshot } |
 /** Tests: drop the inter-run cache. */
 export function resetDiagnosticsCache(): void {
   cache = undefined
+}
+
+/**
+ * Per-project incremental state for tsc.
+ *
+ * Without it every call re-checks the whole program from scratch (tens of
+ * seconds on a monorepo); with it the second call only re-checks what
+ * changed. The file lives in nemo's own cache dir — never in the project,
+ * which the tool has no business writing to.
+ */
+function prepareBuildInfo(tsconfigPath: string): string | undefined {
+  try {
+    const hash = createHash("sha1").update(path.resolve(tsconfigPath)).digest("hex").slice(0, 16)
+    const dir = path.join(os.homedir(), ".nemo", "cache", "diagnostics")
+    fs.mkdirSync(dir, { recursive: true })
+    return path.join(dir, `${hash}.tsbuildinfo`)
+  } catch {
+    // No writable cache dir: a plain (slower) run still beats no run.
+    return undefined
+  }
 }
 
 /** Locate `node_modules/typescript/bin/tsc`: walk up from cwd first (the
@@ -98,8 +129,9 @@ export function resolveTscBin(cwd: string): string | undefined {
 
 function runTsc(bin: string, projectRoot: string, tsconfigPath: string, signal?: AbortSignal): Promise<TscRun> {
   return new Promise<TscRun>((resolve) => {
+    const startedAt = Date.now()
     if (signal?.aborted) {
-      resolve({ code: null, stdout: "", stderr: "", timedOut: false, aborted: true })
+      resolve({ code: null, stdout: "", stderr: "", timedOut: false, aborted: true, durationMs: 0 })
       return
     }
     let child: ReturnType<typeof spawn>
@@ -109,25 +141,29 @@ function runTsc(bin: string, projectRoot: string, tsconfigPath: string, signal?:
       // runs here as code we did not write — it must never see API keys.
       // Same boundary as hook/MCP/git/monitor children: getSafeEnv strips
       // credential-shaped names, PATH/HOME survive. (#112)
-      child = spawn(process.execPath, [bin, "--noEmit", "--pretty", "false", "-p", tsconfigPath], {
+      const args = [bin, "--noEmit", "--pretty", "false"]
+      const buildInfo = prepareBuildInfo(tsconfigPath)
+      if (buildInfo) args.push("--incremental", "--tsBuildInfoFile", buildInfo)
+      args.push("-p", tsconfigPath)
+      child = spawn(process.execPath, args, {
         cwd: projectRoot,
         env: getSafeEnv(process.env),
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
       })
     } catch (error) {
-      resolve({ code: null, stdout: "", stderr: String(error), timedOut: false, aborted: false })
+      resolve({ code: null, stdout: "", stderr: String(error), timedOut: false, aborted: false, durationMs: 0 })
       return
     }
     let stdout = ""
     let stderr = ""
     let settled = false
-    const finish = (run: TscRun): void => {
+    const finish = (run: Omit<TscRun, "durationMs">): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       signal?.removeEventListener("abort", onAbort)
-      resolve(run)
+      resolve({ ...run, durationMs: Date.now() - startedAt })
     }
     const timer = setTimeout(() => {
       child.kill()
@@ -175,16 +211,26 @@ export async function collectDiagnostics(cwd: string, refresh = false, signal?: 
     return { ok: false, reason: `tsc failed to start: ${run.stderr.trim() || "unknown error"}` }
   }
   const { diagnostics, unlocated } = parseTscOutput(run.stdout, projectRoot)
-  const snapshot: DiagnosticsSnapshot = { tsconfigPath, projectRoot, diagnostics, unlocated, generatedAt: Date.now() }
+  const snapshot: DiagnosticsSnapshot = {
+    tsconfigPath,
+    projectRoot,
+    diagnostics,
+    unlocated,
+    generatedAt: Date.now(),
+    durationMs: run.durationMs,
+  }
   cache = { tsconfigPath, at: snapshot.generatedAt, snapshot }
   return { ok: true, snapshot }
 }
 
 const definition: ToolDefinition = {
-  timeoutMs: 30_000,
+  // Must outlast TSC_TIMEOUT_MS so the tool's own "tsc timed out" message
+  // fires instead of the harness killing the call (see the timing-contract
+  // test).
+  timeoutMs: 120_000,
   name: "diagnostics",
   description:
-    "Run the TypeScript compiler (tsc --noEmit) and report diagnostics (errors/warnings) per file. Use after making code changes to verify they compile; optionally filter to specific files. Results are cached for a few seconds.",
+    "Run the TypeScript compiler (tsc --noEmit) and report diagnostics (errors/warnings) per file. Use after making code changes to verify they compile; optionally filter to specific files. The first run type-checks the whole project and can take a minute; later runs reuse the incremental state and are far quicker.",
   parameters: {
     type: "object",
     required: [],
@@ -226,7 +272,8 @@ export function createDiagnosticsTool(): Tool {
         filters.length === 0 && result.snapshot.unlocated.length > 0
           ? `, ${result.snapshot.unlocated.length} project-level message(s)`
           : ""
-      const summary = `Diagnostics: ${errors} error(s), ${warnings} warning(s) across ${entries.length} file(s)${globalNote}${filterNote}.`
+      const took = (result.snapshot.durationMs / 1000).toFixed(1)
+      const summary = `Diagnostics: ${errors} error(s), ${warnings} warning(s) across ${entries.length} file(s)${globalNote}${filterNote}. Checked in ${took}s.`
       const parts = [summary]
       if (blocks.length > 0) parts.push("", blocks.join("\n\n"))
       if (filters.length === 0 && result.snapshot.unlocated.length > 0) {

@@ -103,7 +103,7 @@ else {
 }
 
 const pubPkg = JSON.parse(fs.readFileSync(path.join(OUT, "package.json"), "utf8"))
-pubPkg.name === "@shrijan/nemo-cli" ? ok("package name") : fail(`unexpected name ${pubPkg.name}`)
+pubPkg.name === "@shrijanagain/nemo-cli" ? ok("package name") : fail(`unexpected name ${pubPkg.name}`)
 pubPkg.version === rootPkg.version
   ? ok("publish version synced")
   : fail(`publish version ${pubPkg.version} != ${rootPkg.version}`)

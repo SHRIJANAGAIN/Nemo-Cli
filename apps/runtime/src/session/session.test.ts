@@ -119,4 +119,59 @@ describe("Session.load", () => {
     expect(loaded).not.toBeNull()
     expect(loaded?.messages).toEqual([])
   })
+
+  /**
+   * The transcripts that actually exist on disk are not the shape this class
+   * writes. `nemo resume <id>` resolves `~/.nemo/sessions/<id>`, and the wire
+   * recorder had filled those files with JSONL — one `{ts, message}` row per
+   * line. `Session.load` did a whole-file `JSON.parse`, threw, returned null,
+   * and every real session reported "no transcript found".
+   */
+  it("reads a JSONL wire transcript", () => {
+    const file = tmpFile("wire.jsonl")
+    fs.writeFileSync(
+      file,
+      [
+        JSON.stringify({ ts: 1, message: { role: "system", content: "OLD PROMPT" } }),
+        JSON.stringify({ ts: 2, message: { role: "user", content: "hello" } }),
+        JSON.stringify({
+          ts: 3,
+          message: { role: "assistant", content: [{ type: "text", text: "hi" }], stopReason: "end_turn" },
+        }),
+        "not json at all",
+        "",
+      ].join("\n"),
+      "utf8",
+    )
+
+    const loaded = Session.load(file)
+    expect(loaded?.messages.map((m) => m.role)).toEqual(["user", "assistant"])
+    expect(loaded?.systemContext).toBe("")
+  })
+
+  it("reads a one-line wire transcript, which is also valid JSON", () => {
+    // A short session leaves exactly one row. Whole-file JSON.parse succeeds on
+    // that and found no `messages` key, so the transcript reported empty and
+    // the resume stopped before reaching the wire loader.
+    const file = tmpFile("wire-one.jsonl")
+    fs.writeFileSync(file, JSON.stringify({ ts: 1, message: { role: "user", content: "only turn" } }), "utf8")
+
+    const loaded = Session.load(file)
+    expect(loaded?.messages).toHaveLength(1)
+    expect((loaded?.messages[0] as { content: string }).content).toBe("only turn")
+  })
+
+  it("reads bare JSONL rows that carry no ts/message wrapper", () => {
+    const file = tmpFile("wire-bare.jsonl")
+    fs.writeFileSync(file, [JSON.stringify({ role: "user", content: "a" }), JSON.stringify({ role: "user", content: "b" })].join("\n"), "utf8")
+
+    expect(Session.load(file)?.messages.map((m) => (m as { content: string }).content)).toEqual(["a", "b"])
+  })
+
+  it("returns null rather than an empty session for a transcript with nothing restorable", () => {
+    const file = tmpFile("wire-junk.jsonl")
+    fs.writeFileSync(file, [JSON.stringify({ ts: 1, message: { role: "system", content: "PROMPT" } }), "{ broken"].join("\n"), "utf8")
+
+    expect(Session.loadWire(file)).toBeNull()
+  })
 })

@@ -4,7 +4,12 @@
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import { validateToolArguments, formatValidationIssues, normalizeSchema } from "../../../../packages/core/src/tool_schema.js"
+import {
+  coerceToolArguments,
+  validateToolArguments,
+  formatValidationIssues,
+  normalizeSchema,
+} from "../../../../packages/core/src/tool_schema.js"
 import type { Tool } from "./types.js"
 
 /**
@@ -36,8 +41,9 @@ export function validateArguments(tool: Tool): Tool {
   return {
     ...tool,
     execute: async (toolCallId, args, signal, onUpdate, context) => {
-      const result = validateToolArguments(schema, args)
-      if (result.valid) return tool.execute(toolCallId, args, signal, onUpdate, context)
+      const coerced = coerceToolArguments(schema, args)
+      const result = validateToolArguments(schema, coerced)
+      if (result.valid) return tool.execute(toolCallId, coerced as Record<string, unknown>, signal, onUpdate, context)
 
       const message = formatValidationIssues(result.issues)
       return {

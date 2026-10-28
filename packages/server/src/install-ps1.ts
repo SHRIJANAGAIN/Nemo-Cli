@@ -111,7 +111,7 @@ $spin = @('◉', '◎', '◯', '◎')
 $width = 24
 $installDone = $false
 try {
-  $job = Start-Job -ScriptBlock { npm install -g @shrijan/nemo-cli }
+  $job = Start-Job -ScriptBlock { npm install -g @shrijanagain/nemo-cli }
   $t0 = Get-Date
   $i = 0
   while ($job.State -eq 'Running') {
@@ -140,7 +140,7 @@ try {
   Write-Output "background install unavailable, installing directly…"
 }
 if (-not $installDone) {
-  try { npm install -g @shrijan/nemo-cli } catch { Fail "npm install failed: $($_.Exception.Message)" }
+  try { npm install -g @shrijanagain/nemo-cli } catch { Fail "npm install failed: $($_.Exception.Message)" }
 }
 Write-Output "download + install complete."
 Write-Output ""

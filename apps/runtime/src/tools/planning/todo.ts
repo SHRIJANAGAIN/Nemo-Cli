@@ -170,7 +170,7 @@ export function createTodoTool(): Tool {
     timeoutMs: 30_000,
     name: "todo",
     description:
-      "Maintain a small session-scoped to-do list. Use to plan multi-step work: write, read, or update items. Uses diff rendering to show only changes since last update.",
+      "Maintain a small session-scoped to-do list. Use to plan multi-step work: write, read, or update items. write accepts one item via 'content' or a batch via 'items'. Uses diff rendering to show only changes since last update.",
     parameters: {
       type: "object",
       required: ["action"],
@@ -181,11 +181,17 @@ export function createTodoTool(): Tool {
           description: "The operation to perform on the to-do list.",
         },
         id: { type: "integer", description: "Item id (for update)." },
-        content: { type: "string", description: "Item text (for write)." },
+        content: { type: "string", description: "Item text for a single write." },
+        items: {
+          type: "array",
+          description:
+            "Batch of items for write: [{ content, status?, priority?, dependsOn? }]. Preferred over repeated single writes.",
+          items: { type: "object", description: "One todo: content (required), status?, priority?, dependsOn?." },
+        },
         status: {
           type: "string",
           enum: ["pending", "in_progress", "completed"],
-          description: "New status for the item (for update).",
+          description: "New status for the item (for update, or the initial status of a written item).",
         },
         priority: {
           type: "string",
@@ -219,22 +225,23 @@ export function createTodoTool(): Tool {
         return textResult(renderFull(list.items))
       }
       if (action === "write") {
-        const content = String(args.content ?? "").trim()
-        if (!content) return textResult("Missing 'content'.", /*isError*/ true)
+        const additions = collectNewItems(args)
+        if (typeof additions === "string") return textResult(additions, /*isError*/ true)
 
         // Snapshot before mutation for diff
         list.before = [...list.items]
 
-        const item: TodoItem = {
-          id: nextId(list),
-          content,
-          status: "pending",
-          priority: isPriority(args.priority),
-          dependsOn: Array.isArray(args.dependsOn) ? (args.dependsOn as number[]) : undefined,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+        for (const addition of additions) {
+          list.items.push({
+            id: nextId(list),
+            content: addition.content,
+            status: addition.status ?? "pending",
+            priority: addition.priority,
+            dependsOn: addition.dependsOn,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          })
         }
-        list.items.push(item)
         save(list, sessionId)
         return textResult(renderTodoDiff(list))
       }
@@ -272,6 +279,72 @@ export function createTodoTool(): Tool {
 function isPriority(value: unknown): "low" | "medium" | "high" | undefined {
   if (value === "low" || value === "medium" || value === "high") return value
   return undefined
+}
+
+function isStatus(value: unknown): TodoItem["status"] | undefined {
+  if (value === "pending" || value === "in_progress" || value === "completed") return value
+  return undefined
+}
+
+function idList(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const ids = value.map(Number).filter((n) => Number.isInteger(n))
+  return ids.length > 0 ? ids : undefined
+}
+
+interface NewTodo {
+  content: string
+  status?: TodoItem["status"]
+  priority?: TodoItem["priority"]
+  dependsOn?: number[]
+}
+
+/**
+ * Models write plans as a batch (`items: [{content, status}]`, or `todos:`) far
+ * more often than as repeated single-item writes — that shape used to fail with
+ * a bare "Missing 'content'." because only a top-level `content` was read. One
+ * item via `content` still works, and the error now names the accepted shapes.
+ */
+function collectNewItems(args: Record<string, unknown>): NewTodo[] | string {
+  const batch = Array.isArray(args.items) ? args.items : Array.isArray(args.todos) ? args.todos : undefined
+  if (batch !== undefined) {
+    if (batch.length === 0) return "items must not be empty."
+    const out: NewTodo[] = []
+    for (const [index, raw] of batch.entries()) {
+      if (typeof raw === "string") {
+        const text = raw.trim()
+        if (text) out.push({ content: text })
+        continue
+      }
+      if (raw === null || typeof raw !== "object") {
+        return `items[${index}] must be a string or an object with 'content'.`
+      }
+      const entry = raw as Record<string, unknown>
+      const text = String(entry.content ?? entry.text ?? entry.title ?? "").trim()
+      if (!text) return `items[${index}] is missing 'content'.`
+      out.push({
+        content: text,
+        status: isStatus(entry.status),
+        priority: isPriority(entry.priority),
+        dependsOn: idList(entry.dependsOn),
+      })
+    }
+    if (out.length === 0) return "items must contain at least one non-empty item."
+    return out
+  }
+
+  const content = String(args.content ?? "").trim()
+  if (!content) {
+    return "Missing 'content'. Send content for one item, or items: [{ content, status? }] for a batch."
+  }
+  return [
+    {
+      content,
+      status: isStatus(args.status),
+      priority: isPriority(args.priority),
+      dependsOn: idList(args.dependsOn),
+    },
+  ]
 }
 
 export function loadTodoList(sessionId?: string): TodoList {

@@ -22,7 +22,7 @@ What the scripts do: check `node >= 18`, `npm install`, `npm run build`,
 then link `nemo` / `nemo` launchers (`~/.local/bin` on Unix,
 `~/bin/*.cmd` shims + `NEMO_HOME` on Windows).
 
-Other routes: `npm install -g @shrijan/nemo-cli`, Docker
+Other routes: `npm install -g @shrijanagain/nemo-cli`, Docker
 (`Dockerfile`, entry `node dist/apps/cli/src/index.js`), `nemo upgrade`.
 
 ## Single-file binary

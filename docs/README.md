@@ -22,7 +22,7 @@ terminal coding agent by Shrijan.
 **Install & start**
 
 ```sh
-npm i -g @shrijan/nemo-cli
+npm i -g @shrijanagain/nemo-cli
 nemo          # or: nemo
 ```
 

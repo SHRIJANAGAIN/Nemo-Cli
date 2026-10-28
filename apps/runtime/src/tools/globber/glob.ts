@@ -6,9 +6,17 @@
 
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
+import {
+  textResult,
+  type Tool,
+  type ToolContext,
+  resolveConstrainedPath,
+  assertExternalDirectory,
+  accessDeniedMessage,
+} from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
 import { searchRipgrep } from "../search/ripgrep.js"
+import { resolveSearchRoot } from "../search/search-root.js"
 
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
@@ -44,7 +52,7 @@ export function createGlobTool(): Tool {
           base = resolveConstrainedPath(path.resolve(ctx.cwd, rawBase), ctx.cwd)
         } catch (error) {
           return textResult(
-            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            accessDeniedMessage(error),
             /*isError*/ true,
           )
         }
@@ -54,9 +62,19 @@ export function createGlobTool(): Tool {
 
         assertExternalDirectory(base, ctx.cwd)
 
+        // A file path means "does this file match?" — matching it against the
+        // pattern answers that, where the directory walk would report
+        // "No files matched" for a path that plainly exists.
+        const root = resolveSearchRoot(base)
+        if (root.isFile && root.file) {
+          const name = path.basename(root.file)
+          if (!matchGlob(pattern, name)) return textResult(`No files matched '${pattern}'`)
+          return textResult(`1 file(s):\n${name}`)
+        }
+
         // ── ripgrep fast path (`rg --files -g`): failure falls back to
         //    the Node walker below. ──
-        const rg = await searchRipgrep({ cwd: base, glob: pattern, filesOnly: true }, { signal })
+        const rg = await searchRipgrep({ cwd: root.cwd, target: root.target, glob: pattern, filesOnly: true }, { signal })
         if (rg.kind === "ok") {
           if (signal?.aborted) return textResult("aborted", /*isError*/ true)
           const results = rg.hits.map((h) => h.path).slice(0, maxResults)

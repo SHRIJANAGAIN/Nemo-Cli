@@ -71,6 +71,23 @@ describe("buildSystemPrompt senior upgrade", () => {
     expect(prompt.length).toBeLessThan(corpus.length + 60_000)
   })
 
+  it("teaches call shapes with worked examples for the tools models misuse", () => {
+    const prompt = buildSystemPrompt(ctx())
+    expect(prompt).toContain("## Tool Call Examples")
+    // The batch todo shape is what the tool now accepts; a single-content
+    // example alone is what produced "Missing 'content'." in real sessions.
+    expect(prompt).toContain('"action": "write", "items": [')
+    expect(prompt).toContain('"action": "update", "id": 1, "status": "completed"')
+    // Argument typing: booleans/numbers are declared JSON types, not strings.
+    expect(prompt).toContain('booleans unquoted (`true`, not "True"/"yes")')
+    // MCP per-action requirements, the other repeated rejection.
+    expect(prompt).toContain('"action": "list_tools"}')
+    expect(prompt).toContain('"action": "call_tool", "server"')
+    expect(prompt).toContain("an invented action is rejected")
+    // A rejected call means the shape was wrong, not the tool.
+    expect(prompt).toContain("### When a call is rejected")
+  })
+
   it("carries the company roster block when the caller supplies one", () => {
     const block = "## COMPANY (2 specialists across 1 departments — yours to command)"
     const withCompany = buildSystemPrompt({ ...ctx(), companyBlock: block })

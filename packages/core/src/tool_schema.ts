@@ -303,6 +303,80 @@ export function isValidArguments(schema: ParamSchema, args: unknown): boolean {
   return validateToolArguments(schema, args).valid
 }
 
+const TRUE_WORDS = new Set(["true", "yes", "on", "1"])
+const FALSE_WORDS = new Set(["false", "no", "off", "0"])
+
+function coerceValue(value: unknown, schema: ParamProperty): unknown {
+  if (typeof value === "string") {
+    // Models routinely spell booleans as `"False"` / `"true"`. Rejecting that
+    // costs a whole turn and the model usually re-sends the same string.
+    if (schema.type === "boolean") {
+      const word = value.trim().toLowerCase()
+      if (TRUE_WORDS.has(word)) return true
+      if (FALSE_WORDS.has(word)) return false
+      return value
+    }
+    if (schema.type === "number" || schema.type === "integer") {
+      const trimmed = value.trim()
+      if (trimmed.length === 0) return value
+      const num = Number(trimmed)
+      if (!Number.isFinite(num)) return value
+      if (schema.type === "integer" && !Number.isInteger(num)) return value
+      return num
+    }
+    // An object/array argument sent as a JSON string is the same mistake one
+    // level up; parsing it is unambiguous, unlike guessing at partial JSON.
+    if ((schema.type === "object" || schema.type === "array") && /^[[{]/.test(value.trim())) {
+      try {
+        const parsed: unknown = JSON.parse(value)
+        if (schema.type === "object" && parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed
+        }
+        if (schema.type === "array" && Array.isArray(parsed)) return parsed
+      } catch {
+        /* leave the string for validation to report */
+      }
+    }
+    return value
+  }
+  if (schema.type === "array" && schema.items !== undefined && Array.isArray(value)) {
+    let changed = false
+    const out = value.map((item) => {
+      const coerced = coerceValue(item, schema.items!)
+      if (coerced !== item) changed = true
+      return coerced
+    })
+    return changed ? out : value
+  }
+  return value
+}
+
+/**
+ * Normalise scalar arguments that are unambiguous strings of the declared type
+ * (`"False"` → `false`, `"30"` → 30, JSON-string object/array → parsed).
+ *
+ * Only DECLARED properties are touched, and the original object is returned
+ * untouched when nothing changed — a model's `{"path": "a.ts"}` must reach the
+ * tool exactly as sent. Ambiguous strings are left for validation to reject,
+ * so `"maybe"` for a boolean still produces a corrective message rather than a
+ * silent wrong value.
+ */
+export function coerceToolArguments(schema: ParamSchema, args: unknown): unknown {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) return args
+  const record = args as Record<string, unknown>
+  let out: Record<string, unknown> | undefined
+  for (const [name, property] of Object.entries(schema.properties)) {
+    if (!(name in record)) continue
+    const value = record[name]
+    if (value === undefined) continue
+    const coerced = coerceValue(value, property)
+    if (coerced === value) continue
+    if (out === undefined) out = { ...record }
+    out[name] = coerced
+  }
+  return out ?? args
+}
+
 /**
  * Render issues as ONE model-facing line.
  *

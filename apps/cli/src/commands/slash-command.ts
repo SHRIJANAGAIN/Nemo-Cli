@@ -10,7 +10,7 @@ import { loadConfig } from "../../../runtime/src/index.js"
 
 export interface SlashCommandInterface {
   readonly registry: SlashCommandRegistry
-  readonly dispatch: (input: string) => Promise<string>
+  readonly dispatch: (input: string, options?: { sessionId?: string }) => Promise<string>
   readonly help: () => string
 }
 
@@ -21,9 +21,11 @@ export class SlashCommandService implements SlashCommandInterface {
     this.registry = buildNemoSlashRegistry()
   }
 
-  dispatch(input: string): Promise<string> {
+  dispatch(input: string, options?: { sessionId?: string }): Promise<string> {
     const config = loadConfig()
-    return dispatchSlashCommandAsync(this.registry, input, config).then((r) => r.output)
+    return dispatchSlashCommandAsync(this.registry, input, config, { sessionId: options?.sessionId }).then(
+      (r) => r.output,
+    )
   }
 
   help(): string {

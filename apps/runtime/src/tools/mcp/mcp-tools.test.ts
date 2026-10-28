@@ -12,6 +12,9 @@ import * as http from "node:http"
 import { createMcpConnection, MCP_MAX_BUFFER_BYTES } from "../../../../../packages/mcp/src/index.js"
 import { ExecDecision } from "../../../../../packages/execpolicy/src/policy.js"
 import { createMcpTools, resetMcpRegistry, slugify, toToolProperty } from "./mcp.js"
+import { createMcpRunnerTool } from "./mcp-runner-tool.js"
+import type { NemoConfig } from "../../config.js"
+import type { ToolContext } from "../types.js"
 import {
   createMcpInstallTool,
   execAsync,
@@ -297,4 +300,88 @@ describe("MCP transport buffer cap (#82a)", () => {
       server.close()
     }
   }, 15000)
+})
+
+describe("MCP tools stay usable when the model guesses wrong", () => {
+  function contextWith(servers: Record<string, { command: string[] }>): ToolContext {
+    return {
+      cwd: process.cwd(),
+      config: { mcpServers: servers } as unknown as NemoConfig,
+      permissions: {} as ToolContext["permissions"],
+    }
+  }
+
+  it("matches a prose search query against the catalog", async () => {
+    const tool = createMcpInstallTool()
+    const res = await tool.execute(
+      "t",
+      { action: "search", query: "node server http serve localhost command execution" },
+      undefined,
+      undefined,
+    )
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toMatch(/Found \d+ MCP servers/)
+  })
+
+  it("falls back to the whole catalog when nothing matches the query", async () => {
+    const tool = createMcpInstallTool()
+    const res = await tool.execute(
+      "t",
+      { action: "search", query: "zzzqqq-nothing-matches-this" },
+      undefined,
+      undefined,
+    )
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toContain("Showing all")
+    expect(res.content[0].text).toContain("github")
+  })
+
+  it("names the available servers when the requested one is unknown", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute(
+      "t",
+      { action: "list_tools", server: "definitely-not-a-server" },
+      undefined,
+      undefined,
+      contextWith({}),
+    )
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("Available MCP servers")
+  })
+
+  it("answers a bare list with the server catalog instead of an error", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute("t", { action: "list_tools" }, undefined, undefined, contextWith({}))
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toContain("Available MCP servers")
+  })
+
+  it("answers a bare status with every known server", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute("t", { action: "status" }, undefined, undefined, contextWith({}))
+    expect(res.isError).toBe(false)
+    expect(res.content[0].text).toContain("MCP server status:")
+    expect(res.content[0].text).toContain("not running")
+  })
+
+  it("runs a config-declared server through the 'list' alias", async () => {
+    const { dir, script } = startFakeServer()
+    try {
+      const tool = createMcpRunnerTool()
+      const ctx = contextWith({ fake: { command: [process.execPath, script] } })
+      const res = await tool.execute("t", { action: "list", server: "fake" }, undefined, undefined, ctx)
+      expect(res.isError).toBe(false)
+      expect(res.content[0].text).toContain("alpha")
+      await tool.execute("t", { action: "disconnect", server: "fake" }, undefined, undefined, ctx)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }, 15000)
+
+  it("rejects an unknown action but lists the valid ones", async () => {
+    const tool = createMcpRunnerTool()
+    const res = await tool.execute("t", { action: "frobnicate" }, undefined, undefined, contextWith({}))
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toContain("list_tools")
+  })
 })

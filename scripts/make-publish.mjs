@@ -442,7 +442,7 @@ async function main() {
 
   const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
   const publishPkg = {
-    name: "@shrijan/nemo-cli",
+    name: "@shrijanagain/nemo-cli",
     version: rootPkg.version,
     description: "Nemo — local-first terminal coding agent by Shrijan.",
     license: rootPkg.license,
@@ -451,7 +451,7 @@ async function main() {
     engines: rootPkg.engines,
     bin: {
       nemo: "dist/apps/cli/src/index.js",
-      nemo: "dist/apps/cli/src/index.js",
+      "nemo-code": "dist/apps/cli/src/index.js",
     },
     files: ["dist", "Img"],
     dependencies: rootPkg.dependencies,

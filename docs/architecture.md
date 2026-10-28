@@ -2,7 +2,7 @@
 
 Nemo is a **TypeScript monorepo**: one root `package.json` compiles the
 whole `apps/` + `packages/` + `nemo/` tree into `dist/`, and the release build
-ships on npm as `@shrijan/nemo-cli`.
+ships on npm as `@shrijanagain/nemo-cli`.
 
 ## Repository layout
 
@@ -90,7 +90,7 @@ Supporting scripts (root `package.json`):
 | `npm run format` / `format:check` | Prettier                                                                                                                                                                                                                                                                                        |
 | `npm test`                        | `vitest run` (`vitest.config.ts`); coverage: `npx vitest run --coverage` (`@vitest/coverage-v8`)                                                                                                                                                                                                |
 | `npm run sbom`                    | CycloneDX SBOM → `sbom.cyclonedx.json`                                                                                                                                                                                                                                                          |
-| `npm run publish:build`           | `npm run build` + `scripts/make-publish.mjs` — copies to `publish/`, obfuscates JS (skip with `NEMO_SKIP_OBFUSCATION=1` or `--skip-obfuscation`), adds the `node` shebang, writes `publish/package.json` (`@shrijan/nemo-cli`, `files: ["dist","Img"]`, bins `nemo` + `nemo`) |
+| `npm run publish:build`           | `npm run build` + `scripts/make-publish.mjs` — copies to `publish/`, obfuscates JS (skip with `NEMO_SKIP_OBFUSCATION=1` or `--skip-obfuscation`), adds the `node` shebang, writes `publish/package.json` (`@shrijanagain/nemo-cli`, `files: ["dist","Img"]`, bins `nemo` + `nemo`) |
 | `npm run publish:npm`             | publish build + `npm publish ./publish --access public --provenance`                                                                                                                                                                                                                            |
 
 Two tsconfigs exist on purpose: the emitting one avoids `incremental` (a

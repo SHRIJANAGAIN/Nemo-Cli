@@ -179,13 +179,94 @@ function render(node: YamlNode, depth: number, out: string[]): void {
   }
 }
 
+/**
+ * Strip `//` and block comments plus trailing commas, string-aware.
+ *
+ * JSONC is what tsconfig.json and friends ship; `JSON.parse` rejects them
+ * outright, and the YAML subset below has no flow-style support — which is
+ * why the tool used to answer a JSON file with "{: <value>".
+ */
+function stripJsonComments(text: string): string {
+  const out: string[] = []
+  let i = 0
+  let inString = false
+  while (i < text.length) {
+    const c = text[i]
+    if (inString) {
+      out.push(c)
+      if (c === "\\" && i + 1 < text.length) {
+        out.push(text[i + 1])
+        i += 2
+        continue
+      }
+      if (c === '"') inString = false
+      i++
+      continue
+    }
+    if (c === '"') {
+      inString = true
+      out.push(c)
+      i++
+      continue
+    }
+    if (c === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i++
+      continue
+    }
+    if (c === "/" && text[i + 1] === "*") {
+      i += 2
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++
+      i += 2
+      continue
+    }
+    if (c === ",") {
+      let j = i + 1
+      while (j < text.length && /\s/.test(text[j])) j++
+      if (text[j] === "}" || text[j] === "]") {
+        i++
+        continue
+      }
+    }
+    out.push(c)
+    i++
+  }
+  return out.join("")
+}
+
+/** The parsed value when the text is JSON or JSONC, else undefined. */
+export function parseJsonish(text: string): unknown {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return undefined
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    /* fall through to the JSONC form */
+  }
+  try {
+    return JSON.parse(stripJsonComments(trimmed))
+  } catch {
+    return undefined
+  }
+}
+
+/** Walk a dotted path into a parsed JSON value. */
+function digJson(value: unknown, dotted: string): unknown {
+  let node: unknown = value
+  for (const part of dotted.split(".")) {
+    if (node === null || typeof node !== "object") return undefined
+    node = (node as Record<string, unknown>)[part]
+    if (node === undefined) return undefined
+  }
+  return node
+}
+
 export function createYamlTool(): Tool {
   return {
     definition: {
       timeoutMs: 30_000,
       name: "yaml",
       description:
-        "Read a YAML file and render it as an indented readable structure. Useful for inspecting configs, CI workflows, and deployment manifests.",
+        "Read a YAML file and render it as an indented readable structure. Useful for inspecting configs, CI workflows, and deployment manifests. JSON and JSONC (tsconfig-style) files are rendered as JSON.",
       parameters: {
         type: "object",
         properties: {
@@ -202,16 +283,29 @@ export function createYamlTool(): Tool {
         const cwd = (context as ToolContext | undefined)?.cwd ?? process.cwd()
         const p = resolveConstrainedPath(String(args.file), cwd)
         const text = fs.readFileSync(p, "utf8")
+        const key = typeof args.key === "string" && args.key.length > 0 ? String(args.key) : ""
+        // JSON/JSONC first: the YAML subset below has no flow style, so a
+        // JSON file used to come back as "{: <value>".
+        const json = parseJsonish(text)
+        if (json !== undefined) {
+          if (key) {
+            const node = digJson(json, key)
+            return textResult(
+              `# ${key}\n${node === undefined ? "(not found)" : JSON.stringify(node, null, 2)}`.slice(0, 8000),
+            )
+          }
+          return textResult(JSON.stringify(json, null, 2).slice(0, 8000))
+        }
         const root = parseYamlComment(text)
         const out: string[] = []
         render(root, 0, out)
         let result = out.join("\n") || "(empty)"
-        if (typeof args.key === "string" && args.key.length > 0) {
+        if (key) {
           let node = root
-          for (const part of String(args.key).split(".")) {
+          for (const part of key.split(".")) {
             node = node.mapEntries?.find((e) => e.key === part)?.value ?? { kind: "scalar", scalar: "(not found)" }
           }
-          result = `# ${args.key}\n${(() => {
+          result = `# ${key}\n${(() => {
             const o: string[] = []
             render(node, 0, o)
             return o.join("\n")

@@ -193,10 +193,55 @@ export class Session {
       // the caller rebuilds the prompt from config, and restoring a stale copy
       // from disk would pin an outdated (or tampered) prompt.
       s.messages.push(...sanitizeRestoredMessages(payload.messages))
+      if (s.messages.length === 0) {
+        // A ONE-LINE wire transcript is valid JSON too, so it parsed here as an
+        // object with no `messages` key and reported an empty session instead of
+        // its turns. The wire shape is the one on disk, so try it before
+        // declaring the transcript empty.
+        const wire = Session.loadWire(file)
+        if (wire) return wire
+      }
       return s
+    } catch {
+      // Not the JSON object this class writes. The transcripts the wire
+      // recorder leaves behind are JSONL — one `{ts, message}` row per line —
+      // and a plain JSON.parse of that file fails, so every one of them
+      // reported "no session" and could not be resumed.
+      return Session.loadWire(file)
+    }
+  }
+
+  /** Load a JSONL transcript: one `{ts, message}` row per line.
+   *
+   *  System rows are dropped: they carry the prompt of the run that wrote
+   *  them, and the agent rebuilds its prompt from config on every start, so
+   *  restoring the old one would pin a stale spec (and leak it twice). */
+  static loadWire(file: string): Session | null {
+    let raw: string
+    try {
+      raw = fs.readFileSync(file, "utf8")
     } catch {
       return null
     }
+    const messages: unknown[] = []
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(trimmed)
+      } catch {
+        continue
+      }
+      if (!parsed || typeof parsed !== "object") continue
+      const row = parsed as { message?: unknown }
+      messages.push(row.message !== undefined ? row.message : parsed)
+    }
+    const restored = sanitizeRestoredMessages(messages).filter((m) => m.role !== "system")
+    if (restored.length === 0) return null
+    const s = new Session()
+    s.messages.push(...restored)
+    return s
   }
 }
 

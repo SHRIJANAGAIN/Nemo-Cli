@@ -7,6 +7,7 @@
 import * as http from "http"
 import * as https from "https"
 import * as url from "url"
+import { randomUUID } from "node:crypto"
 import type { AssistantMessage, AssistantContentPart, StopReason, ToolDefinition } from "../../protocol/src/index.js"
 import { stopReasonFromWire } from "../../protocol/src/index.js"
 import type { ChatInput, FimInput, FimResult, Provider, ProviderOptions, WireMessage } from "./types.js"
@@ -88,6 +89,16 @@ export class NvidiaProvider implements Provider {
 
   /** Overridable error prefix, e.g. "OpenAI API" renders "OpenAI API returned 400: …". */
   protected apiErrorPrefix = "NVIDIA API"
+
+  /**
+   * Models whose endpoint refused `reasoning_tokens`.
+   *
+   * NVIDIA validates that field per model: a VL/nano endpoint answers 400
+   * "Unsupported parameter(s): `reasoning_tokens`" while the same account's
+   * other models accept it. Remembering the refusal keeps every later turn
+   * from paying for another rejected request (and another round trip).
+   */
+  private reasoningUnsupportedModels = new Set<string>()
 
   constructor(protected readonly options: ProviderOptions) {
     const normalized = options.baseUrl.replace(/\/+$/, "").replace(/\/v1$/, "")
@@ -196,13 +207,25 @@ export class NvidiaProvider implements Provider {
     })
   }
 
+  /**
+   * Whether this endpoint accepts NVIDIA's `reasoning_tokens` field.
+   *
+   * A seam (not a direct call) so the reasoning path is testable against a
+   * local stub — the host check is about the real endpoint, not the logic
+   * that decides to send the field.
+   */
+  protected reasoningParamsAllowed(): boolean {
+    return nvidiaReasoningParamsAllowed(this.options.baseUrl)
+  }
+
   protected applyReasoning(body: Record<string, unknown>): void {
     // NVIDIA reasoning_tokens hook — subclasses override (OpenAI uses
     // reasoning_effort; xAI/HF/custom send none). Even the base class
     // must not guess: reasoning_tokens is NVIDIA dialect and only
     // NVIDIA's own endpoints understand it — a custom-gateway baseUrl
     // (omniroute and friends) gets no provider-specific field.
-    if (!nvidiaReasoningParamsAllowed(this.options.baseUrl)) return
+    if (!this.reasoningParamsAllowed()) return
+    if (this.reasoningUnsupportedModels.has(this.options.model)) return
     if (this.options.reasoningEffort) {
       const effortMap: Record<string, number | undefined> = {
         low: 10,
@@ -281,7 +304,7 @@ export class NvidiaProvider implements Provider {
     payload: unknown,
     signal: AbortSignal | undefined,
     callbacks: ChatInput["callbacks"],
-    retried = false,
+    attempt: { networkRetried?: boolean; reasoningRetried?: boolean } = {},
   ): Promise<AssistantMessage> {
     this.assertUsableKey()
     const base = new url.URL(this.options.baseUrl.replace(/\/+$/, ""))
@@ -331,12 +354,23 @@ export class NvidiaProvider implements Provider {
           res.on("end", () => {
             const errMsg = buf.slice(0, 500)
             // If the model doesn't support `reasoning_tokens`, retry once without it.
-            if (!retried && /reasoning_tokens|Unsupported parameter/i.test(errMsg)) {
+            // The two fallback budgets are INDEPENDENT: a transient network
+            // blip on the first attempt used to consume the same flag, so the
+            // reasoning fallback was already spent when the 400 arrived and
+            // the turn died with "Unsupported parameter(s): `reasoning_tokens`".
+            if (!attempt.reasoningRetried && /reasoning_tokens|Unsupported parameter/i.test(errMsg)) {
               try {
                 const modifiedPayload = { ...(payload as Record<string, unknown>) }
                 delete modifiedPayload.reasoning_tokens
+                // The endpoint rejected the field for THIS model — stop sending
+                // it on every later turn instead of re-paying the 400 each time.
+                this.reasoningUnsupportedModels.add(this.options.model)
                 setTimeout(
-                  () => this.postJson(path, modifiedPayload, signal, callbacks, /*retried*/ true).then(resolve, reject),
+                  () =>
+                    this.postJson(path, modifiedPayload, signal, callbacks, {
+                      networkRetried: attempt.networkRetried,
+                      reasoningRetried: true,
+                    }).then(resolve, reject),
                   0,
                 )
               } catch {
@@ -420,13 +454,16 @@ export class NvidiaProvider implements Provider {
         settle(() => reject(new Error("Request timed out")))
       })
       req.on("error", (err) => {
-        if (!receivedData && !retried && !signal?.aborted && isTransientNetworkError(err)) {
+        if (!receivedData && !attempt.networkRetried && !signal?.aborted && isTransientNetworkError(err)) {
           // The watchdog bounds time-to-first-byte of THIS attempt; the retry
           // has its own. A stale timer would reject the outer promise at 60s
           // even while the healthy retry is streaming.
           clearTimeout(firstByteTimer)
           setTimeout(() => {
-            this.postJson(path, payload, signal, callbacks, /*retried*/ true).then(resolve, reject)
+            this.postJson(path, payload, signal, callbacks, {
+              networkRetried: true,
+              reasoningRetried: attempt.reasoningRetried,
+            }).then(resolve, reject)
           }, 250)
           return
         }
@@ -512,7 +549,7 @@ export class NvidiaProvider implements Provider {
       const args = parseToolArgs(entry.args)
       toolCalls.push({
         type: "toolCall",
-        id: entry.id || `call_${toolCalls.length}`,
+        id: entry.id || `call_${randomUUID()}`,
         name: entry.name,
         arguments: args,
       })

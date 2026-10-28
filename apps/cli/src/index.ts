@@ -518,6 +518,7 @@ async function main(): Promise<void> {
         config: loadConfig(overrides),
         prompt: positional.slice(1).join(" ") || flags.prompt || "",
         sessionFile: target.file,
+        sessionId,
         modelPath: flags["model-path"],
         port: optionalPort(flags.port),
         altScreen: optionalBoolean(flags["alt-screen"]),

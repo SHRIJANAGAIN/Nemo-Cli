@@ -334,3 +334,15 @@ export function resolveConstrainedPath(inputPath: string, cwd: string): string {
   }
   return resolved
 }
+
+/**
+ * One place decides the "Access denied" prefix.
+ *
+ * The gate throws messages that already carry it, so a caller that prefixes
+ * again produced "Access denied: Access denied: path escapes project
+ * directory (…)" — a doubled prefix the model has to read past.
+ */
+export function accessDeniedMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.startsWith("Access denied:") ? message : `Access denied: ${message}`
+}

@@ -367,6 +367,23 @@ const BUILTIN_CONNECTORS: ConnectorEntry[] = [
 ]
 
 /**
+ * Spellings a query token could plausibly stand for.
+ *
+ * Models search with prose ("serve", "execution", "scraping"), the catalog
+ * uses catalogue words ("server", "execute", "scrape"). Without this bridge a
+ * perfectly good server is unreachable by its own description.
+ */
+function tokenVariants(token: string): string[] {
+  const out = new Set<string>([token])
+  if (token.endsWith("ing") && token.length > 5) out.add(token.slice(0, -3))
+  if (token.endsWith("er") && token.length > 4) out.add(token.slice(0, -2))
+  if (token.endsWith("s") && token.length > 3) out.add(token.slice(0, -1))
+  if (token.endsWith("e") && token.length > 4) out.add(token.slice(0, -1))
+  if (token.length >= 6) out.add(token.slice(0, 5))
+  return [...out]
+}
+
+/**
  * The connector registry: a searchable catalog of discoverable MCP servers.
  * Supports user-installed connectors (from ~/.nemo/connectors/) and
  * built-in connectors (curated list above).
@@ -420,26 +437,37 @@ export class ConnectorRegistry {
     return this.connectors
   }
 
-  /** Search connectors by keyword query. Returns ranked matches. */
+  /**
+   * Search connectors by keyword query. Returns ranked matches.
+   *
+   * The query a model sends is prose, not a keyword: "node server http serve
+   * localhost command execution" is one phrase, and matching it token-by-token
+   * against exact spellings found NOTHING — the model then had no server to
+   * pick and flailed. Each token is therefore expanded into the spellings it
+   * could plausibly be (see `tokenVariants`), so "serve" reaches "server" and
+   * "execution" reaches "execute".
+   */
   search(query: string): ConnectorEntry[] {
     if (!this.connectors.length) this.load()
 
     const lower = query.toLowerCase().trim()
     if (!lower) return this.connectors
 
-    const tokens = lower.split(/\s+/)
+    const tokens = lower.split(/\s+/).filter((t) => t.length > 1)
 
     return this.connectors
       .map((c) => {
         const searchable =
-          `${c.id} ${c.name} ${c.description} ${(c.keywords ?? []).join(" ")} ${c.category ?? ""}`.toLowerCase()
+          `${c.id} ${c.name} ${c.description} ${(c.keywords ?? []).join(" ")} ${c.category ?? ""} ${c.npmPackage ?? ""}`.toLowerCase()
         let score = 0
         for (const token of tokens) {
-          if (c.id === token) score += 10
-          if (c.name.toLowerCase() === token) score += 8
-          if (c.keywords?.some((k) => k.toLowerCase() === token)) score += 6
-          if (c.category?.toLowerCase() === token) score += 4
-          if (searchable.includes(token)) score += 2
+          for (const variant of tokenVariants(token)) {
+            if (c.id === variant) score += 10
+            if (c.name.toLowerCase() === variant) score += 8
+            if (c.keywords?.some((k) => k.toLowerCase() === variant)) score += 6
+            if (c.category?.toLowerCase() === variant) score += 4
+            if (searchable.includes(variant)) score += 2
+          }
         }
         return { connector: c, score }
       })

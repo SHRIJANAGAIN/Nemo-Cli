@@ -71,6 +71,6 @@ export function uninstallCommand(seams: UninstallSeams = {}): string {
   }
 
   lines.push("kept: config, sessions, and state under ~/.nemo")
-  lines.push("npm-global installs: run `npm rm -g @shrijan/nemo-cli` to remove the package itself")
+  lines.push("npm-global installs: run `npm rm -g @shrijanagain/nemo-cli` to remove the package itself")
   return lines.join("\n")
 }

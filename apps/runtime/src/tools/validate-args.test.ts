@@ -67,14 +67,46 @@ describe("validateArguments — passing calls", () => {
     expect(text(result)).toBe("ran")
   })
 
-  it("forwards the ORIGINAL arguments untouched", async () => {
-    // Coercion here would be a lie: the tool body has its own contract, and the
-    // wrapper's job is to reject, not to rewrite.
+  it("forwards arguments untouched when nothing needs coercing", async () => {
     const execute = vi.fn(async (): Promise<ToolResult> => ok())
     const wrapped = validateArguments(toolWith(emptyParams, execute))
     const args = { extra: 1 }
     await wrapped.execute("1", args, undefined, undefined, undefined)
     expect(execute).toHaveBeenCalledWith("1", args, undefined, undefined, undefined)
+  })
+
+  it('coerces "False"/"true" strings for boolean parameters instead of rejecting', async () => {
+    const execute = vi.fn(async (): Promise<ToolResult> => ok())
+    const wrapped = validateArguments(
+      toolWith(
+        { type: "object", properties: { background: { type: "boolean", description: "b" } }, required: [] },
+        execute,
+      ),
+    )
+    const result = await wrapped.execute("1", { background: "False" as never }, undefined, undefined, undefined)
+    expect(result.isError).not.toBe(true)
+    expect(execute).toHaveBeenCalledWith("1", { background: false }, undefined, undefined, undefined)
+  })
+
+  it("coerces numeric strings for number/integer parameters", async () => {
+    const execute = vi.fn(async (): Promise<ToolResult> => ok())
+    const wrapped = validateArguments(
+      toolWith(
+        { type: "object", properties: { limit: { type: "integer", description: "n" } }, required: [] },
+        execute,
+      ),
+    )
+    await wrapped.execute("1", { limit: "25" as never }, undefined, undefined, undefined)
+    expect(execute).toHaveBeenCalledWith("1", { limit: 25 }, undefined, undefined, undefined)
+  })
+
+  it("still rejects an ambiguous string for a boolean", async () => {
+    const wrapped = validateArguments(
+      toolWith({ type: "object", properties: { background: { type: "boolean", description: "b" } }, required: [] }, async () => ok()),
+    )
+    const result = await wrapped.execute("1", { background: "maybe" as never }, undefined, undefined, undefined)
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain("must be a boolean")
   })
 })
 

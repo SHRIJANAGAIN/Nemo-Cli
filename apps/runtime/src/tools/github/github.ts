@@ -366,6 +366,45 @@ async function githubCopyFiles(
   return `github: copied ${sourcePath} -> ${destPath} in ${owner}/${repo}${commit}`
 }
 
+/** Your repos, by your handle: direct API when a token exists, otherwise the
+ *  VPS rides the stored /github login. */
+async function githubListRepos(
+  token: string | undefined,
+  serverOpts: { serverUrl?: string },
+): Promise<{ text: string; isError: boolean }> {
+  if (token) {
+    const reply = await ghRequest(`/user/repos?per_page=100&sort=updated`, token)
+    if (reply.status < 200 || reply.status >= 300)
+      return { text: `github: failed to list repos: ${describeFailure("repos", reply)}`, isError: true }
+    try {
+      const data = JSON.parse(reply.body) as Array<{
+        full_name?: string
+        private?: boolean
+        default_branch?: string
+        updated_at?: string
+      }>
+      const lines = data
+        .filter((r) => typeof r.full_name === "string")
+        .map(
+          (r) => `  ${r.private === true ? "🔒" : "🌐"} ${r.full_name} (default: ${r.default_branch ?? "main"})`,
+        )
+      return { text: `github repos (${lines.length}):\n${lines.join("\n") || "  (none)"}`, isError: false }
+    } catch {
+      return { text: "github: invalid repo-list response", isError: true }
+    }
+  }
+  const r = await listGithubRepos(serverOpts)
+  if (!r.ok)
+    return { text: `github: list_repos failed — ${r.reason} (or set GITHUB_TOKEN).`, isError: true }
+  const lines = (r.repos ?? []).map(
+    (x) => `  ${x.private ? "🔒" : "🌐"} ${x.fullName} (default: ${x.defaultBranch || "main"})`,
+  )
+  return {
+    text: `github repos for @${r.login ?? "?"} (${lines.length}):\n${lines.join("\n") || "  (none)"}`,
+    isError: false,
+  }
+}
+
 const definition: ToolDefinition = {
   timeoutMs: 30_000,
   name: "github",
@@ -373,9 +412,12 @@ const definition: ToolDefinition = {
     "Interact with GitHub repositories: read an issue/PR, list files, read/write files, copy files, compare branches, list your own repos. Reads work unauthenticated for public repos (a token extends them to private ones); writes ride your /github login through the VPS automatically when no GITHUB_TOKEN is set — never ask the user to paste a token.",
   parameters: {
     type: "object",
-    required: ["repo", "action"],
+    required: ["action"],
     properties: {
-      repo: { type: "string", description: "GitHub repository in owner/repo format or full URL" },
+      repo: {
+        type: "string",
+        description: "GitHub repository in owner/repo format or full URL. Required for every action except list_repos.",
+      },
       action: {
         type: "string",
         description: "GitHub action",
@@ -425,6 +467,14 @@ export function createGithubTool(token?: string): Tool {
       const serverOpts = { serverUrl: ctx?.config?.licenseServerUrl }
       const repoInput = String(args.repo ?? "")
       const action = String(args.action ?? "")
+      // `list_repos` is the one action that names no repository, but it used to
+      // run behind the repo parse — so the schema demanded a `repo` value for
+      // it and the model had to invent an owner/repo to list the repos it
+      // already had. The invented value then failed as "invalid repo format".
+      if (action === "list_repos") {
+        const listed = await githubListRepos(ghToken, serverOpts)
+        return textResult(listed.text, listed.isError)
+      }
       const parsed = parseRepo(repoInput)
       if (!parsed)
         return textResult(
@@ -520,39 +570,6 @@ export function createGithubTool(token?: string): Tool {
             )
           }
           return textResult(await githubCopyFiles(owner, repo, source, dest, ghToken))
-        }
-        case "list_repos": {
-          // Your repos, by your handle: direct API when a token exists,
-          // otherwise the VPS rides the stored /github login.
-          if (ghToken) {
-            const reply = await ghRequest(`/user/repos?per_page=100&sort=updated`, ghToken)
-            if (reply.status < 200 || reply.status >= 300)
-              return textResult(`github: failed to list repos: ${describeFailure("repos", reply)}`)
-            try {
-              const data = JSON.parse(reply.body) as Array<{
-                full_name?: string
-                private?: boolean
-                default_branch?: string
-                updated_at?: string
-              }>
-              const lines = data
-                .filter((r) => typeof r.full_name === "string")
-                .map(
-                  (r) =>
-                    `  ${r.private === true ? "🔒" : "🌐"} ${r.full_name} (default: ${r.default_branch ?? "main"})`,
-                )
-              return textResult(`github repos (${lines.length}):\n${lines.join("\n") || "  (none)"}`)
-            } catch {
-              return textResult("github: invalid repo-list response")
-            }
-          }
-          const r = await listGithubRepos(serverOpts)
-          if (!r.ok)
-            return textResult(`github: list_repos failed — ${r.reason} (or set GITHUB_TOKEN).`, /*isError*/ true)
-          const lines = (r.repos ?? []).map(
-            (x) => `  ${x.private ? "🔒" : "🌐"} ${x.fullName} (default: ${x.defaultBranch || "main"})`,
-          )
-          return textResult(`github repos for @${r.login ?? "?"} (${lines.length}):\n${lines.join("\n") || "  (none)"}`)
         }
         case "compare": {
           const base = String(args.base ?? "main")

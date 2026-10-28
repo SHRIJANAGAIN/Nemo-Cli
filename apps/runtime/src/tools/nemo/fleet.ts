@@ -64,7 +64,11 @@ export function createFleetTool(onListFleet?: FleetLister): Tool {
   return {
     definition,
     async execute(_id, args) {
-      if (!onListFleet) return textResult("Fleet registry is unavailable in this runtime.", /*isError*/ true)
+      if (!onListFleet)
+        return textResult(
+          "Fleet: this runtime has no background registry — background jobs are only tracked inside a live agent session.",
+          /*isError*/ true,
+        )
       const action = String(args.action ?? "")
       const jobs = onListFleet()
       if (action === "list") return textResult(fleetListText(jobs))

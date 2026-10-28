@@ -63,6 +63,11 @@ bin/*.pdb
 
 # Generated smoke-run captures
 scripts/*.result.txt
+# Raw terminal frame dump written by scripts/diag-header.mjs
+scripts/*.raw.txt
+
+# Probe scratch dirs created by tool verification runs
+.nemo-probe/
 
 # Harness runtime state written into the repo tree (recorded runs, memory)
 nemo/0-points/points.json

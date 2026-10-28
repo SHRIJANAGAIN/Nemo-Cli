@@ -60,6 +60,7 @@ import {
   type NemoAppProps,
 } from "./app-bootstrap.js"
 import { createSessionPickerActions } from "./session-picker-actions.js"
+import { useResume } from "./use-resume.js"
 import { runDevmode } from "./devmode-command.js"
 import { runMcp } from "./mcp-command.js"
 export { type NemoAppProps } from "./app-bootstrap.js"
@@ -164,6 +165,8 @@ export const NemoApp = ({
   permissionMode: initialMode = "ask",
   onExit,
   initialPrompt,
+  initialSessionFile,
+  initialSessionId,
 }: NemoAppProps): ReactNode => {
   const theme = useThemeColors()
   const [messages, setMessages] = useState<NemoMessage[]>([])
@@ -378,7 +381,7 @@ export const NemoApp = ({
   const permissionModeRef = useRef<PermissionMode>(permissionMode)
   permissionModeRef.current = permissionMode
   const questionResolverRef = useRef<((answers: string[]) => void) | null>(null)
-  const sessionIdRef = useRef<string | null>(null)
+  const sessionIdRef = useRef<string | null>(initialSessionId?.trim() || null)
   const currentSessionRef = useRef<SessionEntry | null>(null)
   /** One-shot type chosen in the agent picker — the next prompt runs as this subagent. */
   const pendingAgentTypeRef = useRef<string | null>(null)
@@ -1109,6 +1112,14 @@ export const NemoApp = ({
     }
   }
 
+  /** Resume is shared by the session picker and `nemo resume <id>`: the screen
+   *  AND the agent have to receive the transcript, and the prompt has to be
+   *  rebuilt so the memory block is the current one. */
+  const { resumeAgentWith, applyPendingSeed } = useResume(
+    { agentRef, setMessages, setStaticEpoch, addSystemMessage },
+    initialSessionFile,
+  )
+
   /** Create the shared agent on first use. Extracted from runAgent so
    * /agent launches get the identical permission + question flow (child
    * subagents inherit these callbacks via runSubagents). */
@@ -1120,6 +1131,9 @@ export const NemoApp = ({
       agentConfigRef.current ??= createAgentConfig(config ?? {})
       agentRef.current = await Agent.create({
         config: agentConfigRef.current,
+        // The todo tool keys its store off the agent's session id; without it
+        // every session shares ~/.nemo/todos/global.json.
+        sessionId: sessionIdRef.current ?? undefined,
         onAskUserQuestion: async (questions) => {
           return new Promise<string[]>((resolve) => {
             questionResolverRef.current = resolve
@@ -1190,6 +1204,7 @@ export const NemoApp = ({
           })
         },
       })
+      applyPendingSeed()
     }
     return agentRef.current
   }
@@ -1261,6 +1276,9 @@ export const NemoApp = ({
       debugInputLog("STAGE agent-ready")
       agent.setBackgroundEmit(emit)
       agent.config.permissions = { ...agent.config.permissions, uiMode: permissionModeRef.current }
+      // agentRef survives /clear and /newchat, so re-stamp the live session
+      // every turn or todo writes keep landing in the previous session's file.
+      agent.sessionId = sessionIdRef.current ?? undefined
 
       if (sessionIdRef.current && messages.length > 0) {
         // Sync-once: agentRef is reused across turns and agent.run() keeps
@@ -1480,6 +1498,7 @@ export const NemoApp = ({
       const agent = await ensureAgent()
       agent.setBackgroundEmit(emit)
       agent.config.permissions = { ...agent.config.permissions, uiMode: permissionModeRef.current }
+      agent.sessionId = sessionIdRef.current ?? undefined
       const flattened = prompt.replace(/\s+/g, " ").trim()
       const desc = flattened.length > 60 ? `${flattened.slice(0, 60)}…` : flattened
       const name = formatSubagentTitle(type, desc, background)
@@ -2408,7 +2427,7 @@ export const NemoApp = ({
         break
       case "todo":
         slashCommandService
-          .dispatch(`/todo ${args}`.trim())
+          .dispatch(`/todo ${args}`.trim(), { sessionId: sessionIdRef.current ?? undefined })
           .then((output) => addSystemMessage(output, { ttlMs: 10_000 }))
           .catch((error) =>
             addSystemMessage(`/todo failed: ${error instanceof Error ? error.message : String(error)}`, {
@@ -2696,7 +2715,7 @@ export const NemoApp = ({
       }
       default:
         slashCommandService
-          .dispatch(`/${command} ${args}`.trim())
+          .dispatch(`/${command} ${args}`.trim(), { sessionId: sessionIdRef.current ?? undefined })
           .then((output) => {
             addSystemMessage(output, { ttlMs: 10_000 })
           })
@@ -3116,10 +3135,13 @@ export const NemoApp = ({
   }, [])
 
   // Sidebar todos: refresh when the sidebar opens or the conversation moves
-  // (slash `/todo` runs land in messages, so this picks them up).
+  // (slash `/todo` runs land in messages, so this picks them up). Strictly
+  // this session's list — the `global` fallback would show items another chat
+  // wrote, which is exactly the cross-session leak this view must not have.
   useEffect(() => {
     if (!showSidebar) return
-    setSidebarTodos(todoListForSession(sessionIdRef.current ?? undefined))
+    const sid = sessionIdRef.current
+    setSidebarTodos(sid ? todoListForSession(sid) : [])
   }, [showSidebar, messages.length])
 
   // Terminal activity notifications (OSC 0 title + bell + OSC 9 OSD) and the
@@ -3816,6 +3838,8 @@ export const NemoApp = ({
             setMessages,
             setStaticEpoch,
             addSystemMessage,
+            onSessionResumed: resumeAgentWith,
+            memoryCount: () => loadMemory().length,
           })}
         />
       ) : (

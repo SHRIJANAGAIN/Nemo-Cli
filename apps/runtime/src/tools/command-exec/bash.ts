@@ -42,6 +42,12 @@ import { ProcessManager } from "../../../../../packages/core/src/process.js"
 import { getSafeEnv, validateEnv } from "../../../../../packages/core/src/env_filter.js"
 import { checkAutoApproval } from "../../../../../packages/approval/src/index.js"
 import { randomUUID } from "crypto"
+import {
+  forgetPersistedVerdict,
+  persistNegativeVerdict,
+  probeKey,
+  readPersistedVerdict,
+} from "./shell-probe-cache.js"
 
 const definition: ToolDefinition = {
   // Outer-runner ceiling MUST cover the documented foreground max (300s):
@@ -118,12 +124,16 @@ function sweepBackgroundJobs(): void {
   }
 }
 
-/** Test hook: kill and forget every background job. */
-export function resetBackgroundJobsForTests(): void {
+/** Test hook: kill and forget every background job. Awaits the kills so the
+ *  caller can tear down the temp dir afterwards — on Windows a job that is
+ *  still shutting down holds its cwd open and the removal fails with EPERM. */
+export function resetBackgroundJobsForTests(): Promise<void> {
+  const kills: Array<Promise<unknown>> = []
   for (const job of backgroundJobs.values()) {
-    if (job.state === "running") void job.kill?.().catch(() => {})
+    if (job.state === "running" && job.kill) kills.push(job.kill().catch(() => {}))
   }
   backgroundJobs.clear()
+  return Promise.all(kills).then(() => undefined)
 }
 
 /**
@@ -136,6 +146,23 @@ export function resetBackgroundJobsForTests(): void {
 function sandboxDescriptor(p: SpawnedProcess): string {
   if (p.isSandboxed) return `os (${p.sandboxType})`
   return p.fallbackReason ? `policy-only — ${p.fallbackReason}` : "policy-only"
+}
+
+/**
+ * The downgrade is explained ONCE per process.
+ *
+ * Repeating the caveat on every command buries it in noise: with the
+ * persisted verdict the agent would re-read the same line on every single
+ * call, and the one thing the line is for — "this shell is not OS-isolated"
+ * — stops being visible. The first downgrade claims the note; later ones
+ * stay quiet.
+ */
+let sandboxDowngradeReported = false
+
+function claimSandboxDowngrade(reason: string | undefined): string {
+  if (sandboxDowngradeReported) return ""
+  sandboxDowngradeReported = true
+  return `sandbox: policy-only — ${reason ?? "os isolation unavailable"}`
 }
 
 /**
@@ -177,17 +204,16 @@ const SHELL_OS_PROBE_TIMEOUT_MS = 60_000
 
 const shellProbeCache = new Map<string, Promise<ShellOsProbe>>()
 
-const shellKey = (shell: string, shellArgs: string[]): string => [shell, ...shellArgs].join("\u0000")
-
 /** Test hook: pre-seed a verdict so unit tests never spawn a real probe. */
 export function seedShellProbeForTests(shellCommand: string, outcome: ShellOsProbe): void {
   const { shell, shellArgs } = parseShellCommand(shellCommand)
-  shellProbeCache.set(shellKey(shell, shellArgs), Promise.resolve(outcome))
+  shellProbeCache.set(probeKey(shell, shellArgs), Promise.resolve(outcome))
 }
 
-/** Test hook: forget every cached verdict. */
+/** Test hook: forget every cached verdict and re-arm the one-time note. */
 export function resetShellProbeForTests(): void {
   shellProbeCache.clear()
+  sandboxDowngradeReported = false
 }
 
 /**
@@ -226,9 +252,11 @@ export function isReadOnlyMode(perms: Record<string, unknown>): boolean {
  * (`shellCommand` from a repo-local config is stripped in config.ts).
  *
  * Verdicts cache per (shell, args) for the session — one probe spawn on
- * the first OS run, nothing after. An empty `shellArgs` (exotic
- * `[bin, command]` configs, e.g. a wrapper that takes the command as its
- * first argument) is not probe-able with a trailing payload, so it
+ * the first OS run, nothing after. A NEGATIVE verdict is additionally
+ * persisted for the machine (shell-probe-cache.ts): the probe costs ~14 s
+ * on Windows, so later processes must not re-pay it. An empty `shellArgs`
+ * (exotic `[bin, command]` configs, e.g. a wrapper that takes the command
+ * as its first argument) is not probe-able with a trailing payload, so it
  * proceeds exactly as before: `ok: true` means "engaged, still governed by
  * spawnProcess's own per-spawn handshake".
  */
@@ -242,11 +270,24 @@ async function probeShellUnderOsSandbox(opts: {
   spawnFn?: typeof spawnProcess
 }): Promise<ShellOsProbe> {
   if (opts.shellArgs.length === 0) return { ok: true }
-  const key = shellKey(opts.shell, opts.shellArgs)
+  const key = probeKey(opts.shell, opts.shellArgs)
   const existing = shellProbeCache.get(key)
   if (existing) return existing
 
+  // An injected spawner is a test double: its verdict says nothing about
+  // the machine, so it neither reads nor writes the persisted cache.
+  const realSpawn = opts.spawnFn === undefined
+  if (realSpawn) {
+    const persisted = readPersistedVerdict(key, opts.shell)
+    if (persisted) {
+      const verdict = Promise.resolve<ShellOsProbe>(persisted)
+      shellProbeCache.set(key, verdict)
+      return verdict
+    }
+  }
+
   const pending = (async (): Promise<ShellOsProbe> => {
+    let verdict: ShellOsProbe
     try {
       const proc = await (opts.spawnFn ?? spawnProcess)(
         osSpawnRequest({
@@ -264,16 +305,23 @@ async function probeShellUnderOsSandbox(opts: {
       if (!proc.isSandboxed) {
         // spawnProcess already refused this spawn (static MSYS detection
         // or a failed handshake) — its reason travels with every real run.
-        return { ok: false, reason: proc.fallbackReason ?? "os isolation unavailable for this spawn" }
+        verdict = { ok: false, reason: proc.fallbackReason ?? "os isolation unavailable for this spawn" }
+      } else {
+        // Sandboxed, and a payload that cannot legitimately fail did fail:
+        // the workload chain is incompatible with the isolator.
+        verdict =
+          code === 0
+            ? { ok: true }
+            : { ok: false, reason: "shell cannot run under windows-restricted isolation" }
       }
-      // Sandboxed, and a payload that cannot legitimately fail did fail:
-      // the workload chain is incompatible with the isolator.
-      return code === 0
-        ? { ok: true }
-        : { ok: false, reason: "shell cannot run under windows-restricted isolation" }
     } catch (err) {
-      return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      verdict = { ok: false, reason: err instanceof Error ? err.message : String(err) }
     }
+    if (realSpawn) {
+      if (verdict.ok) forgetPersistedVerdict(key)
+      else persistNegativeVerdict(key, opts.shell, verdict.reason ?? "os isolation unavailable")
+    }
+    return verdict
   })()
   shellProbeCache.set(key, pending)
   return pending
@@ -406,10 +454,9 @@ async function startBackgroundJob(opts: {
       job.state = "done"
     })
 
-  const downgradeLine =
-    shouldUseOsSandbox(opts.sandboxType) && opts.osProbe && !opts.osProbe.ok
-      ? `sandbox: policy-only — ${opts.osProbe.reason ?? "os isolation unavailable"}\n`
-      : ""
+  const downgraded = shouldUseOsSandbox(opts.sandboxType) && opts.osProbe !== undefined && !opts.osProbe.ok
+  const downgrade = downgraded ? claimSandboxDowngrade(opts.osProbe?.reason) : ""
+  const downgradeLine = downgrade ? `${downgrade}\n` : ""
   return textResult(
     `Background job started.\njob_id: ${id}\ncommand: ${opts.command}\ntimeout: ${opts.timeoutSec}s\n${downgradeLine}\nPoll with bash({"job_id": "${id}"}) for status and output; stop it with bash({"job_id": "${id}", "action": "kill"}).`,
   )
@@ -659,7 +706,15 @@ export function createBashTool(deps?: BashToolDeps): Tool {
         }
 
         const command = String(args.command ?? "")
-        if (!command) return textResult("Missing 'command'.", /*isError*/ true)
+        // Naming the accepted shapes matters: the model sent `{}` and got a bare
+        // "Missing 'command'.", which reads as a tool failure rather than a
+        // call-shape mistake, and it retried the same empty call.
+        if (!command) {
+          return textResult(
+            "Missing 'command'. Send command as a string (plus optional timeout/background), or pass job_id with action \"status\"|\"kill\" to manage a background job.",
+            /*isError*/ true,
+          )
+        }
         const background = args.background === true
 
         // Foreground default is the full 300s window (builds/tests run
@@ -815,11 +870,12 @@ export function createBashTool(deps?: BashToolDeps): Tool {
 
         // Downgraded from the OS path: the policy-path contract is "no
         // marker where no isolator exists" — but an isolator that was
-        // engaged and then refused this shell must say so.
-        const osDowngradeNote =
-          osEngaged && osProbe && !osProbe.ok
-            ? `\n\n[sandbox: policy-only — ${osProbe.reason ?? "os isolation unavailable"}]`
-            : ""
+        // engaged and then refused this shell must say so. Once per
+        // process: repeating it on every command is noise, not honesty.
+        const downgrade = osEngaged && osProbe !== undefined && !osProbe.ok
+          ? claimSandboxDowngrade(osProbe.reason)
+          : ""
+        const osDowngradeNote = downgrade ? `\n\n[${downgrade}]` : ""
 
         // ─── 7. Execute Under Sandbox (OS-isolated when engaged, else policy) ───
         return new Promise<ToolResult>((resolve) => {

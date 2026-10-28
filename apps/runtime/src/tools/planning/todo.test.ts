@@ -91,6 +91,7 @@ describe("todo tool definition", () => {
     expect(params.properties.status?.enum).toEqual(["pending", "in_progress", "completed"])
     expect(params.properties.priority?.enum).toEqual(["low", "medium", "high"])
     expect(params.properties.dependsOn?.type).toBe("array")
+    expect(params.properties.items?.type).toBe("array")
   })
 })
 
@@ -113,12 +114,54 @@ describe("todo tool execution", () => {
   it("requires non-empty content for write", async () => {
     const blank = await run({ action: "write", content: "   " })
     expect(blank.isError).toBe(true)
-    expect(textOf(blank)).toBe("Missing 'content'.")
+    expect(textOf(blank)).toContain("Missing 'content'.")
 
     const missing = await run({ action: "write" })
     expect(missing.isError).toBe(true)
-    expect(textOf(missing)).toBe("Missing 'content'.")
+    expect(textOf(missing)).toContain("Missing 'content'.")
+    expect(textOf(missing)).toContain("items")
     expect(fs.existsSync(globalFile)).toBe(false)
+  })
+
+  it("writes a batch from items, keeping per-item status and priority", async () => {
+    const res = await run({
+      action: "write",
+      items: [
+        { content: "scaffold", status: "in_progress", priority: "high" },
+        { content: "test" },
+        "ship it",
+      ],
+    })
+    expect(res.isError).toBe(false)
+    expect(textOf(res)).toContain("[*] #1 (high) scaffold")
+    expect(textOf(res)).toContain("[ ] #2 test")
+    expect(textOf(res)).toContain("[ ] #3 ship it")
+
+    const raw = JSON.parse(fs.readFileSync(globalFile, "utf8")) as { items: Item[] }
+    expect(raw.items.map((i) => [i.id, i.content, i.status])).toEqual([
+      [1, "scaffold", "in_progress"],
+      [2, "test", "pending"],
+      [3, "ship it", "pending"],
+    ])
+  })
+
+  it("accepts todos as an alias for items and rejects an item without content", async () => {
+    const alias = await run({ action: "write", todos: [{ text: "alias item" }] })
+    expect(alias.isError).toBe(false)
+    expect(textOf(alias)).toContain("#1 alias item")
+
+    const bad = await run({ action: "write", items: [{ priority: "high" }] })
+    expect(bad.isError).toBe(true)
+    expect(textOf(bad)).toBe("items[0] is missing 'content'.")
+
+    const empty = await run({ action: "write", items: [] })
+    expect(empty.isError).toBe(true)
+    expect(textOf(empty)).toBe("items must not be empty.")
+  })
+
+  it("accepts an initial status on a single write", async () => {
+    const res = await run({ action: "write", content: "running", status: "in_progress" })
+    expect(textOf(res)).toContain("[*] #1 running")
   })
 
   it("writes the first item, renders it in full, and snapshots the prior list", async () => {

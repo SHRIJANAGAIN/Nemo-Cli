@@ -8,7 +8,14 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
+import {
+  textResult,
+  type Tool,
+  type ToolContext,
+  resolveConstrainedPath,
+  assertExternalDirectory,
+  accessDeniedMessage,
+} from "../types.js"
 
 function expandHome(p: string): string {
   if (p.startsWith("~/") || p === "~") return path.join(os.homedir(), p.slice(p === "~" ? 1 : 2))
@@ -42,7 +49,7 @@ export function createListDirTool(): Tool {
           target = resolveConstrainedPath(path.resolve(ctx.cwd, expandHome(rel)), ctx.cwd)
         } catch (error) {
           return textResult(
-            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            accessDeniedMessage(error),
             /*isError*/ true,
           )
         }

@@ -173,7 +173,7 @@ describe("findInstallRoot / getInstalledVersion", () => {
     // checkout made every global install compare/upgrade the WRONG tree
     // (source version, unscoped package name) — auto-update never fired.
     const stale = makeRoot("1.1.1", "nemo")
-    const live = makeRoot("0.6.7", "@shrijan/nemo-cli")
+    const live = makeRoot("0.6.7", "@shrijanagain/nemo-cli")
     const nested = path.join(live, "dist", "apps", "runtime", "src", "update")
     fs.mkdirSync(nested, { recursive: true })
     expect(findInstallRoot({ startDir: nested, env: { NEMO_HOME: stale } })).toBe(live)
@@ -183,13 +183,13 @@ describe("findInstallRoot / getInstalledVersion", () => {
   it("recognizes the published scoped package name (production installs)", () => {
     expect(isInstallRootName("nemo")).toBe(true)
     expect(isInstallRootName("Nemo")).toBe(true)
-    expect(isInstallRootName("@shrijan/nemo-cli")).toBe(true)
-    expect(isInstallRootName("@SHRIJAN/NEMO-CLI")).toBe(true)
+    expect(isInstallRootName("@shrijanagain/nemo-cli")).toBe(true)
+    expect(isInstallRootName("@SHRIJANAGAIN/NEMO-CLI")).toBe(true)
     expect(isInstallRootName("someone-else")).toBe(false)
     expect(isInstallRootName(undefined)).toBe(false)
     expect(isInstallRootName(42)).toBe(false)
     // The published layout (scoped name, no source-tree marker) locates.
-    const root = makeRoot("0.6.5", "@shrijan/nemo-cli")
+    const root = makeRoot("0.6.5", "@shrijanagain/nemo-cli")
     const nested = path.join(root, "dist", "apps", "cli", "src")
     fs.mkdirSync(nested, { recursive: true })
     expect(findInstallRoot({ startDir: nested, env: {} })).toBe(root)
@@ -370,7 +370,7 @@ describe("checkForUpdate policy (Shrijan upgrade() port)", () => {
   it("flows end to end on the published layout (scoped name + npm method)", async () => {
     // Regression: the published tarball's scoped package.json used to miss
     // the root marker, so production installs skipped before any check ran.
-    const root = makeRoot("0.6.5", "@shrijan/nemo-cli")
+    const root = makeRoot("0.6.5", "@shrijanagain/nemo-cli")
     const { outcome, applied } = await run(root, { method: "npm", latest: "0.6.6" })
     expect(outcome).toEqual({ kind: "updated", previous: "0.6.5", latest: "0.6.6" })
     expect(applied).toEqual(["npm:0.6.6"])

@@ -591,7 +591,7 @@ describe("tool-call guards", () => {
 describe("text-fence extraction, hooks, verification, context", () => {
   it("extracts tool calls embedded in model text (fallback parser)", async () => {
     const executed: string[] = []
-    const fence = 'Let me probe now. <tool_call:6124c78e>{"name":"probe","arguments":{"n":7}}</tool_call>'
+    const fence = 'Let me probe now. <tool_call:9f3a1c2b>{"name":"probe","arguments":{"n":7}}</tool_call>'
     const { provider } = makeProvider([textReply(fence), textReply("done")])
     const { messages } = await runLoop(baseConfig({ maxTurns: 4 }), provider, {
       tools: [probeTool("probe", executed)],
@@ -608,6 +608,69 @@ describe("text-fence extraction, hooks, verification, context", () => {
       ),
     ).toBe(true)
     expect(toolTexts(messages)).toContain("did:probe")
+  })
+
+  it("extracts bare <tool_call> fences and drops stray closing tags", async () => {
+    const executed: string[] = []
+    const fence =
+      '<tool_call>{"name":"probe","arguments":{"n":1}}</tool_call>\n<tool_call>{"name":"probe","arguments":{"n":2}}</tool_call>\n</tool_call>'
+    const { provider } = makeProvider([textReply(fence), textReply("done")])
+    const { messages } = await runLoop(baseConfig({ maxTurns: 4 }), provider, {
+      tools: [probeTool("probe", executed)],
+    })
+
+    expect(executed).toEqual(['{"n":1}', '{"n":2}'])
+    expect(assistantTexts(messages).join("\n")).not.toContain("tool_call")
+  })
+
+  it("extracts the XML <function=…> dialect", async () => {
+    const executed: string[] = []
+    const fence = [
+      "<tool_call>",
+      "<function=probe>",
+      "<parameter=n>",
+      "3",
+      "</parameter>",
+      "</function>",
+      "</tool_call>",
+    ].join("\n")
+    const { provider } = makeProvider([textReply(fence), textReply("done")])
+    await runLoop(baseConfig({ maxTurns: 4 }), provider, {
+      tools: [probeTool("probe", executed)],
+    })
+
+    expect(executed).toEqual(['{"n":3}'])
+  })
+
+  it("never streams raw tool-call syntax to the UI", async () => {
+    const executed: string[] = []
+    const chunks = ["Checking files. ", '<tool_call>{"name":"probe","arguments":{"n":1}}</tool_call>', " done"]
+    const provider = {
+      chat: async (input: ChatInput): Promise<AssistantMessage> => {
+        if (executed.length > 0) return { role: "assistant", content: [{ type: "text", text: "done" }], stopReason: "end_turn" }
+        for (const chunk of chunks) input.callbacks?.onText?.(chunk)
+        return { role: "assistant", content: [{ type: "text", text: chunks.join("") }], stopReason: "end_turn" }
+      },
+    } as unknown as Provider
+    const { events } = await runLoop(baseConfig({ maxTurns: 4 }), provider, {
+      tools: [probeTool("probe", executed)],
+    })
+
+    const streamed = events
+      .filter((e): e is Extract<AgentEvent, { type: "message_update" }> => e.type === "message_update")
+      .map((e) => e.delta.text ?? "")
+      .join("")
+    expect(streamed).toContain("Checking files.")
+    expect(streamed).toContain("done")
+    expect(streamed).not.toContain("tool_call")
+    const started = events
+      .filter((e): e is Extract<AgentEvent, { type: "message_start" }> => e.type === "message_start")
+      .filter((e) => e.message.role === "assistant")
+      .map((e) => (Array.isArray(e.message.content) ? e.message.content : []))
+      .map((parts) => parts.map((c) => (c.type === "text" ? c.text : "")).join(""))
+      .join("")
+    expect(started).not.toContain("tool_call")
+    expect(executed).toEqual(['{"n":1}'])
   })
 
   it("routes a hook's ask verdict through the approval gate", async () => {

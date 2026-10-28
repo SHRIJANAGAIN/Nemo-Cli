@@ -8,7 +8,7 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { createMemoryTool, loadMemory } from "./memory.js"
+import { createMemoryTool, getContextBlock, loadMemory, memoryJsonPath, memoryMdPath } from "./memory.js"
 
 // Point the whole home at a fixed temp dir so this test never touches the
 // developer's real ~/.nemo/memory/ tree.
@@ -119,5 +119,168 @@ describe("memory save → load round trip", () => {
     const entries = loadMemory()
     expect(entries.length).toBeLessThan(4)
     for (const entry of entries) expect(entry.content).toBe("SAME-FACT")
+  })
+
+  /**
+   * The store's real file is USEMEMORY.MD, not the JSON sidecar — `loadMemory`
+   * reads the MD first, so anything the MD format does not carry is lost on
+   * every save/load cycle even though the JSON next to it still has it.
+   *
+   * The title was the visible symptom: `memory save` reported "Saved mem_x:
+   * my-title" and then `memory list` printed "[mem_x] undefined". Tags, wiki
+   * links and the `expires` frontmatter were dropped the same way — which
+   * silently disabled tag-scored search and made the "drop expired entries"
+   * consolidation a no-op.
+   */
+  it("keeps the title, tags, links and expiry across a save -> load round trip", async () => {
+    const tool = createMemoryTool()
+    const saved = await tool.execute(
+      "t1",
+      {
+        action: "save",
+        title: "Deploy ritual",
+        content: "---\nexpires: 2999-01-01T00:00:00Z\n---\nTag the release before tagging the repo. See [[release-checklist]].",
+        tags: "deploy,ritual",
+      },
+      undefined,
+    )
+    expect(saved.isError).toBe(false)
+
+    const entries = loadMemory()
+    expect(entries).toHaveLength(1)
+    const entry = entries[0]!
+    expect(entry.title).toBe("Deploy ritual")
+    expect(entry.tags).toEqual(["deploy", "ritual"])
+    expect(entry.links).toContain("release-checklist")
+    expect(entry.frontmatter?.expires).toBe("2999-01-01T00:00:00Z")
+    expect(entry.content).toContain("Tag the release before tagging the repo.")
+    expect(entry.content).not.toMatch(/^- created:/)
+  })
+
+  it("lists a saved memory with its title instead of 'undefined'", async () => {
+    const tool = createMemoryTool()
+    await tool.execute("t1", { action: "save", title: "Named Fact", content: "the body" }, undefined)
+    const listed = await tool.execute("t2", { action: "list" }, undefined)
+    const text = (listed.content[0] as { text: string }).text
+    expect(text).toContain("Named Fact")
+    expect(text).not.toContain("undefined")
+  })
+})
+
+const MD_HEADER = `# Shrijan - User Memory (Active)
+
+## Active entries
+
+<!-- The assistant appends entries below. Do not edit by hand. -->
+
+`
+
+/** Write the store file directly, bypassing saveMemory (the cases below are
+ *  about reading files the CURRENT writer never produced). */
+function writeMdStore(body: string): void {
+  const file = memoryMdPath()
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, MD_HEADER + body, "utf8")
+}
+
+describe("legacy store recovery", () => {
+  it("reads real entries out of a legacy-shaped store and repairs the file", () => {
+    // The shipped store was written by the old serializer: the header prose
+    // became a block of its own, and a lost entry's body was a second copy of
+    // the metadata. Every one of those rows was then rejected by the id check,
+    // so a 29 KB file loaded as ZERO memories — the store was silently dead for
+    // every session, which is what made /resume look like it had no memory.
+    writeMdStore(
+      [
+        "### # Nemo Code - User Memory (Active)",
+        'This is the **active** memory store. When the user says "remember this"',
+        "",
+        "### MEM-20261001-00000001",
+        "- created: 2026-10-01T10:00:00Z",
+        "- category: preference",
+        "- title: Gateway",
+        "",
+        "Only the NVIDIA gateway is allowed.",
+        "",
+        "### MEM-20261002-00000002",
+        "- created: 2026-10-02T10:00:00Z",
+        "- category: fact",
+        "- created: 2026-10-02T10:00:00Z",
+        "- category: fact",
+      ].join("\n"),
+    )
+
+    const entries = loadMemory()
+    expect(entries.map((e) => e.content)).toEqual(["Only the NVIDIA gateway is allowed."])
+    expect(entries[0]?.title).toBe("Gateway")
+
+    // Repaired in place: the phantom blocks are gone and the real entry is
+    // still there, so the next load parses without dropping anything.
+    const repaired = fs.readFileSync(memoryMdPath(), "utf8")
+    expect(repaired).not.toContain("### # Nemo Code")
+    expect(repaired).toContain("Only the NVIDIA gateway is allowed.")
+    expect(loadMemory()).toHaveLength(1)
+  })
+
+  it("keeps a memory that survived only in the JSON sidecar", () => {
+    // The MD store sits next to the install and can be read-only; the sidecar
+    // is in the user's home and always writable. Reading the MD alone threw
+    // away every memory whose MD write failed.
+    writeMdStore(
+      ["### MEM-00000001", "- created: 2026-10-01T00:00:00Z", "- category: fact", "", "md-only fact"].join("\n"),
+    )
+    fs.mkdirSync(path.dirname(memoryJsonPath()), { recursive: true })
+    fs.writeFileSync(
+      memoryJsonPath(),
+      JSON.stringify([
+        { id: "MEM-00000001", content: "md-only fact", createdAt: "2026-10-01T00:00:00Z", tags: [] },
+        { id: "MEM-00000002", content: "sidecar-only fact", createdAt: "2026-10-05T00:00:00Z", tags: [] },
+      ]),
+      "utf8",
+    )
+
+    const contents = loadMemory().map((e) => e.content)
+    // Merged by id, no duplicate, ordered oldest → newest so "the last N" is
+    // "the newest N".
+    expect(contents).toEqual(["md-only fact", "sidecar-only fact"])
+  })
+
+  it("lets a body that opens with a bullet survive the metadata heuristic", () => {
+    // "- created:" is metadata; "- Fix the parser first" is a sentence. A
+    // prefix test alone would drop the real memory.
+    writeMdStore(["### MEM-00000003", "- created: 2026-10-03T00:00:00Z", "- category: fact", "", "- pin the lockfile before release"].join("\n"))
+
+    expect(loadMemory().map((e) => e.content)).toEqual(["- pin the lockfile before release"])
+  })
+})
+
+describe("query-ranked context", () => {
+  it("includes the memory the resumed chat is about even when it is old", () => {
+    // The block was the newest N entries and nothing else, so a resumed
+    // conversation about the package manager got the three most recent,
+    // unrelated notes — and the model answered as though it remembered nothing.
+    const block = (n: number) =>
+      [
+        `### MEM-${String(n).padStart(8, "0")}`,
+        `- created: 2026-09-0${n}T00:00:00Z`,
+        `- category: fact`,
+        `- title: T${n}`,
+        "",
+      ].join("\n")
+    writeMdStore(
+      [
+        block(1) + "User prefers pnpm over npm",
+        block(2) + "Deploys run in ap-south-1",
+        block(3) + "The desk lamp flickers",
+        block(4) + "Nights are for reading",
+      ].join("\n\n"),
+    )
+
+    const plain = getContextBlock(3)
+    const ranked = getContextBlock(3, "does the user prefer pnpm")
+
+    expect(plain).not.toContain("pnpm")
+    expect(ranked.split("\n")[1]).toContain("pnpm")
+    expect(ranked.startsWith("## Persistent memory:")).toBe(true)
   })
 })

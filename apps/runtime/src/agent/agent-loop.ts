@@ -299,20 +299,6 @@ export async function runAgentLoop(prompt: string, run: RunConfig): Promise<Agen
 
     const toolCalls = assistant.content.filter((c) => c.type === "toolCall")
     if (toolCalls.length === 0) {
-      const textPart = assistant.content.find((c) => c.type === "text")
-      if (textPart && "text" in textPart) {
-        const { prose, toolCalls: extracted } = extractTextToolCalls(textPart.text)
-        if (extracted.length > 0) {
-          assistant.content = assistant.content.map((c) => (c.type === "text" ? { type: "text", text: prose } : c))
-          for (const tc of extracted) assistant.content.push(tc)
-          run.session.add(assistant)
-          await run.emit({ type: "message_end", message: assistant })
-          const results = await executeToolCalls(assistant, run, state, maxToolCalls)
-          if (run.signal?.aborted) break
-          void results
-          continue
-        }
-      }
       run.session.add(assistant)
       await run.emit({ type: "message_end", message: assistant })
       // The continuation budget is per ANSWER, not per run. It used to be a
@@ -446,6 +432,13 @@ async function streamAssistant(
     thinking = ""
     toolName = undefined
     pendingEmits.length = 0
+    const fence = createToolFenceFilter((chunk) =>
+      queueStreamEvent({
+        type: "message_update",
+        message: placeholder(text, thinking, []),
+        delta: { text: chunk },
+      }),
+    )
 
     try {
       assistant = await chatWithRetry(run, {
@@ -458,11 +451,7 @@ async function streamAssistant(
             const slice = boundedAppend(text, d, MAX_STREAM_TEXT_CHARS)
             if (slice === null) return
             text += slice
-            queueStreamEvent({
-              type: "message_update",
-              message: placeholder(text, thinking, []),
-              delta: { text: slice },
-            })
+            fence.push(slice)
           },
           onThinking: (d) => {
             const slice = boundedAppend(thinking, d, MAX_STREAM_THINKING_CHARS)
@@ -485,6 +474,7 @@ async function streamAssistant(
           },
         },
       })
+      fence.flush()
       await Promise.all(pendingEmits)
     } catch (err) {
       const raw: string = err instanceof Error ? err.message : String(err)
@@ -653,14 +643,21 @@ async function streamAssistant(
   // reintroduce the unbounded allocation the stream cap exists to prevent.
   const finalText =
     authoritative.length > MAX_STREAM_TEXT_CHARS ? authoritative.slice(0, MAX_STREAM_TEXT_CHARS) : authoritative
-  const hasToolCalls = assistant.content.some((c) => c.type === "toolCall")
+  // Parse the text dialect here, before anything observes the message: the
+  // message_start(merged) below is what the UI renders, so leaving the fence in
+  // `finalText` paints raw tool syntax above the tool row it spawned.
+  const textFence = finalText.includes("<tool_call") ? extractTextToolCalls(finalText) : null
+  const textToolCalls = textFence?.toolCalls ?? []
+  const answerText = textFence && textToolCalls.length > 0 ? textFence.prose : finalText
+  const nativeToolCalls = assistant.content.filter((c) => c.type === "toolCall")
+  const hasToolCalls = nativeToolCalls.length > 0 || textToolCalls.length > 0
   const merged: AssistantMessage = {
     role: "assistant",
     stopReason: assistant.stopReason,
     content: [
       ...(thinking ? [{ type: "thinking" as const, text: thinking }] : []),
-      ...(finalText
-        ? [{ type: "text" as const, text: finalText }]
+      ...(answerText
+        ? [{ type: "text" as const, text: answerText }]
         : // Tool-call-only responses are the NORM, not an error: injecting the
           // "no content" filler here painted a bogus assistant row after every
           // tool batch (and persisted it to the session log + model context).
@@ -668,7 +665,8 @@ async function streamAssistant(
           hasToolCalls
           ? []
           : [{ type: "text" as const, text: "The model returned no content. Please try again." }]),
-      ...assistant.content.filter((c) => c.type === "toolCall"),
+      ...nativeToolCalls,
+      ...textToolCalls,
     ],
   }
   await run.emit({ type: "message_start", message: merged })
@@ -1144,6 +1142,60 @@ async function respectRate(
       const timer = setTimeout(resolve, 120)
       signal?.addEventListener("abort", () => clearTimeout(timer), { once: true })
     })
+  }
+}
+
+/**
+ * Hides `<tool_call>` blocks from the live stream. The fence is only parsable
+ * once closed, so streaming it verbatim dumps raw tool syntax into the
+ * transcript right before the real tool row appears.
+ */
+function createToolFenceFilter(sink: (text: string) => void): { push: (delta: string) => void; flush: () => void } {
+  const OPEN = "<tool_call"
+  const CLOSE = "</tool_call>"
+  let pending = ""
+  let inFence = false
+  const emit = (chunk: string): void => {
+    if (chunk) sink(chunk)
+  }
+  const heldTail = (): number => {
+    const max = Math.min(OPEN.length - 1, pending.length)
+    for (let n = max; n > 0; n--) {
+      if (pending.endsWith(OPEN.slice(0, n))) return n
+    }
+    return 0
+  }
+  return {
+    push(delta: string): void {
+      pending += delta
+      for (;;) {
+        if (inFence) {
+          const end = pending.indexOf(CLOSE)
+          if (end < 0) return
+          pending = pending.slice(end + CLOSE.length)
+          inFence = false
+          continue
+        }
+        const start = pending.indexOf(OPEN)
+        if (start >= 0) {
+          emit(pending.slice(0, start))
+          pending = pending.slice(start)
+          inFence = true
+          continue
+        }
+        const hold = heldTail()
+        if (pending.length > hold) {
+          emit(pending.slice(0, pending.length - hold))
+          pending = pending.slice(pending.length - hold)
+        }
+        return
+      }
+    },
+    flush(): void {
+      if (!inFence) emit(pending)
+      pending = ""
+      inFence = false
+    },
   }
 }
 

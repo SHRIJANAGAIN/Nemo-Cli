@@ -9,6 +9,7 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { resolveConstrainedPath, textResult, type Tool, type ToolContext } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
+import { resolveSearchRoot } from "../search/search-root.js"
 
 export interface SemanticDoc {
   path: string
@@ -165,7 +166,7 @@ export function createSemanticSearchTool(): Tool {
       const topK = typeof args.top_k === "number" && Number.isFinite(args.top_k) ? args.top_k : 10
       const docs: SemanticDoc[] = []
       try {
-        walkFiles(base, (abs, rel) => {
+        const scan = (abs: string, rel: string): void => {
           if (docs.length >= MAX_FILES) return
           if (!matchGlob(glob, rel)) return
           let stat: fs.Stats
@@ -183,7 +184,12 @@ export function createSemanticSearchTool(): Tool {
           }
           if (!/^[\t\n\r\x20-\x7e\xa0-\uffff]*$/.test(content)) return
           docs.push({ path: rel, content })
-        })
+        }
+        // A file root is scanned directly — the walker only ever yields files
+        // inside a directory.
+        const searchRoot = resolveSearchRoot(base)
+        if (searchRoot.isFile && searchRoot.file) scan(searchRoot.file, path.basename(searchRoot.file))
+        else walkFiles(base, scan)
       } catch {
         return textResult(`Search root not readable: ${base}`, /*isError*/ true)
       }

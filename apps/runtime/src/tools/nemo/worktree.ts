@@ -40,6 +40,31 @@ export async function listWorktrees(cwd: string): Promise<WorktreeEntry[]> {
   }
 }
 
+/** The worktree root that contains `cwd` (a linked worktree, or the repo). */
+async function toplevelOf(cwd: string): Promise<string> {
+  const { stdout } = await gitExec(["rev-parse", "--show-toplevel"], { cwd })
+  return stdout.trim()
+}
+
+/** Path compare that survives git's forward slashes and Windows' case rules. */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string): string => {
+    const resolved = path.resolve(p).replace(/[\\/]+$/, "")
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved
+  }
+  return norm(a) === norm(b)
+}
+
+/** Does the branch already exist? `show-ref --quiet` exits 1 when it does not. */
+async function branchExists(repoRoot: string, branch: string): Promise<boolean> {
+  try {
+    await gitExec(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd: repoRoot })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const enterDef: ToolDefinition = {
   timeoutMs: 30_000,
   name: "nemo__EnterWorktree",
@@ -61,14 +86,31 @@ export function createEnterWorktreeTool(): Tool {
     async execute(_id, args, _signal, _update, context) {
       const ctx = context as ToolContext
       const name = args.name ? String(args.name) : `wt-${Date.now().toString(36)}`
-      const branch = args.branch ? String(args.branch) : "HEAD"
+      const requested = args.branch ? String(args.branch) : "HEAD"
+      if (name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+        return textResult(`Invalid worktree name '${name}': use a single directory name.`, /*isError*/ true)
+      }
+      // A branch cannot be created from itself.
+      const startPoint = requested === name ? "HEAD" : requested
       try {
-        await gitExec(["worktree", "add", "-b", name, branch], { cwd: ctx.cwd })
+        const repoRoot = await toplevelOf(ctx.cwd)
+        // Worktrees live BESIDE the repo, not inside it: a worktree under
+        // the working tree would show up as untracked content and be walked
+        // by every search tool.
+        const worktreePath = path.join(path.dirname(repoRoot), name)
+        // `git worktree add [-b <new-branch>] <path> [<commit-ish>]` — the
+        // PATH comes first. Passing the start point in the path slot made
+        // git create a worktree literally named "HEAD" in the repo root.
+        const exists = await branchExists(repoRoot, name)
+        const argv = exists
+          ? ["worktree", "add", worktreePath, startPoint]
+          : ["worktree", "add", "-b", name, worktreePath, startPoint]
+        await gitExec(argv, { cwd: ctx.cwd })
         const entries = await listWorktrees(ctx.cwd)
-        const entry = entries.find((e) => e.branch === name)
-        const worktreePath = entry?.path ?? path.join(ctx.cwd, name)
+        const entry = entries.find((e) => samePath(e.path, worktreePath))
+        const created = entry?.path ?? worktreePath
         return textResult(
-          `Created worktree on branch '${name}' based on ${branch}.\nPath: ${worktreePath}\nTo switch: use the worktree switch command or chdir to this path.`,
+          `Created worktree on branch '${name}' based on ${startPoint}.\nPath: ${created}\nTo switch: use the worktree switch command or chdir to this path.`,
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -102,16 +144,35 @@ export function createExitWorktreeTool(): Tool {
     async execute(_id, args, _signal, _update, context) {
       const ctx = context as ToolContext
       const action = String(args.action ?? "keep")
-      const targetPath = args.path ? String(args.path) : ctx.cwd
-
       try {
-        if (action === "remove") {
-          await gitExec(["worktree", "remove", targetPath], { cwd: ctx.cwd })
-          return textResult(`Worktree removed at ${targetPath}.`)
+        const entries = await listWorktrees(ctx.cwd)
+        if (entries.length === 0) {
+          return textResult("Not a git repository — there is no worktree to exit.", /*isError*/ true)
         }
-        // keep: just prune stale entries
-        await gitExec(["worktree", "prune"], { cwd: ctx.cwd })
-        return textResult(`Worktree kept. Current context: ${ctx.cwd}`)
+        // git lists the main worktree first; linked worktrees follow.
+        const main = entries[0]
+        let targetPath = args.path ? String(args.path) : ""
+        if (!targetPath) {
+          const here = await toplevelOf(ctx.cwd)
+          const match = entries.find((e) => samePath(e.path, here))
+          if (!match || samePath(match.path, main.path)) {
+            // Falling back to the repo root would hand `git worktree remove`
+            // the MAIN working tree, which git refuses to remove.
+            return textResult(
+              `Not inside a linked worktree (current: ${main.path}). Pass the worktree path as 'path' to act on it.`,
+              /*isError*/ true,
+            )
+          }
+          targetPath = match.path
+        }
+        if (action === "remove") {
+          // Removal runs from the main worktree: git refuses to remove the
+          // worktree the command is running inside.
+          await gitExec(["worktree", "remove", targetPath], { cwd: main.path })
+          return textResult(`Worktree removed at ${targetPath}. Return to ${main.path}.`)
+        }
+        await gitExec(["worktree", "prune"], { cwd: main.path })
+        return textResult(`Worktree kept at ${targetPath}. Current context: ${ctx.cwd}`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         return textResult(`Worktree action failed: ${message}`, /*isError*/ true)

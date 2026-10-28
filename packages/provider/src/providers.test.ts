@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest"
 import * as http from "node:http"
 import type { AddressInfo } from "node:net"
 import { createCustomProvider } from "./custom.js"
-import { createNvidiaProvider, nvidiaReasoningParamsAllowed } from "./nvidia.js"
+import { createNvidiaProvider, nvidiaReasoningParamsAllowed, NvidiaProvider } from "./nvidia.js"
 import { createLlamaCppProvider } from "./llama-cpp.js"
 import { createOllamaProvider } from "./ollama.js"
 import { normalizeCustomBaseUrl } from "./custom.js"
@@ -266,6 +266,108 @@ describe("nvidia reasoning params stay on NVIDIA's own endpoints", () => {
     expect(seen.body).not.toHaveProperty("reasoning_tokens")
     expect(seen.body).not.toHaveProperty("reasoning_effort")
   }, 15000)
+})
+
+describe("nvidia rejects reasoning_tokens per model", () => {
+  /**
+   * The stub is not an NVIDIA host, so the base class would never send the
+   * field. This subclass opens exactly that gate and nothing else — the
+   * sending decision, the 400 fallback and the sticky skip all stay in the
+   * base class.
+   */
+  class ReasoningNvidiaProvider extends NvidiaProvider {
+    protected reasoningParamsAllowed(): boolean {
+      return true
+    }
+  }
+
+  it("retries without the field and then stops sending it", async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const server = http.createServer((req, res) => {
+      let raw = ""
+      req.on("data", (c) => {
+        raw += c
+      })
+      req.on("end", () => {
+        const body = JSON.parse(raw) as Record<string, unknown>
+        bodies.push(body)
+        if (body.reasoning_tokens !== undefined) {
+          res.writeHead(400, { "Content-Type": "application/json" })
+          res.end(
+            JSON.stringify({
+              message: "Validation: Unsupported parameter(s): `reasoning_tokens`",
+              type: "Bad Request",
+              code: 400,
+            }),
+          )
+          return
+        }
+        res.writeHead(200, { "Content-Type": "text/event-stream" })
+        res.end(SSE_TEXT + SSE_STOP)
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const p = new ReasoningNvidiaProvider({ baseUrl: `http://127.0.0.1:${port}`, model: "m", reasoningEffort: "medium" })
+      const first = await p.chat(toolInput)
+      expect(first.content.length).toBeGreaterThan(0)
+      // A later turn on the SAME provider instance must not re-send the
+      // field the endpoint already refused.
+      await p.chat(toolInput)
+    } finally {
+      server.close()
+    }
+    expect(bodies.length).toBe(3)
+    expect(bodies[0]).toHaveProperty("reasoning_tokens")
+    expect(bodies[1]).not.toHaveProperty("reasoning_tokens")
+    expect(bodies[2]).not.toHaveProperty("reasoning_tokens")
+  }, 15000)
+
+  it("keeps the reasoning fallback after a transient network blip", async () => {
+    // The two fallbacks used to share ONE flag: a network blip on attempt 1
+    // spent the retry, so the 400 that followed had no fallback left and the
+    // turn died with "Unsupported parameter(s): `reasoning_tokens`".
+    const bodies: Array<Record<string, unknown>> = []
+    let request = 0
+    const server = http.createServer((req, res) => {
+      request += 1
+      const isBlip = request === 1
+      let raw = ""
+      req.on("data", (c) => {
+        raw += c
+      })
+      req.on("end", () => {
+        const body = JSON.parse(raw) as Record<string, unknown>
+        bodies.push(body)
+        if (isBlip) {
+          req.socket.destroy()
+          return
+        }
+        if (body.reasoning_tokens !== undefined) {
+          res.writeHead(400, { "Content-Type": "application/json" })
+          res.end(JSON.stringify({ message: "Unsupported parameter(s): `reasoning_tokens`", code: 400 }))
+          return
+        }
+        res.writeHead(200, { "Content-Type": "text/event-stream" })
+        res.end(SSE_TEXT + SSE_STOP)
+      })
+    })
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+    const port = (server.address() as AddressInfo).port
+    try {
+      const p = new ReasoningNvidiaProvider({ baseUrl: `http://127.0.0.1:${port}`, model: "m", reasoningEffort: "medium" })
+      const res = await p.chat(toolInput)
+      expect(res.content.length).toBeGreaterThan(0)
+    } finally {
+      server.close()
+    }
+    // blip → reasoning 400 → reasoning fallback
+    expect(bodies.length).toBe(3)
+    expect(bodies[0]).toHaveProperty("reasoning_tokens")
+    expect(bodies[1]).toHaveProperty("reasoning_tokens")
+    expect(bodies[2]).not.toHaveProperty("reasoning_tokens")
+  }, 20000)
 })
 
 describe("temperature clamping (per-backend ceilings)", () => {

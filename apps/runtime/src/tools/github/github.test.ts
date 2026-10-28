@@ -626,4 +626,20 @@ describe("list_repos", () => {
     expect(res.isError).toBe(true)
     expect(firstText(res)).toContain("/github login")
   })
+
+  it("lists the caller's repos without being handed a repo to name", async () => {
+    // `list_repos` names no repository, so requiring one forced the model to
+    // invent an owner/repo — and the invented value then failed the repo
+    // parse, so the one action that needed no repo was the one action the
+    // schema made impossible to call.
+    net.routes.set("/user/repos", {
+      status: 200,
+      body: JSON.stringify([{ full_name: "octocat/mytest1", private: false, default_branch: "main" }]),
+    })
+    const tool = createGithubTool("tok")
+    const res = await call(tool, { action: "list_repos" })
+    expect(res.isError).toBe(false)
+    expect(firstText(res)).toContain("octocat/mytest1")
+    expect(tool.definition.parameters?.required).not.toContain("repo")
+  })
 })

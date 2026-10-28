@@ -109,7 +109,7 @@ function readPackageJson(dir: string): { name?: string; version?: string } | und
 
 /**
  * Install-root package names: the source tree is "nemo-code", but the
- * published npm tarball is "@shrijan/nemo-cli" — matching only the
+ * published npm tarball is "@shrijanagain/nemo-cli" — matching only the
  * published name made every source checkout unlocatable, so checkForUpdate
  * always skipped with "cannot determine installed version" (observed live:
  * auto-update never fired outside dev checkouts).
@@ -117,7 +117,7 @@ function readPackageJson(dir: string): { name?: string; version?: string } | und
 export function isInstallRootName(name: unknown): boolean {
   if (typeof name !== "string") return false
   const n = name.toLowerCase()
-  return n === "nemo" || n === "nemo-code" || n === "@shrijan/nemo-cli"
+  return n === "nemo" || n === "nemo-code" || n === "@shrijanagain/nemo-cli"
 }
 
 /**
@@ -130,7 +130,7 @@ export function isInstallRootName(name: unknown): boolean {
  * tree). Works from both the source tree and dist/ (walk-up is
  * depth-independent). Stray package.json files can't hijack version
  * detection: only install-root names match (source "nemo" or published
- * "@shrijan/nemo-cli").
+ * "@shrijanagain/nemo-cli").
  */
 export function findInstallRoot(opts?: { startDir?: string; env?: NodeJS.ProcessEnv }): string | undefined {
   const start = opts?.startDir ?? (typeof __dirname !== "undefined" ? __dirname : process.cwd())
@@ -367,7 +367,7 @@ export async function checkForUpdate(opts: CheckForUpdateOptions): Promise<Updat
   // force notify for git checkouts (rebuild-under-running-process is unsafe).
   // Shell-safety of the apply (win32 shell:true): the version token is
   // isSafeVersion-gated at the registry edge and the package name can only
-  // ever be an install-root name ("nemo" / "@shrijan/nemo-cli",
+  // ever be an install-root name ("nemo" / "@shrijanagain/nemo-cli",
   // any case — findInstallRoot matched it exactly), so neither shell-bound
   // token carries metacharacters (DEP0190 concat is safe here).
   const notifyOnly = opts.config.autoupdate === "notify" || releaseType !== "patch" || method === "git"

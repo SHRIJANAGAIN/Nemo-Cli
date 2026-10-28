@@ -37,8 +37,22 @@ function loadPrompt() {
   return raw || undefined
 }
 
+// `nemo resume <id>` resolves the transcript file and passes it here; without
+// this the CLI printed "Resumed session …" and then opened an empty chat.
+function loadSessionFile() {
+  const raw = process.env.NEMO_SESSION
+  return raw ? raw : undefined
+}
+
+function loadSessionId() {
+  const raw = process.env.NEMO_SESSION_ID
+  return raw ? raw : undefined
+}
+
 const config = loadConfig()
 const prompt = loadPrompt()
+const sessionFile = loadSessionFile()
+const sessionId = loadSessionId()
 setKeymap(config.keybindings)
 process.env.NEMO_LOGO_PATH =
   process.env.NEMO_LOGO_PATH || path.join(here, "..", "ink-app-esm", "logo_ansi.txt")
@@ -241,6 +255,8 @@ const instance = render(
       process.exit(0)
     },
     initialPrompt: prompt,
+    initialSessionFile: sessionFile,
+    initialSessionId: sessionId,
   }),
   renderOptions,
 )

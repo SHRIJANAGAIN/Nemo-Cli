@@ -61,6 +61,21 @@ export function transcriptPathFor(id: string): string {
 }
 
 /**
+ * Transcript locations an id can name, in resolution order.
+ *
+ * `Session.save` writes the bare `<id>`, but the transcripts that actually
+ * accumulated in `~/.nemo/sessions` are `<id>.jsonl` rows from the wire
+ * recorder (plus a per-session directory holding `context.jsonl`). Resolving
+ * ONLY the bare name meant every real session id typed at the prompt reported
+ * "no transcript found" — the session list knew the id, the file next to it had
+ * a suffix.
+ */
+export function transcriptCandidates(id: string): string[] {
+  const base = transcriptPathFor(id)
+  return [base, `${base}.jsonl`, path.join(base, "context.jsonl")]
+}
+
+/**
  * Load a session's transcript, or explain why it cannot be resumed.
  *
  * `Session.load` already caps the file size and refuses remote UNC targets, so
@@ -68,31 +83,36 @@ export function transcriptPathFor(id: string): string {
  * caller can report without guessing.
  */
 export function loadTranscript(id: string): TranscriptTarget | { readonly error: string } {
-  let file: string
+  let candidates: string[]
   try {
-    file = transcriptPathFor(id)
+    candidates = transcriptCandidates(id)
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
   }
-  let exists: boolean
+  let existing: string[]
   try {
-    exists = fs.existsSync(file)
+    existing = candidates.filter((file) => fs.existsSync(file))
   } catch (error) {
     return { error: `cannot reach the sessions directory (${error instanceof Error ? error.message : String(error)})` }
   }
-  if (!exists) return { error: `no transcript found for session ${id}` }
-  let session: Session | null
-  try {
-    session = Session.load(file)
-  } catch (error) {
-    return {
-      error: `transcript for ${id} could not be read (${error instanceof Error ? error.message : String(error)})`,
+  if (existing.length === 0) return { error: `no transcript found for session ${id}` }
+  // The first readable candidate wins; an empty-but-valid file is remembered so
+  // the report says "nothing to resume" rather than "unreadable".
+  let empty = false
+  for (const file of existing) {
+    let session: Session | null = null
+    try {
+      session = Session.load(file)
+    } catch (error) {
+      return {
+        error: `transcript for ${id} could not be read (${error instanceof Error ? error.message : String(error)})`,
+      }
     }
+    if (session && session.messages.length > 0) return { id, file, messageCount: session.messages.length }
+    if (session) empty = true
   }
-  if (!session) return { error: `transcript for ${id} is unreadable` }
-  const messageCount = session.messages.length
-  if (messageCount === 0) return { error: `session ${id} has an empty transcript — there is nothing to resume` }
-  return { id, file, messageCount }
+  if (empty) return { error: `session ${id} has an empty transcript — there is nothing to resume` }
+  return { error: `transcript for ${id} is unreadable` }
 }
 
 /** True when the value is a resumable target rather than an error. */

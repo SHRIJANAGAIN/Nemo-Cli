@@ -359,11 +359,11 @@ describe("server-side licensing", () => {
       expect(gated.status).toBe(401)
       const installer = await fetch(`${base(port)}/install.ps1`)
       expect(installer.status).toBe(200)
-      expect(await installer.text()).toContain("npm install -g @shrijan/nemo-cli")
+      expect(await installer.text()).toContain("npm install -g @shrijanagain/nemo-cli")
       // macOS/Linux one-liner serves the animated bash installer too.
       const sh = await fetch(`${base(port)}/install.sh`)
       expect(sh.status).toBe(200)
-      expect(await sh.text()).toContain("npm install -g @shrijan/nemo-cli")
+      expect(await sh.text()).toContain("npm install -g @shrijanagain/nemo-cli")
       // Docs pages serve as markdown; traversal and odd names 404.
       const docDir = mkdtempSync(join(tmpdir(), "lic-doc-"))
       writeFileSync(join(docDir, "getting-started.md"), "# Getting started\n")

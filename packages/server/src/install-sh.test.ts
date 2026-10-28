@@ -21,7 +21,7 @@ describe("INSTALL_SH", () => {
     )
 
   it("installs the published scope, verifies, and guides — nothing else", () => {
-    expect(INSTALL_SH).toContain("npm install -g @shrijan/nemo-cli")
+    expect(INSTALL_SH).toContain("npm install -g @shrijanagain/nemo-cli")
     expect(INSTALL_SH).toContain("nemo --version")
     expect(INSTALL_SH).toContain("/provider add")
     expect(INSTALL_SH).toContain("/github login")

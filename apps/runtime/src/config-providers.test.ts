@@ -78,6 +78,57 @@ describe("config provider ids", () => {
     expect(cfg.providers?.[0]?.baseUrl).toBe("http://localhost:11434")
   })
 
+  it("resolves the active profile's key when the flat apiKey is empty", () => {
+    const cfg = loadConfig({
+      provider: "nvidia-nim",
+      baseUrl: "",
+      model: "",
+      apiKey: "",
+      providers: [
+        {
+          id: "nvidia-nim",
+          type: "nvidia",
+          label: "NVIDIA NIM",
+          baseUrl: "https://integrate.api.nvidia.com",
+          apiKey: "nvapi-from-store",
+        },
+      ],
+    })
+    expect(cfg.apiKey).toBe("nvapi-from-store")
+  })
+
+  it("never borrows a key from an unrelated backend", () => {
+    const cfg = loadConfig({
+      provider: "nvidia",
+      baseUrl: "",
+      model: "",
+      apiKey: "",
+      providers: [
+        { id: "ollama", type: "ollama", label: "Ollama", baseUrl: "http://localhost:11434", apiKey: "ollama-key" },
+      ],
+    })
+    expect(cfg.apiKey).toBe("")
+  })
+
+  it("keeps an explicit flat apiKey over the stored profile", () => {
+    const cfg = loadConfig({
+      provider: "nvidia-nim",
+      baseUrl: "",
+      model: "",
+      apiKey: "nvapi-flat",
+      providers: [
+        {
+          id: "nvidia-nim",
+          type: "nvidia",
+          label: "NVIDIA NIM",
+          baseUrl: "https://integrate.api.nvidia.com",
+          apiKey: "nvapi-store",
+        },
+      ],
+    })
+    expect(cfg.apiKey).toBe("nvapi-flat")
+  })
+
   it("keeps the per-backend live model cache (modelCache) across loads", () => {
     const cfg = loadConfig({
       provider: "nvidia",

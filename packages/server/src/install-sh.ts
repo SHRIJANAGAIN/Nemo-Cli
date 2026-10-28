@@ -156,7 +156,7 @@ fi
 # the foreground paints a glowing comet (head + fading trail) over a dim
 # track, plus the eye spinner and elapsed time.
 log=$(mktemp)
-npm install -g @shrijan/nemo-cli >"$log" 2>&1 &
+npm install -g @shrijanagain/nemo-cli >"$log" 2>&1 &
 NPMPID=$!
 start=$SECONDS
 width=24

@@ -450,7 +450,12 @@ export class Agent {
     })
   }
 
-  private refreshSystemPrompt(): void {
+  /** Rebuild the system prompt.
+   *
+   *  `memoryQuery` re-ranks the long-term memories by relevance to the text
+   *  that is being resumed, so a resumed conversation opens with what it is
+   *  actually about. Without it the newest memories are used. */
+  refreshSystemPrompt(memoryQuery?: string): void {
     const baseTools = this.developerMode.isEnabled() ? this.developerMode.reorderTools(this.tools) : this.tools
     const runTools = this.arsenal ? this.arsenal.resolveTools(baseTools) : baseTools
     const specialistBlock = this.specialistPrompt
@@ -467,7 +472,7 @@ export class Agent {
         model: this.config.model,
         nativeTools: this.config.nativeTools,
         tools: toolDefinitions(runTools),
-        memoryBlock: getContextBlock(),
+        memoryBlock: getContextBlock(8, memoryQuery),
         operatorBlock: this.operatorBlock(),
         developerModeSuffix: this.developerMode.getSystemPromptSuffix(),
         modeSuffix: specialistBlock + modeSystemPromptSuffix(this.mode) + (this.goalStore?.context() ?? ""),

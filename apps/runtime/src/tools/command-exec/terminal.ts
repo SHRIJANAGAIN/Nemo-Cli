@@ -208,7 +208,7 @@ const definition: ToolDefinition = {
     type: "object",
     required: ["action"],
     properties: {
-      action: { type: "string", description: "One of: create, send, read, list, kill." },
+      action: { type: "string", enum: ["create", "send", "read", "list", "kill"], description: "One of: create, send, read, list, kill." },
       shell: { type: "string", description: "Shell for create (default: the configured shellCommand)." },
       input: { type: "string", description: "Input line for send." },
       id: { type: "string", description: "Session id for send/read/kill." },

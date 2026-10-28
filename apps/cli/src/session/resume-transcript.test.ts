@@ -124,4 +124,46 @@ describe("loadTranscript", () => {
     if (isTranscriptTarget(result)) return
     expect(result.error).toContain("Invalid session id")
   })
+
+  /**
+   * The shape that is actually on disk. Every session the recorder wrote is
+   * `<id>.jsonl`; resolving only the bare `<id>` made `nemo resume <uuid>` say
+   * "no transcript found" for sessions the picker listed.
+   */
+  it("finds a wire transcript stored as <id>.jsonl", () => {
+    const id = "11112222-3333-4444-5555-666677778888"
+    fs.writeFileSync(
+      path.join(dir, `${id}.jsonl`),
+      [
+        JSON.stringify({ ts: 1, message: { role: "system", content: "PROMPT" } }),
+        JSON.stringify({ ts: 2, message: { role: "user", content: "did it resume?" } }),
+      ].join("\n"),
+      "utf8",
+    )
+
+    const result = loadTranscript(id)
+    expect(isTranscriptTarget(result)).toBe(true)
+    if (!isTranscriptTarget(result)) return
+    expect(result.file).toBe(path.join(dir, `${id}.jsonl`))
+    expect(result.messageCount).toBe(1)
+  })
+
+  it("prefers the bare transcript when both shapes exist", () => {
+    const id = "session-both"
+    writeTranscript(id, ["the real one"])
+    fs.writeFileSync(path.join(dir, `${id}.jsonl`), JSON.stringify({ ts: 1, message: { role: "user", content: "stale" } }), "utf8")
+
+    const result = loadTranscript(id)
+    if (!isTranscriptTarget(result)) throw new Error("expected a transcript")
+    expect(result.file).toBe(path.join(dir, id))
+  })
+
+  it("still reports an empty transcript when the only candidate is empty", () => {
+    const id = "session-only-empty"
+    new Session().save(path.join(dir, id))
+    const result = loadTranscript(id)
+    expect(isTranscriptTarget(result)).toBe(false)
+    if (isTranscriptTarget(result)) return
+    expect(result.error).toContain("empty transcript")
+  })
 })

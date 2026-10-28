@@ -6,7 +6,14 @@
 
 import * as fs from "fs"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolContext, resolveConstrainedPath, assertExternalDirectory } from "../types.js"
+import {
+  textResult,
+  type Tool,
+  type ToolContext,
+  resolveConstrainedPath,
+  assertExternalDirectory,
+  accessDeniedMessage,
+} from "../types.js"
 import { PathChangedError, identityOf, openVerified, readVerifiedPrefix, type VerifiedHandle } from "./verified-read.js"
 import { noteOpen } from "../../../../../packages/core/src/frecency.js"
 import { binaryReadMessage, detectBinaryFd } from "../text/binary-detect.js"
@@ -77,7 +84,7 @@ export function createReadFileTool(): Tool {
           target = resolveConstrainedPath(rawPath, ctx.cwd)
         } catch (error) {
           return textResult(
-            `Access denied: ${error instanceof Error ? error.message : String(error)}`,
+            accessDeniedMessage(error),
             /*isError*/ true,
           )
         }

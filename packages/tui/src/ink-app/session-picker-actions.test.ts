@@ -66,6 +66,8 @@ const makeState = () =>
     setMessages: vi.fn(),
     setStaticEpoch: vi.fn(),
     addSystemMessage: vi.fn(() => ""),
+    onSessionResumed: vi.fn(),
+    memoryCount: vi.fn(() => 3),
   }) satisfies SessionPickerState
 
 const actions = (state = makeState()) => ({
@@ -113,12 +115,33 @@ describe("onSelect (resume)", () => {
     expect(io.loadConversation).toHaveBeenCalledWith("s2")
     expect(restore.restoreMessages).toHaveBeenCalledWith("s2", [historyRow])
     expect(state.setMessages).toHaveBeenCalledWith(["msg-a", "msg-b"])
+    // The agent must receive the restored rows too — seeding only the screen
+    // left the model answering from whichever chat ran before this one.
+    expect(state.onSessionResumed).toHaveBeenCalledWith(["msg-a", "msg-b"])
     // Wholesale replace → the static epoch bumps so Ink reprints from item 0.
     expect(state.setStaticEpoch).toHaveBeenCalledTimes(1)
     const bump = state.setStaticEpoch.mock.calls[0][0] as (n: number) => number
     expect(bump(41)).toBe(42)
     // Transcript-only: persisted banners would replay and stack per resume.
-    expect(state.addSystemMessage).toHaveBeenCalledWith("Resumed session: Demo - desc", { persist: false })
+    // The counts are the proof of what came back: transcript rows + memories.
+    expect(state.addSystemMessage).toHaveBeenCalledWith(
+      "Resumed session: Demo - desc (2 earlier messages, 3 long-term memories)",
+      { persist: false },
+    )
+  })
+
+  it("banners zero memories when the store is empty and no hook is wired", () => {
+    const state = makeState()
+    state.onSessionResumed = undefined
+    state.memoryCount = undefined
+    restore.restoreMessages.mockReturnValue(["msg-a", "msg-b"])
+
+    createSessionPickerActions(state).onSelect(entry({ sessionId: "s2" }))
+
+    expect(state.addSystemMessage).toHaveBeenCalledWith(
+      "Resumed session: Demo - desc (2 earlier messages, 0 long-term memories)",
+      { persist: false },
+    )
   })
 
   it("drops the ' - description' tail when the session has none", () => {
@@ -126,7 +149,9 @@ describe("onSelect (resume)", () => {
 
     handlers.onSelect(entry({ sessionId: "s2", sessionDescription: "" }))
 
-    expect(state.addSystemMessage).toHaveBeenCalledWith("Resumed session: Demo", { persist: false })
+    expect(state.addSystemMessage).toHaveBeenCalledWith("Resumed session: Demo (0 earlier messages, 3 long-term memories)", {
+      persist: false,
+    })
   })
 
   it("backfills a default-named session's title from its own history", () => {
@@ -138,9 +163,12 @@ describe("onSelect (resume)", () => {
     // Deterministic rename (no provider round-trip) + the banner uses it.
     expect(io.renameSession).toHaveBeenCalledWith("s2", "Backfilled Title")
     expect(state.currentSessionRef.current?.sessionName).toBe("Backfilled Title")
-    expect(state.addSystemMessage).toHaveBeenCalledWith("Resumed session: Backfilled Title - desc", {
-      persist: false,
-    })
+    expect(state.addSystemMessage).toHaveBeenCalledWith(
+      "Resumed session: Backfilled Title - desc (0 earlier messages, 3 long-term memories)",
+      {
+        persist: false,
+      },
+    )
   })
 
   it("never renames a user-chosen title (and skips backfill when no title derives)", () => {

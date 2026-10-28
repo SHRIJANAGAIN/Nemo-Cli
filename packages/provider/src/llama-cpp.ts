@@ -7,6 +7,7 @@
 import * as http from "http"
 import * as https from "https"
 import * as url from "url"
+import { randomUUID } from "node:crypto"
 import type {
   AssistantMessage,
   AssistantContentPart,
@@ -331,7 +332,7 @@ export class LlamaCppProvider implements Provider {
       const args = parseToolArgs(entry.args)
       toolCalls.push({
         type: "toolCall",
-        id: entry.id || `call_${toolCalls.length}`,
+        id: entry.id || `call_${randomUUID()}`,
         name: entry.name,
         arguments: args,
       })

@@ -13,7 +13,7 @@ this page are verified against `apps/cli/src/index.ts` (the CLI entry point).
 ## Install
 
 ```sh
-npm install -g @shrijan/nemo-cli
+npm install -g @shrijanagain/nemo-cli
 ```
 
 The package installs two equivalent binaries — `nemo` and the short alias

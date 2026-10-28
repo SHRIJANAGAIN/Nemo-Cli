@@ -9,7 +9,7 @@ import { getConnectorRegistry } from "./registry.js"
 import { resolveMcpCommand } from "../../../../../packages/mcp/src/spawn-resolve.js"
 import { MCP_MAX_BUFFER_BYTES, type McpServerSpec } from "../../../../../packages/mcp/src/index.js"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
-import { textResult, type Tool, type ToolResult } from "../types.js"
+import { textResult, type Tool, type ToolContext, type ToolResult } from "../types.js"
 import { getSafeEnv } from "../../../../../packages/core/src/env_filter.js"
 
 type JsonRpcRequest = { jsonrpc: "2.0"; id: number; method: string; params?: unknown }
@@ -315,6 +315,75 @@ export function getMcpProcess(name: string, spec: McpServerSpec): McpProcess {
   return process
 }
 
+const MCP_ACTIONS = [
+  "list_tools",
+  "call_tool",
+  "connect",
+  "disconnect",
+  "status",
+  "list_resources",
+  "list_prompts",
+  "get_prompt",
+  "read_resource",
+] as const
+
+type McpAction = (typeof MCP_ACTIONS)[number]
+
+/**
+ * Spellings a model reaches for instead of the exact action name. Rejecting
+ * them wasted a whole turn: the call never reached the tool body, so the
+ * model got no list of what WAS possible and simply retried.
+ */
+const MCP_ACTION_ALIASES: Record<string, McpAction> = {
+  list: "list_tools",
+  tools: "list_tools",
+  tool_list: "list_tools",
+  run: "call_tool",
+  call: "call_tool",
+  invoke: "call_tool",
+  start: "connect",
+  stop: "disconnect",
+  health: "status",
+  resources: "list_resources",
+  prompts: "list_prompts",
+  prompt: "get_prompt",
+  read: "read_resource",
+  resource: "read_resource",
+}
+
+const MCP_ACTION_ENUM: string[] = [...MCP_ACTIONS, ...Object.keys(MCP_ACTION_ALIASES)]
+
+function normalizeMcpAction(action: string): McpAction | undefined {
+  const lower = action.toLowerCase().trim()
+  if ((MCP_ACTIONS as readonly string[]).includes(lower)) return lower as McpAction
+  return MCP_ACTION_ALIASES[lower]
+}
+
+/**
+ * Servers a session can actually reach: what the config declares plus the
+ * built-in catalog. Installed servers live in `config.mcpServers` — the
+ * registry alone could never run them.
+ */
+function knownServerIds(context?: ToolContext): string[] {
+  const ids = new Set<string>(Object.keys(context?.config?.mcpServers ?? {}))
+  for (const entry of getConnectorRegistry().load()) ids.add(entry.id)
+  return [...ids]
+}
+
+function resolveMcpServerSpec(serverId: string, context?: ToolContext): McpServerSpec | undefined {
+  const configured = context?.config?.mcpServers?.[serverId]
+  if (configured) return configured as McpServerSpec
+  return getConnectorRegistry().get(serverId)?.spec
+}
+
+function availableServersHint(context?: ToolContext, limit = 15): string {
+  const ids = knownServerIds(context)
+  if (ids.length === 0) return "No MCP servers are configured. Use mcp__install to add one."
+  const shown = ids.slice(0, limit)
+  const more = ids.length > shown.length ? `\n  …and ${ids.length - shown.length} more` : ""
+  return `Available MCP servers: ${shown.join(", ")}${more}`
+}
+
 export function createMcpRunnerTool(): Tool {
   const definition: ToolDefinition = {
     timeoutMs: 30_000,
@@ -327,19 +396,9 @@ export function createMcpRunnerTool(): Tool {
       properties: {
         action: {
           type: "string",
-          enum: [
-            "list_tools",
-            "call_tool",
-            "connect",
-            "disconnect",
-            "status",
-            "list_resources",
-            "list_prompts",
-            "get_prompt",
-            "read_resource",
-          ],
+          enum: MCP_ACTION_ENUM,
           description:
-            "Action: list_tools (list tools), call_tool (invoke), connect (start), disconnect (stop), status (health), list_resources (list resources), list_prompts (list prompts), get_prompt (get prompt), read_resource (read resource).",
+            "Action: list_tools (list tools), call_tool (invoke), connect (start), disconnect (stop), status (health), list_resources (list resources), list_prompts (list prompts), get_prompt (get prompt), read_resource (read resource). Short aliases (list, tools, call, run, start, stop, health, resources, prompts, prompt, read) are accepted too.",
         },
         server: {
           type: "string",
@@ -367,20 +426,59 @@ export function createMcpRunnerTool(): Tool {
 
   return {
     definition,
-    async execute(_id, args, _signal, _update): Promise<ToolResult> {
-      const action = args.action as string
+    async execute(_id, args, _signal, _update, context?: ToolContext): Promise<ToolResult> {
+      const rawAction = String(args.action ?? "")
+      const action = normalizeMcpAction(rawAction)
+      if (!action) {
+        return textResult(
+          `Unknown action '${rawAction}'. Valid actions: ${MCP_ACTIONS.join(", ")}.`,
+          /*isError*/ true,
+        )
+      }
       const serverId = args.server as string | undefined
+
+      if (action === "status" && !serverId) {
+        const ids = knownServerIds(context)
+        if (ids.length === 0) {
+          return textResult("No MCP servers are configured. Use mcp__install to add one.", /*isError*/ true)
+        }
+        const shown = ids.slice(0, 20)
+        const lines: string[] = []
+        for (const id of shown) {
+          const running = mcpProcesses.get(id)
+          if (!running) {
+            lines.push(`  ${id}: not running`)
+            continue
+          }
+          const status = await running.status()
+          lines.push(
+            `  ${id}: connected=${status.connected} transport=${status.transport} initialized=${status.initialized}`,
+          )
+        }
+        if (ids.length > shown.length) lines.push(`  …and ${ids.length - shown.length} more`)
+        return textResult(`MCP server status:\n${lines.join("\n")}`)
+      }
+
       if (action === "list_tools" || action === "connect" || action === "status") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
-        const registry = getConnectorRegistry()
-        const entry = registry.get(serverId)
-        if (!entry)
+        if (!serverId) {
+          // "list" was almost always meant as "which servers are there?".
+          // Answering that is far more useful than an error the model can
+          // only retry against the same missing argument.
+          if (action === "list_tools") {
+            return textResult(
+              `No 'server' given. ${availableServersHint(context)}\nPass one of these as "server" to list its tools.`,
+            )
+          }
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
+        }
+        const spec = resolveMcpServerSpec(serverId, context)
+        if (!spec)
           return textResult(
-            `MCP server '${serverId}' not found in registry. Use nemo__ToolSearch to find servers.`,
+            `MCP server '${serverId}' is not available.\n${availableServersHint(context)}`,
             /*isError*/ true,
           )
 
-        const process = getMcpProcess(serverId, entry.spec)
+        const process = getMcpProcess(serverId, spec)
         try {
           if (action === "connect") {
             await process.connect()
@@ -415,16 +513,20 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "call_tool") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
+        if (!serverId)
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
         const toolName = args.tool as string | undefined
         const toolArgs = (args.args ?? {}) as Record<string, unknown>
         if (!toolName) return textResult("Missing 'tool' parameter.", /*isError*/ true)
 
-        const registry = getConnectorRegistry()
-        const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
+        const spec = resolveMcpServerSpec(serverId, context)
+        if (!spec)
+          return textResult(
+            `MCP server '${serverId}' is not available.\n${availableServersHint(context)}`,
+            /*isError*/ true,
+          )
 
-        const process = getMcpProcess(serverId, entry.spec)
+        const process = getMcpProcess(serverId, spec)
         try {
           const result = await process.callTool(toolName, toolArgs)
           const text = ((result as { content?: Array<{ type?: string; text?: string }> }).content ?? [])
@@ -442,7 +544,8 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "disconnect") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
+        if (!serverId)
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
         const process = mcpProcesses.get(serverId)
         if (!process) return textResult(`MCP server '${serverId}' is not running.`)
         process.close()
@@ -451,11 +554,15 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "list_resources") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
-        const registry = getConnectorRegistry()
-        const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
-        const process = getMcpProcess(serverId, entry.spec)
+        if (!serverId)
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
+        const spec = resolveMcpServerSpec(serverId, context)
+        if (!spec)
+          return textResult(
+            `MCP server '${serverId}' is not available.\n${availableServersHint(context)}`,
+            /*isError*/ true,
+          )
+        const process = getMcpProcess(serverId, spec)
         try {
           const resources = await process.listResources()
           if (resources.length === 0) return textResult(`MCP server '${serverId}' exposes no resources.`)
@@ -468,11 +575,15 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "list_prompts") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
-        const registry = getConnectorRegistry()
-        const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
-        const process = getMcpProcess(serverId, entry.spec)
+        if (!serverId)
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
+        const spec = resolveMcpServerSpec(serverId, context)
+        if (!spec)
+          return textResult(
+            `MCP server '${serverId}' is not available.\n${availableServersHint(context)}`,
+            /*isError*/ true,
+          )
+        const process = getMcpProcess(serverId, spec)
         try {
           const prompts = await process.listPrompts()
           if (prompts.length === 0) return textResult(`MCP server '${serverId}' exposes no prompts.`)
@@ -485,13 +596,17 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "get_prompt") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
+        if (!serverId)
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
         const promptName = args.name as string | undefined
         if (!promptName) return textResult("Missing 'name' parameter.", /*isError*/ true)
-        const registry = getConnectorRegistry()
-        const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
-        const process = getMcpProcess(serverId, entry.spec)
+        const spec = resolveMcpServerSpec(serverId, context)
+        if (!spec)
+          return textResult(
+            `MCP server '${serverId}' is not available.\n${availableServersHint(context)}`,
+            /*isError*/ true,
+          )
+        const process = getMcpProcess(serverId, spec)
         try {
           const promptArgs =
             typeof args.args === "object" && args.args !== null ? (args.args as Record<string, string>) : undefined
@@ -508,13 +623,17 @@ export function createMcpRunnerTool(): Tool {
       }
 
       if (action === "read_resource") {
-        if (!serverId) return textResult("Missing 'server' parameter.", /*isError*/ true)
+        if (!serverId)
+          return textResult(`Missing 'server' parameter.\n${availableServersHint(context)}`, /*isError*/ true)
         const uri = args.uri as string | undefined
         if (!uri) return textResult("Missing 'uri' parameter.", /*isError*/ true)
-        const registry = getConnectorRegistry()
-        const entry = registry.get(serverId)
-        if (!entry) return textResult(`MCP server '${serverId}' not found in registry.`, /*isError*/ true)
-        const process = getMcpProcess(serverId, entry.spec)
+        const spec = resolveMcpServerSpec(serverId, context)
+        if (!spec)
+          return textResult(
+            `MCP server '${serverId}' is not available.\n${availableServersHint(context)}`,
+            /*isError*/ true,
+          )
+        const process = getMcpProcess(serverId, spec)
         try {
           const content = await process.readResource(uri)
           return textResult(content || "(empty resource)")
@@ -524,7 +643,10 @@ export function createMcpRunnerTool(): Tool {
         }
       }
 
-      return textResult(`Unknown action: ${action}.`, /*isError*/ true)
+      return textResult(
+        `Unknown action: ${rawAction}. Valid actions: ${MCP_ACTIONS.join(", ")}.`,
+        /*isError*/ true,
+      )
     },
   }
 }

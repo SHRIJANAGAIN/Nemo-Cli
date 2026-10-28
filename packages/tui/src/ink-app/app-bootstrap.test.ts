@@ -14,6 +14,7 @@ import { Box, render } from "ink"
 import {
   ALT_SCREEN_ENTER,
   ALT_SCREEN_LEAVE,
+  agentMessagesToRows,
   convertToAgentMessages,
   createAgentConfig,
   enterAltScreen,
@@ -23,6 +24,7 @@ import {
   MIN_USABLE_ROWS,
   readLiveWindowSize,
   resolveAltScreen,
+  resumeQuery,
   syncWindowSizeCache,
   useResizingFlag,
   WELCOME_COMPACT_BELOW_ROWS,
@@ -574,3 +576,99 @@ describe.skip("App alt-screen scroll wiring (source pins the contract)", () => {
     expect(src).toContain("scrollDepth:");
   });
 });
+
+describe("agentMessagesToRows (transcript → live rows)", () => {
+  const callThenResult = [
+    {
+      role: "assistant",
+      content: [
+        { type: "text", text: "Working on it." },
+        { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+      ],
+      stopReason: "tool_use",
+    },
+    {
+      role: "tool",
+      toolCallId: "call_1",
+      toolName: "bash",
+      content: [{ type: "text", text: "file.txt" }],
+      isError: false,
+    },
+  ] as never
+
+  test("folds each tool result back into its own call row", () => {
+    // A transcript stores the prose and the call in ONE assistant message plus
+    // a separate tool row. Rendered raw, that showed the args JSON as assistant
+    // prose and the result nowhere.
+    const rows = agentMessagesToRows(callThenResult)
+    expect(rows.map((r) => r.role)).toEqual(["assistant", "assistant"])
+    const call = rows[1]!
+    expect(call.toolCallId).toBe("call_1")
+    expect(call.toolName).toBe("bash")
+    expect(JSON.parse(call.content)).toEqual({ command: "ls" })
+    expect(call.result).toBe("file.txt")
+    expect(call.toolStatus).toBe("completed")
+    expect(rows[0]!.content).toBe("Working on it.")
+  })
+
+  test("settles a call whose result never landed", () => {
+    const rows = agentMessagesToRows([
+      {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call_9", name: "read", arguments: {} }],
+        stopReason: "tool_use",
+      },
+    ] as never)
+    expect(rows[0]!.toolStatus).toBe("completed")
+  })
+
+  test("keeps an orphan tool result as its own row and drops system rows", () => {
+    const rows = agentMessagesToRows([
+      { role: "system", content: "prompt" },
+      {
+        role: "tool",
+        toolCallId: "call_missing",
+        toolName: "bash",
+        content: [{ type: "text", text: "orphan" }],
+        isError: true,
+      },
+    ] as never)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.role).toBe("tool")
+    expect(rows[0]!.toolStatus).toBe("error")
+  })
+
+  test("round-trips so the agent keeps the tool result", () => {
+    // The resumed agent must receive toolCall + tool result, not the args JSON
+    // as prose — that is what convertToAgentMessages rebuilds from live rows.
+    const rows = agentMessagesToRows(callThenResult)
+    const agentMessages = convertToAgentMessages(rows)
+    const toolMsg = agentMessages.find((m) => m.role === "tool") as { content: Array<{ text: string }> } | undefined
+    expect(toolMsg?.content[0]?.text).toBe("file.txt")
+    const callMsg = agentMessages.find(
+      (m) => m.role === "assistant" && (m as { content: Array<{ type: string }> }).content.some((p) => p.type === "toolCall"),
+    ) as { content: Array<{ type: string; arguments?: Record<string, unknown> }> } | undefined
+    expect(callMsg?.content.some((p) => p.type === "toolCall" && p.arguments?.command === "ls")).toBe(true)
+    expect(rows.some((r) => r.content === "Working on it.")).toBe(true)
+  })
+})
+
+describe("resumeQuery", () => {
+  const row = (content: string): NemoMessage =>
+    ({ id: content, timestamp: 0, role: "user", content }) as NemoMessage
+
+  test("ranks memory against the tail, not the head", () => {
+    // The topic of a long chat is at the end; the first turns are old news, so
+    // the whole transcript diluted what memory the resumed session got.
+    const msgs = [row("setup the repo"), row("fix the parser"), ...Array.from({ length: 10 }, (_, i) => row(`turn ${i}`)), row("deploy to ap-south-1")]
+    const q = resumeQuery(msgs)
+    expect(q).toContain("deploy to ap-south-1")
+    expect(q).not.toContain("setup the repo")
+  })
+
+  test("collapses whitespace and caps the length", () => {
+    expect(resumeQuery([row("a\n\n  b\t\tc")])).toBe("a b c")
+    expect(resumeQuery([row("x".repeat(5000))]).length).toBeLessThanOrEqual(200)
+    expect(resumeQuery(Array.from({ length: 20 }, () => row("y".repeat(300)))).length).toBeLessThanOrEqual(600)
+  })
+})

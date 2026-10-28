@@ -46,10 +46,22 @@ export async function installMcpServer(
   const registry = getConnectorRegistry()
   const entry = registry.get(serverId)
   if (!entry) {
+    const available = registry
+      .load()
+      .map((c) => c.id)
+      .slice(0, 20)
     return {
       server: serverId,
       status: "failed",
-      message: `MCP server '${serverId}' not found in registry. Use /mcp search to find available servers.`,
+      message: `MCP server '${serverId}' not found in registry. Available servers: ${available.join(", ")}. Use /mcp search to find more.`,
+    }
+  }
+
+  if (config?.mcpServers?.[serverId]) {
+    return {
+      server: serverId,
+      status: "already_installed",
+      message: `MCP server '${serverId}' is already installed and saved to nemo config.`,
     }
   }
 
@@ -191,7 +203,7 @@ export function createMcpInstallTool(): Tool {
     timeoutMs: 300_000,
     name: "mcp__install",
     description:
-      "Install and manage MCP (Model Context Protocol) servers. Use /mcp search to find servers, /mcp install <id> to install, /mcp list to see available.",
+      "Install and manage MCP (Model Context Protocol) servers. Call this tool with action=search and a query to find servers, action=install with the server id to install one, action=list to see every available server, action=info for one server's details.",
     parameters: {
       type: "object",
       required: ["action"],
@@ -224,8 +236,21 @@ export function createMcpInstallTool(): Tool {
 
       if (action === "search") {
         const results = searchMcpServers(query || "mcp")
-        if (results.length === 0) return textResult(`No MCP servers found for '${query}'.`)
-        const lines = results.map((c) => `  ${c.id}: ${c.description} [${c.category}]`)
+        if (results.length === 0) {
+          // A search that returns nothing strands the model: it has no id to
+          // install and no hint that the catalog simply did not match. Fall
+          // back to the full catalog so the next call has a target.
+          const all = listAvailableMcpServers()
+          const lines = all.map((c) => `  ${c.id}: ${c.description} [${c.category}]`)
+          return textResult(
+            `No MCP server matched '${query}'. Showing all ${all.length} available servers:\n${lines.join("\n")}`,
+          )
+        }
+        const shown = results.slice(0, 20)
+        const lines = shown.map((c) => `  ${c.id}: ${c.description} [${c.category}]`)
+        if (results.length > shown.length) {
+          lines.push(`  …and ${results.length - shown.length} more (use action "list" for the full catalog)`)
+        }
         return textResult(`Found ${results.length} MCP servers:\n${lines.join("\n")}`)
       }
 

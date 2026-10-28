@@ -9,6 +9,7 @@ import * as path from "path"
 import type { ToolDefinition } from "../../../../../packages/protocol/src/index.js"
 import { resolveConstrainedPath, textResult, type Tool, type ToolContext } from "../types.js"
 import { matchGlob, walkFiles } from "../file-edit/fs-walk.js"
+import { resolveSearchRoot } from "../search/search-root.js"
 
 /**
  * Offline symbol index (legacy semantic-search parity, dependency-free
@@ -156,7 +157,7 @@ export function searchSymbols(root: string, name: string, opts: SymbolSearchOpti
   const maxResults = opts.maxResults ?? 60
   const needle = opts.ignoreCase ? name.toLowerCase() : name
   const hits: SymbolHit[] = []
-  walkFiles(root, (abs, rel) => {
+  const scan = (abs: string, rel: string): void => {
     if (hits.length >= maxResults) return
     if (!matchGlob(glob, rel)) return
     if (languageOf(rel) === null) return
@@ -181,7 +182,12 @@ export function searchSymbols(root: string, name: string, opts: SymbolSearchOpti
       if (candidate !== needle) continue
       hits.push({ file: rel, line: symbol.line, kind: symbol.kind, name: symbol.name, signature: symbol.signature })
     }
-  })
+  }
+  // A file root is scanned directly — the walker only ever yields files
+  // inside a directory.
+  const searchRoot = resolveSearchRoot(root)
+  if (searchRoot.isFile && searchRoot.file) scan(searchRoot.file, path.basename(searchRoot.file))
+  else walkFiles(root, scan)
   return hits
 }
 

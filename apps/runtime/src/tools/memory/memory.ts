@@ -7,6 +7,7 @@
 import * as fs from "fs"
 import * as os from "os"
 import path from "path"
+import { createHash } from "crypto"
 
 import { Tool } from "../types.js"
 import type { ToolResult } from "../types.js"
@@ -100,8 +101,78 @@ function nextMemId(entries: MemoryEntry[]): string {
   return `MEM-${String(max + 1).padStart(8, "0")}`
 }
 
-function parseMemoryMd(raw: string): MemoryEntry[] {
+/** Metadata keys the block parser recognises. A line that is not one of
+ *  these ends the metadata section, so a memory body that starts with a
+ *  bullet ("- Fix the parser: later") is never mistaken for metadata. */
+const MEMORY_META_KEYS = new Set([
+  "created",
+  "category",
+  "title",
+  "confidence",
+  "source",
+  "last_used",
+  "use_count",
+  "tags",
+  "links",
+  "expires",
+])
+
+/** One-line-safe metadata value: a newline would split the block and the
+ *  parser would read the remainder as the body. */
+function oneLine(value: string | undefined): string {
+  return (value ?? "").replace(/[\r\n]+/g, " ").trim()
+}
+
+function parseBracketList(raw: string | undefined): string[] {
+  if (!raw) return []
+  const inner = raw.trim().replace(/^\[/, "").replace(/\]$/, "")
+  return inner
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+}
+
+/** Prose that only the store's OWN header carries. A block whose body is the
+ *  header is a phantom the legacy serializer wrote back into the store — the
+ *  file describing itself, not a memory the user asked to keep. */
+const PHANTOM_BODY_MARKERS = [
+  "This is the **active** memory store",
+  "This file is the **canonical** summarized memory store",
+]
+
+/** The schema illustration in the store header ends with this line. */
+const SCHEMA_BODY_MARKER = "Free-form body"
+
+/** A body that STARTS with a metadata line is a metadata block, not a memory:
+ *  the legacy serializer wrote the front-matter twice and the body was lost. */
+const METADATA_BODY_START = /^- (created|category|title|confidence|source|last_used|use_count|tags|links|expires):/
+
+/** True when a block body carries a memory worth keeping. */
+function isRealBody(content: string): boolean {
+  const trimmed = content.trim()
+  if (!trimmed) return false
+  if (METADATA_BODY_START.test(trimmed)) return false
+  if (content.includes(SCHEMA_BODY_MARKER)) return false
+  return !PHANTOM_BODY_MARKERS.some((marker) => content.includes(marker))
+}
+
+/** Stable id for a block whose own id is unusable — derived from the body so
+ *  repeated loads of the same file produce the same id (no duplicates). */
+function recoveredId(content: string): string {
+  return `mem_${createHash("sha1").update(content).digest("hex").slice(0, 10)}`
+}
+
+export interface ParsedMemoryMd {
+  readonly entries: MemoryEntry[]
+  /** Blocks that looked like entries but carried no memory (header phantoms,
+   *  metadata-only rows). A non-zero count means the file is still in the
+   *  legacy shape and can be rewritten in the canonical one. */
+  readonly dropped: number
+}
+
+function parseMemoryMd(raw: string): ParsedMemoryMd {
   const entries: MemoryEntry[] = []
+  let dropped = 0
   // serializeMemoryMd prepends a prose header whose fenced schema block
   // contains a literal `### MEM-YYYYMMDD-NNN` line — splitting the WHOLE file
   // fed the header text and the schema fragment back as phantom entries (the
@@ -112,37 +183,52 @@ function parseMemoryMd(raw: string): MemoryEntry[] {
   const marker = "## Active entries"
   const start = raw.indexOf(marker)
   const body = start >= 0 ? raw.slice(start) : raw
-  const blocks = body.split(/^### /m).filter((b) => {
-    if (b.trim().length === 0) return false
-    // The section under the marker STARTS with the preamble ("## Active
-    // entries" + the do-not-edit comment) which parses as a block with a junk
-    // id. Keep only blocks whose id is a real entry id — the tool writes
-    // mem_<rand> (save) or MEM-<digits> (nextMemId).
-    const blockId = b.match(/^([^\n]+)\n/)?.[1]?.trim() ?? ""
-    return /^(mem_[a-z0-9]+|MEM-\d+)$/.test(blockId)
-  })
+  // The chunk before the first "### " is the preamble ("## Active entries" plus
+  // the do-not-edit comment), not an entry. A file that STARTS with an entry
+  // has an empty preamble and keeps every chunk.
+  const chunks = body.split(/^### /m)
+  const preamble = /^\s*##\s/.test(chunks[0] ?? "")
+  const blocks = (preamble ? chunks.slice(1) : chunks).filter((b) => b.trim().length > 0)
   for (const block of blocks) {
     const idMatch = block.match(/^([^\n]+)\n/)
-    const id = idMatch ? idMatch[1].trim() : `mem_${Math.random().toString(36).slice(2, 9)}`
-    const categoryMatch = block.match(/- category:\s*(\w+)/)
-    const createdMatch = block.match(/- created:\s*([^\n]+)/)
-    // The serializer writes FIVE metadata keys after `category` (confidence,
-    // source, last_used, use_count, tags); the old {6} never matched, so the
-    // metadata block leaked into `content`.
-    const bodyMatch = block.match(/- category:[^\n]+\n(?:- [^\n]+\n){5}\n?([\s\S]*)/)
-    const content = bodyMatch ? bodyMatch[1].trim() : block.replace(/^[^\n]+\n/, "").trim()
-    const category = (categoryMatch?.[1] as MemoryEntry["category"]) ?? "context"
-    const timestamp = createdMatch?.[1]?.trim() ?? new Date().toISOString()
-    const tagsMatch = block.match(/- tags:\s*\[([^\]]*)\]/)
-    const tags = tagsMatch
-      ? tagsMatch[1]
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : []
-    entries.push({ id, content, category, timestamp, tags, createdAt: timestamp })
+    const rawId = idMatch ? idMatch[1].trim() : ""
+    // The metadata section is the run of `- key: value` lines after the id,
+    // terminated by the blank line the serializer writes before the body.
+    // Parsing it by KEY instead of by line count is what lets the title, the
+    // tags and the expiry survive a save -> load round trip; the old fixed
+    // count silently dropped every field the serializer did not write, which
+    // is why a saved title came back as `undefined`.
+    const lines = block.split(/\r?\n/)
+    const meta: Record<string, string> = {}
+    let i = 1
+    for (; i < lines.length; i++) {
+      const line = lines[i]
+      if (line.trim() === "") {
+        i++
+        break
+      }
+      const m = /^- ([A-Za-z_][A-Za-z0-9_]*):\s?(.*)$/.exec(line)
+      if (!m || !MEMORY_META_KEYS.has(m[1])) break
+      meta[m[1]] = m[2].trim()
+    }
+    const content = lines.slice(i).join("\n").trim()
+    // A block with no real body is a lost entry (or a header phantom). It is
+    // dropped, and counted, so the store can be repaired instead of staying
+    // unreadable forever — which is what left the live store empty.
+    if (!isRealBody(content)) {
+      dropped++
+      continue
+    }
+    const id = /^(mem_[a-z0-9]+|MEM-\d+)$/.test(rawId) ? rawId : recoveredId(content)
+    const category = (meta.category as MemoryEntry["category"]) ?? "context"
+    const timestamp = meta.created ?? new Date().toISOString()
+    const tags = parseBracketList(meta.tags)
+    const links = [...new Set([...parseBracketList(meta.links), ...extractLinks(content)])]
+    const title = meta.title && meta.title.length > 0 ? meta.title : undefined
+    const frontmatter = meta.expires ? { expires: meta.expires } : undefined
+    entries.push({ id, content, category, timestamp, tags, createdAt: timestamp, title, links, frontmatter })
   }
-  return entries
+  return { entries, dropped }
 }
 
 function serializeMemoryMd(entries: MemoryEntry[]): string {
@@ -158,11 +244,13 @@ Each entry is a fenced block with a YAML-like front-matter and a free-form body:
 ### MEM-YYYYMMDD-NNN
 - created: 2026-09-03T10:00:00Z
 - category: preference | fact | project | person | tool | workflow
+- title: Short human title
 - confidence: 0.0-1.0
 - source: user | inferred | imported
 - last_used: 2026-09-03T10:00:00Z
 - use_count: 0
 - tags: [comma, separated]
+- links: [wiki, style, links]
 
 Free-form body — the actual memory.
 \`\`\`
@@ -178,16 +266,20 @@ The agent uses \`4-mem/memory.ts loadMemory\` to inject relevant entries into th
     .map((m) => {
       const cat = m.category ?? "context"
       const created = m.timestamp ?? new Date().toISOString()
-      return `### ${m.id}
-- created: ${created}
-- category: ${cat}
-- confidence: 1.0
-- source: user
-- last_used: ${new Date().toISOString()}
-- use_count: 0
-- tags: []
-
-${m.content}`
+      const meta = [
+        `- created: ${created}`,
+        `- category: ${cat}`,
+        `- title: ${oneLine(m.title)}`,
+        `- confidence: 1.0`,
+        `- source: user`,
+        `- last_used: ${new Date().toISOString()}`,
+        `- use_count: 0`,
+        `- tags: [${(m.tags ?? []).map(oneLine).filter(Boolean).join(", ")}]`,
+        `- links: [${(m.links ?? []).map(oneLine).filter(Boolean).join(", ")}]`,
+      ]
+      const expires = oneLine(m.frontmatter?.expires)
+      if (expires) meta.push(`- expires: ${expires}`)
+      return `### ${m.id}\n${meta.join("\n")}\n\n${m.content}`
     })
     .join("\n\n")
   return header + body + "\n"
@@ -195,23 +287,76 @@ ${m.content}`
 
 export function loadMemory(): MemoryEntry[] {
   try {
-    if (fs.existsSync(useMemoryFile())) {
-      const raw = fs.readFileSync(useMemoryFile(), "utf8")
-      const parsed = parseMemoryMd(raw)
-      if (parsed.length > 0) return parsed.filter((e) => !isExpiredEntry(e))
-    }
-    if (fs.existsSync(memoryFile())) {
-      const raw = fs.readFileSync(memoryFile(), "utf8")
-      const legacy = JSON.parse(raw) as MemoryEntry[]
-      if (Array.isArray(legacy) && legacy.length > 0) {
-        const active = legacy.filter((e) => !isExpiredEntry(e))
-        saveMemory(active)
-        return active
-      }
-    }
-    return []
+    const md = readMdStore()
+    const legacy = readLegacyStore()
+    const merged = mergeEntries(md.entries, legacy)
+    // A store that still parses in the legacy shape lost every entry it
+    // carried. Rewrite it once in the canonical shape; afterwards it parses
+    // cleanly and the store is usable again.
+    if (md.dropped > 0) repairMemoryStore(merged)
+    return merged.filter((e) => !isExpiredEntry(e))
   } catch {
     return []
+  }
+}
+
+function readMdStore(): ParsedMemoryMd {
+  const file = useMemoryFile()
+  if (!fs.existsSync(file)) return { entries: [], dropped: 0 }
+  return parseMemoryMd(fs.readFileSync(file, "utf8"))
+}
+
+function readLegacyStore(): MemoryEntry[] {
+  const file = memoryFile()
+  if (!fs.existsSync(file)) return []
+  const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as MemoryEntry[]
+  if (!Array.isArray(parsed)) return []
+  return parsed.filter((e) => e && typeof e.content === "string")
+}
+
+/** Merge the MD store with the JSON sidecar, newest last.
+ *
+ *  The two stores are written together but not equally durable: the MD lives
+ *  next to the install (read-only in a hardened setup), the JSON lives in the
+ *  user's home. When the MD write fails, the sidecar is the only place the
+ *  memory survived — so both are read and merged by id, and the union is
+ *  ordered by creation time so "the last N entries" means "the newest N".
+ */
+function mergeEntries(primary: MemoryEntry[], secondary: MemoryEntry[]): MemoryEntry[] {
+  const byId = new Map<string, MemoryEntry>()
+  for (const entry of primary) {
+    if (entry.id) byId.set(entry.id, entry)
+  }
+  for (const entry of secondary) {
+    if (!entry.id) continue
+    if (!byId.has(entry.id)) byId.set(entry.id, entry)
+  }
+  const seen = new Set<string>()
+  const out: MemoryEntry[] = []
+  for (const entry of byId.values()) {
+    const key = contentKey(entry)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(entry)
+  }
+  out.sort((a, b) => entryTime(a) - entryTime(b))
+  return out
+}
+
+function entryTime(entry: MemoryEntry): number {
+  const raw = entry.timestamp ?? entry.createdAt
+  const parsed = raw ? Date.parse(raw) : NaN
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
+/** Rewrite the MD store in the canonical shape (best effort — a read-only
+ *  install dir must never break a read). */
+function repairMemoryStore(entries: MemoryEntry[]): void {
+  try {
+    fs.mkdirSync(path.dirname(useMemoryFile()), { recursive: true })
+    fs.writeFileSync(useMemoryFile(), serializeMemoryMd(entries), "utf8")
+  } catch {
+    /* keep the JSON sidecar as the source of truth */
   }
 }
 
@@ -221,8 +366,6 @@ export function saveMemory(entries: MemoryEntry[]): void {
   // neither exists — mkdir-ing only the first made the memory.json write
   // below throw ENOENT (caught by the harness as a broken tool). Each writer
   // creates its own directory.
-  fs.mkdirSync(path.dirname(useMemoryFile()), { recursive: true })
-  fs.mkdirSync(path.dirname(memoryFile()), { recursive: true })
   const active = entries.filter((e) => !isExpiredEntry(e))
   const seen = new Set<string>()
   const deduped: MemoryEntry[] = []
@@ -233,8 +376,17 @@ export function saveMemory(entries: MemoryEntry[]): void {
       deduped.push(e)
     }
   }
-  fs.writeFileSync(useMemoryFile(), serializeMemoryMd(deduped), "utf8")
+  // The JSON sidecar is written FIRST: it lives in the user's home and is
+  // always writable, while the MD store sits next to the install and can be
+  // read-only. A failed MD write must not take the memory down with it.
+  fs.mkdirSync(path.dirname(memoryFile()), { recursive: true })
   fs.writeFileSync(memoryFile(), JSON.stringify(deduped, null, 2), "utf8")
+  try {
+    fs.mkdirSync(path.dirname(useMemoryFile()), { recursive: true })
+    fs.writeFileSync(useMemoryFile(), serializeMemoryMd(deduped), "utf8")
+  } catch {
+    /* the sidecar already holds the memory */
+  }
 }
 
 export function addMemory(
@@ -317,12 +469,11 @@ export function recallMemory(query: string, topK = 10): MemoryEntry[] {
 }
 
 export function getTokenSafeContext(maxTokens = 4096, query?: string): string {
-  let candidates = loadActiveMemories()
-  if (query) candidates = recallMemory(query, candidates.length)
+  const candidates = pickContextEntries(64, query)
   const lines: string[] = []
   let totalTokens = 0
   for (const m of candidates) {
-    const snippet = `  - [${m.category}] ${m.content.slice(0, 150)}`
+    const snippet = `  - [${m.category ?? "context"}] ${contextText(m)}`
     const tokens = countTokens(snippet)
     if (totalTokens + tokens > maxTokens && lines.length > 0) break
     lines.push(snippet)
@@ -336,10 +487,50 @@ export function searchMemory(query: string): MemoryEntry[] {
   return recallMemory(query, 50)
 }
 
-export function getContextBlock(maxEntries = 8): string {
-  const entries = loadActiveMemories().slice(-maxEntries)
+/** One context line per memory: the title (when it has one) then the body. */
+function contextText(entry: MemoryEntry): string {
+  const body = entry.content.replace(/\s+/g, " ").trim().slice(0, 150)
+  const title = entry.title?.trim()
+  // The save path defaults the title to the body's first words, so the same
+  // text would otherwise be printed twice.
+  if (!title || body.startsWith(title)) return body
+  return `${title}: ${body}`
+}
+
+/** The memories that go into the prompt.
+ *
+ *  Without a query that is simply the newest N. With one, the relevant
+ *  memories come first and the remaining slots are filled with the newest
+ *  ones — a resumed session surfaces what it is about without losing the
+ *  recency the plain block relies on.
+ */
+function pickContextEntries(maxEntries: number, query?: string): MemoryEntry[] {
+  const all = loadActiveMemories()
+  if (all.length === 0) return []
+  const q = (query ?? "").trim()
+  if (!q) return all.slice(-maxEntries)
+  const ranked = recallMemory(q, all.length)
+  if (ranked.length === 0) return all.slice(-maxEntries)
+  const chosen: MemoryEntry[] = []
+  const used = new Set<string>()
+  for (const entry of ranked) {
+    if (chosen.length >= maxEntries) break
+    chosen.push(entry)
+    used.add(entry.id)
+  }
+  for (let i = all.length - 1; i >= 0 && chosen.length < maxEntries; i--) {
+    const entry = all[i]!
+    if (used.has(entry.id)) continue
+    chosen.push(entry)
+    used.add(entry.id)
+  }
+  return chosen
+}
+
+export function getContextBlock(maxEntries = 8, query?: string): string {
+  const entries = pickContextEntries(maxEntries, query)
   if (entries.length === 0) return ""
-  const lines = entries.map((m) => `  - [${m.category}] ${m.content.slice(0, 150)}`)
+  const lines = entries.map((m) => `  - [${m.category ?? "context"}] ${contextText(m)}`)
   return ["## Persistent memory:", ...lines].join("\n")
 }
 
@@ -360,6 +551,15 @@ export function importMemory(raw: string): number {
   } catch {
     return 0
   }
+}
+
+/** Display label for an entry: the title when it has one, otherwise the head
+ *  of the body. An entry without a title used to render as the literal
+ *  string "undefined" in `memory list`. */
+export function memoryLabel(entry: MemoryEntry): string {
+  const title = entry.title?.trim()
+  if (title) return title
+  return entry.content.replace(/\s+/g, " ").trim().slice(0, 48) || "(empty)"
 }
 
 function contentKey(entry: { content: string; title?: string; category?: string }): string {
@@ -545,7 +745,7 @@ export function createMemoryTool(): Tool {
           if (!q) return { isError: true, content: [{ type: "text", text: "memory.search: 'query' is required" }] }
           const hits = searchMemory(a.query ?? "")
           const text = hits.length
-            ? hits.map((m) => `[${m.id}] ${m.title}: ${m.content}`).join("\n")
+            ? hits.map((m) => `[${m.id}] ${memoryLabel(m)}: ${m.content}`).join("\n")
             : `No memories match "${a.query}"`
           return { isError: false, content: [{ type: "text", text }] }
         }
@@ -554,7 +754,7 @@ export function createMemoryTool(): Tool {
             ? entries
                 .map(
                   (m) =>
-                    `[${m.id}] ${m.title} (${m.createdAt.slice(0, 10)})${m.links?.length ? ` -> ${m.links.join(", ")}` : ""}`,
+                    `[${m.id}] ${memoryLabel(m)} (${m.createdAt.slice(0, 10)})${m.links?.length ? ` -> ${m.links.join(", ")}` : ""}`,
                 )
                 .join("\n")
             : "Memory is empty."

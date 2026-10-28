@@ -278,8 +278,6 @@ const DEFAULTS: NemoConfig = {
       { tool: "bash", pattern: "reboot", allow: false },
       { tool: "bash", pattern: "sudo", allow: false },
       { tool: "bash", pattern: "su", allow: false },
-      { tool: "write_file", pattern: "*", allow: false },
-      { tool: "edit_file", pattern: "*", allow: false },
     ],
     askByDefault: true,
   },
@@ -1206,12 +1204,51 @@ function sanitizeConfig(cfg: NemoConfig): NemoConfig {
   } catch {
     /* best effort */
   }
-  // #38: warn when the RESOLVED cwd is a system location, so `--cwd /` or
-  // `NEMO_CWD=/etc` cannot silently re-root every path-relative tool. Fires
-  // here rather than at the option-parse site so the value that actually took
-  // effect is the one checked.
+  // `/provider key` stores keys per backend in `providers[]`; the flat
+  // `apiKey` only mirrors the active one. When the two drift (a saved profile
+  // that was never re-applied) every turn died with "No NVIDIA API key
+  // configured" while the key sat on disk.
+  if (!safe.apiKey && safe.providers?.length) {
+    const wanted = [safe.activeProviderId, safe.provider]
+      .filter((v): v is string => typeof v === "string" && v.length > 0)
+      .map((v) => v.toLowerCase())
+    const entry =
+      safe.providers.find((p) => wanted.includes(p.id.toLowerCase())) ??
+      safe.providers.find((p) => p.type !== undefined && wanted.includes(p.type.toLowerCase()))
+    if (entry?.apiKey) safe.apiKey = entry.apiKey
+  }
+  // Older builds shipped blanket `{tool: "write_file"|"edit_file", pattern: "*", allow: false}`
+  // rules as DEFAULTS, and those rules were persisted into user configs. A
+  // default-layer deny beats the approval ladder, so every write call died with
+  // "permission denied by rule [default]" and the agent could not touch a file
+  // at all — while the same rules never appeared in a fresh install that had no
+  // saved config. Dropping them here upgrades those configs in place; scoped
+  // denies (a real path pattern) are left alone.
+  safe.permissions = stripStockWriteDenies(safe.permissions)
   warnOnRiskyCwd(safe.cwd)
   return safe
+}
+
+const STOCK_WRITE_DENY_TOOLS = new Set(["write_file", "edit_file"])
+
+function isStockWriteDeny(tool: unknown, pattern: unknown, denied: boolean): boolean {
+  if (!denied || typeof tool !== "string") return false
+  if (!STOCK_WRITE_DENY_TOOLS.has(tool.toLowerCase())) return false
+  return pattern === undefined || pattern === "" || pattern === "*"
+}
+
+function stripStockWriteDenies(
+  perms: NemoConfig["permissions"],
+): NemoConfig["permissions"] {
+  if (!perms) return perms
+  const rules = Array.isArray(perms.rules)
+    ? perms.rules.filter((r) => !isStockWriteDeny(r.tool, r.pattern, r.allow === false))
+    : perms.rules
+  const rulesV2 = Array.isArray(perms.rulesV2)
+    ? perms.rulesV2.filter((r) => !isStockWriteDeny(r.tool, r.pattern, r.action === "deny"))
+    : perms.rulesV2
+  if (rules === perms.rules && rulesV2 === perms.rulesV2) return perms
+  return { ...perms, rules, rulesV2 }
 }
 
 /**
