@@ -145,7 +145,6 @@ describe("server licensing client", () => {
   })
 
   async function stub(routes: Record<string, (body: Record<string, unknown>) => { status: number; json: unknown }>) {
-    const table = new Map(Object.entries(routes))
     const seen: Array<{ url: string; body: Record<string, unknown> }> = []
     const server = createServer((req, res) => {
       let data = ""
@@ -153,7 +152,8 @@ describe("server licensing client", () => {
         data += c.toString()
       })
       req.on("end", () => {
-        const handler = table.get(req.url ?? "")
+        const key = req.url ?? ""
+        const handler = Object.prototype.hasOwnProperty.call(routes, key) ? routes[key] : undefined
         if (!handler) {
           res.writeHead(404, { "Content-Type": "application/json" })
           res.end(JSON.stringify({ error: "not found" }))

@@ -56,6 +56,36 @@ const COMMAND_WRAPPERS: ReadonlySet<string> = new Set([
 /** Flags that take a value we must not mistake for the wrapped command. */
 const VALUE_TAKING_FLAGS: ReadonlySet<string> = new Set(["-c", "--command", "/c", "/k", "/e", "-command", "/command"])
 
+function isWrapperName(head: string): boolean {
+  const lower = head.toLowerCase()
+  return COMMAND_WRAPPERS.has(lower) || COMMAND_WRAPPERS.has(lower.split(/[\\/]/).pop() ?? lower)
+}
+
+/**
+ * Detect the `head … "<payload>"` shape (`eval "rm -rf /"`, `cmd /c "del …"`).
+ * The closing quote is the LAST same-quote before trailing whitespace, which is
+ * why this is hand-parsed: the equivalent regex nests lazy quantifiers.
+ */
+function quotedPayload(trimmed: string): { head: string; body: string } | null {
+  const isWord = (c: string | undefined): boolean =>
+    c !== undefined && (/[A-Za-z0-9]/.test(c) || c === "_" || c === "." || c === "-")
+  const isSpace = (c: string | undefined): boolean => c !== undefined && /\s/.test(c)
+
+  let headEnd = 0
+  while (headEnd < trimmed.length && isWord(trimmed[headEnd])) headEnd += 1
+  if (headEnd === 0) return null
+
+  for (let q = headEnd; q < trimmed.length; q += 1) {
+    const quote = trimmed[q]
+    if ((quote !== '"' && quote !== "'") || !isSpace(trimmed[q - 1])) continue
+    let end = trimmed.length - 1
+    while (end > q && isSpace(trimmed[end])) end -= 1
+    if (end <= q || trimmed[end] !== quote) return null
+    return { head: trimmed.slice(0, headEnd), body: trimmed.slice(q + 1, end) }
+  }
+  return null
+}
+
 /**
  * Recursively peel wrapper layers: `sudo bash -c "…"` and
  * `eval "$(cat /tmp/x)"` both reduce to their innermost command text.
@@ -66,14 +96,9 @@ function unwrapWrapper(command: string): string {
   if (trimmed === "") return command
 
   // Quoted payload: eval "rm -rf /"  /  cmd /c 'del …'  /  sh -c "…"
-  const quoted = /^([A-Za-z0-9_.-]+)(?:\s+\S+?)*?\s+(["'])([\s\S]*)\2\s*$/.exec(trimmed)
-  if (quoted) {
-    const head = quoted[1]
-    const body = quoted[3]
-    if (COMMAND_WRAPPERS.has(head.toLowerCase()) || COMMAND_WRAPPERS.has(head.split(/[\\/]/).pop() ?? head)) {
-      const inner = unwrapWrapper(body)
-      return inner === body ? inner : inner
-    }
+  const quoted = quotedPayload(trimmed)
+  if (quoted && isWrapperName(quoted.head)) {
+    return unwrapWrapper(quoted.body)
   }
 
   const tokens = tokenize(trimmed)

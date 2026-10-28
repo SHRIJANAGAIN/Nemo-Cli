@@ -257,6 +257,25 @@ export function resolveApiBase(raw: string | undefined): string {
   return GITHUB_API_ORIGIN
 }
 
+/**
+ * Build a GitHub API URL from a path and refuse anything that does not resolve
+ * to the literal public API host. The host check on the final URL (not on the
+ * inputs) is what keeps a tainted path from steering the request elsewhere.
+ */
+function githubUrl(path: string): URL {
+  const url = new URL(path, GITHUB_API_ORIGIN)
+  const isPublic =
+    url.protocol === "https:" &&
+    url.hostname === "api.github.com" &&
+    !url.port &&
+    !url.username &&
+    !url.password
+  if (!isPublic) {
+    throw new Error(`refusing non-GitHub API URL: ${url.href}`)
+  }
+  return url
+}
+
 function apiHeaders(client: ApiClient): Record<string, string> {
   return {
     Accept: "application/vnd.github+json",
@@ -282,7 +301,7 @@ export async function postIssueComment(
     throw new Error(`bad issue number: ${issueNumber}`)
   }
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`
-  const res = await fetch(`${GITHUB_API_ORIGIN}${path}`, {
+  const res = await fetch(githubUrl(path), {
     method: "POST",
     headers: apiHeaders(client),
     body: JSON.stringify({ body }),
@@ -316,7 +335,7 @@ export async function createInstallationToken(apiBase: string, jwt: string, inst
   if (!Number.isInteger(installationId) || installationId <= 0) {
     throw new Error(`bad installation id: ${installationId}`)
   }
-  const res = await fetch(`${GITHUB_API_ORIGIN}/app/installations/${installationId}/access_tokens`, {
+  const res = await fetch(githubUrl(`/app/installations/${installationId}/access_tokens`), {
     method: "POST",
     headers: {
       Accept: "application/vnd.github+json",

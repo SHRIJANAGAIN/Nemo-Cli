@@ -34,7 +34,6 @@ function tmpMachine(): void {
 
 /** In-test auth server: canned OAuth + read endpoints on loopback. */
 async function stubAuthServer(routes: Record<string, (body: string) => { status: number; json: unknown }>) {
-  const table = new Map(Object.entries(routes))
   const seen: string[] = []
   const server = createServer((req, res) => {
     let data = ""
@@ -43,7 +42,8 @@ async function stubAuthServer(routes: Record<string, (body: string) => { status:
     })
     req.on("end", () => {
       const url = (req.url ?? "").split("?")[0]
-      const handler = table.get(`${req.method} ${url}`)
+      const key = `${req.method} ${url}`
+      const handler = Object.prototype.hasOwnProperty.call(routes, key) ? routes[key] : undefined
       seen.push(`${req.method} ${req.url}`)
       if (!handler) {
         res.writeHead(404, { "Content-Type": "application/json" })

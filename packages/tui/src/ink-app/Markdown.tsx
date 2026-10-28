@@ -169,6 +169,77 @@ function findClosingBracket(input: string, from: number): number {
 
 export type BlockKind = "heading" | "paragraph" | "list" | "code" | "quote" | "rule" | "table"
 
+/** `# text` … `###### text`: 1-6 `#` followed by a required space. */
+function headingParts(line: string): { level: number; text: string } | null {
+  let hashes = 0
+  while (hashes < line.length && line[hashes] === "#") hashes += 1
+  if (hashes < 1 || hashes > 6) return null
+  const next = line[hashes]
+  if (next !== " " && next !== "\t") return null
+  let start = hashes
+  while (start < line.length && (line[start] === " " || line[start] === "\t")) start += 1
+  return { level: hashes, text: line.slice(start) }
+}
+
+/** `***`, `---` or `___` on its own line, ignoring surrounding blanks. */
+function isRuleLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (trimmed.length < 3) return false
+  const mark = trimmed[0]
+  if (mark !== "*" && mark !== "-" && mark !== "_") return false
+  for (let k = 1; k < trimmed.length; k += 1) {
+    if (trimmed[k] !== mark) return false
+  }
+  return true
+}
+
+/** `> quoted` — returns the text after the marker, or null when absent. */
+function quoteBody(line: string): string | null {
+  if (line[0] !== ">") return null
+  let start = 1
+  if (line[start] === " " || line[start] === "\t") start += 1
+  return line.slice(start)
+}
+
+/** `- item`, `* item`, `+ item` or `12. item` / `12) item`. */
+function listItemParts(line: string): { indent: number; ordered: boolean; text: string } | null {
+  let pos = 0
+  while (pos < line.length && (line[pos] === " " || line[pos] === "\t")) pos += 1
+  const indent = pos
+  const mark = line[pos]
+  if (!mark) return null
+  let markerEnd = -1
+  if (mark === "-" || mark === "*" || mark === "+") {
+    markerEnd = pos + 1
+  } else if (mark >= "0" && mark <= "9") {
+    let digit = pos
+    while (digit < line.length && line[digit]! >= "0" && line[digit]! <= "9") digit += 1
+    const terminator = line[digit]
+    if (terminator === "." || terminator === ")") markerEnd = digit + 1
+  }
+  if (markerEnd < 0) return null
+  const gap = line[markerEnd]
+  if (gap !== " " && gap !== "\t") return null
+  let textStart = markerEnd
+  while (textStart < line.length && (line[textStart] === " " || line[textStart] === "\t")) textStart += 1
+  return { indent, ordered: mark >= "0" && mark <= "9", text: line.slice(textStart) }
+}
+
+/** `|---|:--:|` style row under a table header. */
+function isTableAlignRow(line: string): boolean {
+  let sawDash = false
+  for (let k = 0; k < line.length; k += 1) {
+    const c = line[k]!
+    if (c === " " || c === "\t" || c === ":" || c === "|") continue
+    if (c === "-") {
+      sawDash = true
+      continue
+    }
+    return false
+  }
+  return sawDash
+}
+
 export interface Block {
   kind: BlockKind
   /** Heading level (1-6) or list indent in spaces. */
@@ -213,39 +284,41 @@ export function parseBlocks(input: string): Block[] {
       i++
       continue
     }
-    const heading = line.match(/^(#{1,6})\s+(.*)$/)
+    const heading = headingParts(line)
     if (heading) {
       flushPara()
-      blocks.push({ kind: "heading", level: heading[1]!.length, ordered: false, lines: [heading[2] ?? ""] })
+      blocks.push({ kind: "heading", level: heading.level, ordered: false, lines: [heading.text] })
       i++
       continue
     }
-    if (/^\s*(\*\*\*|---|___)\s*$/.test(line)) {
+    if (isRuleLine(line)) {
       flushPara()
       blocks.push({ kind: "rule", level: 0, ordered: false, lines: [] })
       i++
       continue
     }
-    const quote = line.match(/^>\s?(.*)$/)
-    if (quote) {
+    const firstQuote = quoteBody(line)
+    if (firstQuote !== null) {
       flushPara()
-      const quoted: string[] = [quote[1] ?? ""]
+      const quoted: string[] = [firstQuote]
       i++
-      while (i < lines.length && /^>\s?/.test(lines[i]!)) {
-        quoted.push(lines[i]!.replace(/^>\s?/, ""))
+      while (i < lines.length) {
+        const body = quoteBody(lines[i]!)
+        if (body === null) break
+        quoted.push(body)
         i++
       }
       blocks.push({ kind: "quote", level: 0, ordered: false, lines: quoted })
       continue
     }
-    const listItem = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/)
+    const listItem = listItemParts(line)
     if (listItem) {
       flushPara()
       blocks.push({
         kind: "list",
-        level: (listItem[1] ?? "").length,
-        ordered: /^\d/.test(listItem[2] ?? ""),
-        lines: [listItem[3] ?? ""],
+        level: listItem.indent,
+        ordered: listItem.ordered,
+        lines: [listItem.text],
       })
       i++
       continue
@@ -256,13 +329,13 @@ export function parseBlocks(input: string): Block[] {
       continue
     }
     // Table: header row with pipes followed by an alignment row.
-    if (line.includes("|") && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]!)) {
+    if (line.includes("|") && i + 1 < lines.length && isTableAlignRow(lines[i + 1]!)) {
       flushPara()
       const cells: string[][] = []
       let j = i
       while (j < lines.length && lines[j]!.includes("|")) {
         const row = lines[j]!
-        if (!/^\s*\|?[\s:|-]+\|?\s*$/.test(row)) {
+        if (!isTableAlignRow(row)) {
           const parts = row.split("|").map((cell) => cell.trim())
           // Drop the empty cells a leading/trailing pipe produces, but keep
           // interior empties — blank cells must still hold their column.

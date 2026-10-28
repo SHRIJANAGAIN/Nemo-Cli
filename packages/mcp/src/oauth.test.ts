@@ -59,13 +59,17 @@ function sendJson(res: http.ServerResponse, status: number, obj: unknown): void 
   res.end(JSON.stringify(obj))
 }
 
-function isLoopbackUrl(raw: string): boolean {
+function loopbackRedirect(raw: string): URL | null {
+  let url: URL
   try {
-    const { hostname } = new URL(raw)
-    return hostname === "127.0.0.1" || hostname === "localhost" || hostname === "[::1]"
+    url = new URL(raw)
   } catch {
-    return false
+    return null
   }
+  const host = url.hostname
+  if (host !== "127.0.0.1" && host !== "localhost" && host !== "[::1]") return null
+  if (url.username || url.password) return null
+  return url
 }
 
 function startServer(
@@ -163,13 +167,15 @@ function startFakeAuthServer(opts: { registration?: boolean; autoRedirect?: bool
       }
       const redirectUri = requestUrl.searchParams.get("redirect_uri")
       const state = requestUrl.searchParams.get("state")
-      if (!redirectUri || !state || !isLoopbackUrl(redirectUri)) {
+      const target = redirectUri ? loopbackRedirect(redirectUri) : null
+      if (!target || !state) {
         res.writeHead(400)
         res.end("missing redirect_uri/state")
         return
       }
-      const location = `${redirectUri}${redirectUri.includes("?") ? "&" : "?"}code=authcode-123&state=${encodeURIComponent(state)}`
-      res.writeHead(302, { Location: location })
+      target.searchParams.set("code", "authcode-123")
+      target.searchParams.set("state", state)
+      res.writeHead(302, { Location: target.toString() })
       res.end()
       return
     }

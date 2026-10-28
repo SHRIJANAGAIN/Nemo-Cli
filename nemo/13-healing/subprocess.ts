@@ -6,6 +6,7 @@
 
 import { spawn, type SpawnOptions } from "child_process"
 import * as fs from "fs"
+import * as os from "os"
 import * as path from "path"
 
 export interface SubprocessResult {
@@ -114,13 +115,17 @@ export async function runPython(
   args: string[] = [],
   opts: SubprocessOptions = {},
 ): Promise<SubprocessResult> {
-  const scriptPath = path.join(opts.cwd ?? DEFAULT_CWD, ".tmp_healing_script.py")
-  fs.writeFileSync(scriptPath, script, "utf8")
+  // The script file lives in a freshly created private directory rather than in
+  // the caller's cwd: a path derived from the environment must never become the
+  // argv[0] of the child process.
+  const scriptDir = fs.mkdtempSync(path.join(os.tmpdir(), "nemo-healing-"))
+  const scriptPath = path.join(scriptDir, "script.py")
+  fs.writeFileSync(scriptPath, script, { encoding: "utf8", mode: 0o600 })
   try {
     return await runSubprocess("python", [scriptPath, ...args], opts)
   } finally {
     try {
-      fs.unlinkSync(scriptPath)
+      fs.rmSync(scriptDir, { recursive: true, force: true })
     } catch {
       /* ignore */
     }
