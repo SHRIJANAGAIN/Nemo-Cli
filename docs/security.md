@@ -188,7 +188,8 @@ Treat any `hooks` entry you did not write as code execution — it is.
 
 ## Updates & supply chain
 
-- npm publishes use `--provenance` (attestation); `npm run sbom` emits
+- Tag-triggered CI releases publish with `--provenance` (attestation); a
+  local `npm run publish:npm` publishes unattested. `npm run sbom` emits
   `sbom.cyclonedx.json`.
 - The tarball is built by `scripts/make-publish.mjs` with a `files` allowlist
   (`["dist", "Img"]`) so source can never ship by accident.

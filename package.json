@@ -41,7 +41,8 @@
     "install-global": "node scripts/install-global.js",
     "publish:build": "npm run build && node scripts/make-publish.mjs",
     "publish:build:debug": "npm run build && node scripts/make-publish.mjs --skip-obfuscation",
-    "publish:npm": "npm run publish:build && npm publish ./publish --access public --provenance"
+    "publish:npm": "npm run publish:build && npm publish ./publish --access public",
+    "publish:npm:provenance": "npm run publish:build && npm publish ./publish --access public --provenance"
   },
   "engines": {
     "node": ">=18"

@@ -9,8 +9,10 @@
 | < 1.1   | No — please upgrade     |
 
 Security fixes ship as patch releases. `npm run sbom` emits
-`sbom.cyclonedx.json`; npm publishes use `--provenance` for
-supply-chain attestation.
+`sbom.cyclonedx.json`. Tag-triggered CI releases
+(`.github/workflows/release.yml`) publish with `--provenance` for
+supply-chain attestation; a local `npm run publish:npm` cannot generate
+provenance and therefore publishes unattested.
 
 ## Reporting a vulnerability
 
@@ -74,7 +76,9 @@ network exposure lives in [docs/security.md](docs/security.md).
 
 ## Releases
 
-- `npm publish ./publish --provenance` (see `scripts/make-publish.mjs`).
+- `npm run publish:npm` publishes from your machine (unattested); push a
+  `v*` tag to let `.github/workflows/release.yml` publish with
+  `--provenance`. `scripts/make-publish.mjs` builds the tarball.
 - `NEMO_SKIP_OBFUSCATION=1` (or `--skip-obfuscation`) produces a debuggable publish build;
   default obfuscation is size/hygiene only — never a security boundary.
 - Verify the tarball contains only `dist/` + `Img/` (`files` allowlist).

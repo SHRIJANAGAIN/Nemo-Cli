@@ -111,8 +111,8 @@ nemo run "prompt"     # interactive session with the prompt queued
 Sandbox + permission layers (deny rules win, read-only tools auto-approve,
 everything else asks by default), `0600` secret files, no telemetry at all.
 Details: [Security](security.md); reporting SLA and scope in
-[`SECURITY.md`](../SECURITY.md). SBOM: `npm run sbom`; publishes use npm
-`--provenance`.
+[`SECURITY.md`](../SECURITY.md). SBOM: `npm run sbom`; tag-triggered CI
+releases publish with npm `--provenance`.
 
 **License**
 
