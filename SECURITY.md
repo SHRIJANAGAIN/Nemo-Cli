@@ -4,9 +4,9 @@
 
 | Version | Supported               |
 | ------- | ----------------------- |
-| 0.6.x   | Yes — latest patch only |
-| 0.5.x   | Security fixes only     |
-| < 0.5   | No — please upgrade     |
+| 1.2.x   | Yes — latest patch only |
+| 1.1.x   | Security fixes only     |
+| < 1.1   | No — please upgrade     |
 
 Security fixes ship as patch releases. `npm run sbom` emits
 `sbom.cyclonedx.json`; npm publishes use `--provenance` for
@@ -14,13 +14,15 @@ supply-chain attestation.
 
 ## Reporting a vulnerability
 
-- **Do not open a public issue.** Report privately — directly to
-  support@sktailabs.in — with: affected version, reproduction
-  steps, impact, and logs with secrets redacted.
+- **Open a GitHub issue directly** at
+  <https://github.com/SHRIJANAGAIN/Nemo-Cli/issues> — there is no private
+  reporting channel. Include the affected version, reproduction steps,
+  impact, and logs.
+- Redact secrets before posting: `NEMO_API_KEY`, `NVAPI_*` keys, OAuth
+  tokens and anything from `~/.nemo/mcp-auth.json`. Never paste a live
+  key into an issue — rotate it if it was ever exposed.
 - Expect an acknowledgement within **3 business days** and a fix
   timeline within **14 days** for confirmed High/Critical issues.
-- Coordinated disclosure: please allow a fix + release before public
-  disclosure (default **90-day** window).
 
 ## Scope
 
