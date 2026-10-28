@@ -62,7 +62,7 @@ npm install -g @shrijanagain/nemo-cli
 Or build from source:
 
 ```sh
-git clone <repo>
+git clone https://github.com/SHRIJANAGAIN/Nemo-Cli.git
 cd nemo
 npm install
 npm run build
