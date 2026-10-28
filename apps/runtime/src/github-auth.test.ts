@@ -43,14 +43,14 @@ async function stubAuthServer(routes: Record<string, (body: string) => { status:
     req.on("end", () => {
       const url = (req.url ?? "").split("?")[0]
       const key = `${req.method} ${url}`
-      const handler = Object.prototype.hasOwnProperty.call(routes, key) ? routes[key] : undefined
+      const route = Object.entries(routes).find(([routeKey]) => routeKey === key)?.[1]
       seen.push(`${req.method} ${req.url}`)
-      if (!handler) {
+      if (!route) {
         res.writeHead(404, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "not found" }))
         return
       }
-      const { status, json } = handler(data)
+      const { status, json } = route(data)
       res.writeHead(status, { "Content-Type": "application/json" })
       res.end(JSON.stringify(json))
     })

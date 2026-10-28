@@ -153,15 +153,15 @@ describe("server licensing client", () => {
       })
       req.on("end", () => {
         const key = req.url ?? ""
-        const handler = Object.prototype.hasOwnProperty.call(routes, key) ? routes[key] : undefined
-        if (!handler) {
+        const route = Object.entries(routes).find(([routeKey]) => routeKey === key)?.[1]
+        if (!route) {
           res.writeHead(404, { "Content-Type": "application/json" })
           res.end(JSON.stringify({ error: "not found" }))
           return
         }
         const body = JSON.parse(data) as Record<string, unknown>
         seen.push({ url: req.url ?? "", body })
-        const { status, json } = handler(body)
+        const { status, json } = route(body)
         res.writeHead(status, { "Content-Type": "application/json" })
         res.end(JSON.stringify(json))
       })

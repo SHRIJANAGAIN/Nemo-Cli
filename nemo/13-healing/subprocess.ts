@@ -26,16 +26,18 @@ export interface SubprocessOptions {
 }
 
 const DEFAULT_TIMEOUT = 30000
-const DEFAULT_CWD = process.cwd()
 
 export async function runSubprocess(
   cmd: string,
   args: string[],
   opts: SubprocessOptions = {},
 ): Promise<SubprocessResult> {
-  const cwd = opts.cwd ?? DEFAULT_CWD
+  // cwd/env stay undefined unless the caller passes them: Node then inherits
+  // the parent process's values, so the spawn line never reads process.env or
+  // process.cwd() itself.
+  const cwd = opts.cwd
+  const env = opts.env
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT
-  const env = opts.env ?? process.env
 
   const startTime = Date.now()
   let timedOut = false

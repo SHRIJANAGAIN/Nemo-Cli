@@ -262,16 +262,19 @@ export function resolveApiBase(raw: string | undefined): string {
  * to the literal public API host. The host check on the final URL (not on the
  * inputs) is what keeps a tainted path from steering the request elsewhere.
  */
-function githubUrl(path: string): URL {
-  const url = new URL(path, GITHUB_API_ORIGIN)
-  const isPublic =
-    url.protocol === "https:" &&
-    url.hostname === "api.github.com" &&
-    !url.port &&
-    !url.username &&
-    !url.password
-  if (!isPublic) {
-    throw new Error(`refusing non-GitHub API URL: ${url.href}`)
+/**
+ * Build a GitHub API URL from a path. Both the literal prefix and the parsed
+ * hostname are checked on the final string — the value handed to `fetch` never
+ * leaves api.github.com, whatever the path contains.
+ */
+function githubUrl(path: string): string {
+  const url = `${GITHUB_API_ORIGIN}${path}`
+  if (!url.startsWith(`${GITHUB_API_ORIGIN}/`)) {
+    throw new Error(`refusing non-GitHub API URL: ${url}`)
+  }
+  const parsed = new URL(url)
+  if (parsed.protocol !== "https:" || parsed.hostname !== "api.github.com" || parsed.port) {
+    throw new Error(`refusing non-GitHub API URL: ${url}`)
   }
   return url
 }
