@@ -1,3 +1,9 @@
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/shrijanagain/nemo-cli?utm_source=readme&utm_medium=badge)  
+[![NPM Version](https://img.shields.io/npm/v/@shrijanagain/nemo-cli?style=flat-square&color=blue)](https://www.npmjs.com/package/@shrijanagain/nemo-cli)
+[![NPM Downloads](https://img.shields.io/npm/dt/@shrijanagain/nemo-cli?style=flat-square&color=green)](https://www.npmjs.com/package/@shrijanagain/nemo-cli)
+
+
+
 # Nemo CLI
 
 **NEMO** is an AI coding agent that runs on your computer. Built by **Shrijan Kumar Tiwari**, it lives in your terminal and helps you carry out software development tasks: reading and modifying code, running shell commands, searching files, fetching web pages, and autonomously planning and adjusting its next steps based on feedback as it works.
@@ -16,12 +22,6 @@ Watch the short animated walkthrough of nemo in action:
 View or download the video on GitHub:
 https://www.youtube.com/watch?v=XqzXESMbUKg
 
----
-
-DIAGRAM
-
-
-[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/shrijanagain/nemo-cli?utm_source=readme&utm_medium=badge)
 
 ---
 
