@@ -16,7 +16,12 @@ Watch the short animated walkthrough of nemo in action:
 View or download the video on GitHub:
 https://www.youtube.com/watch?v=XqzXESMbUKg
 
+---
 
+DIAGRAM
+
+
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/shrijanagain/nemo-cli?utm_source=readme&utm_medium=badge)
 
 ---
 
